@@ -42,9 +42,10 @@ export async function POST(
       );
     }
 
-    // Получаем обращение
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    // Получаем обращение (поддержка id и publicId)
+    const publicIdNormalized = ticketId.replace(/-/g, "");
+    const ticket = await prisma.ticket.findFirst({
+      where: { OR: [{ id: ticketId }, { publicId: publicIdNormalized }] },
       include: {
         user: true,
         organization: true,
@@ -67,17 +68,44 @@ export async function POST(
 
     // Обновляем статус обращения
     await prisma.ticket.update({
-      where: { id: ticketId },
+      where: { id: ticket.id },
       data: {
         status: "REJECTED",
         rejectionReason: reason.trim(),
+        isOverdue: false,
       },
     });
+
+    // Отправляем причину отклонения в чат обращения
+    if (ticket.chatId) {
+      try {
+        await prisma.chatMessage.create({
+          data: {
+            chatId: ticket.chatId,
+            senderId: session!.user.id,
+            content: `❌ Обращение отклонено\n\n**Причина:** ${reason.trim()}`,
+            messageType: "text",
+          },
+        });
+        const lastMsg = await prisma.chatMessage.findFirst({
+          where: { chatId: ticket.chatId },
+          orderBy: { createdAt: "desc" },
+        });
+        if (lastMsg) {
+          await prisma.chat.update({
+            where: { id: ticket.chatId },
+            data: { lastMessageId: lastMsg.id, lastMessageAt: lastMsg.createdAt },
+          });
+        }
+      } catch (chatErr) {
+        console.error("[ppo-head/appeals/reject] Chat message error:", chatErr);
+      }
+    }
 
     // Логируем действие
     await prisma.ticketActionLog.create({
       data: {
-        ticketId,
+        ticketId: ticket.id,
         userId: chairman.id,
         actionType: "rejected",
         description: `Обращение отклонено. Причина: ${reason.trim()}`,

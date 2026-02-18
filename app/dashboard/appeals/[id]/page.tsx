@@ -21,10 +21,12 @@ interface Ticket {
   updatedAt: string;
   chatId: string | null;
   userId?: string;
+  organizationId?: string | null;
   rejectionReason: string | null;
   helpfulRating: number | null;
   helpfulRatingComment: string | null;
   helpfulRatingAt: string | null;
+  isChairmanView?: boolean;
   attachments: Array<{
     id: string;
     fileName: string;
@@ -80,6 +82,10 @@ export default function TicketDetailPage() {
   const [ratingComment, setRatingComment] = useState("");
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showTakeInWorkModal, setShowTakeInWorkModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -92,7 +98,7 @@ export default function TicketDetailPage() {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/tickets/${id}`);
+      const response = await fetch(`/api/tickets/${id}`, { cache: "no-store" });
       if (!response.ok) {
         throw new Error("Ошибка загрузки обращения");
       }
@@ -124,7 +130,67 @@ export default function TicketDetailPage() {
   const canEdit = ticket?.status === "PENDING";
   const canDelete = ticket?.status === "PENDING" || ticket?.status === "REJECTED";
   const canRate = (ticket?.status === "RESOLVED" || ticket?.status === "CLOSED") && !ticket?.helpfulRating;
-  const canClose = ticket && ticket.status !== "CLOSED" && ticket.status !== "RESOLVED" && ticket.userId === session?.user?.id;
+  const isOwner = ticket?.userId === session?.user?.id;
+  const canClose = ticket && ticket.status !== "CLOSED" && ticket.status !== "RESOLVED" && isOwner;
+  const isChairmanView = ticket?.isChairmanView === true;
+  const canTakeInWork = isChairmanView && ticket?.status === "PENDING";
+  const canReject = isChairmanView && ticket?.status !== "CLOSED" && ticket?.status !== "REJECTED" && ticket?.status !== "RESOLVED";
+
+  const handleTakeInWork = useCallback(async () => {
+    if (!ticket || !actionMessage.trim()) {
+      alertError("Введите сообщение для обратившегося");
+      return;
+    }
+    try {
+      setIsSubmittingAction(true);
+      // id в URL: поддерживаются и внутренний id, и publicId (нормализуем без дефисов)
+      const idForApi = (ticket.publicId || ticket.id).toString().replace(/-/g, "");
+      const res = await fetch(`/api/ppo-head/appeals/${idForApi}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "IN_PROGRESS", message: actionMessage.trim() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "Ошибка смены статуса");
+      }
+      setShowTakeInWorkModal(false);
+      setActionMessage("");
+      alertSuccess("Обращение переведено в работу");
+      await loadTicket(ticket.id);
+    } catch (e) {
+      alertError(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  }, [ticket, actionMessage]);
+
+  const handleReject = useCallback(async () => {
+    if (!ticket || !actionMessage.trim()) {
+      alertError("Введите причину отклонения");
+      return;
+    }
+    try {
+      setIsSubmittingAction(true);
+      const res = await fetch(`/api/ppo-head/appeals/${ticket.id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: actionMessage.trim() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "Ошибка отклонения");
+      }
+      setShowRejectModal(false);
+      setActionMessage("");
+      alertSuccess("Обращение отклонено");
+      await loadTicket(ticket.id);
+    } catch (e) {
+      alertError(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  }, [ticket, actionMessage]);
 
   const handleCloseAppeal = useCallback(async (rating: number, comment: string) => {
     if (!ticket) return;
@@ -305,7 +371,7 @@ export default function TicketDetailPage() {
           {ticket.chatId && (
             <Link
               href={`/dashboard/chat?chatId=${ticket.chatId}`}
-              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -321,7 +387,7 @@ export default function TicketDetailPage() {
           {canEdit && !isEditing && (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -334,10 +400,32 @@ export default function TicketDetailPage() {
               Редактировать
             </button>
           )}
+          {canTakeInWork && (
+            <button
+              onClick={() => { setActionMessage(""); setShowTakeInWorkModal(true); }}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:border-blue-600 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Взять в работу
+            </button>
+          )}
+          {canReject && (
+            <button
+              onClick={() => { setActionMessage(""); setShowRejectModal(true); }}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-600 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+              Отклонить
+            </button>
+          )}
           {canClose && (
             <button
               onClick={() => setShowCloseModal(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -348,7 +436,7 @@ export default function TicketDetailPage() {
           {canDelete && (
             <button
               onClick={handleDelete}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-600 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -549,9 +637,79 @@ export default function TicketDetailPage() {
         />
       )}
 
+      {/* Модалка «Взять в работу» */}
+      {showTakeInWorkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-lg">
+            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Взять в работу</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Введите сообщение для обратившегося. Оно будет отправлено в чат обращения.
+            </p>
+            <textarea
+              value={actionMessage}
+              onChange={(e) => setActionMessage(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              rows={4}
+              placeholder="Например: Ваше обращение получено, мы начали работу над ним..."
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleTakeInWork}
+                disabled={!actionMessage.trim() || isSubmittingAction}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSubmittingAction ? "Отправка..." : "Взять в работу"}
+              </button>
+              <button
+                onClick={() => { setShowTakeInWorkModal(false); setActionMessage(""); }}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка «Отклонить» */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-lg">
+            <h2 className="text-xl font-semibold mb-2 text-red-600 dark:text-red-400">Отклонить обращение</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Укажите причину отклонения. Она будет отправлена обратившемуся в чат.
+            </p>
+            <textarea
+              value={actionMessage}
+              onChange={(e) => setActionMessage(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              rows={4}
+              placeholder="Причина отклонения..."
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleReject}
+                disabled={!actionMessage.trim() || isSubmittingAction}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isSubmittingAction ? "Отправка..." : "Отклонить обращение"}
+              </button>
+              <button
+                onClick={() => { setShowRejectModal(false); setActionMessage(""); }}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Модалка оценки */}
       {showRatingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md">
             <h2 className="text-xl font-semibold mb-4">Оцените полезность ответа</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">

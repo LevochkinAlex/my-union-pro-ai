@@ -119,6 +119,7 @@ export async function GET(
         helpfulRating: ticket.helpfulRating,
         helpfulRatingComment: ticket.helpfulRatingComment,
         helpfulRatingAt: ticket.helpfulRatingAt,
+        isChairmanView: isPPOHead,
       },
     });
   } catch (error) {

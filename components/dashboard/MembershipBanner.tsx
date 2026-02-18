@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import QuestionnaireModal from "@/components/profile/QuestionnaireModal";
+import AdditionalInfoModal from "@/components/profile/AdditionalInfoModal";
+import { ProgressBarFill } from "@/components/ui/ProgressBarFill";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 import { hasBothApplicationsSubmitted } from "@/lib/documents-status";
 
@@ -28,6 +30,7 @@ export default function MembershipBanner({
   const { data: session, update: updateSession } = useSession();
   const [isVisible, setIsVisible] = useState(true);
   const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
+  const [isAdditionalInfoModalOpen, setIsAdditionalInfoModalOpen] = useState(false);
 
   const QUESTIONNAIRE_MODAL_KEY = "questionnaireModalOpen";
 
@@ -180,7 +183,7 @@ export default function MembershipBanner({
             ? "Заполните дополнительную информацию о себе"
             : "Заполните дополнительную информацию и добавьте награды",
           buttonText: "Заполнить профиль",
-          buttonAction: () => router.push("/dashboard/profile?tab=additional"),
+          buttonAction: () => setIsAdditionalInfoModalOpen(true),
         };
       }
       return null;
@@ -189,6 +192,9 @@ export default function MembershipBanner({
     const approvedStatusInfo = getApprovedStatusInfo();
     if (!approvedStatusInfo) {
       return null; // Все заполнено
+    }
+    if (!isVisible) {
+      return null; // Пользователь закрыл плашку
     }
 
     return (
@@ -200,7 +206,7 @@ export default function MembershipBanner({
           <div className="mb-4 flex items-start justify-between">
             <div className="flex-1">
               <div className="mb-2 flex items-center gap-2">
-                <div className="flex h-10 w-10 min-h-10 min-w-10 max-h-10 max-w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-600 text-white dark:bg-green-500 p-[7px]" style={{ aspectRatio: '1' }}>
+                <div className="flex aspect-square h-10 w-10 min-h-10 min-w-10 max-h-10 max-w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-600 text-white dark:bg-green-500 p-[7px]">
                   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -314,7 +320,7 @@ export default function MembershipBanner({
         <div className="mb-4 flex items-start justify-between">
           <div className="flex-1">
             <div className="mb-2 flex items-center gap-2">
-              <div className="flex h-10 w-10 min-h-10 min-w-10 max-h-10 max-w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-white dark:bg-blue-500 p-[7px]" style={{ aspectRatio: '1' }}>
+              <div className="flex aspect-square h-10 w-10 min-h-10 min-w-10 max-h-10 max-w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-white dark:bg-blue-500 p-[7px]">
                 <svg
                   className="h-6 w-6"
                   fill="none"
@@ -364,12 +370,10 @@ export default function MembershipBanner({
             </span>
           </div>
           <div className="h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 transition-all duration-500 ease-out"
-              style={{ width: `${profileProgress}%` }}
-            >
-              <div className="h-full w-full animate-pulse bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-            </div>
+            <ProgressBarFill
+              value={profileProgress}
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 transition-all duration-500 ease-out progress-bar-fill"
+            />
           </div>
         </div>
 
@@ -459,7 +463,16 @@ export default function MembershipBanner({
           router.refresh();
         }}
         onComplete={() => {
-          // Обновляем страницу после завершения анкеты
+          window.location.reload();
+        }}
+      />
+
+      {/* Модальное окно: доп. информация и награды (для APPROVED) */}
+      <AdditionalInfoModal
+        isOpen={isAdditionalInfoModalOpen}
+        onClose={() => setIsAdditionalInfoModalOpen(false)}
+        onComplete={() => {
+          setIsAdditionalInfoModalOpen(false);
           window.location.reload();
         }}
       />

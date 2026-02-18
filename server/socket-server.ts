@@ -198,6 +198,42 @@ io.on("connection", (socket) => {
 
       console.log(`[Socket] ✅ Message saved to DB: ${message.id} in chat ${chatId}`);
 
+      // Авто-смена статуса обращения на IN_PROGRESS при первом сообщении председателя
+      try {
+        const linkedTicket = await prisma.ticket.findFirst({
+          where: { chatId },
+          select: { id: true, userId: true, status: true },
+        });
+        if (linkedTicket && linkedTicket.status === "PENDING" && linkedTicket.userId !== userId) {
+          await prisma.ticket.update({
+            where: { id: linkedTicket.id },
+            data: { status: "IN_PROGRESS", lastResponseAt: new Date() },
+          });
+          const statusMsg = await prisma.chatMessage.create({
+            data: {
+              chatId,
+              senderId: userId,
+              content: `📋 Статус обращения изменён на «В работе»`,
+              messageType: "text",
+            },
+            include: {
+              sender: {
+                select: { id: true, firstName: true, lastName: true, middleName: true, avatarUrl: true },
+              },
+              attachments: true,
+            },
+          });
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { lastMessageId: statusMsg.id, lastMessageAt: statusMsg.createdAt },
+          });
+          io.to(chatId).emit("message:new", statusMsg);
+          console.log(`[Socket] ✅ Auto-changed ticket ${linkedTicket.id} to IN_PROGRESS`);
+        }
+      } catch (autoStatusErr) {
+        console.error("[Socket] Auto-status error:", autoStatusErr);
+      }
+
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем количество подключенных клиентов в комнате
       const room = io.sockets.adapter.rooms.get(chatId);
       const clientsCount = room ? room.size : 0;

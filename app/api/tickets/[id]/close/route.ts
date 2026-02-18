@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendMassNotification } from '@/lib/notifications';
+import { appendFileSync } from 'fs';
+import { join } from 'path';
+// #region agent log
+function debugLog(p: { sessionId?: string; location: string; message: string; data?: Record<string, unknown>; hypothesisId?: string }) {
+  try { appendFileSync(join(process.cwd(), '.cursor', 'debug-3d28b8.log'), JSON.stringify({ ...p, timestamp: Date.now() }) + '\n'); } catch (_) {}
+}
+// #endregion
 
 /**
  * POST /api/tickets/[id]/close
@@ -51,6 +58,10 @@ export async function POST(
       return NextResponse.json({ error: 'Обращение не найдено' }, { status: 404 });
     }
 
+    // #region agent log
+    debugLog({ sessionId: '3d28b8', location: 'tickets/[id]/close/route.ts', message: 'Close attempt', data: { sessionUserId: session.user.id, ticketId: ticket.id, ticketUserId: ticket.user.id, isAuthor: ticket.user.id === session.user.id, ticketStatus: ticket.status, hasChatId: !!ticket.chatId }, hypothesisId: 'C' });
+    // #endregion
+
     // Only the ticket creator can close it
     if (ticket.user.id !== session.user.id) {
       return NextResponse.json(
@@ -83,6 +94,10 @@ export async function POST(
         isOverdue: false,
       },
     });
+
+    // #region agent log
+    debugLog({ sessionId: '3d28b8', location: 'tickets/[id]/close/route.ts:afterUpdate', message: 'Ticket closed', data: { ticketId: updatedTicket.id, newStatus: updatedTicket.status }, hypothesisId: 'C' });
+    // #endregion
 
     // Отправляем сообщение в чат обращения и архивируем чат
     if (ticket.chatId) {

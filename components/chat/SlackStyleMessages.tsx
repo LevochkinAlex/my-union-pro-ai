@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import AIChatWelcome from "./AIChatWelcome";
 import AppealMessageCard from "./AppealMessageCard";
 import {
@@ -181,6 +182,18 @@ function normalizeMessageContent(content: unknown): string {
   if (typeof content === "object" && "content" in content && typeof (content as { content?: string }).content === "string")
     return (content as { content: string }).content;
   return String(content);
+}
+
+/** Извлекает текст из ReactNode (чтобы не получать "[object Object]" в параграфах markdown). */
+function reactNodeToText(node: React.ReactNode): string {
+  if (node == null) return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(reactNodeToText).join("");
+  if (typeof node === "object" && node !== null && "props" in node) {
+    const el = node as React.ReactElement<{ children?: React.ReactNode }>;
+    return reactNodeToText(el.props?.children);
+  }
+  return "";
 }
 
 function formatMessageTime(date: Date): string {
@@ -1395,6 +1408,8 @@ interface MessageBubbleProps {
   onImageClick?: (url: string, name?: string) => void;
   onPollVote?: (pollId: string, optionId: string) => void;
   isGroupChat?: boolean;
+  /** Сообщение от ИИ-ассистента: не показываем превью ссылок, полная поддержка markdown как в ChatGPT */
+  isAIMessage?: boolean;
 }
 
 const MessageBubble = memo(function MessageBubble({
@@ -1409,6 +1424,7 @@ const MessageBubble = memo(function MessageBubble({
   onImageClick,
   onPollVote,
   isGroupChat = false,
+  isAIMessage = false,
 }: MessageBubbleProps) {
   const isDeleted = !!message.deletedAt;
   const isChannelPost = message.messageType === 'channel_post' && message.post;
@@ -1563,8 +1579,8 @@ const MessageBubble = memo(function MessageBubble({
                   return (
                     <>
                       <AppealMessageCard content={contentString} isOwn={isOwn} />
-                      {/* Link previews */}
-                      <LinkPreviews content={contentString} isOwn={isOwn} />
+                      {/* Превью ссылок только не для ИИ (в ИИ-чате не подтягиваем объекты по ссылкам) */}
+                      {!isAIMessage && <LinkPreviews content={contentString} isOwn={isOwn} />}
                     </>
                   );
                 }
@@ -1585,21 +1601,53 @@ const MessageBubble = memo(function MessageBubble({
 
                 return (
                   <>
-                    <div className={`
-                      text-[15px] leading-relaxed break-words
-                      ${isOwn ? '!text-white' : 'text-gray-900 dark:text-gray-100'}
-                      prose prose-sm max-w-none
-                      ${isOwn 
-                        ? 'prose-invert [&_*]:!text-white [&_p]:!text-white [&_strong]:!text-white [&_em]:!text-white [&_li]:!text-white [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white [&_blockquote]:!text-white [&_blockquote]:border-blue-300 [&_a]:!text-blue-200 [&_a]:underline hover:[&_a]:!text-blue-100 [&_code]:!text-blue-100 [&_code]:bg-blue-400/30 [&_pre]:bg-blue-400/20 [&_pre]:!text-white' 
-                        : '[&_p]:text-gray-900 dark:[&_p]:text-gray-100 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-900 dark:[&_em]:text-gray-100 [&_li]:text-gray-900 dark:[&_li]:text-gray-100 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_h4]:text-gray-900 dark:[&_h4]:text-gray-100 [&_h5]:text-gray-900 dark:[&_h5]:text-gray-100 [&_h6]:text-gray-900 dark:[&_h6]:text-gray-100 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_code]:text-gray-900 dark:[&_code]:text-gray-100'
-                      }
-                    `}>
+                    <div className={clsx(
+                      "text-[15px] leading-relaxed break-words prose prose-sm max-w-none",
+                      "prose-p:my-1.5 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5",
+                      "prose-pre:my-2 prose-pre:p-4 prose-pre:rounded-xl prose-pre:overflow-x-auto prose-pre:text-sm",
+                      "prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none",
+                      isOwn
+                        ? "!text-white prose-invert [&_*]:!text-white [&_p]:!text-white [&_strong]:!text-white [&_em]:!text-white [&_li]:!text-white [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white [&_blockquote]:!text-white [&_blockquote]:border-blue-300 [&_a]:!text-blue-200 [&_a]:underline hover:[&_a]:!text-blue-100 [&_code]:!text-blue-100 [&_code]:bg-blue-400/30 [&_pre]:bg-blue-400/20 [&_pre]:!text-white [&_table]:!text-white [&_th]:border-white/30 [&_td]:border-white/30"
+                        : "text-gray-900 dark:text-gray-100 [&_p]:text-gray-900 dark:[&_p]:text-gray-100 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-900 dark:[&_em]:text-gray-100 [&_li]:text-gray-900 dark:[&_li]:text-gray-100 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_h4]:text-gray-900 dark:[&_h4]:text-gray-100 [&_h5]:text-gray-900 dark:[&_h5]:text-gray-100 [&_h6]:text-gray-900 dark:[&_h6]:text-gray-100 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_code]:text-gray-900 dark:[&_code]:text-gray-100 [&_pre]:bg-gray-800 dark:[&_pre]:bg-gray-900 [&_pre]:text-gray-100 [&_table]:text-gray-900 dark:[&_table]:text-gray-100 [&_th]:border-gray-300 dark:[&_th]:border-gray-600 [&_td]:border-gray-300 dark:[&_td]:border-gray-600"
+                    )}>
                       <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
                         components={{
-                          // Заменяем плейсхолдеры на стилизованные упоминания
+                          // Блоки кода как в ChatGPT: тёмный фон, скролл
+                          pre: ({ children }) => (
+                            <pre className={clsx(
+                              "my-2 p-4 rounded-xl overflow-x-auto text-sm",
+                              isOwn
+                                ? "bg-blue-400/20 text-white"
+                                : "bg-gray-800 dark:bg-gray-900 text-gray-100 border border-gray-700 dark:border-gray-600"
+                            )}>
+                              {children}
+                            </pre>
+                          ),
+                          code: ({ className, children, ...props }) => {
+                            const isBlock = className?.includes("language-");
+                            if (isBlock) {
+                              return (
+                                <code className={className} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                            return (
+                              <code
+                                className={clsx(
+                                  "px-1.5 py-0.5 rounded text-sm",
+                                  isOwn ? "bg-blue-400/30 text-blue-100" : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                )}
+                                {...props}
+                              >
+                                {children}
+                              </code>
+                            );
+                          },
+                          // Заменяем плейсхолдеры на стилизованные упоминания (текст из children — без [object Object])
                           p: ({ children }) => {
-                            const content = String(children);
+                            const content = reactNodeToText(children);
                             const parts: React.ReactNode[] = [];
                             let lastIndex = 0;
                             
@@ -1651,8 +1699,8 @@ const MessageBubble = memo(function MessageBubble({
                       </ReactMarkdown>
                     </div>
                     
-                    {/* Link previews */}
-                    <LinkPreviews content={contentString} isOwn={isOwn} />
+                    {/* Превью ссылок не показываем для ИИ — в ИИ-чате только markdown, как в ChatGPT */}
+                    {!isAIMessage && <LinkPreviews content={contentString} isOwn={isOwn} />}
                   </>
                 );
               })()}
@@ -1719,7 +1767,8 @@ const MessageBubble = memo(function MessageBubble({
     prevProps.message.uploadProgress === nextProps.message.uploadProgress &&
     prevProps.isOwn === nextProps.isOwn &&
     prevProps.showAvatar === nextProps.showAvatar &&
-    prevProps.showName === nextProps.showName
+    prevProps.showName === nextProps.showName &&
+    prevProps.isAIMessage === nextProps.isAIMessage
   );
 });
 
@@ -2036,12 +2085,13 @@ export default function SlackStyleMessages({
               onImageClick={onImageClick}
               onPollVote={onPollVote}
               isGroupChat={isGroupChat}
+              isAIMessage={isAIChat && !isOwn}
             />
           </div>
         </div>
       );
     });
-  }, [messages, currentUserId, handleContextMenu, onReaction, onOpenThread, onImageClick, onPollVote, isGroupChat, isTicketChat, ticketId]);
+  }, [messages, currentUserId, handleContextMenu, onReaction, onOpenThread, onImageClick, onPollVote, isGroupChat, isAIChat, isTicketChat, ticketId]);
 
   return (
     <div

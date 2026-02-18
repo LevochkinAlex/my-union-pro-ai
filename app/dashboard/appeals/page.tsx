@@ -129,6 +129,9 @@ export default function AppealsPage() {
       if (filter !== "all") params.set("status", filter);
       if (viewParam) params.set("view", viewParam);
       const url = `/api/tickets${params.toString() ? `?${params.toString()}` : ""}`;
+      // #region agent log
+      fetch('http://127.0.0.1:7519/ingest/3c4942b8-26ef-4efc-b536-f006e7e1cd4b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3d28b8'},body:JSON.stringify({sessionId:'3d28b8',location:'appeals/page.tsx:loadTickets',message:'Load tickets request',data:{isAppealsInboxOutboxView,staffTab,viewParam,url,filter},hypothesisId:'D',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) {
         throw new Error("Ошибка загрузки обращений");
@@ -230,7 +233,9 @@ export default function AppealsPage() {
           </h1>
           <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
             {isAppealsInboxOutboxView
-              ? "Входящие в организацию и ваши исходящие обращения"
+              ? staffTab === "outgoing"
+                ? "Ваши личные обращения как члена профсоюза"
+                : "Обращения от членов вашей организации"
               : "Отслеживайте статус ваших обращений к профсоюзу"}
           </p>
         </div>

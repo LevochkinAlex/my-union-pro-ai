@@ -71,10 +71,9 @@ export async function fetchWithRetry(
         throw lastError;
       }
 
-      // Логируем попытку повтора
+      const isTimeout = /timeout|timed out/i.test(lastError.message);
       console.warn(
-        `[fetchWithRetry] Attempt ${attempt + 1}/${config.maxRetries + 1} failed with error:`,
-        lastError.message
+        `[fetchWithRetry] Attempt ${attempt + 1}/${config.maxRetries + 1} failed${isTimeout ? ` (таймаут — ответ сервера дольше ${timeoutMs} мс)` : ": " + lastError.message}`
       );
 
       // Ждем перед повтором

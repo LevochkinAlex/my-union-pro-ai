@@ -145,6 +145,21 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Загружаем текущие значения, чтобы не затирать награды и доп. информацию при пустом теле запроса
+    // (пользователь мог заполнить их во вкладке Профиль, а потом дозаполнить анкету)
+    const existing = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        awards: true,
+        additionalInfo: true,
+        hobbies: true,
+        aboutMe: true,
+        training: true,
+        professions: true,
+        educations: true,
+      },
+    });
+
     const employmentStatus = normalizeString(body.employmentStatus);
     const hobbies = normalizeString(body.hobbies);
     const aboutMe = normalizeString(body.aboutMe);
@@ -153,18 +168,27 @@ export async function PUT(request: NextRequest) {
     const childrenBirthDates = normalizeString(body.childrenBirthDates);
     const maritalStatus = normalizeString(body.maritalStatus);
     const spouseInfo = normalizeString(body.spouseInfo);
-    const awards = normalizeString(body.awards);
-    const training = normalizeString(body.training);
-    const professions = normalizeString(body.professions);
-    const educations = normalizeString(body.educations);
-    const additionalInfo = normalizeString(body.additionalInfo);
+    const awardsRaw = normalizeString(body.awards);
+    const trainingRaw = normalizeString(body.training);
+    const professionsRaw = normalizeString(body.professions);
+    const educationsRaw = normalizeString(body.educations);
+    const additionalInfoRaw = normalizeString(body.additionalInfo);
+
+    // Не затираем награды и доп. информацию пустыми значениями — сохраняем существующие
+    const awards = (awardsRaw !== null && awardsRaw !== "") ? awardsRaw : (existing?.awards ?? null);
+    const additionalInfo = (additionalInfoRaw !== null && additionalInfoRaw !== "") ? additionalInfoRaw : (existing?.additionalInfo ?? null);
+    const training = (trainingRaw !== null && trainingRaw !== "") ? trainingRaw : (existing?.training ?? null);
+    const professions = (professionsRaw !== null && professionsRaw !== "") ? professionsRaw : (existing?.professions ?? null);
+    const educations = (educationsRaw !== null && educationsRaw !== "") ? educationsRaw : (existing?.educations ?? null);
+    const hobbiesFinal = (hobbies !== null && hobbies !== "") ? hobbies : (existing?.hobbies ?? null);
+    const aboutMeFinal = (aboutMe !== null && aboutMe !== "") ? aboutMe : (existing?.aboutMe ?? null);
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         employmentStatus,
-        hobbies,
-        aboutMe,
+        hobbies: hobbiesFinal,
+        aboutMe: aboutMeFinal,
         hasChildren,
         childrenInfo,
         childrenBirthDates,

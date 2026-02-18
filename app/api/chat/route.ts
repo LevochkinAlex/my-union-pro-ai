@@ -370,31 +370,6 @@ export async function GET(request: NextRequest) {
     // Фильтруем ИИ чат из основного списка (он будет добавлен отдельно)
     let filteredChats = Array.isArray(chats) ? chats.filter((c: any) => c && c.name !== AI_CHAT_NAME) : [];
 
-    console.log(`[chat] ========== CHAT LOADING DEBUG ==========`);
-    console.log(`[chat] User: ${userId}, viewMode: ${isMemberMode ? 'MEMBER' : 'PPO_HEAD'}`);
-    console.log(`[chat] Total chats from getUserChats: ${chats.length}, after AI filter: ${filteredChats.length}`);
-    console.log(`[chat] Chat types breakdown:`, {
-      PRIVATE: filteredChats.filter((c: any) => c?.type === "PRIVATE").length,
-      GROUP: filteredChats.filter((c: any) => c?.type === "GROUP").length,
-      CHANNEL: filteredChats.filter((c: any) => c?.type === "CHANNEL").length,
-    });
-    // Логируем архивные чаты
-    const archivedChats = filteredChats.filter((c: any) => c?.archivedAt);
-    if (archivedChats.length > 0) {
-      console.log(`[chat] 📦 Archived chats:`, archivedChats.length, archivedChats.map((c: any) => ({
-        id: c?.id,
-        name: c?.name || c?.displayName,
-        archivedAt: c?.archivedAt,
-      })));
-    }
-    console.log(`[chat] Filtered chats details:`, filteredChats.map((c: any) => ({
-      id: c?.id,
-      type: c?.type,
-      name: c?.name || c?.displayName,
-      hasLastMessage: !!c?.lastMessage,
-      participantsCount: c?.participantsCount || 0,
-    })));
-
     // В режиме участника (MEMBER) фильтруем чаты:
     // - Только личные чаты (PRIVATE)
     // - Свои обращения (где userId === session.user.id)
@@ -409,54 +384,13 @@ export async function GET(request: NextRequest) {
         .map(t => t.chatId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
-      console.log(`[chat] User ticket chat IDs: ${userTicketChatIds.length}`, userTicketChatIds);
-
-      const privateChatsCount = filteredChats.filter((c: any) => c.type === "PRIVATE").length;
-      console.log(`[chat] Private chats before filtering: ${privateChatsCount}`);
-
       filteredChats = filteredChats.filter((chat: any) => {
-        if (!chat || !chat.id) {
-          console.warn(`[chat] Skipping invalid chat:`, chat);
-          return false;
-        }
-
-        // Личные чаты - всегда показываем (ВАЖНО: они уже отфильтрованы по участию в getUserChats)
-        if (chat.type === "PRIVATE") {
-          console.log(`[chat] Including PRIVATE chat: ${chat.id} (${chat.displayName || chat.name})`);
-          return true;
-        }
-        
-        // Свои обращения - показываем
-        if (chat.ticketId && userTicketChatIds.includes(chat.id)) {
-          console.log(`[chat] Including TICKET chat: ${chat.id} (${chat.ticketPublicId || chat.ticketId})`);
-          return true;
-        }
-        
-        // Каналы - показываем только те, где пользователь участник
-        if (chat.type === "CHANNEL") {
-          console.log(`[chat] Including CHANNEL chat: ${chat.id} (${chat.displayName || chat.name})`);
-          return true;
-        }
-        
-        // Групповые чаты заседаний (созданные председателем для участников) — показываем участникам
-        if (chat.type === "GROUP" && chat.meetingId) {
-          console.log(`[chat] Including MEETING chat: ${chat.id} (${chat.displayName || chat.name})`);
-          return true;
-        }
-        
-        // Остальные групповые чаты в режиме участника скрываем
-        console.log(`[chat] Excluding GROUP chat: ${chat.id} (${chat.displayName || chat.name})`);
+        if (!chat || !chat.id) return false;
+        if (chat.type === "PRIVATE") return true;
+        if (chat.ticketId && userTicketChatIds.includes(chat.id)) return true;
+        if (chat.type === "CHANNEL") return true;
+        if (chat.type === "GROUP" && chat.meetingId) return true;
         return false;
-      });
-      
-      const privateChatsAfterFilter = filteredChats.filter((c: any) => c.type === "PRIVATE").length;
-      const channelChatsAfterFilter = filteredChats.filter((c: any) => c.type === "CHANNEL").length;
-      const ticketChatsAfterFilter = filteredChats.filter((c: any) => c.ticketId).length;
-      console.log(`[chat] After filtering for MEMBER:`, {
-        private: privateChatsAfterFilter,
-        channels: channelChatsAfterFilter,
-        tickets: ticketChatsAfterFilter,
-        total: filteredChats.length,
       });
     }
 

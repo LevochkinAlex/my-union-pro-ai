@@ -8,6 +8,17 @@ import { sendUserNotification } from "@/lib/notifications";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getDemoMemberTickets } from "@/lib/demo";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { appendFileSync } from "fs";
+import { join } from "path";
+
+// #region agent log
+function debugLog(payload: { sessionId?: string; location: string; message: string; data?: Record<string, unknown>; hypothesisId?: string }) {
+  const line = JSON.stringify({ ...payload, timestamp: Date.now() }) + "\n";
+  try {
+    appendFileSync(join(process.cwd(), ".cursor", "debug-3d28b8.log"), line);
+  } catch (_) {}
+}
+// #endregion
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -25,7 +36,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
-    const view = searchParams.get("view") === "inbox" ? "inbox" : searchParams.get("view") === "outbox" ? "outbox" : null;
+    const rawView = searchParams.get("view");
+    const view = rawView === "inbox" ? "inbox" : (rawView === "outbox" || rawView === "outgoing") ? "outgoing" : null;
 
     // Демо-член профсоюза: мок-обращения без БД
     if (session.user.id === DEMO_MEMBER_USER_ID) {
@@ -76,23 +88,30 @@ export async function GET(request: NextRequest) {
     const where: any = {};
 
     if (isChairmanRole && chairmanOrgId) {
-      // Председатель (в любом режиме): Входящие — все в организацию; Исходящие — свои
-      if (view === "outbox") {
+      if (view === "outgoing") {
+        // Исходящие — личные обращения председателя как члена профсоюза
         where.userId = session.user.id;
       } else {
+        // Входящие — обращения от членов организации (без собственных)
         where.organizationId = chairmanOrgId;
+        where.userId = { not: session.user.id };
       }
     } else if (view === "inbox" && isStaffWithAppeals && staffOrgId) {
-      // Сотрудник: Входящие — все обращения от членов и сотрудников организации (адресованные в ППО)
+      // Сотрудник: Входящие — обращения от членов организации (без собственных)
       where.organizationId = staffOrgId;
+      where.userId = { not: session.user.id };
     } else {
-      // Обычный участник: только свои обращения. Сотрудник при view=outbox или без view: свои обращения (Исходящие).
+      // Обычный участник: только свои обращения. Сотрудник при view=outgoing или без view: свои обращения.
       where.userId = session.user.id;
     }
 
     if (status && status !== "all") {
       where.status = status;
     }
+
+    // #region agent log
+    debugLog({ sessionId: "3d28b8", location: "tickets/route.ts:GET", message: "Tickets list filter", data: { userId: session.user.id, view, rawView, isChairmanRole, chairmanOrgId: chairmanOrgId || null, staffOrgId: staffOrgId || null, whereKeys: Object.keys(where), whereUserId: where.userId, whereOrgId: where.organizationId }, hypothesisId: "A" });
+    // #endregion
 
     // Получаем обращения, не запрашивая новые поля явно (для обратной совместимости)
     // Prisma автоматически вернет их, если они есть в БД
@@ -141,6 +160,9 @@ export async function GET(request: NextRequest) {
           createdAt: "desc",
         },
       });
+      // #region agent log
+      debugLog({ sessionId: "3d28b8", location: "tickets/route.ts:GET:afterFindMany", message: "Tickets result", data: { ticketsCount: tickets.length, firstTicketId: tickets[0]?.id, firstTicketUserId: tickets[0]?.userId }, hypothesisId: "A" });
+      // #endregion
     } catch (ticketsError: any) {
       console.error("[tickets] Error fetching tickets:", ticketsError);
       // Возвращаем пустой массив вместо ошибки
@@ -384,6 +406,9 @@ export async function POST(request: NextRequest) {
           },
         });
         console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id}, участников: ${appealChat.participants.length} (председатель: ${chairmanId}, создатель: ${session.user.id})`);
+        // #region agent log
+        debugLog({ sessionId: "3d28b8", location: "tickets/route.ts:POST:chatCreated", message: "Appeal chat created", data: { userId: session.user.id, organizationId: user?.organizationId ?? null, chairmanId, appealChatId: appealChat.id, participantsCount: appealChat.participants.length }, hypothesisId: "B" });
+        // #endregion
       } else {
         // Чат уже существует, проверяем участников
         const existingUserIds = appealChat.participants.map(p => p.userId);
@@ -409,6 +434,9 @@ export async function POST(request: NextRequest) {
     } else {
       console.error(`[tickets] ⚠️ Chairman NOT FOUND! Chat will NOT be created for this ticket.`);
       console.error(`[tickets] User: ${session.user.id}, organizationId: ${user?.organizationId || 'N/A'}`);
+      // #region agent log
+      debugLog({ sessionId: "3d28b8", location: "tickets/route.ts:POST:noChairman", message: "No chairman - no chat", data: { userId: session.user.id, organizationId: user?.organizationId ?? null, chairmanId: null }, hypothesisId: "B" });
+      // #endregion
     }
 
     // Создаем тикет с chatId
@@ -455,6 +483,10 @@ export async function POST(request: NextRequest) {
         throw error;
       }
     }
+
+    // #region agent log
+    debugLog({ sessionId: "3d28b8", location: "tickets/route.ts:POST:ticketCreated", message: "Ticket created", data: { ticketId: ticket.id, publicId: ticket.publicId, chatId: ticket.chatId ?? null, userId: session.user.id }, hypothesisId: "B" });
+    // #endregion
 
     // Обрабатываем файлы
     const uploadedFiles: Array<{

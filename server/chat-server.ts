@@ -360,6 +360,43 @@ io.on("connection", (socket) => {
         });
       }
 
+      // Авто-смена статуса обращения на IN_PROGRESS при первом сообщении председателя
+      try {
+        const linkedTicket = await prisma.ticket.findFirst({
+          where: { chatId },
+          select: { id: true, userId: true, status: true },
+        });
+        if (linkedTicket && linkedTicket.status === "PENDING" && linkedTicket.userId !== userId) {
+          await prisma.ticket.update({
+            where: { id: linkedTicket.id },
+            data: { status: "IN_PROGRESS", lastResponseAt: new Date() },
+          });
+          // Системное сообщение в чат
+          const statusMsg = await prisma.chatMessage.create({
+            data: {
+              chatId,
+              senderId: userId,
+              content: `📋 Статус обращения изменён на «В работе»`,
+              messageType: "text",
+            },
+            include: {
+              sender: {
+                select: { id: true, firstName: true, lastName: true, middleName: true, avatarUrl: true },
+              },
+              attachments: true,
+            },
+          });
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { lastMessageId: statusMsg.id, lastMessageAt: statusMsg.createdAt },
+          });
+          io.to(`chat:${chatId}`).emit("message:new", statusMsg);
+          console.log(`[Chat Server] ✅ Auto-changed ticket ${linkedTicket.id} to IN_PROGRESS`);
+        }
+      } catch (autoStatusErr) {
+        console.error("[Chat Server] Auto-status error:", autoStatusErr);
+      }
+
       // Отправляем новое сообщение всем в чате
       io.to(`chat:${chatId}`).emit("message:new", message);
 

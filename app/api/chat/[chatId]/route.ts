@@ -1763,6 +1763,51 @@ export async function POST(
       },
     });
 
+    // Авто-смена статуса тикета на IN_PROGRESS при первом сообщении председателя (не автора обращения)
+    {
+      try {
+        const linkedTicket = await prisma.ticket.findFirst({
+          where: { chatId },
+          select: { id: true, publicId: true, userId: true, status: true },
+        });
+        console.log(`[chat/${chatId}] Auto-status check:`, {
+          linkedTicketFound: !!linkedTicket,
+          ticketId: linkedTicket?.id,
+          ticketStatus: linkedTicket?.status,
+          ticketUserId: linkedTicket?.userId,
+          currentUserId: userId,
+          isAuthor: linkedTicket?.userId === userId,
+          chatTicketFromInclude: !!chat.ticket,
+        });
+        if (linkedTicket && linkedTicket.status === "PENDING" && linkedTicket.userId !== userId) {
+          await prisma.ticket.update({
+            where: { id: linkedTicket.id },
+            data: { status: "IN_PROGRESS", lastResponseAt: new Date() },
+          });
+
+          // Системное сообщение в чат о смене статуса
+          const statusMsg = await prisma.chatMessage.create({
+            data: {
+              chatId,
+              senderId: userId,
+              content: `📋 Статус обращения изменён на «В работе»`,
+              messageType: "text",
+            },
+          });
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { lastMessageId: statusMsg.id, lastMessageAt: statusMsg.createdAt },
+          });
+
+          console.log(`[chat/${chatId}] ✅ Auto-changed ticket ${linkedTicket.id} to IN_PROGRESS`);
+        } else if (linkedTicket) {
+          console.log(`[chat/${chatId}] Skipped auto-status: status=${linkedTicket.status}, isAuthor=${linkedTicket.userId === userId}`);
+        }
+      } catch (autoStatusErr) {
+        console.error(`[chat/${chatId}] ❌ Auto-status change error:`, autoStatusErr);
+      }
+    }
+
     // Если чат с ИИ-ботом — запрашиваем ответ и сохраняем сообщение бота (виджет и полная страница чата)
     const otherParticipantIds = chat.participants
       .filter((p: { userId: string }) => p.userId !== userId)

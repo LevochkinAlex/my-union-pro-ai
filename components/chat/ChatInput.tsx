@@ -13,6 +13,7 @@ import {
   AtSign,
   Mic,
   StopCircle,
+  Plus,
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 import MentionAutocomplete, { Participant } from './MentionAutocomplete';
@@ -115,6 +116,7 @@ export default function ChatInput({
   const [convertingHeic, setConvertingHeic] = useState(false);
   const [compressingImages, setCompressingImages] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showMobileAttach, setShowMobileAttach] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   
   // Состояние для упоминаний
@@ -125,6 +127,19 @@ export default function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const mobileAttachRef = useRef<HTMLDivElement>(null);
+
+  // Close mobile attach menu on outside click
+  useEffect(() => {
+    if (!showMobileAttach) return;
+    const handler = (e: MouseEvent) => {
+      if (mobileAttachRef.current && !mobileAttachRef.current.contains(e.target as Node)) {
+        setShowMobileAttach(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMobileAttach]);
 
   // При включении режима редактирования - заполняем поле
   useEffect(() => {
@@ -524,9 +539,63 @@ export default function ChatInput({
           }
           focus-within:border-blue-400 dark:focus-within:border-blue-500
         `}>
-          {/* Attachment buttons */}
-          <div className="flex items-center gap-1 flex-shrink-0 mb-1">
-            {/* Image upload */}
+          {/* Hidden file inputs (shared by mobile & desktop) */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept={IMAGE_FORMATS.join(',')}
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+            title="Выбрать изображение"
+            aria-label="Прикрепить изображение"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={[...IMAGE_FORMATS, ...DOCUMENT_FORMATS].join(',')}
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+            title="Выбрать файл"
+            aria-label="Прикрепить документ"
+          />
+
+          {/* Mobile: single "+" button with popover */}
+          <div className="flex md:hidden flex-shrink-0 mb-1 relative" ref={mobileAttachRef}>
+            <button
+              type="button"
+              onClick={() => setShowMobileAttach(prev => !prev)}
+              className={`p-2 rounded-lg transition-colors ${showMobileAttach ? 'text-blue-500 bg-blue-100/50 dark:bg-blue-900/30' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+              title="Прикрепить"
+              aria-label="Прикрепить файл или эмодзи"
+            >
+              <Plus className={`w-5 h-5 transition-transform ${showMobileAttach ? 'rotate-45' : ''}`} />
+            </button>
+            {showMobileAttach && (
+              <div className="absolute bottom-full left-0 mb-2 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[180px]">
+                <button
+                  type="button"
+                  onClick={() => { imageInputRef.current?.click(); setShowMobileAttach(false); }}
+                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <ImageIcon className="w-5 h-5 text-blue-500" />
+                  <span>Фото</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { fileInputRef.current?.click(); setShowMobileAttach(false); }}
+                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <Paperclip className="w-5 h-5 text-green-500" />
+                  <span>Документ</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop: three separate buttons */}
+          <div className="hidden md:flex items-center gap-1 flex-shrink-0 mb-1">
             <button
               type="button"
               onClick={() => imageInputRef.current?.click()}
@@ -536,18 +605,6 @@ export default function ChatInput({
             >
               <ImageIcon className="w-5 h-5" />
             </button>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept={IMAGE_FORMATS.join(',')}
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-              title="Выбрать изображение"
-              aria-label="Прикрепить изображение"
-            />
-
-            {/* File upload */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -557,18 +614,6 @@ export default function ChatInput({
             >
               <Paperclip className="w-5 h-5" />
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={[...IMAGE_FORMATS, ...DOCUMENT_FORMATS].join(',')}
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-              title="Выбрать файл"
-              aria-label="Прикрепить документ"
-            />
-
-            {/* Emoji picker */}
             <div className="relative">
               <button
                 type="button"
@@ -651,8 +696,8 @@ export default function ChatInput({
           </div>
         </div>
 
-        {/* Keyboard hints */}
-        <div className="mt-2 px-2 flex items-center gap-4 flex-wrap text-[11px]">
+        {/* Keyboard hints (hidden on mobile) */}
+        <div className="mt-2 px-2 hidden md:flex items-center gap-4 flex-wrap text-[11px]">
           <div className="flex items-center gap-1.5">
             <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-[10px] font-semibold text-gray-700 dark:text-gray-300 shadow-sm">
               Enter

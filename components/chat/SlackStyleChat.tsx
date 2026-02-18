@@ -39,6 +39,7 @@ import {
   Trash2,
   X,
   CheckCircle,
+  Play,
 } from "lucide-react";
 
 const AlertDialog = dynamic(() => import("@/components/ui/AlertDialog"), {
@@ -117,10 +118,7 @@ function getChatDisplayInfo(chat: Chat, currentUserId: string | null) {
     } else {
       subtitle = `${participantsCount} участников`;
     }
-    
-    if (isTicketChat && chat.ticketPublicId) {
-      subtitle = `Обращение #${chat.ticketPublicId} · ${subtitle}`;
-    }
+    // Для обращений не дублируем название в subtitle — в хедере уже есть displayName (Обращение №…), оставляем только кол-во участников
   } else if (chat.otherUser) {
     const isDeleted = (chat.otherUser as { isDeleted?: boolean })?.isDeleted;
     displayName = [chat.otherUser.lastName, chat.otherUser.firstName]
@@ -152,10 +150,14 @@ interface ChatHeaderProps {
   isCurrentUserAdmin?: boolean;
   ticketId?: string | null;
   ticketPublicId?: string | null;
+  /** Статус обращения для отображения в шапке (Ожидание / В работе / Решено и т.д.) */
+  ticketStatus?: string | null;
   /** Закрыть обращение (автор — с оценкой) */
   onCloseAppeal?: () => void;
   /** Принудительно закрыть обращение (председатель/получатель) */
   onForceCloseAppeal?: () => void;
+  /** Взять обращение в работу (председатель, только если статус Ожидание) */
+  onTakeInWork?: () => void | Promise<void>;
   isChairman?: boolean;
   /** Удалить переписку из списка (личные) или выйти из чата (группа). Вызов после успешного API. */
   onLeaveChat?: () => Promise<void>;
@@ -167,10 +169,19 @@ interface ChatHeaderProps {
   isCreatedByMe?: boolean;
 }
 
-function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal, onForceCloseAppeal, isChairman = false, onLeaveChat, onDeleteChat, isPrivateChat = false, isCreatedByMe = false }: ChatHeaderProps) {
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Ожидание",
+  IN_PROGRESS: "В работе",
+  RESOLVED: "Решено",
+  REJECTED: "Отклонено",
+  CLOSED: "Закрыто",
+};
+
+function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, ticketStatus, onCloseAppeal, onForceCloseAppeal, onTakeInWork, isChairman = false, onLeaveChat, onDeleteChat, isPrivateChat = false, isCreatedByMe = false }: ChatHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const router = useRouter();
   const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat, isDeletedUser } = getChatDisplayInfo(chat, currentUserId);
+  const ticketStatusLabel = ticketStatus ? (TICKET_STATUS_LABELS[ticketStatus] || ticketStatus) : null;
   const { showToast } = useToast();
   
   // Закрываем меню при клике вне его
@@ -196,13 +207,13 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
   
   // Обновляем subtitle с реальным статусом
   // ИИ помощник всегда онлайн
-  // Для каналов используем subtitle из getChatDisplayInfo (дата создания)
-  // Для групповых чатов используем subtitle из getChatDisplayInfo (количество участников)
+  // Для чатов обращений показываем статус (Ожидание / В работе / Решено и т.д.) и при необходимости участников
+  // Для остальных групп/каналов — subtitle (дата создания, количество участников)
   // Для личных чатов показываем онлайн статус
   const statusSubtitle = isAI 
     ? "Всегда онлайн"
     : isGroup
-      ? subtitle // Для групп и каналов используем subtitle (дата создания для каналов, количество участников для групп)
+      ? (isTicketChat && ticketStatusLabel ? `${ticketStatusLabel}${subtitle ? ` · ${subtitle}` : ""}` : subtitle)
       : (isOtherUserOnline 
           ? "Онлайн" 
           : formatLastSeen(lastSeenAt, false));
@@ -293,6 +304,17 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
       </div>
 
       <div className="flex items-center gap-1">
+        {/* Взять в работу — только для председателя при статусе «Ожидание» (исправление «залипшего» статуса) */}
+        {(isTicketChat || ticketId) && ticketStatus === "PENDING" && onTakeInWork && (
+          <button
+            type="button"
+            onClick={() => { onTakeInWork(); }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl text-blue-600 dark:text-blue-400"
+            title="Взять в работу"
+          >
+            <Play className="w-5 h-5" />
+          </button>
+        )}
         {/* Кнопка закрытия обращения (автор — с оценкой; председатель — принудительно) */}
         {(isTicketChat || ticketId) && (onCloseAppeal || onForceCloseAppeal) && (
           <button
@@ -678,6 +700,52 @@ export default function SlackStyleChat({
     }
   }, [mounted, ticketIdFromUrl, selectedChat?.ticketId, selectedChat?.ticketPublicId, selectedChat?.ticket]);
 
+  // Рефетч данных обращения (после отправки сообщения председателем статус может смениться на «В работе»)
+  const refetchTicketInfo = useCallback(async () => {
+    const ticketIdToUse = ticketIdFromUrl || selectedChat?.ticketId || selectedChat?.ticketPublicId || ticketInfo?.id || ticketInfo?.publicId;
+    if (!ticketIdToUse) return;
+    try {
+      const response = await fetch(`/api/tickets/${ticketIdToUse}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.ticket) {
+          setTicketInfo({
+            id: data.ticket.id,
+            publicId: data.ticket.publicId,
+            status: data.ticket.status,
+            userId: data.ticket.userId || data.ticket.user?.id || '',
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [ticketIdFromUrl, selectedChat?.ticketId, selectedChat?.ticketPublicId, ticketInfo?.id, ticketInfo?.publicId]);
+
+  const handleTakeInWork = useCallback(async () => {
+    if (!ticketInfo?.publicId && !ticketInfo?.id) return;
+    const idForApi = (ticketInfo.publicId || ticketInfo.id).toString().replace(/-/g, "");
+    try {
+      const response = await fetch(`/api/ppo-head/appeals/${idForApi}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "IN_PROGRESS",
+          message: "Обращение переведено в работу из чата.",
+        }),
+      });
+      const data = await safeJsonParse(response);
+      if (!response.ok) throw new Error(data?.error || "Ошибка смены статуса");
+      showToast("Статус изменён на «В работе»", "success");
+      setTicketInfo((prev) => (prev ? { ...prev, status: "IN_PROGRESS" } : null));
+      refetchTicketInfo();
+    } catch (error) {
+      console.error("[SlackStyleChat] Take in work error:", error);
+      const msg = error instanceof Error ? error.message : "Ошибка смены статуса";
+      showToast(msg, "error");
+    }
+  }, [ticketInfo?.publicId, ticketInfo?.id, showToast, refetchTicketInfo]);
+
   // Handle URL params (userId, chatId — в т.ч. чат заседания по ссылке)
   const chatIdFromUrlTriedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -716,14 +784,18 @@ export default function SlackStyleChat({
         chatIdFromUrlTriedRef.current = null;
         return;
       }
-      // Чата нет в списке (например, чат заседания) — пробуем открыть по ID (один раз на chatId)
+      // Чата нет в списке (например, чат заседания или обращение) — пробуем открыть по ID (один раз на chatId)
       if (chatIdFromUrlTriedRef.current !== chatId) {
         chatIdFromUrlTriedRef.current = chatId;
+        const ticketIdFromQuery = searchParams.get("ticketId");
+        const messageIdFromQuery = searchParams.get("messageId");
         openChatById(chatId).then((result) => {
           if (result.success) {
             setShowChatView(true);
             const urlParams = new URLSearchParams();
             urlParams.set("chatId", chatId);
+            if (ticketIdFromQuery) urlParams.set("ticketId", ticketIdFromQuery);
+            if (messageIdFromQuery) urlParams.set("messageId", messageIdFromQuery);
             router.replace(`${baseUrl}?${urlParams.toString()}`, { scroll: false });
           } else {
             // Не сбрасываем ref — больше не повторяем запрос для этого chatId; очищаем URL
@@ -737,11 +809,15 @@ export default function SlackStyleChat({
     }
   }, [mounted, loading, searchParams, chats, selectedChat?.id, router, baseUrl, selectChat, createOrOpenChat, openChatById, showToast]);
 
+  // На десктопе при выборе чата показываем область чата; на мобильном — только если в URL есть chatId/ticketId (иначе кнопка «Назад» снова откроет чат из-за selectedChat)
   useEffect(() => {
-    if (selectedChat) {
+    if (!selectedChat) return;
+    const hasChatInUrl = searchParams.get("chatId") != null || searchParams.get("ticketId") != null;
+    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 768;
+    if (isDesktop || hasChatInUrl) {
       setShowChatView(true);
     }
-  }, [selectedChat]);
+  }, [selectedChat, searchParams]);
 
   // Обработка прокрутки к сообщению при наличии messageId в URL
   useEffect(() => {
@@ -791,7 +867,16 @@ export default function SlackStyleChat({
     setEditingMessage(null);
     setActiveThread(null);
     setActiveChannelThread(null);
-  }, [selectChat]);
+    // На мобильном обновляем URL и открываем чат, чтобы «Назад» работало без мерцания
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      const params = new URLSearchParams();
+      params.set("chatId", chat.id);
+      const tid = (chat as any).ticketPublicId || (chat as any).ticketId;
+      if (tid) params.set("ticketId", tid);
+      router.replace(`${baseUrl}?${params.toString()}`, { scroll: false });
+      setShowChatView(true);
+    }
+  }, [selectChat, router, baseUrl]);
 
   const handleOpenAIChat = useCallback(async () => {
     try {
@@ -919,12 +1004,21 @@ export default function SlackStyleChat({
         }
         if (hasError) showToast("Ошибка загрузки некоторых файлов", "error");
         setReplyingTo(null);
+        if (ticketInfo || ticketIdFromUrl || selectedChat?.ticketId || selectedChat?.ticketPublicId) {
+          refetchTicketInfo();
+        }
       } else {
         const success = await sendMessage(content, undefined, replyToId || replyingTo?.id || undefined, currentThreadRootId, resolvedMentions);
-        if (success) setReplyingTo(null);
+        if (success) {
+          setReplyingTo(null);
+          // После отправки в чат обращения статус на сервере мог смениться на «В работе» — обновляем отображение
+          if (ticketInfo || ticketIdFromUrl || selectedChat?.ticketId || selectedChat?.ticketPublicId) {
+            refetchTicketInfo();
+          }
+        }
       }
     }
-  }, [editingMessage, replyingTo, selectedChat, editMessage, sendMessage, loadChats, showToast, activeThread]);
+  }, [editingMessage, replyingTo, selectedChat, editMessage, sendMessage, loadChats, showToast, activeThread, ticketInfo, ticketIdFromUrl, refetchTicketInfo]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (deleteConfirm.messageId) {
@@ -936,7 +1030,11 @@ export default function SlackStyleChat({
   const handleBackToList = useCallback(() => {
     setShowChatView(false);
     setActiveThread(null);
-  }, []);
+    // Очищаем URL на мобильном, чтобы эффект по searchParams не открывал чат снова (убираем мерцание)
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      router.replace(baseUrl, { scroll: false });
+    }
+  }, [router, baseUrl]);
 
   const handleLeaveChat = useCallback(async () => {
     if (!selectedChat?.id) return;
@@ -1037,6 +1135,7 @@ export default function SlackStyleChat({
                 )}
                 ticketId={ticketIdFromUrl || selectedChat?.ticketId || undefined}
                 ticketPublicId={ticketInfo?.publicId || selectedChat?.ticket?.publicId || selectedChat?.ticketPublicId || undefined}
+                ticketStatus={ticketInfo?.status || selectedChat?.ticket?.status || undefined}
                 onCloseAppeal={
                   ticketInfo && 
                   ticketInfo.userId === currentUserId && 
@@ -1045,13 +1144,13 @@ export default function SlackStyleChat({
                     ? () => setShowCloseAppealModal(true)
                     : undefined
                 }
-                onForceCloseAppeal={
+                onForceCloseAppeal={undefined}
+                onTakeInWork={
                   ticketInfo &&
                   ticketInfo.userId !== currentUserId &&
                   isChairman &&
-                  ticketInfo.status !== 'CLOSED' &&
-                  ticketInfo.status !== 'RESOLVED'
-                    ? () => setShowForceCloseAppealModal(true)
+                  ticketInfo.status === 'PENDING'
+                    ? handleTakeInWork
                     : undefined
                 }
                 isChairman={isChairman}
@@ -1140,7 +1239,22 @@ export default function SlackStyleChat({
                         </div>
                       );
                     }
+                    // Председатель не может писать в чат обращения, пока не нажмёт «Взять в работу»
+                    const mustTakeInWorkFirst = !!(
+                      (ticketIdFromUrl || selectedChat?.ticketId || selectedChat?.ticketPublicId) &&
+                      ticketInfo?.status === 'PENDING' &&
+                      ticketInfo?.userId !== currentUserId &&
+                      isChairman
+                    );
                     return (
+                    <div className="border-t border-gray-200 dark:border-gray-700">
+                      {mustTakeInWorkFirst && (
+                        <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800">
+                          <p className="text-sm text-amber-800 dark:text-amber-200 text-center">
+                            Чтобы ответить, сначала нажмите <strong>«Взять в работу»</strong> (кнопка ▶ в шапке чата). После этого статус сменится на «В работе» и станет доступна отправка сообщений.
+                          </p>
+                        </div>
+                      )}
                     <ChatInput
                       onSend={handleSendMessage}
                       replyTo={replyingTo ? {
@@ -1154,9 +1268,11 @@ export default function SlackStyleChat({
                       editingMessage={editingMessage?.content || null}
                       onCancelReply={() => setReplyingTo(null)}
                       onCancelEdit={() => setEditingMessage(null)}
-                      disabled={sending}
+                      disabled={sending || mustTakeInWorkFirst}
                       placeholder={
-                        selectedChat.type === 'CHANNEL' && activeThread
+                        mustTakeInWorkFirst
+                          ? "Сначала нажмите «Взять в работу» в шапке чата"
+                          : selectedChat.type === 'CHANNEL' && activeThread
                           ? "Напишите комментарий в треде..."
                           : "Напишите сообщение..."
                       }
@@ -1169,6 +1285,7 @@ export default function SlackStyleChat({
                       })) || []}
                       currentUserId={currentUserId || ''}
                     />
+                    </div>
                     );
                   })()}
                 </div>

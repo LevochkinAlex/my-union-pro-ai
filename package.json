@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "fix-appeal-messages": "tsx scripts/fix-appeal-messages.ts",
+    "rebuild-appeal-statuses": "dotenv -e .env.local -- tsx scripts/rebuild-appeal-statuses.ts",
     "rebuild-meeting-chats": "dotenv -e .env.local -- tsx scripts/rebuild-meeting-chats-for-user.ts",
     "cleanup:orphan-incoming-copies": "dotenv -e .env.local -- tsx scripts/cleanup-orphan-incoming-meeting-copies.ts",
     "rebuild-all-meeting-chats": "dotenv -e .env.local -- tsx scripts/rebuild-all-meeting-chats.ts",
@@ -103,6 +104,7 @@
     "react-input-mask": "^2.0.4",
     "react-markdown": "^10.1.0",
     "react-virtuoso": "^4.18.1",
+    "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "shaders": "^2.2.45",
     "sharp": "^0.34.5",

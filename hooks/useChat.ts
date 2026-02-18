@@ -119,36 +119,9 @@ export function useChat(options: UseChatOptions = {}) {
       const data = await fetchJsonWithRetry<{ chats: Chat[] }>("/api/chat", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
-      });
+      }, { timeoutMs: 60000 });
       
       if (data?.chats) {
-        console.log("[useChat] ========== CLIENT CHAT LOADING ==========");
-        console.log("[useChat] ✅ Loaded chats:", data.chats.length);
-        console.log("[useChat] Chats breakdown:", {
-          PRIVATE: data.chats.filter((c: Chat) => c.type === "PRIVATE").length,
-          GROUP: data.chats.filter((c: Chat) => c.type === "GROUP").length,
-          CHANNEL: data.chats.filter((c: Chat) => c.type === "CHANNEL").length,
-          AI: data.chats.filter((c: Chat) => c.name === "ИИ-Ассистент").length,
-        });
-        console.log("[useChat] Chats details:", data.chats.map((c: Chat) => ({
-          id: c.id,
-          type: c.type,
-          name: c.name || (c as any).displayName,
-          hasLastMessage: !!(c as any).lastMessage,
-          lastMessageAt: (c as any).lastMessageAt,
-          unreadCount: (c as any).unreadCount || 0,
-          otherUser: (c as any).otherUser?.id || null,
-          archivedAt: (c as any).archivedAt || null,
-        })));
-        // Логируем архивные чаты отдельно
-        const archivedChats = data.chats.filter((c: Chat) => (c as any).archivedAt);
-        if (archivedChats.length > 0) {
-          console.log("[useChat] 📦 Archived chats:", archivedChats.length, archivedChats.map((c: Chat) => ({
-            id: c.id,
-            name: c.name || (c as any).displayName,
-            archivedAt: (c as any).archivedAt,
-          })));
-        }
         setChats(data.chats);
         
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа.
@@ -162,25 +135,6 @@ export function useChat(options: UseChatOptions = {}) {
           const count = (c as any).unreadCount || 0;
           return sum + Math.max(0, count);
         }, 0);
-        
-        console.log(`[useChat] ========== LOAD CHATS UNREAD COUNT ==========`);
-        console.log(`[useChat] Total unread:`, totalUnread);
-        console.log(`[useChat] Chats with unread:`, chatsWithUnread.length);
-        console.log(`[useChat] Chats with unread details:`, JSON.stringify(chatsWithUnread.map((c: Chat) => ({
-          id: c.id,
-          name: (c as any).name || (c as any).displayName,
-          unreadCount: (c as any).unreadCount,
-          type: c.type,
-          otherUserId: c.otherUser?.id,
-        })), null, 2));
-        console.log(`[useChat] ALL CHATS:`, JSON.stringify(data.chats.map((c: Chat) => ({
-          id: c.id,
-          name: (c as any).name || (c as any).displayName,
-          unreadCount: (c as any).unreadCount || 0,
-          type: c.type,
-          otherUserId: c.otherUser?.id,
-        })), null, 2));
-        console.log(`[useChat] ==============================================`);
         
         window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
           detail: { totalUnread },
@@ -258,10 +212,10 @@ export function useChat(options: UseChatOptions = {}) {
       auth: { token },
       transports: ["websocket", "polling"],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
+      reconnectionAttempts: 2,
+      reconnectionDelay: 1500,
+      reconnectionDelayMax: 3000,
+      timeout: 2500,
     });
 
     socketRef.current = socket;
@@ -292,10 +246,12 @@ export function useChat(options: UseChatOptions = {}) {
 
     socket.on("connect_error", (error) => {
       setIsConnected(false);
-      // Логируем один раз за сессию, чтобы не засорять консоль при повторных попытках / Strict Mode
+      // Логируем один раз за сессию; приложение работает по HTTP без сокет-сервера
       if (!socketErrorLoggedRef.current) {
         socketErrorLoggedRef.current = true;
-        console.warn("[useChat] Socket unavailable (will use HTTP fallback):", error.message);
+        console.warn(
+          "[useChat] Сокет недоступен (чат работает по HTTP). Чтобы включить realtime, запустите сокет-сервер: pnpm socket (порт 3005 или NEXT_PUBLIC_SOCKET_URL)."
+        );
       }
     });
 

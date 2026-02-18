@@ -21,6 +21,7 @@ interface UseSocketOptions {
 export function useSocket(options: UseSocketOptions = {}) {
   const { data: session } = useSession();
   const socketRef = useRef<Socket | null>(null);
+  const socketErrorLoggedRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const currentChatRef = useRef<string | null>(null);
@@ -44,8 +45,9 @@ export function useSocket(options: UseSocketOptions = {}) {
       auth: { token },
       transports: ["websocket", "polling"],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 2,
+      reconnectionDelay: 1500,
+      timeout: 2500,
     });
 
     socketRef.current = socket;
@@ -65,8 +67,11 @@ export function useSocket(options: UseSocketOptions = {}) {
       setIsConnected(false);
     });
 
-    socket.on("connect_error", (error) => {
-      console.error("[useSocket] Connection error:", error.message);
+    socket.on("connect_error", () => {
+      if (!socketErrorLoggedRef.current) {
+        socketErrorLoggedRef.current = true;
+        console.warn("[useSocket] Сокет недоступен. Запустите: pnpm socket (порт 3005 или NEXT_PUBLIC_SOCKET_URL).");
+      }
     });
 
     // События сообщений
