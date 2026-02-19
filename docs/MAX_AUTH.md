@@ -50,6 +50,48 @@ pnpm prisma migrate dev --name add_max_user_id
 3. Страница отправляет `initData` в `POST /api/auth/max/verify`. Сервер проверяет подпись (HMAC-SHA256 по [документации MAX](https://dev.max.ru/docs/webapps/validation)), находит или создаёт пользователя по `user.id` из MAX и выдаёт одноразовый токен входа.
 4. Браузер переходит на `/auth/max/success?token=...`, где выполняется вход через NextAuth и редирект в `/dashboard`.
 
+## Вход по одноразовому коду в MAX (как в Telegram)
+
+Если у пользователя привязан MAX (он хотя бы раз заходил через мини-приложение или привязал номер в боте), при входе по номеру телефона код доставки приоритет такой: **Telegram → MAX → SMS**. То есть код придёт в MAX, если Telegram не привязан или не сработал.
+
+Привязка MAX по номеру: пользователь открывает бота в MAX и начинает диалог (bot_started); если в профиле MAX указан тот же номер, что в МойСоюз, бот привяжет чат к аккаунту.
+
+## Вход по ссылке из бота (когда мини-приложение не открывается)
+
+В чате с ботом пользователь может отправить **/login** или «вход» / «войти». Бот пришлёт одноразовую ссылку для входа (как в Telegram). Ссылка ведёт на `/api/auth/telegram/auto-login?token=...` и действительна 10 минут.
+
+Чтобы это работало, бот должен быть **подписан на обновления** (webhook). В интерфейсе [business.max.ru](https://business.max.ru/self) поля для URL webhook **нет** — подписка делается через API MAX.
+
+**Как зарегистрировать webhook один раз**
+
+1. Убедитесь, что в `.env` есть `MAX_BOT_TOKEN` (токен из кабинета MAX: **Интеграция → Получить токен**).
+2. Из корня проекта выполните:
+
+```bash
+node scripts/register-max-webhook.mjs
+```
+
+Скрипт сам подхватит токен из `.env`. URL по умолчанию: `https://myunion.pro/api/max/webhook`.
+
+Или вручную через curl:
+
+```bash
+curl -X POST "https://platform-api.max.ru/subscriptions" \
+  -H "Authorization: Bearer ВАШ_ТОКЕН" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://myunion.pro/api/max/webhook", "update_types": ["message_created", "bot_started"]}'
+```
+
+После успешного ответа бот будет получать события (в т.ч. сообщения и /login) на ваш сервер. Проверить текущие подписки: `GET https://platform-api.max.ru/subscriptions` с тем же заголовком `Authorization: Bearer ВАШ_ТОКЕН`.
+
+**На проде:** при каждом деплое (`./complete-deploy.sh`) скрипт автоматически регистрирует webhook на `https://myunion.pro/api/max/webhook`, если в `.env` задан `MAX_BOT_TOKEN`. На сервере можно зарегистрировать вручную: `cd /opt/my-union-pro && WEBHOOK_URL=https://myunion.pro/api/max/webhook node scripts/register-max-webhook.mjs` (токен возьмётся из `.env` или `.env.local` на сервере).
+
+## Если не работает редирект / мини-приложение
+
+1. **Мини-приложение:** В настройках бота в MAX поле «Ссылка мини-приложения» должно быть **ровно** `https://myunion.pro/auth/max` (не главная страница). Иначе открывается сайт без контекста MAX и без initData.
+2. **Веб-версия MAX (web.max.ru):** Вход через мини-приложение в браузере не поддерживается — нужен мобильный клиент MAX или ссылка из бота (/login).
+3. **Webhook:** Проверьте, что в кабинете MAX указан URL webhook и что сервер доступен по HTTPS. В логах приложения при отправке /login в боте должно появляться сообщение «[MAX Webhook] Отправлена ссылка для входа».
+
 ## Документация MAX
 
 - [Подключение мини-приложения](https://dev.max.ru/docs/webapps/introduction)

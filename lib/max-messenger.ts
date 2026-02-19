@@ -89,7 +89,7 @@ export async function sendPINViaMax(
 
 Ваш код подтверждения: ${pinCode}
 
-⏱ Код действителен 5 минут
+⏱ Код действителен 10 минут
 ⚠️ Никому не сообщайте этот код
   `.trim();
 
@@ -162,5 +162,28 @@ export async function sendMaxWelcomeMessage(maxId: string): Promise<MaxSendMessa
   `.trim();
 
   return sendMaxMessage(maxId, message);
+}
+
+/**
+ * Отправляет пользователю в MAX ссылку для входа (как в Telegram).
+ * Ссылка одноразовая, действительна 10 минут.
+ */
+export async function sendMaxLoginLink(
+  maxChatId: string,
+  loginUrl: string,
+  firstName?: string
+): Promise<MaxSendMessageResult> {
+  const name = firstName ? `, ${firstName}` : "";
+  const message = `
+🔐 Вход в МойСоюз${name}
+
+Нажмите ссылку ниже для входа в личный кабинет:
+
+${loginUrl}
+
+⏱ Ссылка действительна 10 минут
+  `.trim();
+
+  return sendMaxMessage(maxChatId, message);
 }
 

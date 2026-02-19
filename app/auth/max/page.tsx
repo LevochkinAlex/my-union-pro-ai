@@ -208,6 +208,9 @@ export default function AuthMaxPage() {
             <p className="text-sm text-amber-600 dark:text-amber-400 mb-4 max-w-sm">
               Используйте приложение MAX на телефоне: откройте бота «Мой Союз» и нажмите кнопку под чатом — или отсканируйте QR-код ниже.
             </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-sm">
+              Либо в чате с ботом отправьте <strong>/login</strong> — вам придёт ссылка для входа (как в Telegram).
+            </p>
           </>
         ) : (
           <>
@@ -216,6 +219,9 @@ export default function AuthMaxPage() {
             </p>
             <p className="text-sm text-amber-600 dark:text-amber-400 mb-4 max-w-sm">
               Если вы уже в MAX — закройте эту вкладку и нажмите кнопку под чатом с ботом ещё раз.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-sm">
+              Или в чате с ботом отправьте <strong>/login</strong> — вам придёт ссылка для входа в личный кабинет (как в Telegram).
             </p>
           </>
         )}

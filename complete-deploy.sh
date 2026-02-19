@@ -33,6 +33,12 @@ git push
 
 echo ""
 echo "Step 5: Deploying to server..."
+# Подтягиваем VK_ID_CLIENT_ID из vds.deploy.env или .env для записи на сервер
+[ -f "$SCRIPT_DIR/vds.deploy.env" ] && source "$SCRIPT_DIR/vds.deploy.env"
+[ -f "$SCRIPT_DIR/.env" ] && source "$SCRIPT_DIR/.env" 2>/dev/null || true
+if [ -n "$VK_ID_CLIENT_ID" ]; then
+  sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 "grep -q '^VK_ID_CLIENT_ID=' /opt/my-union-pro/.env.local 2>/dev/null || echo 'VK_ID_CLIENT_ID=$VK_ID_CLIENT_ID' >> /opt/my-union-pro/.env.local" && echo "✅ VK_ID_CLIENT_ID прописан на проде"
+fi
 sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'EOF'
 cd /opt/my-union-pro
 echo "--- Pulling code ---"
@@ -59,6 +65,14 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
     echo "✅ Server is responding correctly!"
 else
     echo "⚠️ Server returned: $HTTP_CODE"
+fi
+
+echo ""
+echo "Step 7: MAX webhook (прод)..."
+if WEBHOOK_URL="https://myunion.pro/api/max/webhook" node scripts/register-max-webhook.mjs 2>&1; then
+  echo "✅ MAX webhook зарегистрирован"
+else
+  echo "⏭ MAX webhook: пропущено или ошибка (добавьте MAX_BOT_TOKEN в .env для авторегистрации)"
 fi
 
 echo ""

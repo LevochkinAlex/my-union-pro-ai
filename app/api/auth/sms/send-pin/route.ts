@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPINViaSMS } from "@/lib/exolve-sms";
 import { sendTelegramMessage } from "@/lib/telegram-bot";
+import { sendPINViaMax } from "@/lib/max-messenger";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -141,16 +142,14 @@ export async function POST(request: NextRequest) {
       pinCode: process.env.NODE_ENV === "development" ? pinCode : "***",
     });
 
-    // Определяем способ доставки: Telegram (бесплатно) или SMS (платно)
-    // Приоритет: если пользователь привязал Telegram (даже после первой SMS авторизации) - отправляем в Telegram
-    let deliveryMethod: "telegram" | "sms" = "sms";
+    // Определяем способ доставки: Telegram → MAX → SMS (приоритет: мессенджеры бесплатно)
+    let deliveryMethod: "telegram" | "max" | "sms" = "sms";
     let deliverySuccess = false;
     let isExistingUser = !!existingUser;
 
-    // Если у пользователя привязан Telegram - отправляем туда (экономия на SMS)
-    // Это работает даже если пользователь сначала авторизовался по SMS, а потом привязал Telegram через бота
+    // 1) Если у пользователя привязан Telegram — отправляем туда
     if (existingUser?.telegramChatId) {
-      console.log("[2FA Auth] 📱 Пользователь имеет привязанный Telegram, отправляем туда (приоритет над SMS):", existingUser.telegramChatId);
+      console.log("[2FA Auth] 📱 Пользователь имеет привязанный Telegram, отправляем туда:", existingUser.telegramChatId);
       
       const telegramMessage = `
 🔐 <b>Код для входа в МойСоюз</b>
@@ -168,11 +167,24 @@ export async function POST(request: NextRequest) {
         deliveryMethod = "telegram";
         deliverySuccess = true;
       } else {
-        console.log("[2FA Auth] ⚠️ Telegram не сработал, пробуем SMS:", telegramResult.error);
+        console.log("[2FA Auth] ⚠️ Telegram не сработал:", telegramResult.error);
       }
     }
 
-    // Если Telegram не сработал или не привязан - отправляем SMS
+    // 2) Если Telegram не сработал или не привязан — пробуем MAX (если привязан)
+    if (!deliverySuccess && existingUser?.maxChatId) {
+      console.log("[2FA Auth] 📲 Отправка PIN в MAX:", existingUser.maxChatId);
+      const maxResult = await sendPINViaMax(existingUser.maxChatId, pinCode);
+      if (maxResult.success) {
+        console.log("[2FA Auth] ✅ PIN-код отправлен в MAX");
+        deliveryMethod = "max";
+        deliverySuccess = true;
+      } else {
+        console.log("[2FA Auth] ⚠️ MAX не сработал:", maxResult.error);
+      }
+    }
+
+    // 3) Если мессенджеры не сработали — отправляем SMS
     if (!deliverySuccess) {
       console.log("[2FA Auth] 📨 Отправка PIN-кода через SMS на номер:", normalizedPhone);
       console.log("[2FA Auth] EXOLVE_API_KEY установлен:", !!process.env.EXOLVE_API_KEY);
@@ -226,6 +238,7 @@ export async function POST(request: NextRequest) {
 
     const messages = {
       telegram: "Код отправлен в Telegram 💬",
+      max: "Код отправлен в MAX 📲",
       sms: "Код отправлен в SMS 📱",
     };
 
@@ -235,6 +248,7 @@ export async function POST(request: NextRequest) {
       message: messages[deliveryMethod],
       isExistingUser,
       hasTelegram: !!existingUser?.telegramChatId,
+      hasMax: !!existingUser?.maxChatId,
       // В продакшене не возвращаем PIN-код, только для разработки
       ...(process.env.NODE_ENV === "development" && { pinCode }),
     });
