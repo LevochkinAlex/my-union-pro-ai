@@ -15,12 +15,15 @@ interface Notification {
   createdAt: string;
 }
 
+const DOC_APPROVAL_TYPES = ["meeting_agenda_review", "meeting_document_approval"];
+
 export default function NotificationsPage() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [filter, setFilter] = useState<"all" | "unread">("unread");
+  const [approvalSubmitting, setApprovalSubmitting] = useState<string | null>(null);
 
   useEffect(() => {
     loadNotifications();
@@ -85,14 +88,41 @@ export default function NotificationsPage() {
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    // Помечаем как прочитанное
     if (!notification.readAt) {
       markAsRead(notification.id);
     }
-
-    // Переходим по URL
     if (notification.url) {
       router.push(notification.url);
+    }
+  };
+
+  const handleDocApprove = async (e: React.MouseEvent, notification: Notification, action: "approve" | "reject") => {
+    e.stopPropagation();
+    const meta = notification.metadata as { meetingId?: string; documentId?: string } | null;
+    if (!meta?.meetingId || !meta?.documentId) return;
+    setApprovalSubmitting(notification.id);
+    try {
+      const res = await fetch(
+        `/api/ppo-head/meetings/${meta.meetingId}/documents/${meta.documentId}/approve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, comment: undefined }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Ошибка");
+      if (!notification.readAt) markAsRead(notification.id);
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      setUnreadCount((c) => Math.max(0, c - 1));
+      if (action === "approve") {
+        router.push(notification.url || "/dashboard/documents?tab=incoming");
+      }
+    } catch (err) {
+      console.error("Doc approve error:", err);
+      alert(err instanceof Error ? err.message : "Не удалось выполнить действие");
+    } finally {
+      setApprovalSubmitting(null);
     }
   };
 
@@ -118,6 +148,13 @@ export default function NotificationsPage() {
           </svg>
         );
       case "ticket_response":
+        return (
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        );
+      case "meeting_agenda_review":
+      case "meeting_document_approval":
         return (
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -196,19 +233,9 @@ export default function NotificationsPage() {
           )}
         </div>
 
-      {/* Tabs */}
+      {/* Tabs: сначала Непрочитанные, затем Все уведомления */}
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
-          <button
-            onClick={() => setFilter("all")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
-              filter === "all"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Все уведомления
-          </button>
           <button
             onClick={() => setFilter("unread")}
             className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm flex items-center gap-2 ${
@@ -223,6 +250,16 @@ export default function NotificationsPage() {
                 {unreadCount}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setFilter("all")}
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+              filter === "all"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Все уведомления
           </button>
         </nav>
         </div>
@@ -295,6 +332,41 @@ export default function NotificationsPage() {
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
                       {formatDate(notification.createdAt)}
                     </p>
+                    {DOC_APPROVAL_TYPES.includes(notification.type) &&
+                      (notification.metadata as { meetingId?: string; documentId?: string })?.meetingId &&
+                      (notification.metadata as { meetingId?: string; documentId?: string })?.documentId && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (notification.url) {
+                              if (!notification.readAt) markAsRead(notification.id);
+                              router.push(notification.url);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Посмотреть
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDocApprove(e, notification, "approve")}
+                          disabled={approvalSubmitting === notification.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {approvalSubmitting === notification.id ? "…" : "Согласовать"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDocApprove(e, notification, "reject")}
+                          disabled={approvalSubmitting === notification.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Отклонить
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

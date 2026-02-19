@@ -60,14 +60,17 @@ export async function assignAgendaToParticipantsAndNotify(
     fromName = [creator?.lastName, creator?.firstName].filter(Boolean).join(" ") || "Председатель";
   }
 
-  // Копии и уведомления — только участникам, не председателю (председатель утверждает на странице заседания)
+  // Копии и уведомления — только участникам с привязанным пользователем (userId), не председателю
   const participantUserIds = meeting.participants
     .filter((p): p is typeof p & { user: { id: string } } => p.user != null && p.role !== "CHAIRMAN")
     .map((p) => p.user.id);
 
   if (participantUserIds.length === 0) {
+    console.warn("[meeting-agenda-notify] Нет участников для уведомления (все без userId или только председатель). Убедитесь, что в заседании добавлены участники с привязанными учётными записями.");
     return { assignedCount: 0, notifiedCount: 0 };
   }
+
+  console.log(`[meeting-agenda-notify] Повестка: уведомление ${participantUserIds.length} участникам (userId: ${participantUserIds.slice(0, 5).join(", ")}${participantUserIds.length > 5 ? "…" : ""})`);
 
   // Кто уже имеет назначенную повестку (оригинал или копию)
   const existingAssigned = await prisma.document.findMany({
@@ -129,13 +132,19 @@ export async function assignAgendaToParticipantsAndNotify(
     year: "numeric",
   });
 
-  await sendMassNotification({
-    userIds: participantUserIds,
-    title: `Повестка дня на согласование: Заседание №${meeting.number}`,
-    body: `Просьба согласовать или ознакомиться с документом от ${fromName}. Заседание ${meetingDate}. Документ во вкладке «Входящие».`,
-    url: `/dashboard/documents?tab=incoming`,
-    type: "meeting_agenda_review",
-  });
+  try {
+    await sendMassNotification({
+      userIds: participantUserIds,
+      title: `Повестка дня на согласование: Заседание №${meeting.number}`,
+      body: `Просьба согласовать или ознакомиться с документом от ${fromName}. Заседание ${meetingDate}. Документ во вкладке «Входящие».`,
+      url: `/dashboard/documents?tab=incoming`,
+      type: "meeting_agenda_review",
+      metadata: { meetingId: meeting.id, documentId: meeting.agendaDocument!.id },
+    });
+  } catch (err) {
+    console.error("[meeting-agenda-notify] Ошибка отправки push/email участникам:", err);
+    throw err;
+  }
 
   return { assignedCount, notifiedCount: participantUserIds.length };
 }
@@ -239,8 +248,9 @@ export async function assignAgendaToUserIds(
       userIds: usersToAssign,
       title: `Повестка дня: Заседание №${meeting.number}`,
       body: `Вам направлена повестка дня заседания ${meetingDate}. Ознакомьтесь во вкладке «Входящие».`,
-      url: `/dashboard/documents`,
+      url: `/dashboard/documents?tab=incoming`,
       type: "meeting_agenda_review",
+      metadata: { meetingId: meeting.id, documentId: meeting.agendaDocument!.id },
     });
   }
 

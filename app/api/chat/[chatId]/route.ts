@@ -1441,6 +1441,18 @@ export async function POST(
         );
       }
     }
+
+    // Архивированный чат (например, заседание завершено): писать нельзя
+    const chatWithArchive = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: { archivedAt: true },
+    });
+    if (chatWithArchive?.archivedAt) {
+      return NextResponse.json(
+        { error: 'Чат в архиве. Отправка сообщений недоступна.' },
+        { status: 403 }
+      );
+    }
     
     // Проверяем, что отправитель является участником чата
     let senderParticipant = chat.participants.find(p => p.userId === userId);

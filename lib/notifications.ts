@@ -475,6 +475,8 @@ export async function sendMassNotification(data: {
   body: string;
   url: string;
   type?: string;
+  /** Метаданные для записей в разделе «Уведомления» (meetingId, documentId и т.д.) — создаёт UserNotification для каждого получателя */
+  metadata?: Record<string, unknown>;
 }): Promise<{
   push: boolean;
   email: boolean;
@@ -537,6 +539,26 @@ export async function sendMassNotification(data: {
     }
 
     console.log(`[notifications] Sending mass notification to ${users.length} users`);
+
+    // Сохраняем уведомления в БД для раздела «Уведомления» (с быстрыми кнопками Согласовать/Посмотреть)
+    if (data.metadata != null && data.type) {
+      try {
+        await prisma.userNotification.createMany({
+          data: users.map((user) => ({
+            userId: user.id,
+            type: data.type!,
+            title: cleanTitle,
+            body: cleanBody,
+            url: data.url,
+            metadata: data.metadata ?? undefined,
+            pushSent: false,
+            emailSent: false,
+          })),
+        });
+      } catch (err) {
+        console.warn("[notifications] Failed to create UserNotification records:", err);
+      }
+    }
 
     // Отправляем уведомления параллельно всем пользователям
     const results = await Promise.all(

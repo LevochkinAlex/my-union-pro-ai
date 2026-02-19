@@ -309,12 +309,13 @@ export async function POST(
         where: { id: meeting.id },
         data: { agendaDocumentId: document.id },
       });
+      const chairmanName = [orgHead.lastName, orgHead.firstName].filter(Boolean).join(" ") || "Председатель";
       try {
-        const result = await assignAgendaToParticipantsAndNotify(meeting.id, session.user.id);
+        const result = await assignAgendaToParticipantsAndNotify(meeting.id, session.user.id, chairmanName);
         console.log(`[generate-document] Повестка: назначено ${result.assignedCount} участникам, уведомлено ${result.notifiedCount}`);
       } catch (notifyErr) {
         console.error("[generate-document] Ошибка рассылки повестки участникам:", notifyErr);
-        // Не падаем — документ создан, рассылку можно повторить вручную
+        // Не падаем — документ создан; рассылку можно повторить кнопкой «Разослать на согласование» или «Отправить уведомления»
       }
     } else if (documentType === "PROTOCOL" && !existingProtocolDoc) {
       await prisma.meeting.update({

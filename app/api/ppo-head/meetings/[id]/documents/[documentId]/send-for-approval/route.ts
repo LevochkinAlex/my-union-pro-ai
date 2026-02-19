@@ -95,7 +95,9 @@ export async function POST(
 
     if (participantsWithUserId.length === 0) {
       return NextResponse.json(
-        { error: "Нет участников для согласования" },
+        {
+          error: "Нет участников для согласования. Добавьте в заседание участников с привязанными учётными записями (раздел «Состав заседания» или «Присутствовали»), затем повторите рассылку.",
+        },
         { status: 400 }
       );
     }
@@ -163,6 +165,7 @@ export async function POST(
         body: `Просьба согласовать или ознакомиться с документом от ${chairmanName}. Документ во вкладке «Входящие».`,
         url: inboxUrl,
         type: "meeting_document_approval",
+        metadata: { meetingId, documentId },
       });
     }
 

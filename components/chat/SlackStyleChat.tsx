@@ -21,6 +21,7 @@ import ThreadView from "./ThreadView";
 import ChannelThreadView from "./ChannelThreadView";
 import ImageModal from "./ImageModal";
 import ChannelPostModal from "./ChannelPostModal";
+import MeetingChatPendingApprovals from "./MeetingChatPendingApprovals";
 import CloseAppealModal from "@/components/appeals/CloseAppealModal";
 import ParticipantsPanel from "./ParticipantsPanel";
 import AddParticipantModal from "./AddParticipantModal";
@@ -1165,6 +1166,12 @@ export default function SlackStyleChat({
                         "flex flex-col min-w-0 min-h-0 transition-all duration-300",
                         "flex-1",
                       )}>
+                  <MeetingChatPendingApprovals
+                    meetingId={selectedChat.meetingId ?? undefined}
+                    isChairman={!!isChairman}
+                    onApproved={selectedChat?.id ? () => loadMessages(selectedChat.id) : undefined}
+                    showToast={showToast}
+                  />
                   <SlackStyleMessages
                     isGroupChat={selectedChat?.type === 'GROUP' || selectedChat?.type === 'CHANNEL'}
                     isAIChat={selectedChat?.name === "ИИ-Ассистент"}
@@ -1246,12 +1253,20 @@ export default function SlackStyleChat({
                       ticketInfo?.userId !== currentUserId &&
                       isChairman
                     );
+                    const isArchived = !!(selectedChat as any)?.archivedAt;
                     return (
                     <div className="border-t border-gray-200 dark:border-gray-700">
                       {mustTakeInWorkFirst && (
                         <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800">
                           <p className="text-sm text-amber-800 dark:text-amber-200 text-center">
                             Чтобы ответить, сначала нажмите <strong>«Взять в работу»</strong> (кнопка ▶ в шапке чата). После этого статус сменится на «В работе» и станет доступна отправка сообщений.
+                          </p>
+                        </div>
+                      )}
+                      {isArchived && (
+                        <div className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                            Чат в архиве. Отправка сообщений недоступна.
                           </p>
                         </div>
                       )}
@@ -1268,10 +1283,12 @@ export default function SlackStyleChat({
                       editingMessage={editingMessage?.content || null}
                       onCancelReply={() => setReplyingTo(null)}
                       onCancelEdit={() => setEditingMessage(null)}
-                      disabled={sending || mustTakeInWorkFirst}
+                      disabled={sending || mustTakeInWorkFirst || isArchived}
                       placeholder={
                         mustTakeInWorkFirst
                           ? "Сначала нажмите «Взять в работу» в шапке чата"
+                          : isArchived
+                          ? "Чат в архиве. Отправка сообщений недоступна."
                           : selectedChat.type === 'CHANNEL' && activeThread
                           ? "Напишите комментарий в треде..."
                           : "Напишите сообщение..."
