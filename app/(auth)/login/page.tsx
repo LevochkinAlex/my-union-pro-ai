@@ -51,6 +51,17 @@ function LoginForm() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [hasTelegram, setHasTelegram] = useState(false);
   const [devMagicLink, setDevMagicLink] = useState<string | null>(null);
+  const [insideMax, setInsideMax] = useState(false);
+
+  // Определяем, открыта ли страница внутри MAX (скрываем кнопку «Войти с MAX»)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const ref = document.referrer || "";
+    if (params.get("from") === "max" || ref.includes("max.ru")) {
+      setInsideMax(true);
+    }
+  }, []);
 
   // Если уже авторизован — сразу в личный кабинет
   useEffect(() => {
@@ -822,8 +833,8 @@ function LoginForm() {
                     {/* Telegram - кастомная кнопка */}
                     <TelegramLoginButton />
 
-                    {/* MAX — переход на страницу мини-приложения (в MAX откроется вход) */}
-                    <MaxLoginButton />
+                    {/* MAX — скрываем если уже внутри MAX */}
+                    {!insideMax && <MaxLoginButton />}
 
                     {/* VK ID (ВКонтакте / ОК / Mail) — логотип VK белый на синем */}
                     <a

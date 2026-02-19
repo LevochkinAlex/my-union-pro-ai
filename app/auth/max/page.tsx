@@ -271,81 +271,14 @@ export default function AuthMaxPage() {
     const fromMax = ref.includes("max.ru");
 
     if (fromMax) {
-      // Открыто из MAX (web или мобильное) — но initData нет
+      // Открыто из MAX (web или мобильное) — initData нет → сразу на страницу входа
+      if (typeof window !== "undefined") {
+        window.location.replace("/login?from=max");
+      }
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
-          <div className="w-full max-w-sm">
-            <div className="mb-6">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 mb-4">
-                <svg className="w-8 h-8 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              </div>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Вход в МойСоюз
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Автоматический вход не удался.
-                <br />
-                Войдите одним из способов ниже:
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <a
-                href={botUrl}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-medium transition-colors"
-              >
-                Написать /login боту
-              </a>
-
-              <a
-                href="/login"
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
-              >
-                Войти по номеру телефона
-              </a>
-
-              <div className="relative my-2">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-gray-50 dark:bg-gray-900 px-2 text-gray-400">или</span>
-                </div>
-              </div>
-
-              <a
-                href="https://t.me/myunionpro_bot?start=login"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
-              >
-                Войти через Telegram
-              </a>
-
-              <a
-                href="/api/auth/vk-id"
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
-              >
-                Войти с VK ID
-              </a>
-            </div>
-
-            <p className="mt-6 text-xs text-gray-400 dark:text-gray-500">
-              Бот пришлёт ссылку для входа в личный кабинет.
-            </p>
-
-            {debugInfo && (
-              <details className="mt-4 text-left">
-                <summary className="text-xs text-gray-400 cursor-pointer">
-                  Диагностика
-                </summary>
-                <pre className="mt-2 text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto whitespace-pre-wrap break-all">
-                  {debugInfo}
-                </pre>
-              </details>
-            )}
+        <div className="flex flex-col items-center justify-center min-h-screen px-4">
+          <div className="animate-pulse text-gray-600 dark:text-gray-400">
+            Перенаправление на вход…
           </div>
         </div>
       );
