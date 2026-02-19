@@ -48,7 +48,7 @@ export default function AddParticipantModal({
   const loadAvailableUsers = async () => {
     try {
       setSearching(true);
-      const response = await fetch('/api/users/search?status=approved&limit=100');
+      const response = await fetch('/api/users/search?status=approved&limit=100&context=chat');
       if (response.ok) {
         const data = await safeJsonParse(response);
         // Исключаем уже добавленных участников
@@ -77,7 +77,7 @@ export default function AddParticipantModal({
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         setSearching(true);
-        const response = await fetch(`/api/users/search?q=${encodeURIComponent(term)}&status=approved&limit=50`);
+        const response = await fetch(`/api/users/search?q=${encodeURIComponent(term)}&status=approved&limit=50&context=chat`);
         if (response.ok) {
           const data = await safeJsonParse(response);
           // Исключаем уже добавленных участников
@@ -132,8 +132,10 @@ export default function AddParticipantModal({
             Добавить участников
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            aria-label="Закрыть"
           >
             <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
@@ -164,8 +166,10 @@ export default function AddParticipantModal({
                 >
                   <span>{displayName(user)}</span>
                   <button
+                    type="button"
                     onClick={() => toggleUser(user)}
                     className="hover:bg-blue-200 dark:hover:bg-blue-900/40 rounded-full p-0.5"
+                    aria-label={`Убрать ${displayName(user)} из выбранных`}
                   >
                     <X className="w-3 h-3" />
                   </button>

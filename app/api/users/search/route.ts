@@ -14,23 +14,31 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get("q") || "";
     const status = searchParams.get("status");
     const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const context = searchParams.get("context") || "";
 
     const where: any = {
-      id: { not: session.user.id }, // Исключаем текущего пользователя
-      // ВАЖНО: По умолчанию показываем только одобренных членов профсоюза
+      id: { not: session.user.id },
       membershipStatus: "APPROVED",
     };
 
-    // Поиск по имени или email
+    if (context === "chat") {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { organizationId: true },
+      });
+      const myOrgId = currentUser?.organizationId ?? null;
+      where.organizationId = myOrgId;
+    }
+
     if (query.trim()) {
       where.OR = [
         { firstName: { contains: query, mode: "insensitive" } },
         { lastName: { contains: query, mode: "insensitive" } },
         { email: { contains: query, mode: "insensitive" } },
+        ...(context === "chat" ? [{ phone: { contains: query } }] : []),
       ];
     }
 
-    // Фильтр по статусу (если нужен, можно переопределить)
     if (status && status !== "approved") {
       where.membershipStatus = status.toUpperCase();
     }

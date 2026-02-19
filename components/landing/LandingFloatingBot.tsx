@@ -11,9 +11,13 @@ interface ChatMessage {
   id?: string;
 }
 
+/** ID виртуального бота в ответах API */
+const AI_BOT_ID = "ai-assistant-bot";
+
 /**
- * На лендинге: для гостей — полноценный чат с ботом (диалог, сбор имени/телефона, предложение демо и регистрации).
- * Для авторизованных — обычный FloatingChatBot.
+ * На лендинге: для гостей — чат с ботом (диалог, сбор имени/телефона, демо и регистрация).
+ * Для авторизованных — тот же чат с ИИ, что и в дашборде: подтягивается существующая переписка
+ * или инициируется при первом сообщении (например «ты» / «Привет»).
  */
 export default function LandingFloatingBot() {
   const { data: session, status } = useSession();
@@ -22,10 +26,26 @@ export default function LandingFloatingBot() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [initialRequestDone, setInitialRequestDone] = useState(false);
+  const [aiChatId, setAiChatId] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const isAuthenticated = status === "authenticated" && !!session?.user;
+  const userId = (session?.user as { id?: string })?.id ?? null;
   const canSend = input.trim().length > 0 && !isLoading;
+
+  // Сброс истории при смене пользователя (или выходе)
+  const prevUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevUserIdRef.current !== userId) {
+      prevUserIdRef.current = userId ?? null;
+      setHistoryLoaded(false);
+      setAiChatId(null);
+      setMessages([]);
+      setInitialRequestDone(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -39,71 +59,97 @@ export default function LandingFloatingBot() {
     textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
   }, [input]);
 
-  // Определяем endpoint: авторизованные используют assistant/chat, гости — landing-chat
-  const isAuthenticated = status === "authenticated" && !!session?.user;
-  const chatEndpoint = isAuthenticated ? "/api/assistant/chat" : "/api/landing-chat";
-
-  // Запрос к ИИ с fallback на landing-chat при ошибке
-  const fetchAI = useCallback(
-    async (message: string, history: Array<{ role: string; content: string }>) => {
-      const doFetch = async (url: string) => {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || "Ошибка");
-        return data;
-      };
-
-      try {
-        return await doFetch(chatEndpoint);
-      } catch {
-        // Fallback на landing-chat если assistant/chat не сработал
-        if (chatEndpoint !== "/api/landing-chat") {
-          return await doFetch("/api/landing-chat");
-        }
-        throw new Error("Не удалось получить ответ");
-      }
-    },
-    [chatEndpoint]
-  );
-
-  // При первом открытии чата запрашиваем приветствие у бота
+  // Для авторизованных: при открытии подтягиваем чат с ИИ и историю (как в дашборде)
   useEffect(() => {
-    if (open && messages.length === 0 && !isLoading && !initialRequestDone) {
-      setInitialRequestDone(true);
-      setIsLoading(true);
-      const greeting = isAuthenticated ? "Привет" : "Начало диалога";
-      fetchAI(greeting, [])
-        .then((data) => {
-          if (data.message) {
-            setMessages([
-              {
-                role: "assistant",
-                content: data.message,
-                timestamp: Date.now(),
-                id: `welcome-${Date.now()}`,
-              },
-            ]);
-          }
-        })
-        .catch(() => {
+    if (!open || !isAuthenticated || !userId || historyLoaded) return;
+    setHistoryLoaded(true);
+    setIsLoading(true);
+    (async () => {
+      try {
+        const aiRes = await fetch("/api/chat/ai");
+        const aiData = await aiRes.json();
+        if (!aiRes.ok || aiData.error) {
+          setMessages([]);
+          setInitialRequestDone(true);
+          return;
+        }
+        const chat = aiData.chat;
+        const cid = chat?.id;
+        if (cid) setAiChatId(cid);
+        const msgRes = await fetch(`/api/chat/${cid}?limit=100`);
+        const msgData = await msgRes.json();
+        const list: Array<{ id: string; senderId: string; content: string; messageType: string; createdAt: string }> =
+          msgData?.messages ?? [];
+        const mapped: ChatMessage[] = list.map((m) => ({
+          id: m.id,
+          role: m.messageType === "assistant" ? "assistant" : "user",
+          content: m.content || "",
+          timestamp: new Date(m.createdAt).getTime(),
+        }));
+        setMessages(mapped);
+        setInitialRequestDone(true);
+      } catch {
+        setMessages([]);
+        setInitialRequestDone(true);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [open, isAuthenticated, userId, historyLoaded]);
+
+  // Для гостей: при первом открытии запрашиваем приветствие у бота (лендинг-чат)
+  const chatEndpointGuest = "/api/landing-chat";
+  const fetchAIGuest = useCallback(async (message: string, history: Array<{ role: string; content: string }>) => {
+    const res = await fetch(chatEndpointGuest, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, history }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "Ошибка");
+    return data;
+  }, []);
+
+  useEffect(() => {
+    if (!open || isAuthenticated || messages.length > 0 || isLoading || initialRequestDone) return;
+    setInitialRequestDone(true);
+    setIsLoading(true);
+    fetchAIGuest("Начало диалога", [])
+      .then((data) => {
+        if (data.message) {
           setMessages([
-            {
-              role: "assistant",
-              content: isAuthenticated
-                ? "Привет! Я ваш ИИ-помощник. Задайте любой вопрос о профсоюзе, платформе или ваших правах."
-                : "Здравствуйте! Я помощник MyUnion Pro. Расскажите, вы председатель профсоюзной организации, член профсоюза или интересуетесь платформой? Подскажу, как лучше попробовать демо.",
-              timestamp: Date.now(),
-              id: `fallback-${Date.now()}`,
-            },
+            { role: "assistant", content: data.message, timestamp: Date.now(), id: `welcome-${Date.now()}` },
           ]);
-        })
-        .finally(() => setIsLoading(false));
-    }
-  }, [open, messages.length, isLoading, initialRequestDone, isAuthenticated, fetchAI]);
+        }
+      })
+      .catch(() => {
+        setMessages([
+          {
+            role: "assistant",
+            content: "Здравствуйте! Я помощник MyUnion Pro. Расскажите, вы председатель профсоюзной организации, член профсоюза или интересуетесь платформой? Подскажу, как лучше попробовать демо.",
+            timestamp: Date.now(),
+            id: `fallback-${Date.now()}`,
+          },
+        ]);
+      })
+      .finally(() => setIsLoading(false));
+  }, [open, isAuthenticated, messages.length, isLoading, initialRequestDone, fetchAIGuest]);
+
+  // Отправка: для авторизованных — POST /api/chat/ai (та же переписка, что в дашборде)
+  const sendAuthenticated = useCallback(
+    async (text: string) => {
+      const res = await fetch("/api/chat/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text.trim(), chatId: aiChatId || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Ошибка");
+      if (data.chatId) setAiChatId(data.chatId);
+      return data;
+    },
+    [aiChatId]
+  );
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -120,35 +166,51 @@ export default function LandingFloatingBot() {
       setMessages((prev) => [...prev, userMsg]);
       setIsLoading(true);
 
-      const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+      if (isAuthenticated) {
+        sendAuthenticated(text)
+          .then((data) => {
+            const botContent = data?.botMessage?.content ?? data?.message;
+            if (botContent) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: typeof botContent === "string" ? botContent : "",
+                  timestamp: Date.now(),
+                  id: data?.botMessage?.id ?? `ai-${Date.now()}`,
+                },
+              ]);
+            }
+          })
+          .catch(() => {
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content: "Ошибка связи. Попробуйте позже.", timestamp: Date.now() },
+            ]);
+          })
+          .finally(() => setIsLoading(false));
+        return;
+      }
 
-      fetchAI(text, history)
+      const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+      fetchAIGuest(text, history)
         .then((data) => {
           if (data.message) {
             setMessages((prev) => [
               ...prev,
-              {
-                role: "assistant",
-                content: data.message,
-                timestamp: Date.now(),
-                id: `ai-${Date.now()}`,
-              },
+              { role: "assistant", content: data.message, timestamp: Date.now(), id: `ai-${Date.now()}` },
             ]);
           }
         })
         .catch(() => {
           setMessages((prev) => [
             ...prev,
-            {
-              role: "assistant",
-              content: "Ошибка связи. Попробуйте позже.",
-              timestamp: Date.now(),
-            },
+            { role: "assistant", content: "Ошибка связи. Попробуйте позже.", timestamp: Date.now() },
           ]);
         })
         .finally(() => setIsLoading(false));
     },
-    [canSend, input, messages, fetchAI]
+    [canSend, input, messages, isAuthenticated, sendAuthenticated, fetchAIGuest]
   );
 
   if (status === "loading") {
@@ -219,14 +281,13 @@ export default function LandingFloatingBot() {
                       {msg.role === "user" ? (
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       ) : (
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <div className="prose prose-sm dark:prose-invert max-w-none prose-li:my-0.5">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
                               p: ({ children }) => <p className="my-1">{children}</p>,
                               ul: ({ children }) => <ul className="my-1 list-disc pl-4">{children}</ul>,
                               ol: ({ children }) => <ol className="my-1 list-decimal pl-4">{children}</ol>,
-                              li: ({ children }) => <li className="my-0.5">{children}</li>,
                               strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
                             }}
                           >
@@ -243,10 +304,10 @@ export default function LandingFloatingBot() {
                       <img src="/icon-512x512.png" alt="" className="h-full w-full object-cover" />
                     </div>
                     <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-3">
-                      <div className="flex gap-1">
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" style={{ animationDelay: "0ms" }} />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" style={{ animationDelay: "150ms" }} />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" style={{ animationDelay: "300ms" }} />
+                      <div className="flex gap-1" role="status" aria-label="Загрузка">
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:0ms]" />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:150ms]" />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:300ms]" />
                       </div>
                     </div>
                   </div>

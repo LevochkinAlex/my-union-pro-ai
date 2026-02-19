@@ -106,7 +106,7 @@ interface Meeting {
   presidingOfficerUserId?: string | null;
   secretaryUserId?: string | null;
   voteCounterUserIds?: string | null; // JSON array of userId
-  groupChat?: { id: string } | null;
+  groupChat?: { id: string; archivedAt?: string | Date | null } | null;
 }
 
 const MEETING_STATUS_LABELS: Record<string, string> = {
@@ -180,12 +180,27 @@ export default function MeetingDetailPage({
   const [presidingOfficerUserId, setPresidingOfficerUserId] = useState<string>("");
   const [secretaryUserId, setSecretaryUserId] = useState<string>("");
   const [voteCounterUserIds, setVoteCounterUserIds] = useState<string[]>([]);
+  const [invitedGuests, setInvitedGuests] = useState<string>("");
+  const [newGuestInput, setNewGuestInput] = useState<string>("");
+  const guestsList = invitedGuests ? invitedGuests.split(",").map(g => g.trim()).filter(Boolean) : [];
+  const addGuest = () => {
+    const name = newGuestInput.trim();
+    if (!name) return;
+    const updated = [...guestsList, name];
+    setInvitedGuests(updated.join(", "));
+    setNewGuestInput("");
+  };
+  const removeGuest = (index: number) => {
+    const updated = guestsList.filter((_, i) => i !== index);
+    setInvitedGuests(updated.join(", "));
+  };
   const [isSyncingParticipants, setIsSyncingParticipants] = useState(false);
-  const [protocolGeneralCollapsed, setProtocolGeneralCollapsed] = useState(true);
+  const [protocolGeneralCollapsed, setProtocolGeneralCollapsed] = useState(false);
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
   const [isSendingForApproval, setIsSendingForApproval] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [uploadingSignedProtocol, setUploadingSignedProtocol] = useState(false);
+  const [isRegeneratingProtocolPdf, setIsRegeneratingProtocolPdf] = useState(false);
   const protocolSignedFileInputRef = useRef<HTMLInputElement>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [editingAgendaId, setEditingAgendaId] = useState<string | null>(null);
@@ -302,11 +317,24 @@ export default function MeetingDetailPage({
         setProtocolPlace(data.meeting.location || "");
         setPresidingOfficerUserId(data.meeting.presidingOfficerUserId || "");
         setSecretaryUserId(data.meeting.secretaryUserId || "");
+        setInvitedGuests(data.meeting.invitedGuests || "");
         try {
           const vc = data.meeting.voteCounterUserIds;
           setVoteCounterUserIds(vc ? (typeof vc === "string" ? JSON.parse(vc) : vc) : []);
         } catch {
           setVoteCounterUserIds([]);
+        }
+        if (data.meeting.protocolProceduralData) {
+          const pd = data.meeting.protocolProceduralData;
+          setProtocolProcedural({
+            chairmanReportUserId: pd.chairmanReportUserId || "",
+            chairmanVotesFor: pd.chairmanVotesFor || 0, chairmanVotesAgainst: pd.chairmanVotesAgainst || 0, chairmanVotesAbstained: pd.chairmanVotesAbstained || 0,
+            secretaryReportUserId: pd.secretaryReportUserId || "",
+            secretaryVotesFor: pd.secretaryVotesFor || 0, secretaryVotesAgainst: pd.secretaryVotesAgainst || 0, secretaryVotesAbstained: pd.secretaryVotesAbstained || 0,
+            voteCounterReportUserId: pd.voteCounterReportUserId || "",
+            voteCounterVotesFor: pd.voteCounterVotesFor || 0, voteCounterVotesAgainst: pd.voteCounterVotesAgainst || 0, voteCounterVotesAbstained: pd.voteCounterVotesAbstained || 0,
+            agendaApprovalVotesFor: pd.agendaApprovalVotesFor || 0, agendaApprovalVotesAgainst: pd.agendaApprovalVotesAgainst || 0, agendaApprovalVotesAbstained: pd.agendaApprovalVotesAbstained || 0,
+          });
         }
       }
     } catch (error) {
@@ -556,13 +584,24 @@ export default function MeetingDetailPage({
   const maxVotes = meeting?.participants?.filter(p => p.canVote && PRESENT_STATUSES.includes(p.attendance)).length || 0;
   const hasQuorum = totalEligible > 0 && maxVotes >= Math.floor(totalEligible / 2) + 1;
 
-  /** Вычисляет текст решения по голосованию: единогласно / большинством / не принято */
+  const presentParticipantIds = new Set(
+    meeting?.participants?.filter(p => PRESENT_STATUSES.includes(p.attendance)).map(p => p.user?.id).filter(Boolean) || []
+  );
+  const presentElectedBody = electedBody.filter(m => presentParticipantIds.has(m.id));
+
+  const presentSummary = meeting?.participants?.filter(p => PRESENT_STATUSES.includes(p.attendance)) ?? [];
+  const absentSummary = meeting?.participants?.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED") ?? [];
+  const unmarkedSummary = meeting?.participants?.filter(p => p.attendance === "INVITED" || p.attendance === "CONFIRMED") ?? [];
+
+  /** Вычисляет текст решения по голосованию: единогласно / большинством / не принято.
+   *  Правило: решение принимается большинством (50% + 1) от числа присутствующих. */
   const getVoteDecisionText = (votesFor: number, votesAgainst: number, votesAbstained: number) => {
     const total = votesFor + votesAgainst + votesAbstained;
     if (total === 0) return { text: "Не голосовали", approved: null, color: "text-gray-500 dark:text-gray-400" };
-    if (votesFor === total && votesAgainst === 0 && votesAbstained === 0) return { text: "Принято единогласно", approved: true, color: "text-green-700 dark:text-green-400" };
-    if (votesFor > total / 2) return { text: `Принято большинством голосов (${votesFor} из ${total})`, approved: true, color: "text-green-700 dark:text-green-400" };
-    return { text: `Не принято (за: ${votesFor}, против: ${votesAgainst})`, approved: false, color: "text-red-600 dark:text-red-400" };
+    const majorityRequired = Math.floor(maxVotes / 2) + 1;
+    if (votesFor === maxVotes && votesAgainst === 0 && votesAbstained === 0) return { text: "Принято единогласно", approved: true, color: "text-green-700 dark:text-green-400" };
+    if (votesFor >= majorityRequired) return { text: `Принято большинством голосов (${votesFor} из ${maxVotes})`, approved: true, color: "text-green-700 dark:text-green-400" };
+    return { text: `Не принято (за: ${votesFor}, против: ${votesAgainst}, необходимо: ${majorityRequired})`, approved: false, color: "text-red-600 dark:text-red-400" };
   };
 
   /** Ограничивает голоса процедурного блока: сумма За+Против+Воздержались не больше maxVotes. Если в одном поле maxVotes — остальные обнуляются. */
@@ -599,9 +638,10 @@ export default function MeetingDetailPage({
       
       // Валидация для полей голосования
       if (field === "votesFor" || field === "votesAgainst" || field === "votesAbstained") {
-        const votesFor = field === "votesFor" ? (parseInt(value) || 0) : (currentData.votesFor || 0);
-        const votesAgainst = field === "votesAgainst" ? (parseInt(value) || 0) : (currentData.votesAgainst || 0);
-        const votesAbstained = field === "votesAbstained" ? (parseInt(value) || 0) : (currentData.votesAbstained || 0);
+        if (value === "") return { ...prev, [itemId]: newData };
+        const votesFor = field === "votesFor" ? (parseInt(value) || 0) : (parseInt(currentData.votesFor) || 0);
+        const votesAgainst = field === "votesAgainst" ? (parseInt(value) || 0) : (parseInt(currentData.votesAgainst) || 0);
+        const votesAbstained = field === "votesAbstained" ? (parseInt(value) || 0) : (parseInt(currentData.votesAbstained) || 0);
         
         const total = votesFor + votesAgainst + votesAbstained;
         
@@ -716,6 +756,8 @@ export default function MeetingDetailPage({
           presidingOfficerUserId: presidingOfficerUserId || null,
           secretaryUserId: secretaryUserId || null,
           voteCounterUserIds: voteCounterUserIds.length ? voteCounterUserIds : null,
+          protocolProceduralData: protocolProcedural,
+          invitedGuests: invitedGuests || null,
         }),
       });
       if (!res.ok) {
@@ -1010,50 +1052,59 @@ export default function MeetingDetailPage({
             {meeting.protocolDocument ? (
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
-                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Присутствовали ({meeting.participants.filter(p => p.attendance === "PRESENT" || p.attendance === "PRESENT_OFFLINE" || p.attendance === "PRESENT_ONLINE").length})
+                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-green-600 dark:text-green-400">
+                    Присутствовали ({presentSummary.length})
                   </h4>
                   <ul className="space-y-1.5 text-sm">
-                    {meeting.participants
-                      .filter(p => p.attendance === "PRESENT" || p.attendance === "PRESENT_OFFLINE" || p.attendance === "PRESENT_ONLINE")
-                      .map((p) => (
-                        <li key={p.id} className="flex items-center gap-2">
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
-                          <span>{getParticipantName(p)}</span>
-                          {p.role === "CHAIRMAN" && <span className="text-xs text-blue-600">(Председатель)</span>}
-                          {p.role === "SECRETARY" && <span className="text-xs text-purple-600">(Секретарь)</span>}
-                          {(p.attendance === "PRESENT_ONLINE" || p.attendance === "PRESENT_OFFLINE") && (
-                            <span className="text-xs text-gray-500">
-                              {p.attendance === "PRESENT_ONLINE" ? "онлайн" : "очно"}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    {meeting.participants.filter(p => p.attendance === "PRESENT" || p.attendance === "PRESENT_OFFLINE" || p.attendance === "PRESENT_ONLINE").length === 0 && (
+                    {presentSummary.map((p) => (
+                      <li key={p.id} className="flex items-center gap-2">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                        <span>{getParticipantName(p)}</span>
+                        {p.role === "CHAIRMAN" && <span className="text-xs text-blue-600">(Председатель)</span>}
+                        {p.role === "SECRETARY" && <span className="text-xs text-purple-600">(Секретарь)</span>}
+                        <span className="text-xs text-gray-500">
+                          {p.attendance === "PRESENT_ONLINE" ? "онлайн" : "очно"}
+                        </span>
+                      </li>
+                    ))}
+                    {presentSummary.length === 0 && (
                       <li className="text-gray-500 dark:text-gray-400">—</li>
                     )}
                   </ul>
                 </div>
                 <div>
-                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Отсутствовали ({meeting.participants.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED" || p.attendance === "INVITED" || p.attendance === "CONFIRMED").length})
+                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-red-600 dark:text-red-400">
+                    Отсутствовали ({absentSummary.length})
                   </h4>
                   <ul className="space-y-1.5 text-sm">
-                    {meeting.participants
-                      .filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED" || p.attendance === "INVITED" || p.attendance === "CONFIRMED")
-                      .map((p) => (
-                        <li key={p.id} className="flex items-center gap-2">
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
-                          <span>{getParticipantName(p)}</span>
-                          {p.role === "CHAIRMAN" && <span className="text-xs text-blue-600">(Председатель)</span>}
-                          {p.role === "SECRETARY" && <span className="text-xs text-purple-600">(Секретарь)</span>}
-                          {p.attendance === "EXCUSED" && <span className="text-xs text-gray-500">(уваж. причина)</span>}
-                        </li>
-                      ))}
-                    {meeting.participants.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED" || p.attendance === "INVITED" || p.attendance === "CONFIRMED").length === 0 && (
+                    {absentSummary.map((p) => (
+                      <li key={p.id} className="flex items-center gap-2">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                        <span>{getParticipantName(p)}</span>
+                        {p.role === "CHAIRMAN" && <span className="text-xs text-blue-600">(Председатель)</span>}
+                        {p.role === "SECRETARY" && <span className="text-xs text-purple-600">(Секретарь)</span>}
+                        {p.attendance === "EXCUSED" && <span className="text-xs text-gray-500">(уваж. причина)</span>}
+                      </li>
+                    ))}
+                    {absentSummary.length === 0 && (
                       <li className="text-gray-500 dark:text-gray-400">—</li>
                     )}
                   </ul>
+                  {unmarkedSummary.length > 0 && (
+                    <>
+                      <h4 className="mt-4 mb-2 text-xs font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                        Не отмечены ({unmarkedSummary.length})
+                      </h4>
+                      <ul className="space-y-1.5 text-sm">
+                        {unmarkedSummary.map((p) => (
+                          <li key={p.id} className="flex items-center gap-2">
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+                            <span className="text-gray-500 dark:text-gray-400">{getParticipantName(p)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1125,13 +1176,19 @@ export default function MeetingDetailPage({
                         <span className="h-4 w-4 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
                           <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                         </span>
+                      ) : item.isApproved === false ? (
+                        <span className="h-4 w-4 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                          <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                        </span>
                       ) : (
                         <span className="h-4 w-4 rounded-full bg-gray-200 dark:bg-gray-600 flex-shrink-0" />
                       )}
-                      <span className={item.isApproved === true ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}>
+                      <span className={item.isApproved === true ? "text-gray-900 dark:text-white" : item.isApproved === false ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}>
                         {item.orderNumber}. {item.title}
                       </span>
-                      {item.isApproved === true && <span className="text-green-600 dark:text-green-400 text-xs">принят</span>}
+                      {item.isApproved === true && <span className="text-green-600 dark:text-green-400 text-xs font-medium">принят</span>}
+                      {item.isApproved === false && <span className="text-red-600 dark:text-red-400 text-xs font-medium">не принят</span>}
+                      {item.isApproved == null && <span className="text-gray-400 dark:text-gray-500 text-xs">не голосовали</span>}
                     </li>
                   ))}
                 </>
@@ -1158,12 +1215,15 @@ export default function MeetingDetailPage({
                 {meeting.groupChat && (
                   <a
                     href={`/dashboard/chat?chatId=${meeting.groupChat.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium ${(meeting.groupChat as { archivedAt?: Date | string | null }).archivedAt || meeting.status === "COMPLETED"
+                      ? "border-gray-200 bg-gray-100 text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                      : "border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"}`}
+                    title={(meeting.groupChat as { archivedAt?: Date | string | null }).archivedAt || meeting.status === "COMPLETED" ? "Чат закрыт после завершения заседания (только просмотр)" : undefined}
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
-                    Чат заседания
+                    {(meeting.groupChat as { archivedAt?: Date | string | null }).archivedAt || meeting.status === "COMPLETED" ? "Чат заседания (архив)" : "Чат заседания"}
                   </a>
                 )}
               </div>
@@ -1994,6 +2054,14 @@ export default function MeetingDetailPage({
           {/* Документ протокола */}
           {meeting.protocolDocument && (
             <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              {!hasQuorum && (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
+                  <svg className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    По текущим данным кворум отсутствует (присутствуют {maxVotes} из {totalEligible}). Протокол был сформирован ранее. Если изменили состав присутствующих — отредактируйте данные на вкладке «Протокол» и нажмите «Обновить PDF».
+                  </p>
+                </div>
+              )}
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -2006,30 +2074,66 @@ export default function MeetingDetailPage({
                 {meeting.groupChat && (
                   <a
                     href={`/dashboard/chat?chatId=${meeting.groupChat.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium ${(meeting.groupChat as { archivedAt?: Date | string | null }).archivedAt || meeting.status === "COMPLETED"
+                      ? "border-gray-200 bg-gray-100 text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                      : "border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"}`}
+                    title={(meeting.groupChat as { archivedAt?: Date | string | null }).archivedAt || meeting.status === "COMPLETED" ? "Чат закрыт после завершения заседания (только просмотр)" : undefined}
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
-                    Чат заседания
+                    {(meeting.groupChat as { archivedAt?: Date | string | null }).archivedAt || meeting.status === "COMPLETED" ? "Чат заседания (архив)" : "Чат заседания"}
                   </a>
                 )}
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {meeting.protocolDocument && (
-                  <>
-                    <button
-                      onClick={() => setPdfPreviewUrl(getDocumentViewUrl(meeting.protocolDocument!.id))}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      Просмотреть PDF
-                    </button>
-                    {meeting.protocolDocument.status === "COMPLETED" && (
+                <button
+                  onClick={() => setPdfPreviewUrl(getDocumentViewUrl(meeting.protocolDocument.id))}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Просмотреть PDF
+                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await saveProtocolProceduralAndElected();
+                        await saveProtocolData();
+                        setIsRegeneratingProtocolPdf(true);
+                        const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/generate-document`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ documentType: "PROTOCOL", regNumber: protocolRegNumberOverride.trim() || meeting.protocolDocument.regNumber }),
+                        });
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({}));
+                          throw new Error(err.error || "Ошибка обновления");
+                        }
+                        const data = await res.json();
+                        if (data.meeting) setMeeting(data.meeting);
+                        if (data.document?.id) setPdfPreviewUrl(getDocumentViewUrl(data.document.id));
+                        alertSuccess("PDF протокола обновлён по текущим данным.");
+                      } catch (e) {
+                        alertError(e instanceof Error ? e.message : "Не удалось обновить PDF");
+                      } finally {
+                        setIsRegeneratingProtocolPdf(false);
+                      }
+                    }}
+                    disabled={isRegeneratingProtocolPdf || !hasQuorum}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    title={!hasQuorum ? "Сначала отметьте присутствующих (кворум) и сохраните общие сведения" : "Пересобрать PDF из текущих данных протокола (присутствие, голосования, вопросы)"}
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    {isRegeneratingProtocolPdf ? "Обновление…" : "Обновить PDF"}
+                  </button>
+                )}
+                {meeting.protocolDocument.status === "COMPLETED" && (
                       <a
                         href={getDocumentViewUrl(meeting.protocolDocument.id)}
                         target="_blank"
@@ -2112,10 +2216,8 @@ export default function MeetingDetailPage({
                         )}
                       </>
                     )}
-                  </>
-                )}
-                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-                  Согласование: участники подтверждают протокол в системе, затем вы утверждаете документ. Шаг 8: распечатайте, подпишите у председательствующего и секретаря, загрузите скан. Рассылка: после утверждения — уведомления и ссылка на протокол участникам.
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400" title="Согласование: участники подтверждают протокол в системе, затем вы утверждаете. После утверждения: распечатать, подписать у председательствующего и секретаря, загрузить скан. Рассылка — по кнопке ниже.">
+                  После утверждения: распечатать, подписать, при необходимости загрузить скан. Рассылка участникам — по кнопке ниже.
                 </p>
                 {!readOnly && (meeting.protocolDocument.status === "DRAFT" || meeting.protocolDocument.status === "PENDING_APPROVAL") && (
                   <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -2268,8 +2370,9 @@ export default function MeetingDetailPage({
                         </p>
                       </div>
                       <div>
-                        <label htmlFor="protocol-reg-number" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Номер документа (необязательно)</label>
-                        <input id="protocol-reg-number" type="text" value={protocolRegNumberOverride} onChange={(e) => setProtocolRegNumberOverride(e.target.value)} placeholder="PROCCDD" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} />
+                        <label htmlFor="protocol-reg-number" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Номер документа</label>
+                        <input id="protocol-reg-number" type="text" value={protocolRegNumberOverride} onChange={(e) => setProtocolRegNumberOverride(e.target.value)} placeholder="Автоматически (PR00001)" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} />
+                        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Оставьте пустым — номер сгенерируется автоматически. Или введите свой.</p>
                       </div>
                       <div>
                         <label htmlFor="protocol-doc-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Дата документа</label>
@@ -2282,6 +2385,36 @@ export default function MeetingDetailPage({
                       <div className="sm:col-span-2">
                         <label htmlFor="protocol-place" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Место проведения</label>
                         <input id="protocol-place" type="text" value={protocolPlace} onChange={(e) => setProtocolPlace(e.target.value)} placeholder="Например: Москва" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Приглашённые гости (необязательно)</label>
+                        {guestsList.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {guestsList.map((guest, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-white px-3 py-1 text-sm text-gray-800 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                {guest}
+                                <button type="button" onClick={() => removeGuest(idx)} className="ml-0.5 rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-300" aria-label={`Удалить ${guest}`}>
+                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            id="protocol-invited-guests"
+                            type="text"
+                            value={newGuestInput}
+                            onChange={(e) => setNewGuestInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addGuest(); } }}
+                            placeholder="ФИО гостя"
+                            className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          />
+                          <button type="button" onClick={addGuest} disabled={!newGuestInput.trim()} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                            Добавить
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="mt-4">
@@ -2305,6 +2438,9 @@ export default function MeetingDetailPage({
                   <span className="font-medium text-gray-700 dark:text-gray-300">Присутствуют: {maxVotes} из {totalEligible}</span>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${hasQuorum ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"}`}>
                     {hasQuorum ? "Кворум имеется" : "Кворум отсутствует"}
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    (необходимо не менее {Math.floor(totalEligible / 2) + 1} — 50% + 1)
                   </span>
                 </div>
                 <button
@@ -2345,7 +2481,7 @@ export default function MeetingDetailPage({
                               {participant ? (
                                 <select
                                   aria-label={`Присутствие: ${label}`}
-                                  value={participant.attendance === "PRESENT" ? "PRESENT_OFFLINE" : participant.attendance}
+                                  value={participant.attendance}
                                   onChange={async (e) => {
                                     const v = e.target.value as "PRESENT_OFFLINE" | "PRESENT_ONLINE" | "ABSENT";
                                     setMeeting(prev => {
@@ -2372,8 +2508,11 @@ export default function MeetingDetailPage({
                                       loadMeeting();
                                     }
                                   }}
-                                  className="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                  className={`rounded-md border px-2 py-1 text-sm dark:bg-gray-700 dark:text-white ${!["PRESENT_OFFLINE", "PRESENT_ONLINE", "ABSENT"].includes(participant.attendance) ? "border-amber-400 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/30" : "border-gray-300 dark:border-gray-600"}`}
                                 >
+                                  {!["PRESENT_OFFLINE", "PRESENT_ONLINE", "ABSENT"].includes(participant.attendance) && (
+                                    <option value={participant.attendance}>— Укажите присутствие —</option>
+                                  )}
                                   <option value="PRESENT_OFFLINE">Присутствовал очно</option>
                                   <option value="PRESENT_ONLINE">Присутствовал онлайн</option>
                                   <option value="ABSENT">Отсутствовал</option>
@@ -2390,8 +2529,38 @@ export default function MeetingDetailPage({
                 </div>
               </div>
 
+              {/* Кворум */}
+              <div className={`rounded-xl border-2 p-6 ${hasQuorum ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20" : "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/20"}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 flex-shrink-0 rounded-full p-1 ${hasQuorum ? "bg-green-200 text-green-700 dark:bg-green-800 dark:text-green-300" : "bg-red-200 text-red-700 dark:bg-red-800 dark:text-red-300"}`}>
+                    {hasQuorum ? (
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    )}
+                  </div>
+                  <div>
+                    {hasQuorum ? (
+                      <>
+                        <p className="text-sm font-semibold text-green-800 dark:text-green-300">Кворум имеется. Заседание правомочно.</p>
+                        <p className="mt-1 text-xs text-green-700 dark:text-green-400">
+                          Согласно п. 5 ст. 14 Устава Профсоюза, заседание Профкома правомочно при присутствии не менее половины его членов. Присутствуют {maxVotes} из {totalEligible} членов ({Math.round(maxVotes / totalEligible * 100)}%). Для принятия решения необходимо {Math.floor(totalEligible / 2) + 1} голосов (50% + 1).
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-red-800 dark:text-red-300">Кворум отсутствует. Заседание неправомочно.</p>
+                        <p className="mt-1 text-xs text-red-700 dark:text-red-400">
+                          Согласно п. 5 ст. 14 Устава Профсоюза, для правомочности заседания необходимо присутствие не менее половины членов Профкома. Присутствуют {maxVotes} из {totalEligible} ({totalEligible > 0 ? Math.round(maxVotes / totalEligible * 100) : 0}%), требуется минимум {Math.floor(totalEligible / 2) + 1}. Протокол не может быть сформирован без кворума. Отметьте присутствие участников в таблице выше.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Блок 2: Об избрании председательствующего */}
-              <div className="rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <div className={`rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800 ${!hasQuorum ? "opacity-50 pointer-events-none" : ""}`}>
                 <h4 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">2. Об избрании председательствующего на заседании Профкома</h4>
                 <div className="space-y-4">
                   <div>
@@ -2402,32 +2571,41 @@ export default function MeetingDetailPage({
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Докладывал (ФИО – член Профсоюза)</label>
                     <select aria-label="Докладывал (об избрании председательствующего)" value={protocolProcedural.chairmanReportUserId} onChange={(e) => setProtocolProcedural(p => ({ ...p, chairmanReportUserId: e.target.value }))} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                       <option value="">— Выбрать —</option>
-                      {electedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
+                      {presentElectedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">ПОСТАНОВИЛИ: Избрать председательствующим на собрании</label>
                     <select aria-label="Председательствующий на собрании" value={presidingOfficerUserId} onChange={(e) => setPresidingOfficerUserId(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                      <option value="">— Выбрать из выборного органа —</option>
-                      {electedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
+                      <option value="">— Выбрать из присутствующих —</option>
+                      {presentElectedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
                     </select>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900">
                     <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Голосовали:</span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Макс: {maxVotes} участников</span>
                     <div className="mt-2 grid grid-cols-3 gap-4">
-                      <div><label htmlFor="chairman-votes-for" className="block text-xs text-gray-500">За</label><input id="chairman-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (председательствующий)" value={protocolProcedural.chairmanVotesFor} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.chairmanVotesFor, p.chairmanVotesAgainst, p.chairmanVotesAbstained, "for", num); return { ...p, chairmanVotesFor: c.for, chairmanVotesAgainst: c.against, chairmanVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="chairman-votes-against" className="block text-xs text-gray-500">Против</label><input id="chairman-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (председательствующий)" value={protocolProcedural.chairmanVotesAgainst} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.chairmanVotesFor, p.chairmanVotesAgainst, p.chairmanVotesAbstained, "against", num); return { ...p, chairmanVotesFor: c.for, chairmanVotesAgainst: c.against, chairmanVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="chairman-votes-abstained" className="block text-xs text-gray-500">Воздержались</label><input id="chairman-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (председательствующий)" value={protocolProcedural.chairmanVotesAbstained} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.chairmanVotesFor, p.chairmanVotesAgainst, p.chairmanVotesAbstained, "abstained", num); return { ...p, chairmanVotesFor: c.for, chairmanVotesAgainst: c.against, chairmanVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
+                      <div>
+                        <label htmlFor="chairman-votes-for" className="block text-xs text-gray-500 mb-1">За</label>
+                        <input id="chairman-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (председательствующий)" value={protocolProcedural.chairmanVotesFor || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, chairmanVotesFor: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.chairmanVotesFor, p.chairmanVotesAgainst, p.chairmanVotesAbstained, "for", num); return { ...p, chairmanVotesFor: c.for, chairmanVotesAgainst: c.against, chairmanVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, chairmanVotesFor: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-green-300 bg-green-50 px-3 py-2 text-center font-medium text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="chairman-votes-against" className="block text-xs text-gray-500 mb-1">Против</label>
+                        <input id="chairman-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (председательствующий)" value={protocolProcedural.chairmanVotesAgainst || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, chairmanVotesAgainst: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.chairmanVotesFor, p.chairmanVotesAgainst, p.chairmanVotesAbstained, "against", num); return { ...p, chairmanVotesFor: c.for, chairmanVotesAgainst: c.against, chairmanVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, chairmanVotesAgainst: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-red-300 bg-red-50 px-3 py-2 text-center font-medium text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="chairman-votes-abstained" className="block text-xs text-gray-500 mb-1">Воздержались</label>
+                        <input id="chairman-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (председательствующий)" value={protocolProcedural.chairmanVotesAbstained || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, chairmanVotesAbstained: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.chairmanVotesFor, p.chairmanVotesAgainst, p.chairmanVotesAbstained, "abstained", num); return { ...p, chairmanVotesFor: c.for, chairmanVotesAgainst: c.against, chairmanVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, chairmanVotesAbstained: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-center font-medium dark:border-gray-600 dark:bg-gray-700" />
+                      </div>
                     </div>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">Всего: {protocolProcedural.chairmanVotesFor + protocolProcedural.chairmanVotesAgainst + protocolProcedural.chairmanVotesAbstained} / {maxVotes}</p>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Решение принято единогласно (большинством голосов).</p>
+                    <p className={`mt-1 text-sm font-medium ${getVoteDecisionText(protocolProcedural.chairmanVotesFor, protocolProcedural.chairmanVotesAgainst, protocolProcedural.chairmanVotesAbstained).color}`}>{getVoteDecisionText(protocolProcedural.chairmanVotesFor, protocolProcedural.chairmanVotesAgainst, protocolProcedural.chairmanVotesAbstained).text}</p>
                   </div>
                 </div>
               </div>
 
               {/* Блок 3: Об избрании секретаря */}
-              <div className="rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <div className={`rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800 ${!hasQuorum ? "opacity-50 pointer-events-none" : ""}`}>
                 <h4 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">3. Об избрании секретаря на заседании Профкома</h4>
                 <div className="space-y-4">
                   <div>
@@ -2438,32 +2616,41 @@ export default function MeetingDetailPage({
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Докладывал (ФИО – член Профсоюза)</label>
                     <select aria-label="Докладывал (об избрании секретаря)" value={protocolProcedural.secretaryReportUserId} onChange={(e) => setProtocolProcedural(p => ({ ...p, secretaryReportUserId: e.target.value }))} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                       <option value="">— Выбрать —</option>
-                      {electedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
+                      {presentElectedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">ПОСТАНОВИЛИ: Избрать секретарем на собрании</label>
                     <select aria-label="Секретарь на собрании" value={secretaryUserId} onChange={(e) => setSecretaryUserId(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                      <option value="">— Выбрать из выборного органа —</option>
-                      {electedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
+                      <option value="">— Выбрать из присутствующих —</option>
+                      {presentElectedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
                     </select>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900">
                     <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Голосовали:</span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Макс: {maxVotes} участников</span>
                     <div className="mt-2 grid grid-cols-3 gap-4">
-                      <div><label htmlFor="secretary-votes-for" className="block text-xs text-gray-500">За</label><input id="secretary-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (секретарь)" value={protocolProcedural.secretaryVotesFor} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.secretaryVotesFor, p.secretaryVotesAgainst, p.secretaryVotesAbstained, "for", num); return { ...p, secretaryVotesFor: c.for, secretaryVotesAgainst: c.against, secretaryVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="secretary-votes-against" className="block text-xs text-gray-500">Против</label><input id="secretary-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (секретарь)" value={protocolProcedural.secretaryVotesAgainst} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.secretaryVotesFor, p.secretaryVotesAgainst, p.secretaryVotesAbstained, "against", num); return { ...p, secretaryVotesFor: c.for, secretaryVotesAgainst: c.against, secretaryVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="secretary-votes-abstained" className="block text-xs text-gray-500">Воздержались</label><input id="secretary-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (секретарь)" value={protocolProcedural.secretaryVotesAbstained} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.secretaryVotesFor, p.secretaryVotesAgainst, p.secretaryVotesAbstained, "abstained", num); return { ...p, secretaryVotesFor: c.for, secretaryVotesAgainst: c.against, secretaryVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
+                      <div>
+                        <label htmlFor="secretary-votes-for" className="block text-xs text-gray-500 mb-1">За</label>
+                        <input id="secretary-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (секретарь)" value={protocolProcedural.secretaryVotesFor || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, secretaryVotesFor: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.secretaryVotesFor, p.secretaryVotesAgainst, p.secretaryVotesAbstained, "for", num); return { ...p, secretaryVotesFor: c.for, secretaryVotesAgainst: c.against, secretaryVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, secretaryVotesFor: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-green-300 bg-green-50 px-3 py-2 text-center font-medium text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="secretary-votes-against" className="block text-xs text-gray-500 mb-1">Против</label>
+                        <input id="secretary-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (секретарь)" value={protocolProcedural.secretaryVotesAgainst || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, secretaryVotesAgainst: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.secretaryVotesFor, p.secretaryVotesAgainst, p.secretaryVotesAbstained, "against", num); return { ...p, secretaryVotesFor: c.for, secretaryVotesAgainst: c.against, secretaryVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, secretaryVotesAgainst: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-red-300 bg-red-50 px-3 py-2 text-center font-medium text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="secretary-votes-abstained" className="block text-xs text-gray-500 mb-1">Воздержались</label>
+                        <input id="secretary-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (секретарь)" value={protocolProcedural.secretaryVotesAbstained || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, secretaryVotesAbstained: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.secretaryVotesFor, p.secretaryVotesAgainst, p.secretaryVotesAbstained, "abstained", num); return { ...p, secretaryVotesFor: c.for, secretaryVotesAgainst: c.against, secretaryVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, secretaryVotesAbstained: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-center font-medium dark:border-gray-600 dark:bg-gray-700" />
+                      </div>
                     </div>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">Всего: {protocolProcedural.secretaryVotesFor + protocolProcedural.secretaryVotesAgainst + protocolProcedural.secretaryVotesAbstained} / {maxVotes}</p>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Решение принято единогласно (большинством голосов).</p>
+                    <p className={`mt-1 text-sm font-medium ${getVoteDecisionText(protocolProcedural.secretaryVotesFor, protocolProcedural.secretaryVotesAgainst, protocolProcedural.secretaryVotesAbstained).color}`}>{getVoteDecisionText(protocolProcedural.secretaryVotesFor, protocolProcedural.secretaryVotesAgainst, protocolProcedural.secretaryVotesAbstained).text}</p>
                   </div>
                 </div>
               </div>
 
               {/* Блок 4: О подсчете голосов */}
-              <div className="rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <div className={`rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800 ${!hasQuorum ? "opacity-50 pointer-events-none" : ""}`}>
                 <h4 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">4. О подсчете голосов на заседании Профкома</h4>
                 <div className="space-y-4">
                   <div>
@@ -2474,39 +2661,52 @@ export default function MeetingDetailPage({
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Докладывал (ФИО – член Профсоюза)</label>
                     <select aria-label="Докладывал (о подсчёте голосов)" value={protocolProcedural.voteCounterReportUserId} onChange={(e) => setProtocolProcedural(p => ({ ...p, voteCounterReportUserId: e.target.value }))} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                       <option value="">— Выбрать —</option>
-                      {electedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
+                      {presentElectedBody.map(m => (<option key={m.id} value={m.id}>{getElectedMemberName(m)}</option>))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">ПОСТАНОВИЛИ: Назначить ответственного за подсчет голосов (можно несколько)</label>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      {electedBody.map(m => {
+                    <div className="mt-2 space-y-1">
+                      {presentElectedBody.map(m => {
                         const checked = voteCounterUserIds.includes(m.id);
                         return (
-                          <label key={m.id} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700">
-                            <input type="checkbox" checked={checked} onChange={(e) => setVoteCounterUserIds(prev => e.target.checked ? [...prev, m.id] : prev.filter(id => id !== m.id))} className="rounded border-gray-300 dark:border-gray-600" />
-                            {getElectedMemberName(m)}
+                          <label key={m.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700/50"}`}>
+                            <input type="checkbox" checked={checked} onChange={(e) => setVoteCounterUserIds(prev => e.target.checked ? [...prev, m.id] : prev.filter(id => id !== m.id))} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600" />
+                            <span className="text-gray-900 dark:text-white">{getElectedMemberName(m)}</span>
+                            {(m.jobTitle || m.roleName) && <span className="text-xs text-gray-500 dark:text-gray-400">({m.jobTitle || m.roleName})</span>}
                           </label>
                         );
                       })}
+                      {presentElectedBody.length === 0 && (
+                        <p className="text-sm text-amber-600 dark:text-amber-400">Сначала отметьте присутствие участников в таблице выше</p>
+                      )}
                     </div>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900">
                     <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Голосовали:</span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Макс: {maxVotes} участников</span>
                     <div className="mt-2 grid grid-cols-3 gap-4">
-                      <div><label htmlFor="vote-counter-votes-for" className="block text-xs text-gray-500">За</label><input id="vote-counter-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (подсчёт голосов)" value={protocolProcedural.voteCounterVotesFor} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.voteCounterVotesFor, p.voteCounterVotesAgainst, p.voteCounterVotesAbstained, "for", num); return { ...p, voteCounterVotesFor: c.for, voteCounterVotesAgainst: c.against, voteCounterVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="vote-counter-votes-against" className="block text-xs text-gray-500">Против</label><input id="vote-counter-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (подсчёт голосов)" value={protocolProcedural.voteCounterVotesAgainst} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.voteCounterVotesFor, p.voteCounterVotesAgainst, p.voteCounterVotesAbstained, "against", num); return { ...p, voteCounterVotesFor: c.for, voteCounterVotesAgainst: c.against, voteCounterVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="vote-counter-votes-abstained" className="block text-xs text-gray-500">Воздержались</label><input id="vote-counter-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (подсчёт голосов)" value={protocolProcedural.voteCounterVotesAbstained} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.voteCounterVotesFor, p.voteCounterVotesAgainst, p.voteCounterVotesAbstained, "abstained", num); return { ...p, voteCounterVotesFor: c.for, voteCounterVotesAgainst: c.against, voteCounterVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
+                      <div>
+                        <label htmlFor="vote-counter-votes-for" className="block text-xs text-gray-500 mb-1">За</label>
+                        <input id="vote-counter-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (подсчёт голосов)" value={protocolProcedural.voteCounterVotesFor || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, voteCounterVotesFor: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.voteCounterVotesFor, p.voteCounterVotesAgainst, p.voteCounterVotesAbstained, "for", num); return { ...p, voteCounterVotesFor: c.for, voteCounterVotesAgainst: c.against, voteCounterVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, voteCounterVotesFor: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-green-300 bg-green-50 px-3 py-2 text-center font-medium text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="vote-counter-votes-against" className="block text-xs text-gray-500 mb-1">Против</label>
+                        <input id="vote-counter-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (подсчёт голосов)" value={protocolProcedural.voteCounterVotesAgainst || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, voteCounterVotesAgainst: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.voteCounterVotesFor, p.voteCounterVotesAgainst, p.voteCounterVotesAbstained, "against", num); return { ...p, voteCounterVotesFor: c.for, voteCounterVotesAgainst: c.against, voteCounterVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, voteCounterVotesAgainst: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-red-300 bg-red-50 px-3 py-2 text-center font-medium text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="vote-counter-votes-abstained" className="block text-xs text-gray-500 mb-1">Воздержались</label>
+                        <input id="vote-counter-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (подсчёт голосов)" value={protocolProcedural.voteCounterVotesAbstained || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, voteCounterVotesAbstained: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.voteCounterVotesFor, p.voteCounterVotesAgainst, p.voteCounterVotesAbstained, "abstained", num); return { ...p, voteCounterVotesFor: c.for, voteCounterVotesAgainst: c.against, voteCounterVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, voteCounterVotesAbstained: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-center font-medium dark:border-gray-600 dark:bg-gray-700" />
+                      </div>
                     </div>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">Всего: {protocolProcedural.voteCounterVotesFor + protocolProcedural.voteCounterVotesAgainst + protocolProcedural.voteCounterVotesAbstained} / {maxVotes}</p>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Решение принято единогласно (большинством голосов).</p>
+                    <p className={`mt-1 text-sm font-medium ${getVoteDecisionText(protocolProcedural.voteCounterVotesFor, protocolProcedural.voteCounterVotesAgainst, protocolProcedural.voteCounterVotesAbstained).color}`}>{getVoteDecisionText(protocolProcedural.voteCounterVotesFor, protocolProcedural.voteCounterVotesAgainst, protocolProcedural.voteCounterVotesAbstained).text}</p>
                   </div>
                 </div>
               </div>
 
               {/* Блок 5: Утверждение повестки дня */}
-              <div className="rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <div className={`rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800 ${!hasQuorum ? "opacity-50 pointer-events-none" : ""}`}>
                 <h4 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">5. Утверждение повестки дня заседания профсоюзного комитета</h4>
                 <div className="space-y-4">
                   <div>
@@ -2516,54 +2716,62 @@ export default function MeetingDetailPage({
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Докладывал (председательствующий)</label>
                     <p className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                      {presidingOfficerUserId ? getElectedMemberName(electedBody.find(m => m.id === presidingOfficerUserId) || {}) : "— Выберите председательствующего выше —"}
+                      {presidingOfficerUserId ? getElectedMemberName(presentElectedBody.find(m => m.id === presidingOfficerUserId) || electedBody.find(m => m.id === presidingOfficerUserId) || {}) : "— Выберите председательствующего выше —"}
                     </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">ПОСТАНОВИЛИ: Утвердить повестку дня заседания Профкома</label>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Пункты повестки (редактируйте на вкладке «Повестка» или ниже в блоке 6):</p>
-                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-700 dark:text-gray-300">
-                      {meeting.agendaItems.map((item, idx) => (
-                        <li key={item.id}>{item.orderNumber}. {item.title}</li>
-                      ))}
-                      {meeting.agendaItems.length === 0 && <li className="text-gray-500">Нет пунктов. Добавьте на вкладке «Повестка».</li>}
-                    </ol>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      {meeting.agendaItems.length > 0
+                        ? `Повестка из ${meeting.agendaItems.length} вопросов (см. ниже — блок 6)`
+                        : "Нет пунктов. Добавьте на вкладке «Повестка»."}
+                    </p>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900">
                     <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Голосовали:</span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Макс: {maxVotes} участников</span>
                     <div className="mt-2 grid grid-cols-3 gap-4">
-                      <div><label htmlFor="agenda-approval-votes-for" className="block text-xs text-gray-500">За</label><input id="agenda-approval-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (утверждение повестки)" value={protocolProcedural.agendaApprovalVotesFor} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.agendaApprovalVotesFor, p.agendaApprovalVotesAgainst, p.agendaApprovalVotesAbstained, "for", num); return { ...p, agendaApprovalVotesFor: c.for, agendaApprovalVotesAgainst: c.against, agendaApprovalVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="agenda-approval-votes-against" className="block text-xs text-gray-500">Против</label><input id="agenda-approval-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (утверждение повестки)" value={protocolProcedural.agendaApprovalVotesAgainst} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.agendaApprovalVotesFor, p.agendaApprovalVotesAgainst, p.agendaApprovalVotesAbstained, "against", num); return { ...p, agendaApprovalVotesFor: c.for, agendaApprovalVotesAgainst: c.against, agendaApprovalVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
-                      <div><label htmlFor="agenda-approval-votes-abstained" className="block text-xs text-gray-500">Воздержались</label><input id="agenda-approval-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (утверждение повестки)" value={protocolProcedural.agendaApprovalVotesAbstained} onChange={(e) => { const v = e.target.value; const num = v === "" ? 0 : parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.agendaApprovalVotesFor, p.agendaApprovalVotesAgainst, p.agendaApprovalVotesAbstained, "abstained", num); return { ...p, agendaApprovalVotesFor: c.for, agendaApprovalVotesAgainst: c.against, agendaApprovalVotesAbstained: c.abstained }; }); }} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} /></div>
+                      <div>
+                        <label htmlFor="agenda-approval-votes-for" className="block text-xs text-gray-500 mb-1">За</label>
+                        <input id="agenda-approval-votes-for" type="number" min={0} max={maxVotes} aria-label="Голосов за (утверждение повестки)" value={protocolProcedural.agendaApprovalVotesFor || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, agendaApprovalVotesFor: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.agendaApprovalVotesFor, p.agendaApprovalVotesAgainst, p.agendaApprovalVotesAbstained, "for", num); return { ...p, agendaApprovalVotesFor: c.for, agendaApprovalVotesAgainst: c.against, agendaApprovalVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, agendaApprovalVotesFor: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-green-300 bg-green-50 px-3 py-2 text-center font-medium text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="agenda-approval-votes-against" className="block text-xs text-gray-500 mb-1">Против</label>
+                        <input id="agenda-approval-votes-against" type="number" min={0} max={maxVotes} aria-label="Голосов против (утверждение повестки)" value={protocolProcedural.agendaApprovalVotesAgainst || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, agendaApprovalVotesAgainst: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.agendaApprovalVotesFor, p.agendaApprovalVotesAgainst, p.agendaApprovalVotesAbstained, "against", num); return { ...p, agendaApprovalVotesFor: c.for, agendaApprovalVotesAgainst: c.against, agendaApprovalVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, agendaApprovalVotesAgainst: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-red-300 bg-red-50 px-3 py-2 text-center font-medium text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <label htmlFor="agenda-approval-votes-abstained" className="block text-xs text-gray-500 mb-1">Воздержались</label>
+                        <input id="agenda-approval-votes-abstained" type="number" min={0} max={maxVotes} aria-label="Воздержались (утверждение повестки)" value={protocolProcedural.agendaApprovalVotesAbstained || ""} onChange={(e) => { const v = e.target.value; if (v === "") { setProtocolProcedural(p => ({ ...p, agendaApprovalVotesAbstained: 0 })); return; } const num = parseInt(v, 10) || 0; setProtocolProcedural(p => { const c = clampProceduralVotes(p.agendaApprovalVotesFor, p.agendaApprovalVotesAgainst, p.agendaApprovalVotesAbstained, "abstained", num); return { ...p, agendaApprovalVotesFor: c.for, agendaApprovalVotesAgainst: c.against, agendaApprovalVotesAbstained: c.abstained }; }); }} onBlur={(e) => { if (e.target.value === "") setProtocolProcedural(p => ({ ...p, agendaApprovalVotesAbstained: 0 })); }} onFocus={(e) => e.target.select()} className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-center font-medium dark:border-gray-600 dark:bg-gray-700" />
+                      </div>
                     </div>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">Всего: {protocolProcedural.agendaApprovalVotesFor + protocolProcedural.agendaApprovalVotesAgainst + protocolProcedural.agendaApprovalVotesAbstained} / {maxVotes}</p>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Решение принято единогласно (большинством голосов).</p>
+                    <p className={`mt-1 text-sm font-medium ${getVoteDecisionText(protocolProcedural.agendaApprovalVotesFor, protocolProcedural.agendaApprovalVotesAgainst, protocolProcedural.agendaApprovalVotesAbstained).color}`}>{getVoteDecisionText(protocolProcedural.agendaApprovalVotesFor, protocolProcedural.agendaApprovalVotesAgainst, protocolProcedural.agendaApprovalVotesAbstained).text}</p>
                   </div>
                 </div>
               </div>
 
               {/* Блок 6: Вопросы повестки дня */}
-              <div className="rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-                <h4 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">
-                  6. Вопросы повестки дня
+              <div className={`rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800 ${!hasQuorum ? "opacity-50 pointer-events-none" : ""}`}>
+                <h4 className="mb-2 text-base font-semibold text-gray-900 dark:text-white">
+                  6. Рассмотрение вопросов повестки дня
                 </h4>
+                <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                  Заполните протокольные данные по каждому вопросу: Слушали, Докладывал, Постановили и результаты голосования.
+                </p>
                 {meeting.agendaItems.length === 0 ? (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                    Нет пунктов в повестке. Добавьте пункты на вкладке «Повестка», затем заполните по каждому вопросу: Слушали, Докладывал, Постановили, Голосование.
+                    Нет пунктов в повестке. Добавьте пункты на вкладке «Повестка».
                   </p>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-4">
           {meeting.agendaItems.map((item) => (
             <div
               key={item.id}
-              className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-lg border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50"
             >
-              <div className="mb-4 flex items-center justify-between">
-                <h4 className="text-lg font-semibold">
-                  Вопрос {item.orderNumber}. {item.title}
-                </h4>
-              </div>
+              <h5 className="mb-3 text-sm font-semibold text-blue-700 dark:text-blue-400">
+                Вопрос {item.orderNumber}. {item.title}
+              </h5>
 
               <div className="space-y-4">
                 {/* СЛУШАЛИ */}
@@ -2583,14 +2791,14 @@ export default function MeetingDetailPage({
                 {/* ДОКЛАДЫВАЛ — только члены выборного органа (как при создании повестки) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Докладывал: * (только члены выборного органа)
+                    Докладывал: * (только присутствующие члены)
                   </label>
                   <select
                     aria-label={`Докладывал по вопросу ${item.orderNumber}`}
                     value={protocolData[item.id]?.speakerId || item.speakerId || ""}
                     onChange={(e) => {
                       const memberId = e.target.value;
-                      const m = electedBody.find((x) => x.id === memberId);
+                      const m = presentElectedBody.find((x) => x.id === memberId) || electedBody.find((x) => x.id === memberId);
                       updateProtocolItem(item.id, "speakerId", memberId);
                       if (m) {
                         updateProtocolItem(item.id, "speakerName", getElectedMemberName(m));
@@ -2600,7 +2808,7 @@ export default function MeetingDetailPage({
                     className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                   >
                     <option value="">— Выберите докладчика —</option>
-                    {electedBody.map((m) => (
+                    {presentElectedBody.map((m) => (
                       <option key={m.id} value={m.id}>
                         {getElectedMemberName(m)}
                         {m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
@@ -2747,21 +2955,7 @@ export default function MeetingDetailPage({
                 <h4 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
                   Действия с протоколом
                 </h4>
-                {!meeting.protocolDocument && (
-                  <div className="mb-4 max-w-xs">
-                    <label htmlFor="protocol-reg-number" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Номер документа (необязательно)
-                    </label>
-                    <input
-                      id="protocol-reg-number"
-                      type="text"
-                      value={protocolRegNumberOverride}
-                      onChange={(e) => setProtocolRegNumberOverride(e.target.value)}
-                      placeholder="Например: PR00001 или оставьте пустым"
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                )}
+                
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <button
                     onClick={() => {
@@ -2773,7 +2967,18 @@ export default function MeetingDetailPage({
                     ← Назад к повестке
                   </button>
                   {!readOnly && (
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="space-y-3">
+                    {!hasQuorum && (
+                      <div className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-700 dark:bg-red-900/20">
+                        <svg className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                          Формирование протокола невозможно — кворум отсутствует. Для принятия решений необходимо присутствие не менее {Math.floor(totalEligible / 2) + 1} из {totalEligible} членов Профкома.
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
                     <button
                       onClick={async () => {
                         await saveProtocolData();
@@ -2796,7 +3001,7 @@ export default function MeetingDetailPage({
                           setIsGenerating(false);
                         }
                       }}
-                      disabled={isSaving || isGenerating}
+                      disabled={isSaving || isGenerating || !hasQuorum}
                       className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2827,7 +3032,7 @@ export default function MeetingDetailPage({
                           setIsGenerating(false);
                         }
                       }}
-                      disabled={isSaving || isGenerating}
+                      disabled={isSaving || isGenerating || !hasQuorum}
                       className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                     >
                       {isSaving || isGenerating ? "Сохранение..." : "Сохранить в черновики"}
@@ -2854,7 +3059,7 @@ export default function MeetingDetailPage({
                           setIsGenerating(false);
                         }
                       }}
-                      disabled={isSaving || isGenerating}
+                      disabled={isSaving || isGenerating || !hasQuorum}
                       className="inline-flex items-center gap-2 rounded-lg border border-green-600 bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2862,6 +3067,7 @@ export default function MeetingDetailPage({
                       </svg>
                       {isGenerating ? "Утверждение..." : "Утвердить"}
                     </button>
+                    </div>
                   </div>
                   )}
                 </div>

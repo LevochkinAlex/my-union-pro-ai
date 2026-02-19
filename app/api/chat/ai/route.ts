@@ -243,22 +243,42 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Проверяем, что чат существует и пользователь является участником
-    const chat = await prisma.chat.findFirst({
-      where: {
-        id: chatId,
-        name: AI_CHAT_NAME,
-        participants: {
-          some: {
-            userId: userId,
-            leftAt: null,
+    // Находим чат ИИ: по chatId или любой чат пользователя с именем ИИ-Ассистент (на случай удалённого чата)
+    let chat = chatId
+      ? await prisma.chat.findFirst({
+          where: {
+            id: chatId,
+            name: AI_CHAT_NAME,
+            participants: {
+              some: { userId: userId, leftAt: null },
+            },
           },
-        },
-      },
-    });
+        })
+      : null;
 
     if (!chat) {
-      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
+      chat = await prisma.chat.findFirst({
+        where: {
+          name: AI_CHAT_NAME,
+          participants: {
+            some: { userId: userId, leftAt: null },
+          },
+        },
+      });
+    }
+
+    if (!chat) {
+      chat = await prisma.chat.create({
+        data: {
+          type: "PRIVATE",
+          name: AI_CHAT_NAME,
+          description: "Персональный ИИ-помощник по профсоюзным вопросам",
+          isPublic: false,
+          participants: {
+            create: [{ userId: userId, role: "member" }],
+          },
+        },
+      });
     }
 
     // Сохраняем сообщение пользователя
@@ -420,6 +440,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
+      chatId: chat.id,
       userMessage: {
         id: userMessage.id,
         content: userMessage.content,

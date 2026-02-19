@@ -94,6 +94,21 @@ export async function POST(
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
     }
 
+    // Проверка кворума для протокола (50% + 1 от числа членов Профкома с правом голоса)
+    if (documentType === "PROTOCOL") {
+      const PRESENT_STATUSES = ["PRESENT", "PRESENT_OFFLINE", "PRESENT_ONLINE"];
+      const votingMembers = meeting.participants.filter((p: any) => p.canVote);
+      const totalEligible = votingMembers.length;
+      const presentVoters = votingMembers.filter((p: any) => PRESENT_STATUSES.includes(p.attendance)).length;
+      const quorumRequired = Math.floor(totalEligible / 2) + 1;
+      if (totalEligible === 0 || presentVoters < quorumRequired) {
+        return NextResponse.json(
+          { error: `Кворум отсутствует: присутствуют ${presentVoters} из ${totalEligible} членов Профкома. Для правомочности заседания необходимо не менее ${quorumRequired}. Протокол не может быть сформирован.` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Для протокола: если уже есть документ — обновляем его (тот же номер)
     const existingProtocolDoc = documentType === "PROTOCOL" && meeting.protocolDocumentId
       ? await prisma.document.findUnique({ where: { id: meeting.protocolDocumentId } })
@@ -179,6 +194,34 @@ export async function POST(
       }
     }
 
+    const eligibleVoters = meeting.participants.filter((p: any) => p.canVote);
+    const totalEligible = eligibleVoters.length;
+    const presentVotersCount = presentMembers.filter((p: any) => p.canVote).length;
+    const quorumRequired = Math.floor(totalEligible / 2) + 1;
+
+    const presentMembersList = presentMembers.map(p =>
+      p.user ? formatUserName(p.user) : p.externalName || ""
+    ).filter(Boolean);
+    const absentMembersList = absentMembers.map(p =>
+      p.user ? formatUserName(p.user) : p.externalName || ""
+    ).filter(Boolean);
+
+    const procedural = (meeting as any).protocolProceduralData || {};
+
+    const resolveUserName = (userId: string | undefined) => {
+      if (!userId) return "";
+      const p = meeting.participants.find((p: any) => p.userId === userId);
+      if (p?.user) return formatUserName(p.user);
+      return "";
+    };
+
+    const voteCounterIds: string[] = (() => {
+      const raw = (meeting as any).voteCounterUserIds;
+      if (!raw) return [];
+      try { return typeof raw === "string" ? JSON.parse(raw) : raw; } catch { return []; }
+    })();
+    const voteCounterNames = voteCounterIds.map(resolveUserName).filter(Boolean);
+
     const templateData = {
       organizationName: meeting.organization.name,
       organizationChairmanName: meeting.organization.chairmanName || formatUserName(chairman?.user),
@@ -189,23 +232,30 @@ export async function POST(
       meetingPlace: meeting.location || "",
       regNumber,
       currentDate: formatDate(new Date()),
-      
+
       chairmanName: documentType === "PROTOCOL" && presidingOfficerName ? presidingOfficerName : (formatUserName(chairman?.user) || meeting.organization.chairmanName || ""),
       secretaryName: documentType === "PROTOCOL" && protocolSecretaryName ? protocolSecretaryName : (formatUserName(secretary?.user) || ""),
       secretaryJobTitle: secretary?.user?.jobTitle || "Секретарь",
       signatureLabelChairman: documentType === "PROTOCOL" ? "Председательствующий" : "Председатель",
-      
-      presentMembers: presentMembers.map(p => 
-        p.user ? formatUserName(p.user) : p.externalName || ""
-      ).filter(Boolean).join(", "),
-      
-      absentMembers: absentMembers.map(p => 
-        p.user ? formatUserName(p.user) : p.externalName || ""
-      ).filter(Boolean).join(", "),
-      
-      totalMembers: meeting.participants.length,
-      presentCount: presentMembers.length,
-      quorum: presentMembers.length >= Math.ceil(meeting.participants.length / 2) ? "имеется" : "отсутствует",
+
+      presentMembersList,
+      presentMembers: presentMembersList.join(", "),
+      absentMembersList,
+      absentMembers: absentMembersList.join(", "),
+      invitedGuests: (meeting as any).invitedGuests || "",
+
+      totalMembers: totalEligible,
+      presentCount: presentVotersCount,
+      quorumRequired,
+      quorum: presentVotersCount >= quorumRequired ? "имеется" : "отсутствует",
+
+      procedural,
+      presidingOfficerName,
+      protocolSecretaryName,
+      voteCounterNames,
+      chairmanReportName: resolveUserName(procedural.chairmanReportUserId),
+      secretaryReportName: resolveUserName(procedural.secretaryReportUserId),
+      voteCounterReportName: resolveUserName(procedural.voteCounterReportUserId),
     };
 
     // Генерация HTML в зависимости от типа документа
@@ -422,130 +472,130 @@ function generateAgendaHTML(meeting: any, data: any): string {
 <head>
   <meta charset="UTF-8">
   <style>
+    @page { margin: 20mm 15mm 20mm 30mm; }
     body {
       font-family: 'Times New Roman', Times, serif;
       font-size: 14px;
-      line-height: 1.5;
+      line-height: 1.6;
       margin: 0;
-      padding: 40px;
+      padding: 40px 30px 40px 50px;
+      color: #000;
     }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .title {
-      font-size: 16px;
-      font-weight: bold;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .subtitle {
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
-    .info {
-      margin: 20px 0;
-    }
-    .info-row {
-      margin-bottom: 5px;
-    }
-    .agenda-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 20px 0;
-    }
-    .agenda-table td {
-      border: 1px solid #333;
-    }
+    .header { text-align: center; margin-bottom: 24px; }
+    .header .org-name { font-size: 13px; margin-bottom: 16px; }
+    .header .title { font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .header .subtitle { font-size: 14px; margin-bottom: 2px; }
+    .header .date-line { font-size: 14px; margin-top: 4px; }
+    .info-row { margin: 6px 0; }
+    .agenda-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .agenda-table td { border: 1px solid #333; }
+    .signatures { margin-top: 50px; page-break-inside: avoid; }
+    .sig-row { display: flex; justify-content: space-between; margin-top: 40px; }
+    .sig-block { width: 45%; }
+    .sig-block .sig-line { border-bottom: 1px solid #000; margin-bottom: 4px; margin-top: 30px; }
   </style>
 </head>
 <body>
   <div class="header">
+    <div class="org-name">${escapeHtml(data.organizationName)}</div>
     <div class="title">ПОВЕСТКА ДНЯ</div>
-    <div class="subtitle">заседания профсоюзного комитета</div>
-    <div class="subtitle"><strong>${data.organizationName}</strong></div>
-    <div class="subtitle">№ ${data.regNumber} от ${data.meetingDate}</div>
+    <div class="subtitle">заседания профсоюзного комитета первичной профсоюзной организации</div>
+    <div class="subtitle">«${escapeHtml(data.organizationName)}»</div>
+    <div class="date-line">№ ${data.regNumber} от ${data.meetingDate}</div>
   </div>
 
-  <div class="info">
-    <div class="info-row"><strong>Время:</strong> ${data.meetingTime || "___:___"}</div>
-    <div class="info-row"><strong>Место проведения:</strong> ${data.meetingPlace || "_________________________"}</div>
-  </div>
+  <p class="info-row"><strong>Время:</strong> ${data.meetingTime || "___:___"}</p>
+  <p class="info-row"><strong>Место проведения:</strong> ${escapeHtml(data.meetingPlace) || "_________________________"}</p>
 
-  <p><strong>Вопросы для обсуждения:</strong></p>
+  <p style="margin-top: 20px;"><strong>Вопросы для обсуждения:</strong></p>
 
   <table class="agenda-table">
     <tbody>
       ${agendaItemsHtml}
     </tbody>
   </table>
+
+  <div class="signatures">
+    <div class="sig-row">
+      <div class="sig-block">
+        <div>Председатель:</div>
+        <div class="sig-line"></div>
+        <div>${escapeHtml(data.chairmanName || "_________________________")}</div>
+      </div>
+      <div class="sig-block">
+        <div>Секретарь:</div>
+        <div class="sig-line"></div>
+        <div>${escapeHtml(data.secretaryName || "_________________________")}</div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
   `.trim();
 }
 
-// Генерация HTML для Протокола.
-// Данные берутся из meeting.agendaItems (поля заполняются в форме «Заполнение протокола» и сохраняются через PATCH /api/ppo-head/meetings/[id]/agenda):
-// — СЛУШАЛИ: item.heardText || item.title
-// — ДОКЛАДЫВАЛ: item.speakerName / item.speaker, item.speakerPosition / item.speaker.jobTitle, item.coSpeakerName / item.coSpeaker
-// — ПОСТАНОВИЛИ: item.resolutionText
-// — ГОЛОСОВАНИЕ: item.votesFor, item.votesAgainst, item.votesAbstained; Решение: item.isApproved (true/false)
-// — РЕШИЛИ: item.decidedText (если указано)
+// Генерация HTML для Протокола по стандарту Минюст РФ / Устав Профсоюза.
 function generateProtocolHTML(meeting: any, data: any): string {
-  const agendaItemsHtml = meeting.agendaItems
-    .map((item: any) => {
-      const speakerName = item.speakerName ||
-        (item.speaker ? [item.speaker.lastName, item.speaker.firstName, item.speaker.middleName].filter(Boolean).join(" ") : "");
-      const coSpeakerName = item.coSpeakerName ||
-        (item.coSpeaker ? [item.coSpeaker.lastName, item.coSpeaker.firstName, item.coSpeaker.middleName].filter(Boolean).join(" ") : "");
-      const speakerLine = speakerName || "____________________________";
-      const coSpeakerLine = coSpeakerName ? ` Со-докладчик: ${coSpeakerName}` : "";
-      const positionText = (item.speakerPosition || (item.speaker?.jobTitle ?? "")).trim();
-      const positionLine = positionText ? ` ${escapeHtml(positionText)}` : "";
-      return `
-        <div class="agenda-item">
-          <p class="item-number"><strong>${item.orderNumber}. ${escapeHtml(item.title)}</strong></p>
-          
-          <div class="section">
-            <p class="section-title">СЛУШАЛИ:</p>
-            <p>${escapeHtml(item.heardText || item.title)}</p>
-          </div>
-          
-          <div class="section">
-            <p class="section-title">ДОКЛАДЫВАЛ:</p>
-            <p>${escapeHtml(speakerLine)}${positionLine}${coSpeakerLine ? `<br>Со-докладчик: ${escapeHtml(coSpeakerName)}` : ""}</p>
-          </div>
-          
-          <div class="section">
-            <p class="section-title">ПОСТАНОВИЛИ:</p>
-            <p>${escapeHtml(item.resolutionText || "____________________________")}</p>
-          </div>
-          
-          <div class="voting">
-            <p class="section-title">ГОЛОСОВАНИЕ:</p>
-            <table class="voting-table">
-              <tr>
-                <td>За:</td>
-                <td><strong>${item.votesFor || 0}</strong></td>
-                <td>Против:</td>
-                <td><strong>${item.votesAgainst || 0}</strong></td>
-                <td>Воздержались:</td>
-                <td><strong>${item.votesAbstained || 0}</strong></td>
-              </tr>
-            </table>
-            <p>Решение: <strong>${item.isApproved === true ? "ПРИНЯТО" : item.isApproved === false ? "НЕ ПРИНЯТО" : "___________"}</strong></p>
-          </div>
-          ${item.decidedText ? `
-          <div class="section">
-            <p class="section-title">РЕШИЛИ:</p>
-            <p>${escapeHtml(item.decidedText)}</p>
-          </div>
-          ` : ""}
-        </div>
-        <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
-      `;
-    })
-    .join("");
+  const proc = data.procedural || {};
+  const vFor = (f: string) => proc[f] || 0;
+
+  const getVoteResult = (votesFor: number, votesAgainst: number, votesAbstained: number) => {
+    const total = votesFor + votesAgainst + votesAbstained;
+    if (total === 0) return "Не голосовали";
+    if (votesFor === data.presentCount && votesAgainst === 0 && votesAbstained === 0) return "Решение принято единогласно.";
+    const required = Math.floor(data.presentCount / 2) + 1;
+    if (votesFor >= required) return `Решение принято большинством голосов.`;
+    return `Решение не принято.`;
+  };
+
+  const proceduralBlock = (
+    title: string,
+    listenedText: string,
+    reporterName: string,
+    resolvedText: string,
+    vF: number, vA: number, vAbs: number,
+  ) => `
+    <div class="protocol-block">
+      <p><strong>СЛУШАЛИ:</strong> ${escapeHtml(listenedText)}</p>
+      <p>Докладывал ${escapeHtml(reporterName || "____________________")} – член Профсоюза.</p>
+      <p><strong>ПОСТАНОВИЛИ:</strong> ${escapeHtml(resolvedText)}</p>
+      <p>Голосовали:</p>
+      <p class="vote-line">«За» – ${vF}; &nbsp; «Против» – ${vA}; &nbsp; «Воздержались» – ${vAbs}</p>
+      <p><em>${getVoteResult(vF, vA, vAbs)}</em></p>
+    </div>
+  `;
+
+  const agendaListHtml = meeting.agendaItems.map((item: any) =>
+    `<p style="margin: 2px 0; padding-left: 20px;">${item.orderNumber}. ${escapeHtml(item.title)}</p>`
+  ).join("");
+
+  const agendaItemsHtml = meeting.agendaItems.map((item: any) => {
+    const speakerName = item.speakerName ||
+      (item.speaker ? [item.speaker.lastName, item.speaker.firstName, item.speaker.middleName].filter(Boolean).join(" ") : "");
+    const positionText = (item.speakerPosition || (item.speaker?.jobTitle ?? "")).trim();
+    const coSpeakerName = item.coSpeakerName ||
+      (item.coSpeaker ? [item.coSpeaker.lastName, item.coSpeaker.firstName, item.coSpeaker.middleName].filter(Boolean).join(" ") : "");
+
+    return `
+      <div class="protocol-block">
+        <p><strong>СЛУШАЛИ:</strong> ${escapeHtml(item.heardText || item.title)}</p>
+        <p>Докладывал ${escapeHtml(speakerName || "____________________")}${positionText ? `, ${escapeHtml(positionText)}` : ""}.</p>
+        ${coSpeakerName ? `<p>Со-докладчик: ${escapeHtml(coSpeakerName)}</p>` : ""}
+        <p><strong>ПОСТАНОВИЛИ:</strong> ${escapeHtml(item.resolutionText || "____________________")}</p>
+        <p>Голосовали:</p>
+        <p class="vote-line">«За» – ${item.votesFor || 0}; &nbsp; «Против» – ${item.votesAgainst || 0}; &nbsp; «Воздержались» – ${item.votesAbstained || 0}</p>
+        <p><em>${getVoteResult(item.votesFor || 0, item.votesAgainst || 0, item.votesAbstained || 0)}</em></p>
+      </div>
+    `;
+  }).join("");
+
+  const presentMemberLines = (data.presentMembersList || []).map((name: string, i: number) =>
+    `${i + 1}. ${escapeHtml(name)}`
+  ).join("<br>");
+
+  const absentMemberLines = (data.absentMembersList || []).map((name: string, i: number) =>
+    `${i + 1}. ${escapeHtml(name)}`
+  ).join("<br>");
 
   return `
 <!DOCTYPE html>
@@ -553,137 +603,124 @@ function generateProtocolHTML(meeting: any, data: any): string {
 <head>
   <meta charset="UTF-8">
   <style>
+    @page { margin: 20mm 15mm 20mm 30mm; }
     body {
       font-family: 'Times New Roman', Times, serif;
       font-size: 14px;
-      line-height: 1.5;
+      line-height: 1.6;
       margin: 0;
-      padding: 40px;
+      padding: 40px 30px 40px 50px;
+      color: #000;
     }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .title {
-      font-size: 18px;
-      font-weight: bold;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .subtitle {
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
-    .info {
-      margin: 20px 0;
-      display: flex;
-      gap: 30px;
-    }
-    .info-block {
-      flex: 1;
-    }
-    .presence {
-      margin: 20px 0;
-      padding: 15px;
-      background: #f9f9f9;
-      border-left: 3px solid #333;
-    }
-    .agenda-item {
-      margin: 25px 0;
-      page-break-inside: avoid;
-    }
-    .item-number {
-      font-size: 15px;
-      margin-bottom: 10px;
-    }
-    .section {
-      margin: 10px 0;
-      padding-left: 20px;
-    }
-    .section-title {
-      font-weight: bold;
-      color: #333;
-      margin-bottom: 5px;
-    }
-    .voting {
-      margin: 15px 0;
-      padding: 10px;
-      background: #f5f5f5;
-    }
-    .voting-table {
-      margin: 10px 0;
-    }
-    .voting-table td {
-      padding: 5px 15px 5px 0;
-    }
-    .signatures {
-      margin-top: 50px;
-      page-break-inside: avoid;
-    }
-    .signature-row {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 40px;
-    }
-    .signature-block {
-      text-align: center;
-    }
-    .signature-line {
-      border-bottom: 1px solid #000;
-      width: 200px;
-      margin: 5px auto;
-    }
+    .header { text-align: center; margin-bottom: 24px; }
+    .header .org-name { font-size: 13px; margin-bottom: 16px; }
+    .header .title { font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .header .subtitle { font-size: 14px; margin-bottom: 2px; }
+    .header .date-line { font-size: 14px; margin-top: 4px; }
+    .info-line { margin: 6px 0; }
+    .presence-section { margin: 20px 0 16px 0; }
+    .presence-section p { margin: 4px 0; }
+    .quorum-statement { margin: 16px 0; font-style: italic; }
+    .protocol-block { margin: 20px 0; page-break-inside: avoid; }
+    .protocol-block p { margin: 4px 0; }
+    .vote-line { padding-left: 20px; }
+    .signatures { margin-top: 60px; page-break-inside: avoid; }
+    .sig-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 50px; }
+    .sig-block { width: 45%; }
+    .sig-block .sig-title { margin-bottom: 30px; }
+    .sig-block .sig-line { border-bottom: 1px solid #000; margin-bottom: 4px; }
+    .sig-block .sig-name { font-size: 13px; }
+    .divider { border: none; border-top: 1px solid #ccc; margin: 16px 0; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="title">ПРОТОКОЛ № ${data.meetingNumber}</div>
-    <div class="subtitle">заседания профсоюзного комитета</div>
-    <div class="subtitle"><strong>${data.organizationName}</strong></div>
+    <div class="org-name">${escapeHtml(data.organizationName)}</div>
+    <div class="title">ПРОТОКОЛ № ${escapeHtml(data.meetingNumber)}</div>
+    <div class="subtitle">заседания профсоюзного комитета первичной профсоюзной организации</div>
+    <div class="subtitle">«${escapeHtml(data.organizationName)}»</div>
+    <div class="date-line">от ${data.meetingDate}</div>
   </div>
 
-  <div class="info">
-    <div class="info-block">
-      <p><strong>Номер документа:</strong> ${data.regNumber}</p>
-      <p><strong>Дата заседания:</strong> ${data.meetingDate}</p>
-      <p><strong>Начало:</strong> ${data.meetingTime || "___:___"}</p>
-    </div>
-    <div class="info-block">
-      <p><strong>Место проведения:</strong></p>
-      <p>${data.meetingPlace || "_________________________"}</p>
-    </div>
-  </div>
+  <p class="info-line"><strong>Место проведения:</strong> ${escapeHtml(data.meetingPlace) || "____________________"}</p>
+  <p class="info-line"><strong>Начало заседания:</strong> ${data.meetingTime || "___:___"}</p>
 
-  <div class="presence">
+  <div class="presence-section">
     <p><strong>В состав профкома избраны:</strong> ${data.totalMembers} чел.</p>
+
     <p><strong>Присутствовали на заседании:</strong> ${data.presentCount} чел.</p>
-    <p>${data.presentMembers || "___________________________"}</p>
-    ${data.absentMembers ? `<p><strong>Отсутствовали:</strong> ${data.absentMembers}</p>` : ""}
-    <p><strong>Кворум:</strong> ${data.quorum}</p>
+    <div style="padding-left: 20px; margin: 4px 0;">${presentMemberLines || "____________________"}</div>
+
+    ${absentMemberLines ? `
+    <p><strong>Отсутствовали:</strong></p>
+    <div style="padding-left: 20px; margin: 4px 0;">${absentMemberLines}</div>
+    ` : ""}
+
+    ${data.invitedGuests ? `<p><strong>Присутствовали гости:</strong> ${escapeHtml(data.invitedGuests)}</p>` : ""}
   </div>
 
-  <h3 style="text-align: center; margin: 30px 0;">ПОВЕСТКА ДНЯ:</h3>
+  <p class="quorum-statement">В соответствии с п.&nbsp;3 ст.&nbsp;18 Устава Профсоюза заседание профсоюзного комитета считается правомочным (имеет кворум) и объявляется открытым. Присутствуют ${data.presentCount} из ${data.totalMembers} членов (необходимо не менее ${data.quorumRequired}).</p>
+
+  <hr class="divider">
+
+  ${proceduralBlock(
+    "Об избрании председательствующего",
+    "Об избрании председательствующего на заседании Профкома.",
+    data.chairmanReportName,
+    `Избрать председательствующим на собрании – ${escapeHtml(data.presidingOfficerName || "____________________")}`,
+    vFor("chairmanVotesFor"), vFor("chairmanVotesAgainst"), vFor("chairmanVotesAbstained"),
+  )}
+
+  <hr class="divider">
+
+  ${proceduralBlock(
+    "Об избрании секретаря",
+    "Об избрании секретаря на заседании Профкома.",
+    data.secretaryReportName,
+    `Избрать секретарем на собрании – ${escapeHtml(data.protocolSecretaryName || "____________________")}`,
+    vFor("secretaryVotesFor"), vFor("secretaryVotesAgainst"), vFor("secretaryVotesAbstained"),
+  )}
+
+  <hr class="divider">
+
+  ${proceduralBlock(
+    "О порядке подсчёта голосов",
+    "О порядке подсчёта голосов на заседании профкома.",
+    data.voteCounterReportName,
+    `Поручить вести подсчет голосов на заседании Профкома – ${data.voteCounterNames.length > 0 ? escapeHtml(data.voteCounterNames.join(", ")) : "____________________"}`,
+    vFor("voteCounterVotesFor"), vFor("voteCounterVotesAgainst"), vFor("voteCounterVotesAbstained"),
+  )}
+
+  <hr class="divider">
+
+  <div class="protocol-block">
+    <p><strong>СЛУШАЛИ:</strong> О повестке дня заседания профсоюзного комитета.</p>
+    <p>Докладывал ${escapeHtml(data.presidingOfficerName || "____________________")}.</p>
+    <p><strong>ПОСТАНОВИЛИ:</strong> Утвердить повестку дня заседания Профкома:</p>
+    ${agendaListHtml}
+    <p>Голосовали:</p>
+    <p class="vote-line">«За» – ${vFor("agendaApprovalVotesFor")}; &nbsp; «Против» – ${vFor("agendaApprovalVotesAgainst")}; &nbsp; «Воздержались» – ${vFor("agendaApprovalVotesAbstained")}</p>
+    <p><em>${getVoteResult(vFor("agendaApprovalVotesFor"), vFor("agendaApprovalVotesAgainst"), vFor("agendaApprovalVotesAbstained"))}</em></p>
+  </div>
+
+  <hr class="divider">
 
   ${agendaItemsHtml}
 
   <div class="signatures">
-    <div class="signature-row">
-      <div class="signature-block">
-        <p>${data.signatureLabelChairman ?? "Председательствующий"}</p>
-        <div class="signature-line"></div>
-        <p>${data.chairmanName || "_________________________"}</p>
+    <div class="sig-row">
+      <div class="sig-block">
+        <div class="sig-title">Председательствующий:</div>
+        <div class="sig-line"></div>
+        <div class="sig-name">${escapeHtml(data.presidingOfficerName || data.chairmanName || "____________________")}</div>
       </div>
-      <div class="signature-block">
-        <p>Секретарь</p>
-        <div class="signature-line"></div>
-        <p>${data.secretaryName || "_________________________"}</p>
+      <div class="sig-block">
+        <div class="sig-title">Секретарь:</div>
+        <div class="sig-line"></div>
+        <div class="sig-name">${escapeHtml(data.protocolSecretaryName || data.secretaryName || "____________________")}</div>
       </div>
     </div>
   </div>
-
-  <p style="margin-top: 30px; font-size: 12px; color: #666;">
-    Дата формирования: ${data.currentDate}
-  </p>
 </body>
 </html>
   `.trim();

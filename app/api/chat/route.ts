@@ -446,8 +446,23 @@ export async function POST(request: NextRequest) {
     let chat;
     let isNew = false;
 
-    // Создаем личный чат
+    // Создаем личный чат (только с пользователями своего ППО; исключение — ИИ-помощник)
     if (targetUserId) {
+      const [me, target] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId }, select: { organizationId: true } }),
+        prisma.user.findUnique({ where: { id: targetUserId }, select: { organizationId: true, email: true } }),
+      ]);
+      const isAIBot = target?.email === "ai-assistant@myunion.pro";
+      if (!isAIBot) {
+        const myOrg = me?.organizationId ?? null;
+        const targetOrg = target?.organizationId ?? null;
+        if (myOrg !== targetOrg) {
+          return NextResponse.json(
+            { error: "Чат доступен только с участниками вашей первичной профсоюзной организации (ППО). Пользователь из другого ППО." },
+            { status: 403 }
+          );
+        }
+      }
       const result = await getOrCreatePrivateChat(userId, targetUserId);
       chat = result.chat;
       isNew = result.isNew;

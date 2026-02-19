@@ -286,6 +286,7 @@ export default function MembersPage() {
       alertError("Укажите причину отклонения");
       return;
     }
+    if (isSubmitting) return;
 
     try {
       setIsSubmitting(true);
@@ -296,8 +297,14 @@ export default function MembersPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Ошибка при отклонении");
+        let message = "Ошибка при отклонении";
+        try {
+          const data = await response.json();
+          if (data?.error) message = data.error;
+        } catch {
+          if (response.statusText) message = response.statusText;
+        }
+        throw new Error(message);
       }
 
       alertSuccess("Заявка отклонена");

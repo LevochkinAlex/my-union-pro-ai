@@ -65,7 +65,7 @@ export default function ChatUnreadBadge() {
     return () => clearInterval(interval);
   }, [session, fetchUnreadCount]);
 
-  // Слушаем события обновления
+  // Слушаем события обновления (подписка один раз при монтировании, чтобы не пропустить событие)
   useEffect(() => {
     const handleUnreadUpdate = (e: Event) => {
       const customEvent = e as CustomEvent;
@@ -76,41 +76,25 @@ export default function ChatUnreadBadge() {
         setIsInitialized(true);
       });
     };
-    
-    const handleMessagesRead = (e?: Event) => {
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При прочтении сообщений обновляем счетчик немедленно
-      const customEvent = e as CustomEvent;
-      const chatId = customEvent?.detail?.chatId;
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[ChatUnreadBadge] Messages read event:', chatId);
-      }
-      setTimeout(() => {
-        fetchUnreadCount();
-      }, 1500); // Увеличена задержка для синхронизации с перезагрузкой чатов
+
+    const handleMessagesRead = () => {
+      setTimeout(() => fetchUnreadCount(), 1500);
     };
-    
-    // Слушаем события изменения unreadCount из useChat.
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Откладываем setState в очередь, чтобы не обновлять
-    // ChatUnreadBadge во время рендера другого компонента (SlackStyleChat) — иначе
-    // "Cannot update a component while rendering a different component".
+
     const handleUnreadCountChange = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.totalUnread === undefined) return;
-      const newCount = Math.max(0, customEvent.detail.totalUnread);
-      const oldCount = unreadCount;
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[ChatUnreadBadge] Unread count event:', oldCount, '->', newCount);
-      }
+      const newCount = Math.max(0, Number(customEvent.detail.totalUnread));
       queueMicrotask(() => {
         setUnreadCount(newCount);
         setIsInitialized(true);
       });
     };
-    
+
     window.addEventListener('chat-unread-updated', handleUnreadUpdate);
     window.addEventListener('chat-messages-read', handleMessagesRead);
     window.addEventListener('chat-unread-count-changed', handleUnreadCountChange);
-    
+
     return () => {
       window.removeEventListener('chat-unread-updated', handleUnreadUpdate);
       window.removeEventListener('chat-messages-read', handleMessagesRead);
@@ -118,12 +102,14 @@ export default function ChatUnreadBadge() {
     };
   }, [fetchUnreadCount]);
 
-  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем бейдж только если есть непрочитанные и компонент инициализирован
-  if (!isInitialized) return null;
-  if (unreadCount === 0) return null;
+  // Показываем бейдж, если есть непрочитанные (индекс показываем всегда при unreadCount > 0)
+  if (unreadCount <= 0) return null;
 
   return (
-    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[10px] font-medium bg-red-500 text-white rounded-full flex items-center justify-center">
+    <span
+      className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[10px] font-medium bg-red-500 text-white rounded-full flex items-center justify-center"
+      aria-label={`Непрочитанных сообщений: ${unreadCount}`}
+    >
       {unreadCount > 99 ? '99+' : unreadCount}
     </span>
   );

@@ -11,6 +11,7 @@ import {
   exchangeCodeForTokens,
   getVkIdUserInfo,
 } from "@/lib/vk-id-auth";
+import { translitLatinToCyrillic } from "@/lib/translit-latin-to-cyrillic";
 
 const PKCE_COOKIE = "vkid_pkce";
 
@@ -24,11 +25,21 @@ function getBaseUrl(request: NextRequest): string {
   return `${proto}://${host}`;
 }
 
-function normalizePhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\(\)]/g, "");
-  if (cleaned.startsWith("8")) cleaned = "+7" + cleaned.slice(1);
-  if (cleaned.startsWith("7") && !cleaned.startsWith("+")) cleaned = "+" + cleaned;
-  return cleaned;
+function normalizePhone(phone: string | null | undefined): string | null {
+  if (phone == null || typeof phone !== "string") return null;
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length < 10) return null;
+  if (cleaned.startsWith("8")) cleaned = "7" + cleaned.slice(1);
+  if (cleaned.startsWith("7") && cleaned.length > 11) cleaned = cleaned.slice(0, 11);
+  if (!cleaned.startsWith("7")) cleaned = "7" + cleaned;
+  return "+" + cleaned;
+}
+
+/** Нормализация email для поиска и хранения (нижний регистр, trim). */
+function normalizeEmail(email: string | null | undefined): string | null {
+  if (email == null || typeof email !== "string") return null;
+  const trimmed = email.trim().toLowerCase();
+  return trimmed === "" ? null : trimmed;
 }
 
 export async function GET(request: NextRequest) {
@@ -85,28 +96,67 @@ export async function GET(request: NextRequest) {
 
   const vkUserId = String(tokens.user_id);
   const userInfo = await getVkIdUserInfo(tokens.access_token);
-  const email = userInfo?.email ?? null;
+  const email = normalizeEmail(userInfo?.email);
   const phone = userInfo?.phone ? normalizePhone(userInfo.phone) : null;
 
   let user = await prisma.user.findUnique({ where: { vkId: vkUserId } });
 
   if (!user) {
-    const searchConditions: { OR: Array<Record<string, string>> } = { OR: [] };
-    if (email) searchConditions.OR.push({ email });
-    if (phone) searchConditions.OR.push({ phone }, { authPhone: phone });
-    if (searchConditions.OR.length > 0) {
-      user = await prisma.user.findFirst({ where: searchConditions });
+    // Слияние с существующим аккаунтом: ищем по email и по телефону. При нескольких совпадениях
+    // предпочитаем пользователя с telegramChatId (аккаунт из Telegram), чтобы не «переключить»
+    // привязку на дубликат и не сломать вход через Telegram.
+    if (email) {
+      const byEmail = await prisma.user.findMany({
+        where: { email: { equals: email, mode: "insensitive" } },
+        select: { id: true, telegramChatId: true },
+      });
+      const preferred = byEmail.find((u) => u.telegramChatId != null) ?? byEmail[0];
+      if (preferred) user = await prisma.user.findUnique({ where: { id: preferred.id } });
+    }
+    if (!user && phone) {
+      const byPhone = await prisma.user.findMany({
+        where: { OR: [{ phone }, { authPhone: phone }] },
+        select: { id: true, telegramChatId: true },
+      });
+      const preferred = byPhone.find((u) => u.telegramChatId != null) ?? byPhone[0];
+      if (preferred) user = await prisma.user.findUnique({ where: { id: preferred.id } });
+    }
+    // Fallback: телефон в БД мог быть сохранён в другом формате (+7 (963) 977-12-86 и т.д.)
+    if (!user && phone) {
+      const phoneDigits = phone.replace(/\D/g, "");
+      const allWithPhone = await prisma.user.findMany({
+        where: { OR: [{ phone: { not: null } }, { authPhone: { not: null } }] },
+        select: { id: true, phone: true, authPhone: true, telegramChatId: true },
+      });
+      const matches = allWithPhone.filter(
+        (u) =>
+          (u.phone && normalizePhone(u.phone)?.replace(/\D/g, "") === phoneDigits) ||
+          (u.authPhone && normalizePhone(u.authPhone)?.replace(/\D/g, "") === phoneDigits),
+      );
+      const preferred = matches.find((u) => u.telegramChatId != null) ?? matches[0];
+      if (preferred) user = await prisma.user.findUnique({ where: { id: preferred.id } });
     }
   }
 
+  // VK ID может отдавать ФИО латиницей — переводим в кириллицу для профиля
+  const firstName =
+    userInfo?.first_name != null ? translitLatinToCyrillic(userInfo.first_name) : null;
+  const lastName =
+    userInfo?.last_name != null ? translitLatinToCyrillic(userInfo.last_name) : null;
+
   if (user) {
+    // Существующий пользователь (найден по vkId, email или телефону): только дополняем пустые поля, не перезаписываем уже сохранённые (ФИО, аватар и т.д.)
+    const hasFirstName = user.firstName != null && String(user.firstName).trim() !== "";
+    const hasLastName = user.lastName != null && String(user.lastName).trim() !== "";
+    const hasAvatar = user.avatarUrl != null && String(user.avatarUrl).trim() !== "";
+
     await prisma.user.update({
       where: { id: user.id },
       data: {
         vkId: vkUserId,
-        firstName: userInfo?.first_name ?? user.firstName,
-        lastName: userInfo?.last_name ?? user.lastName,
-        avatarUrl: userInfo?.avatar ?? user.avatarUrl,
+        ...(hasFirstName ? {} : { firstName: firstName ?? user.firstName }),
+        ...(hasLastName ? {} : { lastName: lastName ?? user.lastName }),
+        ...(hasAvatar ? {} : { avatarUrl: userInfo?.avatar ?? user.avatarUrl }),
         ...(email && !user.email && { email }),
         ...(phone && !user.phone && { phone }),
       },
@@ -115,8 +165,8 @@ export async function GET(request: NextRequest) {
     user = await prisma.user.create({
       data: {
         vkId: vkUserId,
-        firstName: userInfo?.first_name ?? null,
-        lastName: userInfo?.last_name ?? null,
+        firstName: firstName ?? null,
+        lastName: lastName ?? null,
         avatarUrl: userInfo?.avatar ?? null,
         email,
         phone,

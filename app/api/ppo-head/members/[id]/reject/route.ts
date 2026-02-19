@@ -70,7 +70,7 @@ export async function POST(
       );
     }
 
-    // Обновляем статус
+    // Обновляем статус (главное действие — не должно зависеть от чата/уведомлений)
     const updatedMember = await prisma.user.update({
       where: { id },
       data: {
@@ -78,20 +78,24 @@ export async function POST(
       },
     });
 
-    // Создаем или находим чат с членом профсоюза
-    const chat = await getOrCreatePrivateChat(chairman.id, member.id);
-
-    // Создаем сообщение с причиной отклонения
-    const rejectionMessage = `Ваша заявка на вступление в профсоюз отклонена.\n\nПричина: ${reason.trim()}\n\nПожалуйста, исправьте указанные ошибки и подайте заявку повторно.`;
-
-    // Отправляем уведомление
-    await sendUserNotification({
-      userId: member.id,
-      type: "ticket_response",
-      title: "Заявка отклонена",
-      body: `Ваша заявка на вступление в профсоюз отклонена. Причина: ${reason}`,
-      url: `${process.env.NEXT_PUBLIC_APP_URL || ""}/dashboard/profile`,
-    });
+    // Чат и уведомление — выполняем отдельно, чтобы ошибки не отменяли отклонение заявки
+    const reasonTrimmed = reason.trim();
+    try {
+      await getOrCreatePrivateChat(chairman.id, member.id);
+    } catch (chatErr: any) {
+      console.warn("[ppo-head/members] Reject: getOrCreatePrivateChat failed (reject still applied):", chatErr?.message);
+    }
+    try {
+      await sendUserNotification({
+        userId: member.id,
+        type: "ticket_response",
+        title: "Заявка отклонена",
+        body: `Ваша заявка на вступление в профсоюз отклонена. Причина: ${reasonTrimmed}`,
+        url: `${process.env.NEXT_PUBLIC_APP_URL || ""}/dashboard/profile`,
+      });
+    } catch (notifErr: any) {
+      console.warn("[ppo-head/members] Reject: sendUserNotification failed (reject still applied):", notifErr?.message);
+    }
 
     return NextResponse.json({
       success: true,

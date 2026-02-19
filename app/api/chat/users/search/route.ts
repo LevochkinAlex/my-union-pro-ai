@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/chat/users/search
- * Поиск пользователей для создания нового чата
+ * Поиск пользователей для создания нового чата.
+ * Закрытый круг: только пользователи того же ППО (organizationId), что и текущий пользователь.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -14,17 +15,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
     }
 
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { organizationId: true },
+    });
+    const myOrgId = currentUser?.organizationId ?? null;
+
     const searchParams = request.nextUrl.searchParams;
     const q = searchParams.get('q')?.trim();
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    // Если нет поискового запроса - вернём последних активных пользователей
+    const baseConditions: any[] = [
+      { id: { not: session.user.id } },
+      { membershipStatus: 'APPROVED' as const },
+    ];
+    if (myOrgId !== null) {
+      baseConditions.push({ organizationId: myOrgId });
+    } else {
+      baseConditions.push({ organizationId: null });
+    }
+
     const whereCondition: any = q && q.length >= 2
       ? {
           AND: [
-            { id: { not: session.user.id } },
-            // ВАЖНО: Показываем только одобренных членов профсоюза
-            { membershipStatus: 'APPROVED' as const },
+            ...baseConditions,
             {
               OR: [
                 { firstName: { contains: q, mode: 'insensitive' as const } },
@@ -36,8 +50,7 @@ export async function GET(request: NextRequest) {
           ],
         }
       : {
-          id: { not: session.user.id },
-          membershipStatus: 'APPROVED' as const,
+          AND: baseConditions,
         };
 
     const users = await prisma.user.findMany({

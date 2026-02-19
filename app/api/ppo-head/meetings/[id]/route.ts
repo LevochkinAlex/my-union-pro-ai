@@ -89,7 +89,7 @@ export async function GET(
           },
           orderBy: { orderNumber: "asc" },
         },
-        groupChat: { select: { id: true } },
+        groupChat: { select: { id: true, archivedAt: true } },
       },
     });
 
@@ -168,6 +168,8 @@ export async function PATCH(
       presidingOfficerUserId,
       secretaryUserId,
       voteCounterUserIds,
+      protocolProceduralData,
+      invitedGuests,
     } = body;
 
     const updateData: any = {};
@@ -183,6 +185,8 @@ export async function PATCH(
     if (presidingOfficerUserId !== undefined) updateData.presidingOfficerUserId = presidingOfficerUserId || null;
     if (secretaryUserId !== undefined) updateData.secretaryUserId = secretaryUserId || null;
     if (voteCounterUserIds !== undefined) updateData.voteCounterUserIds = Array.isArray(voteCounterUserIds) ? (voteCounterUserIds.length ? JSON.stringify(voteCounterUserIds) : null) : (voteCounterUserIds ?? null);
+    if (protocolProceduralData !== undefined) updateData.protocolProceduralData = protocolProceduralData;
+    if (invitedGuests !== undefined) updateData.invitedGuests = invitedGuests;
 
     // Обновление времени начала/окончания
     if (status === "IN_PROGRESS" && !meeting.actualStartAt) {
@@ -196,14 +200,27 @@ export async function PATCH(
       where: { id },
       data: updateData,
       include: {
+        organization: { select: { id: true, name: true, chairmanName: true, chairmanJobTitle: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+        agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
+        protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
+        resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
         participants: {
           include: {
             user: {
-              select: { id: true, firstName: true, lastName: true, middleName: true },
+              select: { id: true, firstName: true, lastName: true, middleName: true, jobTitle: true, email: true },
             },
           },
+          orderBy: [{ role: "asc" }, { createdAt: "asc" }],
         },
-        agendaItems: true,
+        agendaItems: {
+          include: {
+            speaker: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+            votes: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
+          },
+          orderBy: { orderNumber: "asc" },
+        },
       },
     });
 

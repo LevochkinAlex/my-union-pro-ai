@@ -141,7 +141,7 @@ model User {
   childrenBirthDates String?  @db.Text // Даты рождения детей в формате JSON: [{"name": "Имя", "birthDate": "YYYY-MM-DD", "gender": "М"|"Ж"}] для подарков
   maritalStatus      String? // Семейное положение (холост/замужем/женат/в разводе)
   spouseInfo         String?  @db.Text // Информация о супруге/супруге
-  awards             String?  @db.Text // Награды в формате JSON: [{"type": "ведомственная"|"государственная"|"профсоюзная", "year": "YYYY", "description": "описание"}] 
+  awards             String?  @db.Text // Награды в формате JSON: [{"type": "ведомственная"|"государственная"|"профсоюзная", "year": "YYYY", "description": "описание", "attachments": [{"url": "...", "fileName": "...", "mimeType": "..."}]}] 
   training           String?  @db.Text // Обучение в формате JSON: [{"name": "название", "year": "YYYY", "description": "описание"}]
   professions        String?  @db.Text // Профессии в формате JSON: [{"name": "название профессии", "experience": "опыт работы"}]
   educations         String?  @db.Text // Образование в формате JSON: [{"level": "уровень", "institution": "учебное заведение", "year": "год окончания", "specialty": "специальность"}]
@@ -942,13 +942,15 @@ model Meeting {
   presidingOfficerUserId String? // Председательствующий (из выборного органа)
   secretaryUserId        String? // Секретарь заседания (из выборного органа)
   voteCounterUserIds     String? @db.Text // JSON: массив userId ответственных за подсчёт голосов
+  protocolProceduralData Json? // Процедурные голосования протокола (избрание председательствующего, секретаря, счётной комиссии, утверждение повестки)
 
   // Созыватель/Организатор (опционально: при удалении пользователя можно обнулить в коде)
   createdById String?
   createdBy   User?  @relation("MeetingCreatedBy", fields: [createdById], references: [id])
 
   // Метаданные
-  notes String? @db.Text // Примечания
+  notes         String? @db.Text // Примечания
+  invitedGuests String? @db.Text // Приглашённые гости (свободная форма, ФИО)
 
   // Групповой чат заседания (создаётся при отправке на согласование; председатель — админ)
   groupChat Chat? @relation("MeetingGroupChat")

@@ -1,13 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Modal } from "@/components/ui/modal";
 import { ProgressBarFill } from "@/components/ui/ProgressBarFill";
+
+export interface AwardAttachment {
+  url: string;
+  fileName: string;
+  mimeType?: string;
+}
 
 interface Award {
   type: "ведомственная" | "государственная" | "профсоюзная";
   year: string;
   description: string;
+  attachments?: AwardAttachment[];
 }
 
 interface AdditionalInfoModalProps {
@@ -37,7 +44,10 @@ export default function AdditionalInfoModal({
     type: "ведомственная",
     year: "",
     description: "",
+    attachments: [],
   });
+  const [uploadingAwardFile, setUploadingAwardFile] = useState(false);
+  const awardFileInputRef = useRef<HTMLInputElement>(null);
 
   const [loadedPayload, setLoadedPayload] = useState<Record<string, unknown>>({});
 
@@ -57,7 +67,9 @@ export default function AdditionalInfoModal({
         if (data.awards) {
           try {
             const parsed = JSON.parse(data.awards);
-            if (Array.isArray(parsed)) setAwards(parsed);
+            if (Array.isArray(parsed)) {
+              setAwards(parsed.map((a: Award) => ({ ...a, attachments: a.attachments || [] })));
+            } else setAwards([]);
           } catch {
             setAwards([]);
           }
@@ -90,8 +102,35 @@ export default function AdditionalInfoModal({
       setAwards([...awards, { ...newAward }]);
       setIsAddingAward(false);
     }
-    setNewAward({ type: "ведомственная", year: "", description: "" });
+    setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
     setError(null);
+  };
+
+  const handleAwardFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploadingAwardFile(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", f);
+      const res = await fetch("/api/profile/award-attachment", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+      const list = [...(newAward.attachments || []), data.attachment];
+      setNewAward({ ...newAward, attachments: list });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось загрузить файл");
+    } finally {
+      setUploadingAwardFile(false);
+      e.target.value = "";
+    }
+  };
+
+  const removeAwardAttachment = (index: number) => {
+    const list = [...(newAward.attachments || [])];
+    list.splice(index, 1);
+    setNewAward({ ...newAward, attachments: list });
   };
 
   const removeAward = (index: number) => {
@@ -99,7 +138,7 @@ export default function AdditionalInfoModal({
     if (editingAwardIndex === index) {
       setEditingAwardIndex(null);
       setIsAddingAward(false);
-      setNewAward({ type: "ведомственная", year: "", description: "" });
+      setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
     } else if (editingAwardIndex !== null && editingAwardIndex > index) {
       setEditingAwardIndex(editingAwardIndex - 1);
     }
@@ -223,7 +262,7 @@ export default function AdditionalInfoModal({
                   <button
                     type="button"
                     onClick={() => {
-                      setNewAward({ type: "ведомственная", year: "", description: "" });
+                      setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
                       setIsAddingAward(true);
                       setEditingAwardIndex(null);
                     }}
@@ -283,13 +322,46 @@ export default function AdditionalInfoModal({
                         />
                       </div>
                     </div>
+                    <div className="mt-3">
+                      <label htmlFor="award-attachment-input" className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Файлы / картинки
+                      </label>
+                      <input
+                        id="award-attachment-input"
+                        ref={awardFileInputRef}
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,image/*,application/pdf"
+                        onChange={handleAwardFileSelect}
+                        disabled={uploadingAwardFile}
+                        aria-label="Загрузить файл или картинку к награде"
+                        className="block w-full text-sm text-gray-500 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-300"
+                      />
+                      {uploadingAwardFile && <p className="mt-1 text-xs text-gray-500">Загрузка...</p>}
+                      {(newAward.attachments?.length ?? 0) > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {newAward.attachments?.map((att, i) => (
+                            <li key={i} className="flex items-center gap-2 text-sm">
+                              {att.mimeType?.startsWith("image/") ? (
+                                <a href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline">
+                                  <img src={att.url.startsWith("http") ? att.url : att.url} alt="" className="h-8 w-8 rounded object-cover" />
+                                  <span className="truncate">{att.fileName}</span>
+                                </a>
+                              ) : (
+                                <a href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 hover:underline">{att.fileName}</a>
+                              )}
+                              <button type="button" onClick={() => removeAwardAttachment(i)} className="rounded p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" title="Удалить">×</button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           setIsAddingAward(false);
                           setEditingAwardIndex(null);
-                          setNewAward({ type: "ведомственная", year: "", description: "" });
+                          setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
                         }}
                         className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       >
@@ -325,6 +397,19 @@ export default function AdditionalInfoModal({
                           </span>
                           <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{award.year}</span>
                           <p className="mt-1 text-sm text-gray-900 dark:text-white">{award.description}</p>
+                          {(award.attachments?.length ?? 0) > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {award.attachments?.map((att, j) => (
+                                att.mimeType?.startsWith("image/") ? (
+                                  <a key={j} href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="inline-block">
+                                    <img src={att.url.startsWith("http") ? att.url : att.url} alt={att.fileName} className="h-12 w-12 rounded border border-gray-200 object-cover dark:border-gray-600" />
+                                  </a>
+                                ) : (
+                                  <a key={j} href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">{att.fileName}</a>
+                                )
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <button

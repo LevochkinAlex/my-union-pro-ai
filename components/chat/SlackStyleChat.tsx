@@ -771,21 +771,8 @@ export default function SlackStyleChat({
         setShowChatView(true);
         return;
       }
-      const chat = chats.find((c) => c.id === chatId);
-      if (chat) {
-        selectChat(chat);
-        setShowChatView(true);
-        const ticketId = searchParams.get("ticketId");
-        const messageId = searchParams.get("messageId");
-        const urlParams = new URLSearchParams();
-        urlParams.set("chatId", chatId);
-        if (ticketId) urlParams.set("ticketId", ticketId);
-        if (messageId) urlParams.set("messageId", messageId);
-        router.replace(`${baseUrl}?${urlParams.toString()}`, { scroll: false });
-        chatIdFromUrlTriedRef.current = null;
-        return;
-      }
-      // Чата нет в списке (например, чат заседания или обращение) — пробуем открыть по ID (один раз на chatId)
+      // Всегда загружаем чат по ID при открытии по ссылке, чтобы получить актуальные данные
+      // (в т.ч. archivedAt — иначе чат заседания после архива/закрытия остаётся открытым для отправки)
       if (chatIdFromUrlTriedRef.current !== chatId) {
         chatIdFromUrlTriedRef.current = chatId;
         const ticketIdFromQuery = searchParams.get("ticketId");

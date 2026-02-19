@@ -69,7 +69,7 @@ export default function GroupChatModal({
   const loadAvailableUsers = async () => {
     try {
       setSearching(true);
-      const response = await fetch('/api/users/search?status=approved&limit=100');
+      const response = await fetch('/api/users/search?status=approved&limit=100&context=chat');
       if (response.ok) {
         const data = await safeJsonParse(response);
         setAvailableUsers(data?.users || []);
@@ -90,7 +90,7 @@ export default function GroupChatModal({
 
     try {
       setSearching(true);
-      const response = await fetch(`/api/users/search?q=${encodeURIComponent(term)}&status=approved&limit=50`);
+      const response = await fetch(`/api/users/search?q=${encodeURIComponent(term)}&status=approved&limit=50&context=chat`);
       if (response.ok) {
         const data = await safeJsonParse(response);
         setAvailableUsers(data?.users || []);
@@ -192,8 +192,10 @@ export default function GroupChatModal({
             )}
           </div>
           <button
+            type="button"
             onClick={handleClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+            aria-label="Закрыть"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -346,6 +348,7 @@ export default function GroupChatModal({
                           toggleUser(user);
                         }}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        aria-label={`Убрать ${getUserName(user)} из участников`}
                       >
                         <X className="w-4 h-4" />
                       </button>

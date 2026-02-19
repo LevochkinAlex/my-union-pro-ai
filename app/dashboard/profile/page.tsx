@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
@@ -76,10 +76,17 @@ interface AdditionalInfo {
   education: string;
 }
 
+interface AwardAttachment {
+  url: string;
+  fileName: string;
+  mimeType?: string;
+}
+
 interface Award {
   type: "ведомственная" | "государственная" | "профсоюзная";
   year: string;
   description: string;
+  attachments?: AwardAttachment[];
 }
 
 interface Training {
@@ -167,7 +174,9 @@ export default function ProfilePage() {
   // Состояния для управления формами добавления/редактирования
   const [isAddingAward, setIsAddingAward] = useState(false);
   const [editingAwardIndex, setEditingAwardIndex] = useState<number | null>(null);
-  const [newAward, setNewAward] = useState<Award>({ type: "ведомственная", year: "", description: "" });
+  const [newAward, setNewAward] = useState<Award>({ type: "ведомственная", year: "", description: "", attachments: [] });
+  const [uploadingAwardFile, setUploadingAwardFile] = useState(false);
+  const awardFileInputRef = useRef<HTMLInputElement>(null);
   
   const [isAddingEducation, setIsAddingEducation] = useState(false);
   const [editingEducationIndex, setEditingEducationIndex] = useState<number | null>(null);
@@ -286,7 +295,34 @@ export default function ProfilePage() {
   // Отменить добавление награды
   const cancelAddAward = () => {
     setIsAddingAward(false);
-    setNewAward({ type: "ведомственная", year: "", description: "" });
+    setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
+  };
+
+  const handleAwardFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploadingAwardFile(true);
+    setMessage({ type: "error", text: "" });
+    try {
+      const form = new FormData();
+      form.append("file", f);
+      const res = await fetch("/api/profile/award-attachment", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+      const list = [...(newAward.attachments || []), data.attachment];
+      setNewAward({ ...newAward, attachments: list });
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Не удалось загрузить файл" });
+    } finally {
+      setUploadingAwardFile(false);
+      e.target.value = "";
+    }
+  };
+
+  const removeAwardAttachment = (index: number) => {
+    const list = [...(newAward.attachments || [])];
+    list.splice(index, 1);
+    setNewAward({ ...newAward, attachments: list });
   };
 
   // Сохранить новую награду
@@ -316,13 +352,14 @@ export default function ProfilePage() {
       setIsAddingAward(false);
     }
     
-    setNewAward({ type: "ведомственная", year: "", description: "" });
+    setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
     setMessage({ type: "success", text: "Награда сохранена. Не забудьте сохранить изменения внизу страницы." });
   };
 
   // Начать редактирование награды
   const startEditAward = (index: number) => {
-    setNewAward({ ...awards[index] });
+    const a = awards[index];
+    setNewAward({ ...a, attachments: a.attachments || [] });
     setEditingAwardIndex(index);
     setIsAddingAward(true);
   };
@@ -331,7 +368,7 @@ export default function ProfilePage() {
   const cancelEditAward = () => {
     setEditingAwardIndex(null);
     setIsAddingAward(false);
-    setNewAward({ type: "ведомственная", year: "", description: "" });
+    setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
   };
 
   // Удалить награду
@@ -671,7 +708,7 @@ export default function ProfilePage() {
           try {
             const parsedAwards = JSON.parse(data.awards);
             if (Array.isArray(parsedAwards)) {
-              setAwards(parsedAwards);
+              setAwards(parsedAwards.map((a: Award) => ({ ...a, attachments: a.attachments || [] })));
             }
           } catch (error) {
             console.error("Failed to parse awards data:", error);
@@ -2515,6 +2552,40 @@ export default function ProfilePage() {
                     />
                   </div>
                 </div>
+
+                <div>
+                  <label htmlFor="profile-award-attachment-input" className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Файлы / картинки
+                  </label>
+                  <input
+                    id="profile-award-attachment-input"
+                    ref={awardFileInputRef}
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,image/*,application/pdf"
+                    onChange={handleAwardFileSelect}
+                    disabled={uploadingAwardFile}
+                    aria-label="Загрузить файл или картинку к награде"
+                    className="block w-full text-sm text-gray-500 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-300"
+                  />
+                  {uploadingAwardFile && <p className="mt-1 text-xs text-gray-500">Загрузка...</p>}
+                  {(newAward.attachments?.length ?? 0) > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {newAward.attachments?.map((att, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm">
+                          {att.mimeType?.startsWith("image/") ? (
+                            <a href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline">
+                              <img src={att.url.startsWith("http") ? att.url : att.url} alt="" className="h-8 w-8 rounded object-cover" />
+                              <span className="truncate">{att.fileName}</span>
+                            </a>
+                          ) : (
+                            <a href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 hover:underline">{att.fileName}</a>
+                          )}
+                          <button type="button" onClick={() => removeAwardAttachment(i)} className="rounded p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" title="Удалить">×</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 
                 <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                   <button
@@ -2565,6 +2636,19 @@ export default function ProfilePage() {
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{award.year}</span>
                       </div>
                       <p className="text-sm text-gray-900 dark:text-white">{award.description}</p>
+                      {(award.attachments?.length ?? 0) > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {award.attachments?.map((att, j) => (
+                            att.mimeType?.startsWith("image/") ? (
+                              <a key={j} href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="inline-block">
+                                <img src={att.url.startsWith("http") ? att.url : att.url} alt={att.fileName} className="h-12 w-12 rounded border border-gray-200 object-cover dark:border-gray-600" />
+                              </a>
+                            ) : (
+                              <a key={j} href={att.url.startsWith("http") ? att.url : att.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">{att.fileName}</a>
+                            )
+                          ))}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-2">

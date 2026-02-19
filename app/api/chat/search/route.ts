@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// GET - поиск пользователей для чата
+// GET - поиск пользователей для чата (закрытый круг: только своё ППО)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,41 +11,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { organizationId: true },
+    });
+    const myOrgId = currentUser?.organizationId ?? null;
+
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get("search") || "";
-    const organizationId = searchParams.get("organizationId") || "";
 
-    if (!search && !organizationId) {
+    if (!search) {
       return NextResponse.json({ users: [] });
     }
 
-    // Строим условия поиска
     const where: any = {
-      id: {
-        not: session.user.id, // Исключаем текущего пользователя
-      },
-      role: {
-        not: "SUPER_ADMIN",
-      },
+      id: { not: session.user.id },
+      role: { not: "SUPER_ADMIN" },
     };
-
-    // Поиск по имени, email или телефону
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: "insensitive" } },
-        { lastName: { contains: search, mode: "insensitive" } },
-        { middleName: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-        { phone: { contains: search, mode: "insensitive" } },
-      ];
+    if (myOrgId !== null) {
+      where.organizationId = myOrgId;
+    } else {
+      where.organizationId = null;
     }
 
-    // Фильтр по организации
-    if (organizationId) {
-      where.organizationId = organizationId;
-    }
+    where.OR = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { middleName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+      { phone: { contains: search, mode: "insensitive" } },
+    ];
 
-    // Получаем пользователей
     const users = await prisma.user.findMany({
       where,
       take: 20,

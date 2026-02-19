@@ -830,17 +830,21 @@ export function useChat(options: UseChatOptions = {}) {
           if (response.ok) {
             const data = await response.json();
             setAiTyping(false);
+            const effectiveChatId = data.chatId || selectedChat.id;
+            if (data.chatId && data.chatId !== selectedChat.id) {
+              selectChat({ ...selectedChat, id: data.chatId } as Chat);
+            }
             setMessages(prev => {
               const withoutTemp = prev.filter(m => m.id !== tempMessageId);
               const userMsg: Message = {
                 ...data.userMessage,
-                chatId: selectedChat.id,
+                chatId: effectiveChatId,
                 sender: data.userMessage.sender,
                 reactions: {},
               };
               const botMsg: Message = {
                 ...data.botMessage,
-                chatId: selectedChat.id,
+                chatId: effectiveChatId,
                 sender: data.botMessage.sender,
                 reactions: {},
               };

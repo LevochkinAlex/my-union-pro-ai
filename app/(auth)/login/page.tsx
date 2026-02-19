@@ -861,18 +861,18 @@ function LoginForm() {
                       <span>Войти с Яндекс</span>
                     </button>
 
-                    {/* Госуслуги (ЕСИА) — stroke secondary */}
-                    <a
-                      href="/api/auth/esia"
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent hover:bg-[#0D4CD3]/10 dark:hover:bg-[#0D4CD3]/20 text-[#0D4CD3] dark:text-white font-medium rounded-lg transition-colors border-2 border-[#0D4CD3]"
+                    {/* Госуслуги (ЕСИА) — пока отключено, tooltip «Скоро» */}
+                    <span
+                      title="Скоро"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-500 font-medium rounded-lg border-2 border-gray-300 dark:border-gray-600"
                     >
                       <img
                         src="/gosusligi-logo.svg"
                         alt="Госуслуги"
-                        className="w-6 h-6 flex-shrink-0 object-contain dark:brightness-0 dark:invert"
+                        className="w-6 h-6 flex-shrink-0 object-contain dark:brightness-0 dark:invert opacity-70"
                       />
                       <span>Войти через Госуслуги</span>
-                    </a>
+                    </span>
                   </div>
                 </div>
               </>

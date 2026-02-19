@@ -20,8 +20,10 @@ export async function GET(request: NextRequest) {
     console.log(`[api/notifications] ========== LOADING NOTIFICATIONS ==========`);
     console.log(`[api/notifications] User: ${session.user.id}, page: ${page}, limit: ${limit}, unreadOnly: ${unreadOnly}`);
 
+    // Исключаем уведомления о новых сообщениях в чате — непрочитанные отображаются в сайдбаре чатов
     const where: any = {
       userId: session.user.id,
+      type: { not: "chat_message" },
     };
 
     if (unreadOnly) {
@@ -47,6 +49,7 @@ export async function GET(request: NextRequest) {
           where: {
             userId: session.user.id,
             readAt: null,
+            type: { not: "chat_message" },
           },
         }),
       ]);
