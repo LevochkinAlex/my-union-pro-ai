@@ -836,10 +836,10 @@ function LoginForm() {
                     {/* MAX — временно скрыта (CDN MAX не работает) */}
                     {/* {!insideMax && <MaxLoginButton />} */}
 
-                    {/* VK ID (ВКонтакте / ОК / Mail) — логотип VK белый на синем */}
+                    {/* VK ID (ВКонтакте / ОК / Mail) — stroke secondary */}
                     <a
                       href="/api/auth/vk-id"
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#0077FF] hover:bg-[#0066DD] text-white font-medium rounded-lg transition-colors"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent hover:bg-[#0077FF]/10 dark:hover:bg-[#0077FF]/20 text-[#0077FF] dark:text-white font-medium rounded-lg transition-colors border-2 border-[#0077FF]"
                     >
                       <svg className="w-6 h-6 flex-shrink-0" viewBox="0 0 90 90" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden>
                         <path fillRule="evenodd" d="M87.935 21.894c.626-2.086 0-3.619-2.977-3.619h-9.846c-2.504 0-3.658 1.324-4.283 2.785 0 0-5.008 12.204-12.101 20.132c-2.294 2.295-3.337 3.026-4.59 3.026c-.625 0-1.531-.731-1.531-2.816V21.894c0-2.503-.727-3.619-2.813-3.619H34.32c-1.564 0-2.506 1.162-2.506 2.264 0 2.373 3.547 2.921 3.913 9.597v14.499c0 3.179-.574 3.757-1.826 3.757c-3.337 0-11.457-12.26-16.273-26.288c-.944-2.727-1.89-3.828-4.406-3.828H3.376C.562 18.275 0 19.599 0 21.059c0 2.608 3.337 15.543 15.542 32.65c8.136 11.682 19.599 18.016 30.031 18.016c6.258 0 7.033-1.407 7.033-3.83v-8.829c0-2.814.593-3.375 2.575-3.375c1.46 0 3.963.729 9.805 6.362c6.676 6.676 7.776 9.671 11.532 9.671h9.846c2.812 0 4.219-1.407 3.408-4.182c-.889-2.767-4.076-6.781-8.305-11.538c-2.295-2.712-5.738-5.633-6.781-7.094c-1.461-1.877-1.043-2.711 0-4.381C74.687 44.53 86.684 27.631 87.935 21.894z"/>
@@ -847,19 +847,32 @@ function LoginForm() {
                       <span>Войти с VK ID</span>
                     </a>
 
-                    {/* Яндекс */}
+                    {/* Яндекс — stroke secondary */}
                     <button
                       type="button"
                       onClick={() => signIn("yandex", { callbackUrl: "/dashboard" })}
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#FC3F1D] hover:bg-[#E0350F] text-white font-medium rounded-lg transition-colors"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent hover:bg-[#FC3F1D]/10 dark:hover:bg-[#FC3F1D]/20 text-[#FC3F1D] dark:text-white font-medium rounded-lg transition-colors border-2 border-[#FC3F1D]"
                     >
                       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 13L6 7" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-                        <path d="M12 13L18 7" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-                        <path d="M12 13V21" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+                        <path d="M12 13L6 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+                        <path d="M12 13L18 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+                        <path d="M12 13V21" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
                       </svg>
                       <span>Войти с Яндекс</span>
                     </button>
+
+                    {/* Госуслуги (ЕСИА) — stroke secondary */}
+                    <a
+                      href="/api/auth/esia"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent hover:bg-[#0D4CD3]/10 dark:hover:bg-[#0D4CD3]/20 text-[#0D4CD3] dark:text-white font-medium rounded-lg transition-colors border-2 border-[#0D4CD3]"
+                    >
+                      <img
+                        src="/gosusligi-logo.svg"
+                        alt="Госуслуги"
+                        className="w-6 h-6 flex-shrink-0 object-contain dark:brightness-0 dark:invert"
+                      />
+                      <span>Войти через Госуслуги</span>
+                    </a>
                   </div>
                 </div>
               </>
@@ -918,7 +931,7 @@ function TelegramLoginButton() {
     <button
       type="button"
       onClick={handleTelegramLogin}
-      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#0088cc] hover:bg-[#0077b3] text-white font-medium rounded-lg transition-colors border border-[#0088cc]"
+      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent hover:bg-[#0088cc]/10 dark:hover:bg-[#0088cc]/20 text-[#0088cc] dark:text-white font-medium rounded-lg transition-colors border-2 border-[#0088cc]"
     >
       <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.1.154.234.17.331.015.098.034.321.019.496z"/>
