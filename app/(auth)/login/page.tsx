@@ -833,8 +833,8 @@ function LoginForm() {
                     {/* Telegram - кастомная кнопка */}
                     <TelegramLoginButton />
 
-                    {/* MAX — скрываем если уже внутри MAX */}
-                    {!insideMax && <MaxLoginButton />}
+                    {/* MAX — временно скрыта (CDN MAX не работает) */}
+                    {/* {!insideMax && <MaxLoginButton />} */}
 
                     {/* VK ID (ВКонтакте / ОК / Mail) — логотип VK белый на синем */}
                     <a
