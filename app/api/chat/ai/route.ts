@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import * as Sentry from "@sentry/nextjs";
 import { isDemoUserId } from "@/lib/demo";
 
@@ -437,6 +438,20 @@ export async function POST(request: NextRequest) {
         lastMessageId: botMessage.id,
         lastMessageAt: botMessage.createdAt,
       },
+    });
+
+    // Сохраняем взаимодействие в персональную базу знаний пользователя (супер-админка: под каждым пользователем)
+    saveUserInteractionToKnowledgeBase(
+      userId,
+      content.trim(),
+      aiResponse,
+      {
+        chatId: chat.id,
+        userMessageId: userMessage.id,
+        botMessageId: botMessage.id,
+      }
+    ).catch((err) => {
+      console.error("[chat/ai] Error saving interaction to user knowledge base:", err);
     });
 
     return NextResponse.json({

@@ -69,9 +69,9 @@ export default function FloatingChatBot() {
     loadUserAvatar();
   }, [session?.user?.id, isDemo]);
 
-  // Загружаем историю чата при открытии: демо — из localStorage, иначе из API
+  // Загружаем историю при открытии: демо — из localStorage, иначе один чат «ИИ-Ассистент» из API
   useEffect(() => {
-    if (!isOpen || !session?.user?.id || isSendingMessageRef.current || messages.length > 0) return;
+    if (!isOpen || !session?.user?.id || isSendingMessageRef.current) return;
     if (isDemo) {
       try {
         const raw = localStorage.getItem(DEMO_ASSISTANT_STORAGE_KEY);
@@ -134,112 +134,50 @@ export default function FloatingChatBot() {
     };
   }, []);
 
-  // Загрузка истории чата с ботом
+  // Загрузка истории чата с ИИ — один и тот же чат «ИИ-Ассистент», что и в /dashboard/chat и на лендинге
   const loadChatHistory = async () => {
     if (!session?.user?.id || isSendingMessageRef.current) return;
 
     try {
-      // Если chatId уже известен, используем его напрямую
-      if (chatId) {
-        const messagesResponse = await fetch(`/api/chat/${chatId}`);
-        if (messagesResponse.ok) {
-          const messagesData = await messagesResponse.json();
-          const chatMessages = (messagesData.messages || []).map((msg: any) => ({
-            role: msg.senderId === session.user.id ? "user" : "assistant",
-            content: msg.content,
-            timestamp: new Date(msg.createdAt).getTime(),
-            id: msg.id || `${msg.senderId === session.user.id ? "user" : "assistant"}-${msg.id || Date.now()}-${Math.random()}`,
-          }));
-          
-          // Объединяем с существующими сообщениями, избегая дубликатов
-          setMessages((prev) => {
-            // Создаем Set для быстрой проверки дубликатов по ID и содержимому
-            const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
-            const existingContent = new Set(
-              prev.map(m => `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`)
-            );
-            
-            // Добавляем только новые сообщения
-            const newMessages = chatMessages.filter(m => {
-              if (m.id && existingIds.has(m.id)) return false;
-              const contentKey = `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`;
-              return !existingContent.has(contentKey);
-            });
-            
-            if (newMessages.length === 0) return prev;
-            
-            // Объединяем и сортируем по времени
-            const merged = [...prev, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
-            conversationHistoryRef.current = merged;
-            return merged;
-          });
-          return;
-        }
+      let currentChatId = chatId;
+      if (!currentChatId) {
+        const aiRes = await fetch("/api/chat/ai");
+        const aiData = await aiRes.json();
+        if (!aiRes.ok || !aiData?.chat?.id) return;
+        currentChatId = aiData.chat.id;
+        setChatId(currentChatId);
       }
 
-      // Если chatId неизвестен, получаем список чатов и ищем чат с ботом
-      const chatsResponse = await fetch("/api/chat");
-      if (chatsResponse.ok) {
-        const chatsData = await chatsResponse.json();
-        const botChat = chatsData.chats?.find((chat: any) => 
-          chat.isAIChat === true ||
-          chat.otherUser?.id === "ai-assistant-bot" ||
-          chat.otherUser?.email === "ai-assistant@myunion.pro" ||
-          (chat.otherUser?.firstName === "AI" && chat.otherUser?.lastName === "Помощник") ||
-          (chat.otherUser?.firstName === "ИИ" && chat.otherUser?.lastName === "Ассистент") ||
-          chat.otherUser?.firstName?.includes("AI") ||
-          chat.otherUser?.firstName?.includes("Помощник")
+      const messagesResponse = await fetch(`/api/chat/${currentChatId}`);
+      if (!messagesResponse.ok) return;
+      const messagesData = await messagesResponse.json();
+      const list = messagesData.messages || [];
+      const chatMessages: ChatMessage[] = list.map((msg: any) => ({
+        role: msg.messageType === "assistant" ? "assistant" : "user",
+        content: msg.content ?? "",
+        timestamp: new Date(msg.createdAt).getTime(),
+        id: msg.id ?? `${msg.messageType === "assistant" ? "assistant" : "user"}-${msg.id || Date.now()}-${Math.random()}`,
+      }));
+
+      setMessages((prev) => {
+        if (!isSendingMessageRef.current && prev.length === 0) {
+          conversationHistoryRef.current = chatMessages;
+          return chatMessages;
+        }
+        const existingIds = new Set(prev.map((m) => m.id).filter(Boolean));
+        const existingContent = new Set(
+          prev.map((m) => `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`)
         );
-
-        if (botChat) {
-          const newChatId = botChat.id;
-          // Обновляем chatId
-          if (newChatId !== chatId) {
-            setChatId(newChatId);
-          }
-          
-          // Загружаем сообщения из чата
-          const messagesResponse = await fetch(`/api/chat/${newChatId}`);
-          if (messagesResponse.ok) {
-            const messagesData = await messagesResponse.json();
-            const chatMessages = (messagesData.messages || []).map((msg: any) => ({
-              role: msg.senderId === session.user.id ? "user" : "assistant",
-              content: msg.content,
-              timestamp: new Date(msg.createdAt).getTime(),
-              id: msg.id || `${msg.senderId === session.user.id ? "user" : "assistant"}-${msg.id || Date.now()}-${Math.random()}`,
-            }));
-            
-            // Заменяем сообщения только если мы не отправляем сообщение сейчас
-            if (!isSendingMessageRef.current) {
-              setMessages(chatMessages);
-              conversationHistoryRef.current = chatMessages;
-            } else {
-              // Если отправляем, объединяем с существующими, избегая дубликатов
-              setMessages((prev) => {
-                // Создаем Set для быстрой проверки дубликатов по ID и содержимому
-                const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
-                const existingContent = new Set(
-                  prev.map(m => `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`)
-                );
-                
-                // Добавляем только новые сообщения
-                const newMessages = chatMessages.filter(m => {
-                  if (m.id && existingIds.has(m.id)) return false;
-                  const contentKey = `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`;
-                  return !existingContent.has(contentKey);
-                });
-                
-                if (newMessages.length === 0) return prev;
-                
-                // Объединяем и сортируем по времени
-                const merged = [...prev, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
-                conversationHistoryRef.current = merged;
-                return merged;
-              });
-            }
-          }
-        }
-      }
+        const newMessages = chatMessages.filter((m) => {
+          if (m.id && existingIds.has(m.id)) return false;
+          const contentKey = `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`;
+          return !existingContent.has(contentKey);
+        });
+        if (newMessages.length === 0) return prev;
+        const merged = [...prev, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
+        conversationHistoryRef.current = merged;
+        return merged;
+      });
     } catch (error) {
       console.error("[FloatingChatBot] Error loading chat history:", error);
     }
@@ -292,115 +230,53 @@ export default function FloatingChatBot() {
     conversationHistoryRef.current.push(userMsg);
 
     try {
-      // Если chatId есть, отправляем через /api/chat/ai (сохраняет сообщение + вызывает ИИ + возвращает ответ)
-      if (chatId) {
-        const response = await fetch("/api/chat/ai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: userMessage,
-            chatId,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          // Чат не «ИИ-Ассистент» (404) — отправляем в чат и полагаемся на бэкенд: он вызовет ИИ для чата с ботом
-          if (response.status === 404) {
-            const fallbackRes = await fetch(`/api/chat/${chatId}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ content: userMessage }),
-            });
-            if (!fallbackRes.ok) throw new Error("Ошибка отправки сообщения");
-            setTimeout(() => loadChatHistory(), 1500);
-          } else {
-            throw new Error(data?.error || "Ошибка отправки сообщения");
-          }
-        } else if (data.botMessage) {
-          const aiMsgId = data.botMessage.id || `ai-${Date.now()}-${Math.random()}`;
-          const aiMsg: ChatMessage = {
-            role: "assistant",
-            content: data.botMessage.content || "",
-            timestamp: data.botMessage.createdAt ? new Date(data.botMessage.createdAt).getTime() : Date.now(),
-            id: aiMsgId,
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-          conversationHistoryRef.current = [...conversationHistoryRef.current, aiMsg];
-          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-        } else {
-          setTimeout(() => loadChatHistory(), 1000);
-        }
-      } else if (isDemo) {
-        // Демо: только API помощника, история передаётся и сохраняется в localStorage
+      if (isDemo) {
+        // Демо: только API помощника, история в localStorage
         const history = conversationHistoryRef.current.map((m) => ({ role: m.role, content: m.content }));
         const response = await fetch("/api/assistant/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: userMessage,
-            history,
-          }),
+          body: JSON.stringify({ message: userMessage, history }),
         });
-        if (!response.ok) {
-          throw new Error("Ошибка отправки сообщения");
-        }
+        if (!response.ok) throw new Error("Ошибка отправки сообщения");
         const data = await response.json();
-        const aiMsgId = `ai-${Date.now()}-${Math.random()}`;
         const aiMsg: ChatMessage = {
           role: "assistant",
           content: data.message ?? "Извините, не удалось получить ответ.",
           timestamp: Date.now(),
-          id: aiMsgId,
+          id: `ai-${Date.now()}-${Math.random()}`,
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+        conversationHistoryRef.current = [...conversationHistoryRef.current, aiMsg];
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+        return;
+      }
+
+      // Один и тот же чат «ИИ-Ассистент»: виджет, лендинг и полноэкранный чат
+      const response = await fetch("/api/chat/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: userMessage, chatId: chatId ?? undefined }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Ошибка отправки сообщения");
+      }
+      if (data.chatId && !chatId) setChatId(data.chatId);
+      const botContent = data.botMessage?.content ?? data.message;
+      if (botContent) {
+        const aiMsg: ChatMessage = {
+          role: "assistant",
+          content: typeof botContent === "string" ? botContent : "",
+          timestamp: data.botMessage?.createdAt ? new Date(data.botMessage.createdAt).getTime() : Date.now(),
+          id: data.botMessage?.id ?? `ai-${Date.now()}-${Math.random()}`,
         };
         setMessages((prev) => [...prev, aiMsg]);
         conversationHistoryRef.current = [...conversationHistoryRef.current, aiMsg];
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       } else {
-        // Если chatId нет, используем старый API
-        const response = await fetch("/api/assistant/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: userMessage,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Ошибка отправки сообщения");
-        }
-
-        // Сохраняем chatId если его еще нет
-        if (data.chatId && !chatId) {
-          setChatId(data.chatId);
-        }
-
-        // Добавляем ответ AI с уникальным ID
-        const aiMsgId = `ai-${Date.now()}-${Math.random()}`;
-        const aiMsg: ChatMessage = {
-          role: "assistant",
-          content: data.message,
-          timestamp: Date.now(),
-          id: aiMsgId,
-        };
-
-        setMessages((prev) => {
-          // Проверяем, нет ли уже такого сообщения
-          const exists = prev.some(m => m.id === aiMsgId || (m.role === "assistant" && m.content === data.message && Math.abs(m.timestamp - aiMsg.timestamp) < 2000));
-          if (exists) {
-            return prev; // Не добавляем дубликат
-          }
-          const newMessages = [...prev, aiMsg];
-          // Принудительный скролл после добавления ответа AI
-          setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-          }, 100);
-          return newMessages;
-        });
-        conversationHistoryRef.current.push(aiMsg);
+        setTimeout(() => loadChatHistory(), 1000);
       }
     } catch (error: any) {
       console.error("[FloatingChatBot] Error sending message:", error);
