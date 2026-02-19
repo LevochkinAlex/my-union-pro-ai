@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const res = NextResponse.redirect(new URL(`/auth/telegram/success?token=${loginToken}`, baseUrl));
+  const res = NextResponse.redirect(new URL(`/auth/vk-id/success?token=${loginToken}`, baseUrl));
   res.cookies.delete(PKCE_COOKIE);
   return res;
 }

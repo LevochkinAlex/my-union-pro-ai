@@ -4,6 +4,7 @@ import { signIn, useSession, getSession } from "next-auth/react";
 import Image from "next/image";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { LOGIN_INPUT_HINT_EMAIL, LOGIN_INPUT_HINT_SMS } from "@/lib/login-copy";
 
 /**
  * Нормализация номера телефона к формату +7XXXXXXXXXX
@@ -566,9 +567,33 @@ function LoginForm() {
           </div>
           <div>
             {error && (
-              <div className="p-4 mb-6 text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
-                {error}
-              </div>
+              <>
+                <div className="p-4 mb-4 text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
+                  {error}
+                </div>
+                <div className="mb-6 text-center space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError("");
+                      setLoginMethod("email");
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                  >
+                    Войти другим способом
+                  </button>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <a
+                      href="https://t.me/myunionpro_bot"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      Проблема с регистрацией?
+                    </a>
+                  </p>
+                </div>
+              </>
             )}
 
             {step === "input" && (
@@ -725,6 +750,33 @@ function LoginForm() {
                     Изменить {inputType === "email" ? "email" : "номер телефона"}
                   </button>
                 </div>
+
+                <div className="text-center pt-2 space-y-1 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Не пришёл код?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("input");
+                      setPinCode("");
+                      setError("");
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                  >
+                    Войти другим способом
+                  </button>
+                  <p className="pt-1">
+                    <a
+                      href="https://t.me/myunionpro_bot"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 underline"
+                    >
+                      Проблема с регистрацией?
+                    </a>
+                  </p>
+                </div>
               </form>
             )}
 
@@ -749,9 +801,9 @@ function LoginForm() {
                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      {loginMethod === "email" 
-                        ? "Отправим ссылку для входа на email ✉️" 
-                        : "Отправим код в SMS 📱 (или в Telegram / MAX, если привязаны)"}
+                      {loginMethod === "email"
+                        ? LOGIN_INPUT_HINT_EMAIL
+                        : LOGIN_INPUT_HINT_SMS}
                     </p>
                 </div>
 
@@ -773,14 +825,13 @@ function LoginForm() {
                     {/* MAX — переход на страницу мини-приложения (в MAX откроется вход) */}
                     <MaxLoginButton />
 
-                    {/* VK ID (ВКонтакте / ОК / Mail) */}
+                    {/* VK ID (ВКонтакте / ОК / Mail) — логотип VK белый на синем */}
                     <a
                       href="/api/auth/vk-id"
                       className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#0077FF] hover:bg-[#0066DD] text-white font-medium rounded-lg transition-colors"
                     >
-                      <svg className="w-6 h-6 flex-shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M0 23.04C0 12.1788 0 6.74826 3.37413 3.37413C6.74826 0 12.1788 0 23.04 0H24.96C35.8212 0 41.2517 0 44.6259 3.37413C48 6.74826 48 12.1788 48 23.04V24.96C48 35.8212 48 41.2517 44.6259 44.6259C41.2517 48 35.8212 48 24.96 48H23.04C12.1788 48 6.74826 48 3.37413 44.6259C0 41.2517 0 35.8212 0 24.96V23.04Z" fill="currentColor"/>
-                        <path d="M25.54 34.5801C14.6 34.5801 8.3601 27.0801 8.1001 14.6001H13.5801C13.7601 23.7601 17.8 27.6401 21 28.4401V14.6001H26.1602V22.5001C29.3202 22.1601 32.6398 18.5601 33.7598 14.6001H38.9199C38.0599 19.4801 34.4599 23.0801 31.8999 24.5601C34.4599 25.7601 38.5601 28.9001 40.1201 34.5801H34.4399C33.2199 30.7801 30.1802 27.8401 26.1602 27.4401V34.5801H25.54Z" fill="white"/>
+                      <svg className="w-6 h-6 flex-shrink-0" viewBox="0 0 90 90" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                        <path fillRule="evenodd" d="M87.935 21.894c.626-2.086 0-3.619-2.977-3.619h-9.846c-2.504 0-3.658 1.324-4.283 2.785 0 0-5.008 12.204-12.101 20.132c-2.294 2.295-3.337 3.026-4.59 3.026c-.625 0-1.531-.731-1.531-2.816V21.894c0-2.503-.727-3.619-2.813-3.619H34.32c-1.564 0-2.506 1.162-2.506 2.264 0 2.373 3.547 2.921 3.913 9.597v14.499c0 3.179-.574 3.757-1.826 3.757c-3.337 0-11.457-12.26-16.273-26.288c-.944-2.727-1.89-3.828-4.406-3.828H3.376C.562 18.275 0 19.599 0 21.059c0 2.608 3.337 15.543 15.542 32.65c8.136 11.682 19.599 18.016 30.031 18.016c6.258 0 7.033-1.407 7.033-3.83v-8.829c0-2.814.593-3.375 2.575-3.375c1.46 0 3.963.729 9.805 6.362c6.676 6.676 7.776 9.671 11.532 9.671h9.846c2.812 0 4.219-1.407 3.408-4.182c-.889-2.767-4.076-6.781-8.305-11.538c-2.295-2.712-5.738-5.633-6.781-7.094c-1.461-1.877-1.043-2.711 0-4.381C74.687 44.53 86.684 27.631 87.935 21.894z"/>
                       </svg>
                       <span>Войти с VK ID</span>
                     </a>
@@ -810,14 +861,20 @@ function LoginForm() {
                   Регистрация происходит автоматически при первом входе
                 </span>
               </p>
-              <div>
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
                 <a
                   href="https://t.me/myunionpro_bot"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
                 >
                   Проблема с регистрацией?
+                </a>
+                <a
+                  href="/privacy"
+                  className="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 underline"
+                >
+                  Политика конфиденциальности
                 </a>
               </div>
             </div>

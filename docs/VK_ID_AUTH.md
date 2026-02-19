@@ -23,13 +23,13 @@
 VK_ID_CLIENT_ID=ваш_идентификатор_приложения
 ```
 
-Для локальной разработки в настройках приложения VK ID добавьте второй Trusted redirect URL:
+**Локальная разработка:** если при нажатии «Войти с VK ID» открывается id.vk.ru, но затем появляется **«Error loading / Please try again»** — в настройках приложения VK ID в список **Trusted redirect URL** не добавлен адрес localhost. Добавьте второй URL (порт — тот, на котором у вас запущен dev, например 3004):
 
 ```
 http://localhost:3004/api/auth/vk-id/callback
 ```
 
-(замените порт на тот, на котором запущен проект).
+В кабинете VK ID: приложение → **Connection options** (или **Authorization** / **Доступ**) → Trusted redirect URL → Add → вставьте URL выше → сохраните.
 
 ## 3. Миграция БД
 
