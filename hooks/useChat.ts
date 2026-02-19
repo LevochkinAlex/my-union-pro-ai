@@ -123,7 +123,7 @@ export function useChat(options: UseChatOptions = {}) {
       
       if (data?.chats) {
         setChats(data.chats);
-        
+
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа.
         // Не учитываем чаты бота и ИИ-Ассистент (МойСоюз Помощник, ИИ-Ассистент).
         const chatsWithUnread = data.chats.filter((c: Chat) => {
@@ -135,10 +135,12 @@ export function useChat(options: UseChatOptions = {}) {
           const count = (c as any).unreadCount || 0;
           return sum + Math.max(0, count);
         }, 0);
-        
-        window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
-          detail: { totalUnread },
-        }));
+
+        window.dispatchEvent(
+          new CustomEvent("chat-unread-count-changed", {
+            detail: { totalUnread },
+          })
+        );
       } else if (data === null) {
         // Если data null, значит была ошибка при запросе
         console.error("[useChat] ❌ Failed to load chats - data is null (request failed)");
@@ -710,6 +712,18 @@ export function useChat(options: UseChatOptions = {}) {
       loadMessages(chat.id);
     }
   }, [loadMessages]);
+
+  // ИИ-чат главный: при первой загрузке без выбранного чата открываем его по умолчанию (виджеты и раздел «Чаты» — одна история)
+  useEffect(() => {
+    if (loading || chats.length === 0 || selectedChatRef.current) return;
+    const aiChat = chats.find(
+      (c: any) =>
+        c?.name === "ИИ-Ассистент" ||
+        c?.isAIChat === true ||
+        c?.otherUser?.id === "ai-assistant-bot"
+    );
+    if (aiChat) selectChat(aiChat as Chat);
+  }, [loading, chats, selectChat]);
 
   // Создание или открытие чата
   const createOrOpenChat = useCallback(async (userId: string): Promise<Chat | null> => {

@@ -522,22 +522,20 @@ export default function FloatingChatBot() {
                         : "bg-gray-200 dark:bg-gray-700 rounded-bl-md"
                     }`}
                   >
-                    <div 
-                      className={`text-sm leading-relaxed ${
-                        message.role === "user" 
-                          ? "text-white" 
+                    <div
+                      className={`text-sm leading-relaxed break-words ${
+                        message.role === "user"
+                          ? "text-white"
                           : "text-gray-900 dark:text-gray-100"
                       }`}
-                      style={{ wordBreak: "normal", overflowWrap: "break-word", hyphens: "auto" }}
                     >
-                      <ReactMarkdown 
+                      <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          p: ({children}) => <p className="my-1">{children}</p>,
-                          ul: ({children}) => <ul className="my-1 list-disc pl-4">{children}</ul>,
-                          ol: ({children}) => <ol className="my-1 list-decimal pl-4">{children}</ol>,
-                          li: ({children}) => <li className="my-0.5">{children}</li>,
-                          strong: ({children}) => <strong className="font-semibold">{children}</strong>,
+                          p: ({ children }) => <p className="my-1">{children}</p>,
+                          ul: ({ children }) => <ul className="my-1 list-disc pl-4">{children}</ul>,
+                          ol: ({ children }) => <ol className="my-1 list-decimal pl-4">{children}</ol>,
+                          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
                         }}
                       >
                         {message.content}
@@ -577,10 +575,10 @@ export default function FloatingChatBot() {
                 <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-md px-4 py-3">
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">Печатает</span>
-                    <div className="flex gap-1">
-                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                    <div className="flex gap-1" role="status" aria-label="Печатает">
+                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
                     </div>
                   </div>
                 </div>
@@ -627,8 +625,7 @@ export default function FloatingChatBot() {
                 }}
                 placeholder="Задайте вопрос..."
                 rows={1}
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 resize-none overflow-hidden"
-                style={{ minHeight: "40px", maxHeight: "120px" }}
+                className="min-h-[40px] max-h-[120px] flex-1 resize-none overflow-hidden rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 disabled={isLoading}
               />
               <button
