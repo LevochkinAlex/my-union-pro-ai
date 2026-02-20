@@ -864,20 +864,22 @@ export default function SlackStyleSidebar({
       // Проверяем наличие обращения (ticketId) - проверяем все возможные варианты
       // Данные могут быть в chat.ticketId, chat.ticketPublicId или в chat.ticket (объект из relation)
       const hasTicket = !!(
-        chat.ticketId || 
-        chat.ticketPublicId || 
+        chat.ticketId ||
+        chat.ticketPublicId ||
         (chat as any).ticket?.id ||
         (chat as any).ticket?.publicId
       );
-      
-      // Рабочие чаты: обращения (любой тип с ticketId, кроме каналов)
-      if (hasTicket) {
+      // Чат заседания (групповой чат, привязанный к заседанию)
+      const isMeetingChat = !!(chat as any).meetingId;
+
+      // Рабочие чаты: обращения (ticketId) и чаты заседаний (meetingId)
+      if (hasTicket || isMeetingChat) {
         work.push(chat);
       } else if (chat.type === 'PRIVATE') {
-        // Личные чаты: только приватные чаты без ticketId
+        // Личные чаты: только приватные чаты без ticketId и не заседания
         personal.push(chat);
       } else {
-        // Групповые чаты без ticketId идут в личные
+        // Остальные групповые чаты — в личные
         personal.push(chat);
       }
     }

@@ -82,7 +82,7 @@ export async function exchangeCodeForTokens(params: {
 }
 
 export interface VkIdUserInfo {
-  user_id: string;
+  user_id?: string;
   first_name?: string;
   last_name?: string;
   avatar?: string;
@@ -107,5 +107,8 @@ export async function getVkIdUserInfo(accessToken: string): Promise<VkIdUserInfo
 
   if (!res.ok) return null;
   const data = await res.json();
-  return data?.user ?? null;
+  // API возвращает { user: { user_id, first_name, ... } }; на случай другого формата — fallback на корень
+  const raw = data?.user ?? data;
+  if (!raw || typeof raw !== "object") return null;
+  return raw as VkIdUserInfo;
 }

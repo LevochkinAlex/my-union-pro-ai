@@ -82,12 +82,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ meetings, isOrgHead });
   } catch (error: any) {
-    console.error("[ppo-head/meetings] GET error:", error?.message ?? error, error?.stack);
+    const errMsg = error?.message ?? String(error);
+    const errStack = error?.stack;
+    console.error("[ppo-head/meetings] GET error:", errMsg, errStack);
     return NextResponse.json(
       {
         error: "Ошибка при получении заседаний",
-        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
-        stack: process.env.NODE_ENV === "development" ? error?.stack : undefined,
+        details: errMsg || undefined,
+        stack: process.env.NODE_ENV === "development" ? errStack : undefined,
       },
       { status: 500 }
     );

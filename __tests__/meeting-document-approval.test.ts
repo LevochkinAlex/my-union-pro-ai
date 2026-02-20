@@ -1,7 +1,10 @@
 /**
- * Тесты для API документооборота заседаний
- * 
- * Тестируемые endpoints:
+ * Тесты для API документооборота заседаний (Jest, с фикстурами).
+ *
+ * Основные тесты без авторизации (401) и контракты ответов запускаются в:
+ * __tests__/meeting-document-approval-api.test.ts (node:test, входит в pnpm test).
+ *
+ * Тестируемые endpoints (при наличии testMeetingId, testDocumentId, authToken):
  * - POST /api/ppo-head/meetings/[id]/documents/[documentId]/send-for-approval
  * - POST /api/ppo-head/meetings/[id]/documents/[documentId]/approve
  * - POST /api/ppo-head/meetings/[id]/documents/[documentId]/final-approve
@@ -9,7 +12,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 
-describe('Meeting Document Approval API', () => {
+describe('Meeting Document Approval API (e2e с фикстурами)', () => {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004';
   let testMeetingId: string;
   let testDocumentId: string;
@@ -18,8 +21,8 @@ describe('Meeting Document Approval API', () => {
   let authToken: string;
 
   beforeAll(async () => {
-    // Здесь должна быть инициализация тестовых данных
-    // В реальном проекте это может быть через test database или fixtures
+    // Инициализация тестовых данных: БД, пользователи, заседание, документ, токен.
+    // Без этого тесты ниже не выполняются (переменные undefined).
     console.log('⚠️  Тесты требуют реальной базы данных и аутентификации');
     console.log('⚠️  Для запуска тестов необходимо:');
     console.log('   1. Настроить тестовую базу данных');

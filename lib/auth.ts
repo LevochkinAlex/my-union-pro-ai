@@ -4,6 +4,8 @@ import YandexProvider from "next-auth/providers/yandex";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "./demo-constants";
+import { translitLatinToCyrillic } from "./translit-latin-to-cyrillic";
+import { mergeUsers } from "./account-merge";
 
 /**
  * Нормализация номера телефона к формату +7XXXXXXXXXX
@@ -23,6 +25,7 @@ function normalizePhone(phone: string): string {
  * Парсинг ФИО из данных Яндекс API.
  * ВАЖНО: firstName = имя (given name), lastName = фамилия (surname). Не менять местами.
  * Яндекс отдаёт first_name = имя, last_name = фамилия — используем как есть.
+ * ФИО латиницей транслитерируем в кириллицу для профиля и анкет.
  */
 function parseYandexName(yandexUserInfo: {
   first_name?: string;
@@ -34,17 +37,17 @@ function parseYandexName(yandexUserInfo: {
   // Приоритет: first_name и last_name из API (имя и фамилия соответственно — без перестановки)
   if (yandexUserInfo.first_name || yandexUserInfo.last_name) {
     if (yandexUserInfo.first_name) {
-      result.firstName = yandexUserInfo.first_name.trim();
+      result.firstName = translitLatinToCyrillic(yandexUserInfo.first_name.trim());
     }
     if (yandexUserInfo.last_name) {
-      result.lastName = yandexUserInfo.last_name.trim();
+      result.lastName = translitLatinToCyrillic(yandexUserInfo.last_name.trim());
     }
     return result;
   }
 
   // Fallback: парсим real_name (полная строка "Имя Фамилия" или "Фамилия Имя Отчество")
   if (yandexUserInfo.real_name) {
-    const realName = yandexUserInfo.real_name.trim();
+    const realName = translitLatinToCyrillic(yandexUserInfo.real_name.trim());
     const nameParts = realName.split(/\s+/).filter(p => p.length > 0);
 
     if (nameParts.length >= 2) {
@@ -123,17 +126,19 @@ export const authOptions: NextAuthOptions = {
             },
           });
 
-          // Возвращаем пользователя
+          // Возвращаем пользователя (firstName/lastName нужны для профиля и сессии)
           const fullName = [tokenRecord.user.firstName, tokenRecord.user.lastName]
             .filter(Boolean)
             .join(" ") || undefined;
-            
+
           return {
             id: tokenRecord.user.id,
             email: tokenRecord.user.email || undefined,
             name: fullName,
             role: tokenRecord.user.role,
             membershipStatus: tokenRecord.user.membershipStatus,
+            firstName: tokenRecord.user.firstName ?? undefined,
+            lastName: tokenRecord.user.lastName ?? undefined,
           };
         } catch (error) {
           console.error("[Auth] Ошибка при авторизации по токену:", error);
@@ -590,15 +595,26 @@ export const authOptions: NextAuthOptions = {
 
           console.log("[Yandex Auth] Всего условий поиска:", searchConditions.length);
 
-          // Ищем пользователя по всем условиям одновременно
-          let existingUser = null;
+          // Ищем всех пользователей, подходящих по любому условию (для слияния дубликатов по email/телефону)
+          let existingUser: Awaited<ReturnType<typeof prisma.user.findUnique>> = null;
           if (searchConditions.length > 0) {
             try {
-              existingUser = await prisma.user.findFirst({
-                where: {
-                  OR: searchConditions,
-                },
+              const candidates = await prisma.user.findMany({
+                where: { OR: searchConditions },
+                select: { id: true, telegramChatId: true },
               });
+              if (candidates.length > 0) {
+                // При нескольких аккаунтах (одинаковые email/телефон) — сливаем в один
+                const primary = candidates.find((u) => u.telegramChatId != null) ?? candidates[0];
+                if (candidates.length > 1) {
+                  for (const u of candidates) {
+                    if (u.id === primary.id) continue;
+                    const { ok, error } = await mergeUsers(prisma, primary.id, u.id);
+                    if (!ok) console.warn("[Yandex Auth] Не удалось слить аккаунт:", u.id, error);
+                  }
+                }
+                existingUser = await prisma.user.findUnique({ where: { id: primary.id } });
+              }
               console.log("[Yandex Auth] Результат поиска пользователя:", existingUser ? "НАЙДЕН" : "НЕ НАЙДЕН");
             } catch (searchError) {
               console.error("[Yandex Auth] Ошибка при поиске пользователя:", searchError);
@@ -925,6 +941,8 @@ export const authOptions: NextAuthOptions = {
                   viewMode: true,
                   isPPOHead: true,
                   ppoHeadOrganizationId: true,
+                  firstName: true,
+                  lastName: true,
                 },
               });
 
@@ -934,6 +952,10 @@ export const authOptions: NextAuthOptions = {
                 (session.user as any).viewMode = userData.viewMode || "MEMBER";
                 (session.user as any).isPPOHead = userData.isPPOHead || false;
                 (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId ?? null;
+                if (userData.firstName != null) session.user.firstName = userData.firstName;
+                if (userData.lastName != null) session.user.lastName = userData.lastName;
+                const fullNameFromDb = [userData.firstName, userData.lastName].filter(Boolean).join(" ").trim();
+                if (fullNameFromDb) session.user.name = fullNameFromDb;
               }
             } catch (error) {
               console.error("[Auth] Error fetching user data from DB:", error);

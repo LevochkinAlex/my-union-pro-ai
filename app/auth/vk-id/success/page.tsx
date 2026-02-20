@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn, useSession, getSession } from "next-auth/react";
 
@@ -12,6 +12,7 @@ function VkIdSuccessContent() {
   const searchParams = useSearchParams();
   const { update: updateSession } = useSession();
   const [error, setError] = useState<string | null>(null);
+  const authStarted = useRef(false);
 
   useEffect(() => {
     const token = searchParams.get("token");
@@ -21,15 +22,30 @@ function VkIdSuccessContent() {
       return;
     }
 
+    if (authStarted.current) return;
+    authStarted.current = true;
+
     const authenticate = async () => {
       try {
+        // Если уже есть сессия (например, токен уже использован при двойном рендере) — сразу в кабинет
+        const existingSession = await getSession();
+        if (existingSession?.user?.id) {
+          window.location.href = "/dashboard";
+          return;
+        }
+
         const result = await signIn("login-token", {
           loginToken: token,
           redirect: false,
         });
 
         if (result?.error) {
-          setError("Ошибка авторизации. Попробуйте войти снова через VK ID.");
+          const sessionAfter = await getSession();
+          if (sessionAfter?.user?.id) {
+            window.location.href = "/dashboard";
+            return;
+          }
+          setError("Ошибка авторизации. Попробуйте войти снова через VK ID. Если открыли ссылку из приложения ВКонтакте — откройте страницу входа в обычном браузере.");
         } else if (result?.ok) {
           await updateSession();
           setTimeout(async () => {

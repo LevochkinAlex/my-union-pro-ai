@@ -12,14 +12,16 @@ import {
   getVkIdUserInfo,
 } from "@/lib/vk-id-auth";
 import { translitLatinToCyrillic } from "@/lib/translit-latin-to-cyrillic";
+import { mergeUsers } from "@/lib/account-merge";
 
 const PKCE_COOKIE = "vkid_pkce";
 
 function getBaseUrl(request: NextRequest): string {
   const host = request.headers.get("host") || "localhost:3000";
   const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL;
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  // В проде используем явный URL из env, чтобы редирект с VK/встроенного браузера всегда вёл на один и тот же домен
+  if (!isLocalhost && process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  if (!isLocalhost && process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL.replace(/\/$/, "");
   if (isLocalhost) return `http://${host}`;
   const proto = request.headers.get("x-forwarded-proto") || "https";
   return `${proto}://${host}`;
@@ -102,27 +104,27 @@ export async function GET(request: NextRequest) {
   let user = await prisma.user.findUnique({ where: { vkId: vkUserId } });
 
   if (!user) {
-    // Слияние с существующим аккаунтом: ищем по email и по телефону. При нескольких совпадениях
-    // предпочитаем пользователя с telegramChatId (аккаунт из Telegram), чтобы не «переключить»
-    // привязку на дубликат и не сломать вход через Telegram.
+    // Собираем всех кандидатов по email и телефону для слияния при совпадении
+    const candidateIds = new Set<string>();
+    let byEmail: { id: string; telegramChatId: string | null }[] = [];
+    let byPhone: { id: string; telegramChatId: string | null }[] = [];
+    let byPhoneFallback: { id: string }[] = [];
+
     if (email) {
-      const byEmail = await prisma.user.findMany({
+      byEmail = await prisma.user.findMany({
         where: { email: { equals: email, mode: "insensitive" } },
         select: { id: true, telegramChatId: true },
       });
-      const preferred = byEmail.find((u) => u.telegramChatId != null) ?? byEmail[0];
-      if (preferred) user = await prisma.user.findUnique({ where: { id: preferred.id } });
+      byEmail.forEach((u) => candidateIds.add(u.id));
     }
-    if (!user && phone) {
-      const byPhone = await prisma.user.findMany({
+    if (phone) {
+      byPhone = await prisma.user.findMany({
         where: { OR: [{ phone }, { authPhone: phone }] },
         select: { id: true, telegramChatId: true },
       });
-      const preferred = byPhone.find((u) => u.telegramChatId != null) ?? byPhone[0];
-      if (preferred) user = await prisma.user.findUnique({ where: { id: preferred.id } });
+      byPhone.forEach((u) => candidateIds.add(u.id));
     }
-    // Fallback: телефон в БД мог быть сохранён в другом формате (+7 (963) 977-12-86 и т.д.)
-    if (!user && phone) {
+    if (candidateIds.size === 0 && phone) {
       const phoneDigits = phone.replace(/\D/g, "");
       const allWithPhone = await prisma.user.findMany({
         where: { OR: [{ phone: { not: null } }, { authPhone: { not: null } }] },
@@ -133,8 +135,26 @@ export async function GET(request: NextRequest) {
           (u.phone && normalizePhone(u.phone)?.replace(/\D/g, "") === phoneDigits) ||
           (u.authPhone && normalizePhone(u.authPhone)?.replace(/\D/g, "") === phoneDigits),
       );
-      const preferred = matches.find((u) => u.telegramChatId != null) ?? matches[0];
-      if (preferred) user = await prisma.user.findUnique({ where: { id: preferred.id } });
+      byPhoneFallback = matches.map((u) => ({ id: u.id, telegramChatId: u.telegramChatId }));
+      matches.forEach((u) => candidateIds.add(u.id));
+    }
+
+    // Выбираем одного пользователя: приоритет — с telegramChatId, иначе первый из объединённого списка
+    const allCandidates = [...byEmail, ...byPhone, ...byPhoneFallback];
+    const uniqueById = Array.from(new Map(allCandidates.map((u) => [u.id, u])).values());
+    const preferred = uniqueById.find((u) => "telegramChatId" in u && u.telegramChatId != null) ?? uniqueById[0];
+    if (preferred) {
+      user = await prisma.user.findUnique({ where: { id: preferred.id } });
+      // Если найдено несколько разных аккаунтов (по email и по телефону) — сливаем в один
+      if (user && candidateIds.size > 1) {
+        const primaryId = user.id;
+        for (const id of candidateIds) {
+          if (id === primaryId) continue;
+          const { ok, error } = await mergeUsers(prisma, primaryId, id);
+          if (!ok) console.warn("[VK ID] Не удалось слить аккаунт:", id, error);
+        }
+        user = await prisma.user.findUnique({ where: { id: primaryId } }) ?? user;
+      }
     }
   }
 
@@ -144,11 +164,25 @@ export async function GET(request: NextRequest) {
   const lastName =
     userInfo?.last_name != null ? translitLatinToCyrillic(userInfo.last_name) : null;
 
+  // Парсим дату рождения (формат VK: "DD.MM.YYYY" или "D.M.YYYY")
+  let dateOfBirth: Date | null = null;
+  if (userInfo?.birthday) {
+    const parts = String(userInfo.birthday).trim().split(".").map((p) => parseInt(p, 10));
+    if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
+      const [d, m, y] = parts;
+      if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        dateOfBirth = new Date(y, m - 1, d);
+        if (isNaN(dateOfBirth.getTime())) dateOfBirth = null;
+      }
+    }
+  }
+
   if (user) {
-    // Существующий пользователь (найден по vkId, email или телефону): только дополняем пустые поля, не перезаписываем уже сохранённые (ФИО, аватар и т.д.)
+    // Существующий пользователь: только дополняем пустые поля
     const hasFirstName = user.firstName != null && String(user.firstName).trim() !== "";
     const hasLastName = user.lastName != null && String(user.lastName).trim() !== "";
     const hasAvatar = user.avatarUrl != null && String(user.avatarUrl).trim() !== "";
+    const hasDateOfBirth = user.dateOfBirth != null;
 
     await prisma.user.update({
       where: { id: user.id },
@@ -157,8 +191,10 @@ export async function GET(request: NextRequest) {
         ...(hasFirstName ? {} : { firstName: firstName ?? user.firstName }),
         ...(hasLastName ? {} : { lastName: lastName ?? user.lastName }),
         ...(hasAvatar ? {} : { avatarUrl: userInfo?.avatar ?? user.avatarUrl }),
+        ...(hasDateOfBirth ? {} : dateOfBirth && { dateOfBirth }),
         ...(email && !user.email && { email }),
         ...(phone && !user.phone && { phone }),
+        ...(phone && !user.authPhone && { authPhone: phone }),
       },
     });
   } else {
@@ -168,6 +204,7 @@ export async function GET(request: NextRequest) {
         firstName: firstName ?? null,
         lastName: lastName ?? null,
         avatarUrl: userInfo?.avatar ?? null,
+        ...(dateOfBirth && { dateOfBirth }),
         email,
         phone,
         authPhone: phone,

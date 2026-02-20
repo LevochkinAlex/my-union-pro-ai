@@ -85,6 +85,8 @@ function LoginForm() {
         setError("Ссылка для входа уже использована или истекла. Запросите новую ссылку по email.");
       } else if (err === "invalid_token" || err === "token_expired" || err === "token_used") {
         setError("Ссылка недействительна или уже использована. Запросите новую ссылку для входа.");
+      } else if (err?.startsWith("vk_id_")) {
+        setError("Ошибка входа через VK ID. Попробуйте снова или войдите другим способом (SMS, email).");
       }
     }
   }, []);
