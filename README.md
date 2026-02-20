@@ -458,6 +458,8 @@ pnpm pre-deploy
 | Документ | Описание |
 |----------|----------|
 | [`docs/JUNIOR_GUIDE.md`](docs/JUNIOR_GUIDE.md) | Полное руководство для нового разработчика (глоссарий, архитектура, примеры, промты для Cursor AI) |
+
+**PDF (со ссылками на репозиторий):** `pnpm docs:pdf` — создаёт в `docs/` файлы `README.pdf` и `JUNIOR_GUIDE.pdf`. Нужен установленный Chrome (или `PUPPETEER_EXECUTABLE_PATH`).
 | [`docs/DEPLOY_PROCESS.md`](docs/DEPLOY_PROCESS.md) | Процесс деплоя |
 | [`docs/VK_ID_AUTH.md`](docs/VK_ID_AUTH.md) | Настройка VK ID |
 | [`DEPLOY-CHECKLIST.md`](DEPLOY-CHECKLIST.md) | Чек-лист деплоя и команды |
