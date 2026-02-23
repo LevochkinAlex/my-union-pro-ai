@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") as OrganizationType | null;
     const includeInactive = searchParams.get("includeInactive") === "true";
+    const search = searchParams.get("search")?.trim() || null;
 
     const where: any = {};
     if (type) {
@@ -43,7 +44,14 @@ export async function GET(request: NextRequest) {
     if (!includeInactive) {
       where.isActive = true;
     }
-    console.log("[admin/organizations] Query params:", { type, includeInactive, where });
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { chairmanName: { contains: search, mode: "insensitive" } },
+        ...(search.replace(/\D/g, "").length >= 4 ? [{ inn: { contains: search } }] : []),
+      ];
+    }
+    console.log("[admin/organizations] Query params:", { type, includeInactive, search: !!search, where });
 
     const organizations = await prisma.organization.findMany({
       where,
@@ -63,7 +71,7 @@ export async function GET(request: NextRequest) {
             level: true,
           },
           orderBy: {
-            sortOrder: "asc",
+            name: "asc",
           },
         },
         _count: {
@@ -74,7 +82,6 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [
         { level: "asc" },
-        { sortOrder: "asc" },
         { name: "asc" },
       ],
     });

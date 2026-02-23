@@ -64,6 +64,11 @@ export default function OrganizationsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [jobTitles, setJobTitles] = useState<string[]>([]);
+
+  // Фильтры списка организаций
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<OrganizationType | "ALL">("ALL");
+  const [letterFilter, setLetterFilter] = useState<string | null>(null);
   
   // Состояние для найденного существующего пользователя
   const [existingUser, setExistingUser] = useState<ExistingUser | null>(null);
@@ -588,17 +593,49 @@ export default function OrganizationsPage() {
     }
   };
 
-  // Построение дерева организаций
+  // Фильтрация организаций по поиску, типу и букве
+  const filteredOrganizations = organizations.filter((org) => {
+    const matchesType = filterType === "ALL" || org.type === filterType;
+    const matchesSearch =
+      !searchQuery.trim() ||
+      org.name.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+      (org.chairmanName?.toLowerCase().includes(searchQuery.trim().toLowerCase())) ||
+      (org.inn?.includes(searchQuery.trim()));
+    const firstChar = org.name.trim().charAt(0).toUpperCase();
+    const isDigit = /^[0-9]/.test(org.name.trim());
+    const letterKey = isDigit ? "0-9" : firstChar;
+    const matchesLetter = !letterFilter || letterKey === letterFilter;
+    return matchesType && matchesSearch && matchesLetter;
+  });
+
+  // Буквы, для которых есть организации (по текущему списку с учётом типа и поиска)
+  const availableLetters = React.useMemo(() => {
+    const filtered = organizations.filter((org) => {
+      const matchesType = filterType === "ALL" || org.type === filterType;
+      const matchesSearch =
+        !searchQuery.trim() ||
+        org.name.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+        (org.chairmanName?.toLowerCase().includes(searchQuery.trim().toLowerCase())) ||
+        (org.inn?.includes(searchQuery.trim()));
+      return matchesType && matchesSearch;
+    });
+    const set = new Set<string>();
+    filtered.forEach((org) => {
+      const firstChar = org.name.trim().charAt(0).toUpperCase();
+      set.add(/^[0-9]/.test(org.name.trim()) ? "0-9" : firstChar);
+    });
+    return Array.from(set).sort((a, b) => (a === "0-9" ? 1 : b === "0-9" ? -1 : a.localeCompare(b, "ru")));
+  }, [organizations, filterType, searchQuery]);
+
+  // Построение дерева организаций (сортировка по названию А–Я)
   const buildTree = (orgs: Organization[]): Organization[] => {
     const orgMap = new Map<string, Organization>();
     const rootOrgs: Organization[] = [];
 
-    // Создаем карту всех организаций
     orgs.forEach((org) => {
       orgMap.set(org.id, { ...org, children: [] });
     });
 
-    // Строим дерево
     orgs.forEach((org) => {
       const orgWithChildren = orgMap.get(org.id)!;
       if (org.parentId && orgMap.has(org.parentId)) {
@@ -612,13 +649,12 @@ export default function OrganizationsPage() {
       }
     });
 
-    // Сортируем по sortOrder
     const sortTree = (nodes: Organization[]): Organization[] => {
       return nodes
-        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .sort((a, b) => a.name.localeCompare(b.name, "ru"))
         .map((node) => ({
           ...node,
-          children: node.children ? sortTree(node.children) : [],
+          children: node.children?.length ? sortTree(node.children) : [],
         }));
     };
 
@@ -792,7 +828,15 @@ export default function OrganizationsPage() {
     );
   }
 
-  const tree = buildTree(organizations);
+  const tree = buildTree(filteredOrganizations);
+
+  const TYPE_OPTIONS: { value: OrganizationType | "ALL"; label: string }[] = [
+    { value: "ALL", label: "Все" },
+    { value: "REGIONAL", label: "Региональные (РПО)" },
+    { value: "LOCAL", label: "Местные (МПО)" },
+    { value: "PRIMARY", label: "ППО" },
+    { value: "FEDERAL", label: "ФПО" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -811,6 +855,73 @@ export default function OrganizationsPage() {
         >
           + Создать организацию
         </button>
+      </div>
+
+      {/* Поиск, тип, алфавит */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="min-w-[200px] flex-1">
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Поиск
+            </label>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Название, председатель, ИНН..."
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Тип
+            </label>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as OrganizationType | "ALL")}
+              className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            >
+              {TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400">А–Я:</span>
+          <button
+            type="button"
+            onClick={() => setLetterFilter(null)}
+            className={`rounded px-2 py-1 text-sm font-medium ${
+              letterFilter === null
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            }`}
+          >
+            Все
+          </button>
+          {availableLetters.map((letter) => (
+            <button
+              key={letter}
+              type="button"
+              onClick={() => setLetterFilter(letter)}
+              className={`rounded px-2 py-1 text-sm font-medium ${
+                letterFilter === letter
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              }`}
+            >
+              {letter}
+            </button>
+          ))}
+        </div>
+        {(searchQuery || filterType !== "ALL" || letterFilter) && (
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            Показано: {filteredOrganizations.length} из {organizations.length} организаций
+          </p>
+        )}
       </div>
 
       {/* Модальное окно редактирования/создания организации */}
@@ -894,8 +1005,9 @@ export default function OrganizationsPage() {
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               >
                 <option value="">Нет (корневая организация)</option>
-                {organizations
+                {[...organizations]
                   .filter((org) => org.id !== selectedOrg?.id)
+                  .sort((a, b) => a.name.localeCompare(b.name, "ru"))
                   .map((org) => (
                     <option key={org.id} value={org.id}>
                       {org.fullPath || org.name}
