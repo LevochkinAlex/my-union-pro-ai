@@ -147,6 +147,11 @@ export default function OrganizationsPage() {
         const data = await response.json();
         if (data.found && data.user) {
           setExistingUser(data.user);
+          setUserConfirmed(false);
+          setFormData((prev) => ({
+            ...prev,
+            existingUserId: "",
+          }));
           // Если пользователь найден и ещё не подтверждён, НЕ заполняем данные автоматически
           // Пользователь должен сначала подтвердить
         } else {
@@ -211,6 +216,12 @@ export default function OrganizationsPage() {
   // Функция подтверждения использования существующего пользователя
   const confirmExistingUser = () => {
     if (!existingUser) return;
+    if (isExistingUserPPOHeadInAnotherOrg) {
+      alertError(
+        `Пользователь уже назначен председателем в организации «${existingUser.currentPPOOrganization?.name}». Для этой организации создайте нового пользователя или снимите текущее назначение.`
+      );
+      return;
+    }
     
     // Заполняем данные из существующего пользователя
     setFormData(prev => ({
@@ -236,6 +247,21 @@ export default function OrganizationsPage() {
       existingUserId: "",
     }));
   };
+
+  const isExistingUserPPOHeadInAnotherOrg =
+    !!existingUser?.isPPOHead &&
+    !!existingUser.currentPPOOrganization?.id &&
+    existingUser.currentPPOOrganization.id !== selectedOrg?.id;
+
+  useEffect(() => {
+    if (isExistingUserPPOHeadInAnotherOrg && userConfirmed) {
+      setUserConfirmed(false);
+      setFormData((prev) => ({
+        ...prev,
+        existingUserId: "",
+      }));
+    }
+  }, [isExistingUserPPOHeadInAnotherOrg, userConfirmed]);
 
   const loadOrganizations = async () => {
     try {
@@ -508,8 +534,22 @@ export default function OrganizationsPage() {
       if (response.ok) {
         const result = await response.json();
         
-        // Если указаны данные председателя, отправляем инвайт
-        if (formData.chairmanEmail && formData.chairmanPhone && formData.chairmanFirstName && formData.chairmanLastName) {
+        // Инвайт отправляем не всегда:
+        // - при создании организации;
+        // - при явном подтверждении существующего пользователя;
+        // - при вводе данных нового пользователя (без existingUserId).
+        // Если в редактировании подгружен уже назначенный председатель (existingUserId, без подтверждения),
+        // повторно инвайт не отправляем.
+        const hasChairmanContacts = !!(
+          formData.chairmanEmail &&
+          formData.chairmanPhone &&
+          formData.chairmanFirstName &&
+          formData.chairmanLastName
+        );
+        const shouldSendInvite =
+          hasChairmanContacts && (isCreating || userConfirmed || !formData.existingUserId);
+
+        if (shouldSendInvite) {
           try {
             const inviteResponse = await fetch(`/api/admin/organizations/${result.organization.id}/invite-chairman`, {
               method: "POST",
@@ -528,7 +568,13 @@ export default function OrganizationsPage() {
             if (!inviteResponse.ok) {
               const inviteError = await inviteResponse.json();
               console.error("Ошибка отправки инвайта:", inviteError);
-              alertError(`Организация сохранена, но не удалось отправить инвайт: ${inviteError.error || "Неизвестная ошибка"}`);
+              const inviteErrorText = String(inviteError?.error || "");
+              const isAlreadyChairmanError = inviteErrorText.includes("уже является председателем этой организации");
+              if (isAlreadyChairmanError) {
+                alertSuccess("Организация успешно сохранена. Председатель уже назначен для этой организации.");
+              } else {
+                alertError(`Организация сохранена, но не удалось отправить инвайт: ${inviteError.error || "Неизвестная ошибка"}`);
+              }
             } else {
               const inviteResult = await inviteResponse.json();
               if (inviteResult.existingUserPromoted) {
@@ -1195,16 +1241,24 @@ export default function OrganizationsPage() {
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
-                        Если вы подтвердите, этому пользователю будут предоставлены права председателя ППО. 
-                        Он сможет переключаться между режимами «Член профсоюза» и «Председатель ППО».
+                        {isExistingUserPPOHeadInAnotherOrg
+                          ? "Этот пользователь уже назначен председателем в другой организации. Использовать его для текущей организации нельзя."
+                          : "Если вы подтвердите, этому пользователю будут предоставлены права председателя ППО. Он сможет переключаться между режимами «Член профсоюза» и «Председатель ППО»."}
                       </p>
                       <div className="mt-3 flex gap-2">
                         <button
                           type="button"
                           onClick={confirmExistingUser}
-                          className="rounded bg-yellow-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-yellow-700"
+                          disabled={isExistingUserPPOHeadInAnotherOrg}
+                          className={`rounded px-3 py-1.5 text-xs font-medium text-white ${
+                            isExistingUserPPOHeadInAnotherOrg
+                              ? "cursor-not-allowed bg-gray-400"
+                              : "bg-yellow-600 hover:bg-yellow-700"
+                          }`}
                         >
-                          Подтвердить и использовать данные
+                          {isExistingUserPPOHeadInAnotherOrg
+                            ? "Нельзя использовать (уже председатель)"
+                            : "Подтвердить и использовать данные"}
                         </button>
                         <button
                           type="button"
@@ -1220,7 +1274,7 @@ export default function OrganizationsPage() {
               )}
 
               {/* Показываем инфо что пользователь подтверждён */}
-              {userConfirmed && existingUser && (
+              {userConfirmed && existingUser && !isExistingUserPPOHeadInAnotherOrg && (
                 <div className="mt-4 rounded-lg border border-green-300 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">

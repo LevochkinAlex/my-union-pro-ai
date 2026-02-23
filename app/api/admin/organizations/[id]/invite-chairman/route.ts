@@ -95,6 +95,18 @@ export async function POST(
           { status: 400 }
         );
       }
+      if (existingUser.ppoHeadOrganizationId && existingUser.ppoHeadOrganizationId !== id) {
+        const currentOrg = await prisma.organization.findUnique({
+          where: { id: existingUser.ppoHeadOrganizationId },
+          select: { name: true },
+        });
+        return NextResponse.json(
+          {
+            error: `Пользователь уже является председателем другой организации${currentOrg?.name ? `: ${currentOrg.name}` : ""}`,
+          },
+          { status: 400 }
+        );
+      }
 
       // Обновляем пользователя: добавляем права председателя (двойная роль)
       // НЕ меняем основную роль, если он член профсоюза - добавляем isPPOHead
@@ -159,6 +171,18 @@ export async function POST(
       if (existingUser.ppoHeadOrganizationId === id) {
         return NextResponse.json(
           { error: "Пользователь уже является председателем этой организации" },
+          { status: 400 }
+        );
+      }
+      if (existingUser.ppoHeadOrganizationId && existingUser.ppoHeadOrganizationId !== id) {
+        const currentOrg = await prisma.organization.findUnique({
+          where: { id: existingUser.ppoHeadOrganizationId },
+          select: { name: true },
+        });
+        return NextResponse.json(
+          {
+            error: `Пользователь уже является председателем другой организации${currentOrg?.name ? `: ${currentOrg.name}` : ""}`,
+          },
           { status: 400 }
         );
       }
@@ -233,6 +257,18 @@ export async function POST(
       if (existingByPhone.ppoHeadOrganizationId === id) {
         return NextResponse.json(
           { error: "Пользователь уже является председателем этой организации" },
+          { status: 400 }
+        );
+      }
+      if (existingByPhone.ppoHeadOrganizationId && existingByPhone.ppoHeadOrganizationId !== id) {
+        const currentOrg = await prisma.organization.findUnique({
+          where: { id: existingByPhone.ppoHeadOrganizationId },
+          select: { name: true },
+        });
+        return NextResponse.json(
+          {
+            error: `Пользователь уже является председателем другой организации${currentOrg?.name ? `: ${currentOrg.name}` : ""}`,
+          },
           { status: 400 }
         );
       }
