@@ -50,30 +50,68 @@ export interface PricingRow {
   perUserYear: number | null;
 }
 
-/** Цены из файла «Расчет цены.xlsx»: пользователи, орги, работающие, цены за период и за пользователя */
+const PRICING_BANDS = [
+  { maxUsers: 50, sixMonthRate: 79, yearRate: 71 },
+  { maxUsers: 150, sixMonthRate: 76, yearRate: 68 },
+  { maxUsers: 300, sixMonthRate: 70, yearRate: 63 },
+  { maxUsers: 500, sixMonthRate: 65, yearRate: 59 },
+  { maxUsers: 800, sixMonthRate: 59, yearRate: 53 },
+  { maxUsers: 1500, sixMonthRate: 52, yearRate: 47 },
+  { maxUsers: 2500, sixMonthRate: 50, yearRate: 45 },
+  { maxUsers: 3500, sixMonthRate: 48, yearRate: 43 },
+  { maxUsers: Infinity, sixMonthRate: 45, yearRate: 41 },
+] as const;
+
+function getPricingRates(users: number) {
+  return PRICING_BANDS.find((b) => users <= b.maxUsers)!;
+}
+
+function buildPricingRow(users: number, orgs: number, employees: number): PricingRow {
+  const { sixMonthRate, yearRate } = getPricingRates(users);
+  const monthPrice = users * sixMonthRate;
+  const quarterPrice = monthPrice * 3;
+  const halfYearPrice = monthPrice * 6;
+  const yearPrice = users * yearRate * 12;
+
+  return {
+    users,
+    orgs,
+    employees,
+    monthPrice,
+    quarterPrice,
+    halfYearPrice,
+    yearPrice,
+    perUserMonth: sixMonthRate,
+    perUserQuarter: sixMonthRate,
+    perUserHalfYear: sixMonthRate,
+    perUserYear: yearRate,
+  };
+}
+
+/** Цены по новой сетке (6 и 12 месяцев), совместимо с калькулятором периодов. */
 export const PRICING_ROWS: PricingRow[] = [
-  { users: 50, orgs: 11, employees: 246, monthPrice: 2250, quarterPrice: 6412.5, halfYearPrice: 12150, yearPrice: 21600, perUserMonth: 45, perUserQuarter: 42.75, perUserHalfYear: 40.5, perUserYear: 36 },
-  { users: 100, orgs: 13, employees: 1081, monthPrice: 4000, quarterPrice: 11400, halfYearPrice: 21600, yearPrice: 38400, perUserMonth: 40, perUserQuarter: 38, perUserHalfYear: 36, perUserYear: 32 },
-  { users: 150, orgs: 8, employees: 1015, monthPrice: 6000, quarterPrice: 17100, halfYearPrice: 32400, yearPrice: 57600, perUserMonth: 40, perUserQuarter: 38, perUserHalfYear: 36, perUserYear: 32 },
-  { users: 200, orgs: 8, employees: 1336, monthPrice: 7000, quarterPrice: 19950, halfYearPrice: 37800, yearPrice: 67200, perUserMonth: 35, perUserQuarter: 33.25, perUserHalfYear: 31.5, perUserYear: 28 },
-  { users: 250, orgs: 5, employees: 1104, monthPrice: 8750, quarterPrice: 24937.5, halfYearPrice: 47250, yearPrice: 84000, perUserMonth: 35, perUserQuarter: 33.25, perUserHalfYear: 31.5, perUserYear: 28 },
-  { users: 300, orgs: 7, employees: 1970, monthPrice: 10500, quarterPrice: 29925, halfYearPrice: 56700, yearPrice: 100800, perUserMonth: 35, perUserQuarter: 33.25, perUserHalfYear: 31.5, perUserYear: 28 },
-  { users: 350, orgs: 6, employees: 1924, monthPrice: 12250, quarterPrice: 34912.5, halfYearPrice: 66150, yearPrice: 117600, perUserMonth: 35, perUserQuarter: 33.25, perUserHalfYear: 31.5, perUserYear: 28 },
-  { users: 400, orgs: 2, employees: 739, monthPrice: 14000, quarterPrice: 39900, halfYearPrice: 75600, yearPrice: 134400, perUserMonth: 35, perUserQuarter: 33.25, perUserHalfYear: 31.5, perUserYear: 28 },
-  { users: 450, orgs: 4, employees: 1681, monthPrice: 15750, quarterPrice: 44887.5, halfYearPrice: 85050, yearPrice: 151200, perUserMonth: 35, perUserQuarter: 33.25, perUserHalfYear: 31.5, perUserYear: 28 },
-  { users: 500, orgs: 4, employees: 1848, monthPrice: 17500, quarterPrice: 49875, halfYearPrice: 94500, yearPrice: 168000, perUserMonth: 35, perUserQuarter: 33.25, perUserHalfYear: 31.5, perUserYear: 28 },
-  { users: 600, orgs: 6, employees: 3271, monthPrice: 19800, quarterPrice: 56430, halfYearPrice: 106920, yearPrice: 190080, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 700, orgs: 3, employees: 1897, monthPrice: 23100, quarterPrice: 65835, halfYearPrice: 124740, yearPrice: 221760, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 800, orgs: 4, employees: 2925, monthPrice: 26400, quarterPrice: 75240, halfYearPrice: 142560, yearPrice: 253440, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 900, orgs: 5, employees: 4257, monthPrice: 29700, quarterPrice: 84645, halfYearPrice: 160380, yearPrice: 285120, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 1000, orgs: 3, employees: 2831, monthPrice: 33000, quarterPrice: 94050, halfYearPrice: 178200, yearPrice: 316800, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 1250, orgs: 8, employees: 8931, monthPrice: 41250, quarterPrice: 117562.5, halfYearPrice: 222750, yearPrice: 395568, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 1500, orgs: 7, employees: 9719, monthPrice: 49500, quarterPrice: 141075, halfYearPrice: 267300, yearPrice: 475200, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 1750, orgs: 5, employees: 8270, monthPrice: 57750, quarterPrice: 164587.5, halfYearPrice: 311850, yearPrice: 554400, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 2000, orgs: 2, employees: 3737, monthPrice: 66000, quarterPrice: 188100, halfYearPrice: 356400, yearPrice: 633600, perUserMonth: 33, perUserQuarter: 31.5, perUserHalfYear: 29.7, perUserYear: 26.4 },
-  { users: 2500, orgs: 4, employees: 9458, monthPrice: 75000, quarterPrice: 213750, halfYearPrice: 405000, yearPrice: 720000, perUserMonth: 30, perUserQuarter: 28.5, perUserHalfYear: 27, perUserYear: 24 },
-  { users: 3000, orgs: 7, employees: 18822, monthPrice: 90000, quarterPrice: 256500, halfYearPrice: 486000, yearPrice: 864000, perUserMonth: 30, perUserQuarter: 28.5, perUserHalfYear: 27, perUserYear: 24 },
-  { users: 3600, orgs: 3, employees: 9687, monthPrice: 108000, quarterPrice: 307800, halfYearPrice: 583200, yearPrice: 1036800, perUserMonth: 30, perUserQuarter: 28.5, perUserHalfYear: 27, perUserYear: 24 },
+  buildPricingRow(50, 11, 246),
+  buildPricingRow(100, 13, 1081),
+  buildPricingRow(150, 8, 1015),
+  buildPricingRow(200, 8, 1336),
+  buildPricingRow(250, 5, 1104),
+  buildPricingRow(300, 7, 1970),
+  buildPricingRow(350, 6, 1924),
+  buildPricingRow(400, 2, 739),
+  buildPricingRow(450, 4, 1681),
+  buildPricingRow(500, 4, 1848),
+  buildPricingRow(600, 6, 3271),
+  buildPricingRow(700, 3, 1897),
+  buildPricingRow(800, 4, 2925),
+  buildPricingRow(900, 5, 4257),
+  buildPricingRow(1000, 3, 2831),
+  buildPricingRow(1250, 8, 8931),
+  buildPricingRow(1500, 7, 9719),
+  buildPricingRow(1750, 5, 8270),
+  buildPricingRow(2000, 2, 3737),
+  buildPricingRow(2500, 4, 9458),
+  buildPricingRow(3000, 7, 18822),
+  buildPricingRow(3600, 3, 9687),
   { users: "3600+", orgs: 1, employees: 9521, monthPrice: null, quarterPrice: null, halfYearPrice: null, yearPrice: null, perUserMonth: null, perUserQuarter: null, perUserHalfYear: null, perUserYear: null },
 ];
 
