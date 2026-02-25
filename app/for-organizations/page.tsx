@@ -188,6 +188,41 @@ export default function OrganizationsLandingPage() {
           </div>
         </section>
 
+        {/* Стоимость и лицензирование */}
+        <section id="licensing" className="scroll-mt-20 border-b border-border py-16 md:py-24">
+          <div className="container mx-auto px-4">
+            <h2 className="mb-2 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl landing-animate-in">
+              Стоимость и лицензирование
+            </h2>
+            <p className="mx-auto mb-10 max-w-3xl text-center text-muted-foreground landing-animate-in landing-animate-in-delay-1">
+              Программное обеспечение myunion.pro предоставляется на условиях возмездного лицензионного договора
+              (SaaS-подписка). Публичная open-source лицензия не применяется.
+            </p>
+            <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-2">
+              <div className="landing-animate-in landing-animate-in-delay-2 rounded-xl border border-border bg-card p-6 shadow-sm">
+                <h3 className="mb-2 text-lg font-semibold text-foreground">Модель предоставления</h3>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li>• Возмездный лицензионный договор на использование ПО.</li>
+                  <li>• Доступ к функционалу по подписке (SaaS).</li>
+                  <li>• Стоимость зависит от масштаба организации и сценариев внедрения.</li>
+                </ul>
+              </div>
+              <div className="landing-animate-in landing-animate-in-delay-3 rounded-xl border border-border bg-card p-6 shadow-sm">
+                <h3 className="mb-2 text-lg font-semibold text-foreground">Где запросить стоимость</h3>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Актуальные коммерческие условия и расчёт стоимости размещены на этой странице в разделе «Узнать цены».
+                </p>
+                <a
+                  href="#pricing"
+                  className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
+                >
+                  Перейти к разделу «Узнать цены»
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Узнать цены — форма заявки */}
         <LandingPricingForm />
 

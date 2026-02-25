@@ -907,10 +907,11 @@ export default function OrganizationsPage() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-wrap items-center gap-4">
           <div className="min-w-[200px] flex-1">
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="org-search" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Поиск
             </label>
             <input
+              id="org-search"
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -919,10 +920,11 @@ export default function OrganizationsPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="org-type-filter" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Тип
             </label>
             <select
+              id="org-type-filter"
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as OrganizationType | "ALL")}
               className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
@@ -994,6 +996,9 @@ export default function OrganizationsPage() {
                   {isCreating ? "Создание организации" : "Редактирование организации"}
                 </h2>
                 <button
+                  type="button"
+                  aria-label="Закрыть окно"
+                  title="Закрыть"
                   onClick={() => {
                     setIsEditing(false);
                     setIsCreating(false);
@@ -1013,10 +1018,11 @@ export default function OrganizationsPage() {
               <div className="max-h-[calc(100vh-200px)] overflow-y-auto px-6 py-4">
                 <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Название организации *
               </label>
               <input
+                id="org-name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -1026,10 +1032,11 @@ export default function OrganizationsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="org-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Тип организации *
               </label>
               <select
+                id="org-type"
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as OrganizationType })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -1042,10 +1049,11 @@ export default function OrganizationsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="org-parent" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Родительская организация
               </label>
               <select
+                id="org-parent"
                 value={formData.parentId}
                 onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -1071,10 +1079,11 @@ export default function OrganizationsPage() {
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label htmlFor="org-inn" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     ИНН
                   </label>
                   <input
+                    id="org-inn"
                     type="text"
                     value={formData.inn}
                     onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
@@ -1083,10 +1092,11 @@ export default function OrganizationsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label htmlFor="org-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Телефон
                   </label>
                   <input
+                    id="org-phone"
                     type="text"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -1095,10 +1105,11 @@ export default function OrganizationsPage() {
                 </div>
               </div>
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label htmlFor="org-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Email
                 </label>
                 <input
+                  id="org-email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -1106,10 +1117,11 @@ export default function OrganizationsPage() {
                 />
               </div>
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label htmlFor="org-address" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Адрес
                 </label>
                 <textarea
+                  id="org-address"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
