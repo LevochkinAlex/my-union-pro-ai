@@ -1,115 +1,142 @@
 "use client";
 
 import { useState } from "react";
-import { PRICING_TIERS, type PricingPeriod } from "@/lib/constants/landing";
 import { cn } from "@/lib/design-system";
 
-const PERIODS: { key: PricingPeriod; label: string; priceKey: "monthPrice" | "quarterPrice" | "halfYearPrice" | "yearPrice"; perUserKey: "perUserMonth" | "perUserQuarter" | "perUserHalfYear" | "perUserYear"; periodLabel: string }[] = [
-  { key: "month", label: "Месяц", priceKey: "monthPrice", perUserKey: "perUserMonth", periodLabel: "месяц" },
-  { key: "quarter", label: "Квартал", priceKey: "quarterPrice", perUserKey: "perUserQuarter", periodLabel: "квартал" },
-  { key: "halfyear", label: "Полгода", priceKey: "halfYearPrice", perUserKey: "perUserHalfYear", periodLabel: "полгода" },
-  { key: "year", label: "Год", priceKey: "yearPrice", perUserKey: "perUserYear", periodLabel: "год" },
+const PRICING_BANDS = [
+  { label: "0–50", users: 50, halfYear: 79, year: 71 },
+  { label: "51–150", users: 150, halfYear: 76, year: 68 },
+  { label: "151–300", users: 300, halfYear: 70, year: 63 },
+  { label: "301–500", users: 500, halfYear: 65, year: 59 },
+  { label: "501–800", users: 800, halfYear: 59, year: 53 },
+  { label: "801–1 500", users: 1500, halfYear: 52, year: 47 },
+  { label: "1 501–2 500", users: 2500, halfYear: 50, year: 45 },
+  { label: "2 501–3 500", users: 3500, halfYear: 48, year: 43 },
+  { label: "от 3 501", users: 5000, halfYear: 45, year: 41 },
+] as const;
+
+type Period = "halfYear" | "year";
+const PERIODS: { key: Period; label: string; months: number }[] = [
+  { key: "halfYear", label: "6 месяцев", months: 6 },
+  { key: "year", label: "12 месяцев", months: 12 },
 ];
 
-function formatPrice(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)} млн`;
-  return Math.round(v).toLocaleString("ru-RU");
+function fmt(n: number): string {
+  return Math.round(n).toLocaleString("ru-RU");
 }
 
-const MIN_INDEX = 0;
-const MAX_INDEX = PRICING_TIERS.length - 1;
-
 export default function LandingPricing() {
-  const [period, setPeriod] = useState<PricingPeriod>("year");
-  const [sliderIndex, setSliderIndex] = useState(4); // 200 users by default
+  const [period, setPeriod] = useState<Period>("year");
+  const [bandIdx, setBandIdx] = useState(3);
 
-  const currentPeriod = PERIODS.find((p) => p.key === period)!;
-  const row = PRICING_TIERS[sliderIndex];
-  const users = row.users;
-  const totalPrice = row[currentPeriod.priceKey] as number;
-  const perUser = row[currentPeriod.perUserKey] as number;
-
-  const periodLabel = currentPeriod.periodLabel;
+  const band = PRICING_BANDS[bandIdx];
+  const rate = band[period];
+  const months = PERIODS.find((p) => p.key === period)!.months;
+  const total = band.users * rate * months;
 
   return (
     <section id="pricing" className="scroll-mt-20 py-16 md:py-24">
       <div className="container mx-auto px-4">
         <h2 className="mb-2 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl landing-animate-in">
-          Калькулятор стоимости
+          Стоимость
         </h2>
         <p className="mx-auto mb-10 max-w-2xl text-center text-muted-foreground landing-animate-in landing-animate-in-delay-1">
-          Выберите количество пользователей и период — стоимость рассчитается автоматически.
+          Цена за одного пользователя в месяц (руб.). Минимальный период — 6 месяцев.
         </p>
 
-        <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-4 sm:p-6 md:p-8 shadow-sm transition-shadow hover:shadow-md landing-animate-in landing-animate-in-delay-2">
-          {/* Период */}
-          <div className="mb-6">
-            <p className="mb-2 text-sm font-medium text-muted-foreground">Период оплаты</p>
-            <div className="flex flex-wrap gap-2">
-              {PERIODS.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => setPeriod(p.key)}
+        {/* Таблица */}
+        <div className="mx-auto max-w-2xl overflow-x-auto rounded-xl border border-border bg-card shadow-sm landing-animate-in landing-animate-in-delay-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="px-4 py-3 text-left font-semibold text-foreground">Пользователей</th>
+                <th className="px-4 py-3 text-center font-semibold text-foreground">6 мес.</th>
+                <th className="px-4 py-3 text-center font-semibold text-foreground">12 мес.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PRICING_BANDS.map((b, i) => (
+                <tr
+                  key={i}
+                  onClick={() => setBandIdx(i)}
                   className={cn(
-                    "rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
-                    period === p.key
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    "cursor-pointer border-b border-border last:border-0 transition-colors",
+                    bandIdx === i
+                      ? "bg-primary/10 dark:bg-primary/15"
+                      : "hover:bg-muted/30"
                   )}
                 >
-                  {p.label}
-                </button>
+                  <td className="px-4 py-2.5 font-medium text-foreground whitespace-nowrap">{b.label}</td>
+                  <td className="px-4 py-2.5 text-center tabular-nums text-muted-foreground">{b.halfYear} ₽</td>
+                  <td className="px-4 py-2.5 text-center tabular-nums text-muted-foreground">{b.year} ₽</td>
+                </tr>
               ))}
-            </div>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Калькулятор */}
+        <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-border bg-card p-4 sm:p-6 md:p-8 shadow-sm landing-animate-in landing-animate-in-delay-3">
+          <p className="mb-3 text-sm font-medium text-muted-foreground">Калькулятор</p>
+
+          {/* Период */}
+          <div className="mb-4 flex gap-2">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setPeriod(p.key)}
+                className={cn(
+                  "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                  period === p.key
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
 
           {/* Ползунок */}
-          <div className="mb-8">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <label htmlFor="pricing-slider" className="text-sm font-medium text-foreground whitespace-nowrap">
-                Пользователей
-              </label>
-              <span className="text-lg font-semibold tabular-nums text-foreground whitespace-nowrap">
-                {users.toLocaleString("ru-RU")}
-              </span>
+          <div className="mb-6">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">Пользователей</span>
+              <span className="text-lg font-semibold tabular-nums text-foreground">{band.label}</span>
             </div>
             <input
-              id="pricing-slider"
               type="range"
-              min={MIN_INDEX}
-              max={MAX_INDEX}
-              value={sliderIndex}
-              onChange={(e) => setSliderIndex(Number(e.target.value))}
+              min={0}
+              max={PRICING_BANDS.length - 1}
+              value={bandIdx}
+              onChange={(e) => setBandIdx(Number(e.target.value))}
+              aria-label="Количество пользователей"
+              title="Выберите количество пользователей"
               className="h-3 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-track]:bg-muted [&::-moz-range-track]:rounded-full"
             />
-            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-              <span>{PRICING_TIERS[MIN_INDEX].users.toLocaleString("ru-RU")}</span>
-              <span>{PRICING_TIERS[MAX_INDEX].users.toLocaleString("ru-RU")}</span>
-            </div>
           </div>
 
           {/* Итог */}
           <div className="rounded-xl bg-primary/10 p-4 sm:p-6 text-center dark:bg-primary/15">
             <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-              Стоимость за {periodLabel}
+              {rate} ₽ / пользователь / мес.
             </p>
             <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-bold tabular-nums text-foreground">
-              {formatPrice(totalPrice)} ₽
+              {fmt(total)} ₽
             </p>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              {perUser} ₽ за пользователя в месяц
+              за {months} мес. на {fmt(band.users)} польз.
             </p>
-            {period !== "month" && (
+            {period === "year" && (
               <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                Экономия {Math.round((1 - perUser / row.perUserMonth!) * 100)}% при оплате за {periodLabel}
+                Экономия {Math.round((1 - band.year / band.halfYear) * 100)}% при оплате за год
               </p>
             )}
           </div>
         </div>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          Более 3600 пользователей —{" "}
+          Более 3 500 пользователей —{" "}
           <a href="#contacts" className="font-medium text-primary hover:underline">
             индивидуальный расчёт
           </a>

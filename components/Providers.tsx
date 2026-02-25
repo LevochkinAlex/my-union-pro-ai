@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/lib/language-context";
 import { AlertProvider } from "./providers/AlertProvider";
 import { ToastProvider } from "./ui/Toast";
 import ErrorHandler from "./ErrorHandler";
+import CookieBanner from "./CookieBanner";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -26,6 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <ErrorHandler />
                 <FirebasePushInit />
                 {children}
+                <CookieBanner />
               </ToastProvider>
             </AlertProvider>
           </LanguageProvider>

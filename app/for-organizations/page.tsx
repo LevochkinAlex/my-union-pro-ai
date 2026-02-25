@@ -1,6 +1,7 @@
 import Link from "next/link";
 import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFloatingBot from "@/components/landing/LandingFloatingBot";
+import LandingPricing from "@/components/landing/LandingPricing";
 import LandingPricingForm from "@/components/landing/LandingPricingForm";
 import LandingDemoLinks from "@/components/landing/LandingDemoLinks";
 import { COMPANY, CONTACTS, ROADMAP } from "@/lib/constants/landing";
@@ -223,7 +224,10 @@ export default function OrganizationsLandingPage() {
           </div>
         </section>
 
-        {/* Узнать цены — форма заявки */}
+        {/* Таблица цен и калькулятор */}
+        <LandingPricing />
+
+        {/* Форма заявки на расчёт */}
         <LandingPricingForm />
 
         {/* Контакты */}
@@ -267,9 +271,18 @@ export default function OrganizationsLandingPage() {
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} {COMPANY.name}. {COMPANY.product}.
             </p>
-            <div className="flex gap-6">
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
               <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
                 Для членов профсоюза
+              </Link>
+              <Link href="/license" className="text-sm text-muted-foreground hover:text-foreground">
+                Публичная оферта
+              </Link>
+              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground">
+                Политика конфиденциальности
+              </Link>
+              <Link href="/requisites" className="text-sm text-muted-foreground hover:text-foreground">
+                Реквизиты
               </Link>
               <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
                 Войти

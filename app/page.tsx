@@ -303,9 +303,18 @@ export default function MemberLandingPage() {
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} {COMPANY.name}. {COMPANY.product}.
             </p>
-            <div className="flex gap-6">
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
               <Link href="/for-organizations" className="text-sm text-muted-foreground hover:text-foreground">
                 Для организаций
+              </Link>
+              <Link href="/license" className="text-sm text-muted-foreground hover:text-foreground">
+                Публичная оферта
+              </Link>
+              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground">
+                Политика конфиденциальности
+              </Link>
+              <Link href="/requisites" className="text-sm text-muted-foreground hover:text-foreground">
+                Реквизиты
               </Link>
               <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
                 Войти

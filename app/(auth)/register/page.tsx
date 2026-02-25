@@ -154,7 +154,15 @@ export default function RegisterPage() {
                     >
                       политикой конфиденциальности
                     </button>
-                    {" "}и обработкой персональных данных
+                    {" "}и обработкой персональных данных, а также с{" "}
+                    <Link
+                      href="/license"
+                      target="_blank"
+                      className="text-brand-500 hover:text-brand-600 dark:text-brand-400 underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      публичной офертой
+                    </Link>
                   </label>
                 </div>
 
@@ -235,6 +243,8 @@ export default function RegisterPage() {
               </h2>
               <button
                 onClick={() => setShowPolicyModal(false)}
+                aria-label="Закрыть модальное окно политики"
+                title="Закрыть"
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

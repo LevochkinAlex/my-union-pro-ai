@@ -46,10 +46,10 @@ export default async function PrivacyPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
         <Link
-          href="/login"
+          href="/"
           className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white mb-8"
         >
-          ← На страницу входа
+          ← На главную
         </Link>
 
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -100,10 +100,10 @@ export default async function PrivacyPage() {
 
         <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
           <Link
-            href="/login"
+            href="/"
             className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
           >
-            ← Вернуться на страницу входа
+            ← На главную
           </Link>
         </div>
       </div>
