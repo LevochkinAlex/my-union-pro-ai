@@ -2,6 +2,10 @@ import type { Config } from "tailwindcss";
 import { heroui } from "@heroui/react";
 
 const config: Config = {
+  safelist: [
+    // Progress bar widths (dynamic percentage in statistics)
+    ...Array.from({ length: 101 }, (_, i) => `w-[${i}%]`),
+  ],
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",

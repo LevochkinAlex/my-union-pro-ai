@@ -1055,8 +1055,7 @@ export default function DiscountDetailPage() {
               {/* Прямоугольная карточка промокода 16:9 */}
               <div 
                 ref={promoCardRef}
-                className="relative overflow-hidden rounded-2xl shadow-2xl"
-                style={{ aspectRatio: '16/9' }}
+                className="relative aspect-video overflow-hidden rounded-2xl shadow-2xl"
               >
                 {/* Фоновое изображение с blur */}
                 <div className="absolute inset-0">
@@ -1180,7 +1179,10 @@ export default function DiscountDetailPage() {
 
                       {/* Избранное */}
                       <button
+                        type="button"
                         onClick={handleToggleFavorite}
+                        aria-label={isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
+                        title={isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
                         className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
                           isFavorite 
                             ? "bg-rose-500 text-white" 
@@ -1199,7 +1201,10 @@ export default function DiscountDetailPage() {
 
               {/* Кнопка закрытия - вынесена за пределы карточки */}
               <button
+                type="button"
                 onClick={() => setShowPromoModal(false)}
+                aria-label="Закрыть"
+                title="Закрыть"
                 className="absolute -right-3 -top-3 rounded-full bg-white p-2 text-gray-600 shadow-lg transition hover:bg-gray-100 hover:text-gray-900 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1243,7 +1248,10 @@ export default function DiscountDetailPage() {
             <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
               {/* Close button */}
               <button
+                type="button"
                 onClick={() => setShowOptionsModal(false)}
+                aria-label="Закрыть"
+                title="Закрыть"
                 className="absolute right-4 top-4 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

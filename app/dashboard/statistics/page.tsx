@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { OrganizationType } from "@prisma/client";
 import { BarChart3, Building2, Users, ClipboardList, Mail, TrendingUp, User, AlertTriangle, Trophy } from "lucide-react";
-import styles from "./statistics.module.css";
 
 interface TimeSeriesData {
   period: string;
@@ -261,8 +260,7 @@ export default function StatisticsPage() {
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                       <div
-                        className={`h-full ${statusInfo.color} transition-all duration-500 ${styles.progressFill}`}
-                        style={{ "--progress-width": `${percentage}%` } as React.CSSProperties}
+                        className={`h-full ${statusInfo.color} transition-all duration-500 w-[${percentage}%]`}
                       />
                     </div>
                   </div>
