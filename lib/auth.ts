@@ -941,6 +941,10 @@ export const authOptions: NextAuthOptions = {
                   viewMode: true,
                   isPPOHead: true,
                   ppoHeadOrganizationId: true,
+                  isMPOHead: true,
+                  mpoHeadOrganizationId: true,
+                  isRPOHead: true,
+                  rpoHeadOrganizationId: true,
                   firstName: true,
                   lastName: true,
                 },
@@ -952,6 +956,10 @@ export const authOptions: NextAuthOptions = {
                 (session.user as any).viewMode = userData.viewMode || "MEMBER";
                 (session.user as any).isPPOHead = userData.isPPOHead || false;
                 (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId ?? null;
+                (session.user as any).isMPOHead = userData.isMPOHead || false;
+                (session.user as any).mpoHeadOrganizationId = userData.mpoHeadOrganizationId ?? null;
+                (session.user as any).isRPOHead = userData.isRPOHead || false;
+                (session.user as any).rpoHeadOrganizationId = userData.rpoHeadOrganizationId ?? null;
                 if (userData.firstName != null) session.user.firstName = userData.firstName;
                 if (userData.lastName != null) session.user.lastName = userData.lastName;
                 const fullNameFromDb = [userData.firstName, userData.lastName].filter(Boolean).join(" ").trim();
@@ -961,10 +969,14 @@ export const authOptions: NextAuthOptions = {
               console.error("[Auth] Error fetching user data from DB:", error);
               (session.user as any).viewMode = "MEMBER";
               (session.user as any).isPPOHead = false;
+              (session.user as any).isMPOHead = false;
+              (session.user as any).isRPOHead = false;
             }
           } else {
             (session.user as any).viewMode = "MEMBER";
             (session.user as any).isPPOHead = false;
+            (session.user as any).isMPOHead = false;
+            (session.user as any).isRPOHead = false;
           }
         }
         
