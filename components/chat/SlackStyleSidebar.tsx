@@ -27,6 +27,7 @@ import {
   FolderOpen,
   ArrowLeft,
   Trash2,
+  Headset,
 } from "lucide-react";
 import CreateFolderModal from "./CreateFolderModal";
 import { Chat, ChatUser } from "@/types/chat";
@@ -149,17 +150,17 @@ function isChannelChat(chat: Chat): boolean {
 }
 
 function isAIChat(chat: Chat): boolean {
+  if ((chat as any).isAIChat === true) return true;
   // Проверка по ID другого участника
   if (chat.otherUser?.id) {
     const userIdLower = chat.otherUser.id.toLowerCase();
-    if (userIdLower.includes('ai-assistant') || 
+    if (userIdLower.includes('ai-assistant') ||
         userIdLower.includes('bot') ||
         userIdLower === 'ai-assistant-bot' ||
         userIdLower.includes('ai') && userIdLower.includes('assistant')) {
       return true;
     }
   }
-  
   // Проверка по названию чата
   if (chat.name) {
     const nameLower = chat.name.toLowerCase();
@@ -176,54 +177,13 @@ function isAIChat(chat: Chat): boolean {
       return true;
     }
   }
-  
-  // Проверка по displayName (для случаев, когда name не установлен)
-  const displayName = getChatDisplayName(chat, null);
-  const displayNameLower = displayName.toLowerCase();
-  // Убираем первую букву, если она одна (например, "П Помощник AI" -> "помощник ai")
-  const displayNameNormalized = displayNameLower.replace(/^[а-яa-z]\s+/, '');
-  const displayNamePatterns = [
-    "ии-ассистент",
-    "ии ассистент",
-    "ai assistant",
-    "ai-assistant",
-    "помощник ai",
-    "ai помощник",
-    "ai-помощник",
-  ];
-  if (displayNamePatterns.some(pattern => 
-    displayNameLower.includes(pattern) || displayNameNormalized.includes(pattern)
-  )) {
-    return true;
-  }
-  
-  // Дополнительная проверка: если есть "помощник" и ("ai" или "ии"), то это AI
-  if ((displayNameLower.includes('помощник') || displayNameNormalized.includes('помощник')) &&
-      (displayNameLower.includes('ai') || displayNameLower.includes('ии'))) {
-    return true;
-  }
-  
-  // Проверка по имени другого участника
-  if (chat.otherUser) {
-    const firstName = (chat.otherUser.firstName || '').toLowerCase();
-    const lastName = (chat.otherUser.lastName || '').toLowerCase();
-    const fullName = `${firstName} ${lastName}`.trim();
-    
-    if ((fullName.includes('помощник') || fullName.includes('ассистент')) && 
-        (fullName.includes('ai') || fullName.includes('ии'))) {
-      return true;
-    }
-    
-    // Проверка только по фамилии (например, "Помощник AI")
-    if (lastName && (
-      (lastName.includes('помощник') && (lastName.includes('ai') || lastName.includes('ии'))) ||
-      lastName.includes('ассистент')
-    )) {
-      return true;
-    }
-  }
-  
   return false;
+}
+
+function isSupportChat(chat: Chat): boolean {
+  if ((chat as any).isSupportChat === true) return true;
+  const name = (chat as any).displayName || chat.name || "";
+  return name === "Техподдержка" || name.toLowerCase().includes("техподдерж");
 }
 
 function formatLastMessageTime(date: Date | string | null): string {
@@ -813,7 +773,7 @@ export default function SlackStyleSidebar({
   }, [folders]);
 
   // Разделяем чаты по категориям
-  const { workChats, personalChats, channels, archivedChats, aiChat } = useMemo(() => {
+  const { workChats, personalChats, channels, archivedChats, aiChat, supportChat } = useMemo(() => {
     // Фильтруем по поиску
     let filtered = searchQuery
       ? chats.filter((chat) => {
@@ -821,7 +781,7 @@ export default function SlackStyleSidebar({
           return name.toLowerCase().includes(searchQuery.toLowerCase());
         })
       : chats;
-    
+
     // Если не смотрим содержимое папки, скрываем чаты из папок
     if (!openFolderId) {
       filtered = filtered.filter(chat => !chatsInFolders.has(chat.id));
@@ -832,20 +792,20 @@ export default function SlackStyleSidebar({
     const channelList: Chat[] = [];
     const archived: Chat[] = [];
     let ai: Chat | null = null;
+    let support: Chat | null = null;
 
     for (const chat of filtered) {
-      // Сначала проверяем, является ли это AI чатом
       const isAI = isAIChat(chat);
-      
       if (isAI) {
-        // Если это ИИ-чат, сохраняем первый найденный и НЕ добавляем в personal
-        if (!ai) {
-          ai = chat;
-        }
-        // Все остальные ИИ-чаты просто пропускаем (не добавляем никуда)
-        continue; // Явно пропускаем, чтобы не попало в personal
+        if (!ai) ai = chat;
+        continue;
       }
-      
+      const isSupport = isSupportChat(chat);
+      if (isSupport) {
+        if (!support) support = chat;
+        continue;
+      }
+
       // Проверяем, архивирован ли чат
       const isArchived = !!(chat as any).archivedAt;
       
@@ -884,26 +844,21 @@ export default function SlackStyleSidebar({
       }
     }
 
-    return { workChats: work, personalChats: personal, channels: channelList, archivedChats: archived, aiChat: ai };
+    return { workChats: work, personalChats: personal, channels: channelList, archivedChats: archived, aiChat: ai, supportChat: support };
   }, [chats, searchQuery, currentUserId, openFolderId, chatsInFolders]);
 
   const displayedChats = useMemo(() => {
-    // Фильтрация по табам применяется для всех пользователей
     switch (activeTab) {
-      case "work": 
-        // В "Рабочие" включаем обращения и каналы (только для председателей)
-        return { work: workChats, personal: [], channels: channels, archived: [], ai: null };
-      case "personal": 
-        // В "Личные" только приватные чаты (только для председателей)
-        return { work: [], personal: personalChats, channels: [], archived: [], ai: null };
+      case "work":
+        return { work: workChats, personal: [], channels: channels, archived: [], ai: null, support: null };
+      case "personal":
+        return { work: [], personal: personalChats, channels: [], archived: [], ai: null, support: null };
       case "archived":
-        // В "Архив" только архивные чаты
-        return { work: [], personal: [], channels: [], archived: archivedChats, ai: null };
-      default: 
-        // "Все" - показываем всё (кроме архивных)
-        return { work: workChats, personal: personalChats, channels: channels, archived: [], ai: aiChat };
+        return { work: [], personal: [], channels: [], archived: archivedChats, ai: null, support: null };
+      default:
+        return { work: workChats, personal: personalChats, channels: channels, archived: [], ai: aiChat, support: supportChat };
     }
-  }, [activeTab, workChats, personalChats, channels, archivedChats, aiChat]);
+  }, [activeTab, workChats, personalChats, channels, archivedChats, aiChat, supportChat]);
 
   const handleAIChatClick = useCallback(() => {
     if (aiChat) {
@@ -912,6 +867,10 @@ export default function SlackStyleSidebar({
       onOpenAIChat();
     }
   }, [aiChat, onSelectChat, onOpenAIChat]);
+
+  const handleSupportChatClick = useCallback(() => {
+    if (supportChat) onSelectChat(supportChat);
+  }, [supportChat, onSelectChat]);
 
   const handleCreateChat = useCallback((userId: string) => {
     onCreateChat?.(userId);
@@ -1033,7 +992,7 @@ export default function SlackStyleSidebar({
         <button
           onClick={handleAIChatClick}
           className={`
-            w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-150 mb-3
+            w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-150 mb-2
             ${aiChat && selectedChat?.id === aiChat.id
               ? "bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 shadow-sm"
               : "bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/10 dark:to-blue-900/10 hover:from-purple-100 hover:to-blue-100 dark:hover:from-purple-900/20 dark:hover:to-blue-900/20"
@@ -1053,6 +1012,34 @@ export default function SlackStyleSidebar({
           </div>
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
         </button>
+
+        {/* Техподдержка - сразу под ИИ */}
+        {displayedChats.support && (
+          <button
+            type="button"
+            onClick={handleSupportChatClick}
+            className={`
+              w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-150 mb-3
+              ${supportChat && selectedChat?.id === supportChat.id
+                ? "bg-amber-100 dark:bg-amber-900/30 shadow-sm"
+                : "bg-amber-50 dark:bg-amber-900/10 hover:bg-amber-100 dark:hover:bg-amber-900/20"
+              }
+            `}
+            aria-label="Чат с техподдержкой"
+          >
+            <div className="w-11 h-11 rounded-xl bg-amber-500 flex items-center justify-center shadow-lg">
+              <Headset className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm text-gray-900 dark:text-white">
+                Техподдержка
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Вопросы по работе платформы
+              </div>
+            </div>
+          </button>
+        )}
 
         {/* Папки - показываем если есть и не открыта папка */}
         {!openFolderId && folders.length > 0 && activeTab === "all" && (

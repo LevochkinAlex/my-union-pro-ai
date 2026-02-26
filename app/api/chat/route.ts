@@ -3,13 +3,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
-import { 
-  getUserChats, 
+import {
+  getUserChats,
   getOrCreatePrivateChat,
   getChatById,
-  ChatFilter 
+  ChatFilter,
 } from "@/lib/chat-service";
 import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
+import { getSupportUserId } from "@/lib/support-user";
 import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
 import { withCache, getCacheKey } from "@/lib/cache";
@@ -19,6 +20,7 @@ import { getDemoMemberChats, getDemoChairmanChats } from "@/lib/demo";
 
 const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot";
+const SUPPORT_CHAT_DISPLAY_NAME = "Техподдержка";
 
 /**
  * Получает или создает чат с ИИ-ассистентом (экспорт для /api/chat/rooms)
@@ -150,6 +152,81 @@ function formatAIChat(aiChat: any, userId: string) {
     ticketPublicId: null,
     ticketTitle: null,
     isAIChat: true,
+  };
+}
+
+/**
+ * Получает или создаёт чат с техподдержкой и возвращает чат с lastMessage для списка
+ */
+async function getOrCreateSupportChat(userId: string) {
+  const supportUserId = await getSupportUserId();
+  if (!supportUserId) return null;
+  const { chat } = await getOrCreatePrivateChat(userId, supportUserId);
+  if (!chat?.id) return null;
+  const withLast = await prisma.chat.findUnique({
+    where: { id: chat.id },
+    include: {
+      participants: {
+        where: { leftAt: null },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      },
+      lastMessage: { select: { content: true, createdAt: true, messageType: true } },
+      _count: { select: { participants: true, messages: true } },
+    },
+  });
+  return withLast;
+}
+
+/**
+ * Форматирует чат техподдержки для ответа API (как отдельный пункт под ИИ)
+ */
+function formatSupportChat(supportChat: any, userId: string) {
+  const supportUserId = supportChat.participants?.find((p: any) => p.userId !== userId)?.userId;
+  const supportUser = supportChat.participants?.find((p: any) => p.userId === supportUserId)?.user;
+  return {
+    id: supportChat.id,
+    type: "PRIVATE" as const,
+    name: SUPPORT_CHAT_DISPLAY_NAME,
+    description: "Чат с техподдержкой МойСоюз",
+    displayName: SUPPORT_CHAT_DISPLAY_NAME,
+    displayAvatar: supportUser?.avatarUrl ?? null,
+    iconUrl: null,
+    isPublic: false,
+    lastMessage: supportChat.lastMessage?.content ?? null,
+    lastMessageAt: supportChat.lastMessage?.createdAt ?? supportChat.createdAt,
+    unreadCount: 0,
+    createdAt: supportChat.createdAt,
+    otherUser: supportUser
+      ? {
+          id: supportUser.id,
+          firstName: supportUser.firstName ?? "Техподдержка",
+          lastName: supportUser.lastName ?? "МойСоюз",
+          middleName: supportUser.middleName ?? null,
+          avatarUrl: supportUser.avatarUrl ?? null,
+        }
+      : {
+          id: supportUserId ?? "support",
+          firstName: "Техподдержка",
+          lastName: "МойСоюз",
+          middleName: null,
+          avatarUrl: null,
+        },
+    participants: supportChat.participants ?? [],
+    participantsCount: supportChat._count?.participants ?? 2,
+    ticketId: null,
+    ticketPublicId: null,
+    ticketTitle: null,
+    isSupportChat: true,
   };
 }
 
@@ -367,8 +444,14 @@ export async function GET(request: NextRequest) {
       chats = [];
     }
 
-    // Фильтруем ИИ чат из основного списка (он будет добавлен отдельно)
-    let filteredChats = Array.isArray(chats) ? chats.filter((c: any) => c && c.name !== AI_CHAT_NAME) : [];
+    // Фильтруем ИИ и чат техподдержки из основного списка (добавляются отдельно в начало)
+    const supportUserId = await getSupportUserId().catch(() => null);
+    let filteredChats = Array.isArray(chats) ? chats.filter((c: any) => {
+      if (!c) return false;
+      if (c.name === AI_CHAT_NAME) return false;
+      if (supportUserId && c.otherUser?.id === supportUserId) return false;
+      return true;
+    }) : [];
 
     // В режиме участника (MEMBER) фильтруем чаты:
     // - Только личные чаты (PRIVATE)
@@ -394,21 +477,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Добавляем ИИ чат, если нужно
+    // Добавляем ИИ чат и чат техподдержки в начало списка
     let finalChats = filteredChats;
     if (includeAI && !filter.hasTicket) {
+      const head: any[] = [];
       try {
         const aiChat = await getOrCreateAIChat(userId);
-        if (aiChat) {
-          const formattedAIChat = formatAIChat(aiChat, userId);
-          // ИИ чат добавляем в начало списка
-          finalChats = [formattedAIChat, ...filteredChats];
-        }
+        if (aiChat) head.push(formatAIChat(aiChat, userId));
       } catch (aiError) {
         console.error("[chat] Error loading AI chat:", aiError);
-        // Продолжаем без ИИ чата
-        finalChats = filteredChats;
       }
+      try {
+        const supportChat = await getOrCreateSupportChat(userId);
+        if (supportChat) head.push(formatSupportChat(supportChat, userId));
+      } catch (supportError) {
+        console.error("[chat] Error loading support chat:", supportError);
+      }
+      if (head.length) finalChats = [...head, ...filteredChats];
     }
 
     return NextResponse.json({ chats: finalChats || [] });

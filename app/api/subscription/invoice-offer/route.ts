@@ -184,13 +184,15 @@ export async function POST(request: NextRequest) {
     );
     y = doc.y + 10;
 
-    // Простая табличная часть
-    const col1 = 30;
-    const col2 = 280;
-    const col3 = 80;
-    const col4 = 80;
-    const col5 = 90;
-    const rowH = 22;
+    // Таблица: ширина под A4 (595 - 80 margin = 515), колонки пропорционально
+    const tableWidth = 515;
+    const col1 = 22;
+    const col2 = 250;
+    const col3 = 48;
+    const col4 = 90;
+    const col5 = 105;
+    const rowH = 20;
+    const dataRowH = 36;
 
     doc.rect(x, y, col1, rowH).stroke();
     doc.rect(x + col1, y, col2, rowH).stroke();
@@ -198,29 +200,30 @@ export async function POST(request: NextRequest) {
     doc.rect(x + col1 + col2 + col3, y, col4, rowH).stroke();
     doc.rect(x + col1 + col2 + col3 + col4, y, col5, rowH).stroke();
 
-    doc.font(fontBold).fontSize(9)
-      .text("№", x + 8, y + 6)
-      .text("Наименование", x + col1 + 6, y + 6)
-      .text("Кол-во", x + col1 + col2 + 18, y + 6)
-      .text("Цена", x + col1 + col2 + col3 + 20, y + 6)
-      .text("Сумма", x + col1 + col2 + col3 + col4 + 18, y + 6);
+    doc.font(fontBold).fontSize(8)
+      .text("№", x + 4, y + 6)
+      .text("Наименование", x + col1 + 4, y + 6, { width: col2 - 8 })
+      .text("Кол-во", x + col1 + col2 + 4, y + 6)
+      .text("Цена", x + col1 + col2 + col3 + 4, y + 6, { width: col4 - 8, align: "right" })
+      .text("Сумма", x + col1 + col2 + col3 + col4 + 4, y + 6, { width: col5 - 8, align: "right" });
 
     y += rowH;
-    doc.rect(x, y, col1, rowH).stroke();
-    doc.rect(x + col1, y, col2, rowH).stroke();
-    doc.rect(x + col1 + col2, y, col3, rowH).stroke();
-    doc.rect(x + col1 + col2 + col3, y, col4, rowH).stroke();
-    doc.rect(x + col1 + col2 + col3 + col4, y, col5, rowH).stroke();
+    doc.rect(x, y, col1, dataRowH).stroke();
+    doc.rect(x + col1, y, col2, dataRowH).stroke();
+    doc.rect(x + col1 + col2, y, col3, dataRowH).stroke();
+    doc.rect(x + col1 + col2 + col3, y, col4, dataRowH).stroke();
+    doc.rect(x + col1 + col2 + col3 + col4, y, col5, dataRowH).stroke();
 
-    const itemName = `Доступ к SaaS «MyUnion Pro», ${tariffLabel}, период ${periodLabel(period)}`;
-    doc.font(fontRegular).fontSize(9)
-      .text("1", x + 8, y + 6)
-      .text(itemName, x + col1 + 6, y + 6, { width: col2 - 12 })
-      .text(String(memberLimit), x + col1 + col2 + 28, y + 6)
-      .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + 8, y + 6, { width: col4 - 10, align: "right" })
-      .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + col4 + 8, y + 6, { width: col5 - 12, align: "right" });
+    const itemNameFull = `Доступ к SaaS MyUnion Pro, ${tariffLabel}, ${periodLabel(period)}`;
+    const itemName = itemNameFull.length > 55 ? itemNameFull.slice(0, 52) + "…" : itemNameFull;
+    doc.font(fontRegular).fontSize(8)
+      .text("1", x + 4, y + 8)
+      .text(itemName, x + col1 + 4, y + 8, { width: col2 - 8 })
+      .text(String(memberLimit), x + col1 + col2 + 4, y + 12)
+      .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + 4, y + 12, { width: col4 - 8, align: "right" })
+      .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + col4 + 4, y + 12, { width: col5 - 8, align: "right" });
 
-    y += rowH + 10;
+    y += dataRowH + 10;
     doc.font(fontBold).fontSize(10).text(`Итого к оплате: ${formatMoney(amountRub)} ₽`, x, y);
     y += 18;
     doc.font(fontRegular).fontSize(9).text(`НДС не облагается (УСН). Тарифная ставка: ${ratePerUserPerMonth} ₽/польз./месяц`, x, y);
@@ -230,7 +233,7 @@ export async function POST(request: NextRequest) {
       "Настоящий счет-оферта (далее — «Счет») является письменным предложением (офертой) Поставщика заключить договор в соответствии со ст. 432–444 ГК РФ.",
       "Акцептом оферты является полная оплата настоящего Счета Покупателем (п. 3 ст. 438 ГК РФ).",
       "Счет действителен 7 (семь) рабочих дней с даты выставления.",
-      "Предмет договора: предоставление доступа к SaaS MyUnion Pro по выбранному тарифу.",
+      "Предмет договора: предоставление доступа к SaaS MyUnion Pro по выбранному тарифу. Публичная оферта: https://myunion.pro/license",
       "Период предоставления услуг: " + periodLabel(period) + ".",
       "Споры подлежат рассмотрению по месту нахождения Поставщика.",
     ];
@@ -241,12 +244,24 @@ export async function POST(request: NextRequest) {
     }
 
     y += 18;
-    doc.font(fontRegular).fontSize(10).text("Генеральный директор ООО «ЯППИКС» __________________ Усманов Р.Р.", x, y);
+    doc.font(fontRegular).fontSize(10).text("Генеральный директор ООО «ЯППИКС»", x, y);
+    const signLineY = y;
 
+    const podpisPath = path.join(process.cwd(), "public", "podpis.png");
     const stampPath = path.join(process.cwd(), "public", "Печать.png");
+
+    if (fs.existsSync(podpisPath)) {
+      try {
+        doc.image(podpisPath, 220, signLineY - 8, { fit: [100, 36] });
+      } catch (imgError) {
+        console.warn("[invoice-offer] podpis image render warning:", imgError);
+      }
+    }
+    doc.font(fontRegular).fontSize(10).text("Усманов Р.Р.", 330, signLineY);
+
     if (fs.existsSync(stampPath)) {
       try {
-        doc.image(stampPath, 380, y - 40, { fit: [120, 120] });
+        doc.image(stampPath, 380, signLineY - 40, { fit: [120, 120] });
       } catch (imgError) {
         console.warn("[invoice-offer] stamp image render warning:", imgError);
       }

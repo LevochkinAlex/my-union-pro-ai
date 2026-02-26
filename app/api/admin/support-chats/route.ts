@@ -1,0 +1,93 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getSupportUserId } from "@/lib/support-user";
+
+/**
+ * GET /api/admin/support-chats
+ * Список чатов с техподдержкой для суперадмина (все диалоги пользователей с поддержкой).
+ */
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || (session.user as { role?: string }).role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const supportUserId = await getSupportUserId();
+  if (!supportUserId) {
+    return NextResponse.json({ chats: [] });
+  }
+
+  const participants = await prisma.chatParticipant.findMany({
+    where: {
+      userId: supportUserId,
+      leftAt: null,
+    },
+    select: { chatId: true },
+  });
+  const chatIds = participants.map((p) => p.chatId);
+  if (chatIds.length === 0) {
+    return NextResponse.json({ chats: [] });
+  }
+
+  const BOT_EMAILS = ["ai-assistant@myunion.pro", "support@myunion.pro"];
+
+  const chats = await prisma.chat.findMany({
+    where: { id: { in: chatIds }, type: "PRIVATE" },
+    include: {
+      participants: {
+        where: { leftAt: null },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      },
+      lastMessage: {
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+          senderId: true,
+        },
+      },
+      _count: { select: { messages: true } },
+    },
+    orderBy: { lastMessageAt: "desc" },
+  });
+
+  const list = chats
+    .map((chat) => {
+      const clientParticipant = chat.participants.find((p) => p.userId !== supportUserId);
+      const user = clientParticipant?.user ?? null;
+      if (!user) return null;
+      if (user.email && BOT_EMAILS.includes(user.email)) return null;
+      const hasMessages = (chat._count?.messages ?? 0) > 0;
+      if (!hasMessages) return null;
+      const lastName = (chat.lastMessage?.content ?? "").trim();
+      const preview = lastName.length > 80 ? lastName.slice(0, 80) + "…" : lastName;
+      return {
+        chatId: chat.id,
+        lastMessageAt: chat.lastMessageAt ?? chat.createdAt,
+        lastMessagePreview: preview,
+        lastMessageSenderId: chat.lastMessage?.senderId ?? null,
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+        },
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  return NextResponse.json({ chats: list });
+}
