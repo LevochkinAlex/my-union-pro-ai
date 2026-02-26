@@ -1,4 +1,4 @@
-import { getChildOrganizationIds, getOrgHead } from "@/lib/ppo-head-utils";
+import { getChildOrganizationIds, getOrgHead, type OrgHeadData } from "@/lib/ppo-head-utils";
 
 export type OrgHeadScope = {
   organizationIds: string[];
@@ -6,8 +6,14 @@ export type OrgHeadScope = {
   organizationId: string;
 };
 
-export async function getOrgHeadScope(userId: string): Promise<OrgHeadScope | null> {
-  const orgHead = await getOrgHead(userId);
+/**
+ * Возвращает scope руководителя. Если передан orgHead — повторный getOrgHead не вызывается.
+ */
+export async function getOrgHeadScope(
+  userId: string,
+  existingOrgHead?: OrgHeadData | null
+): Promise<OrgHeadScope | null> {
+  const orgHead = existingOrgHead ?? (await getOrgHead(userId));
   if (!orgHead) return null;
 
   if (orgHead.level === "PPO") {

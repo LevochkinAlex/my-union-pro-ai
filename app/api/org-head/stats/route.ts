@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const scope = await getOrgHeadScope(session.user.id);
+    const scope = await getOrgHeadScope(session.user.id, orgHead);
     if (!scope) {
       return NextResponse.json(
         { error: "Вы не являетесь руководителем организации" },
@@ -36,149 +36,135 @@ export async function GET(request: NextRequest) {
 
     const allOrgIds = scope.organizationIds;
 
-    // Получаем статистику по организациям
-    const organizations = await prisma.organization.findMany({
-      where: { id: { in: allOrgIds } },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        chairmanName: true,
-        chairmanJobTitle: true,
-        parentId: true,
-        _count: {
-          select: {
-            members: true,
-            reports: true,
-            documents: true,
-            tickets: true,
-          },
-        },
-      },
-    });
-
-    // Общая статистика по членам
-    const totalMembers = await prisma.user.count({
-      where: {
-        organizationId: { in: allOrgIds },
-        membershipStatus: "APPROVED",
-      },
-    });
-
-    // Статистика по отчётам
-    const reportStats = await prisma.report.groupBy({
-      by: ["status"],
-      where: { organizationId: { in: allOrgIds } },
-      _count: { status: true },
-    });
-
-    // Текущий период (для проверки сданных отчётов)
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
     const currentPeriod = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Организации без отчёта за текущий период
-    const orgsWithReport = await prisma.report.findMany({
-      where: {
-        organizationId: { in: allOrgIds },
-        periodYear: currentYear,
-        periodMonth: currentMonth,
-      },
-      select: { organizationId: true },
-      distinct: ["organizationId"],
-    });
+    const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
 
+    // Параллельно: организации + счётчики + отчёты за период + тикеты + активность + 12 помесячных count
+    const [
+      organizations,
+      totalMembers,
+      reportStats,
+      orgsWithReport,
+      ticketStats,
+      newMembersCount,
+      newReportsCount,
+      newTicketsCount,
+      ...timeSeriesCounts
+    ] = await Promise.all([
+      prisma.organization.findMany({
+        where: { id: { in: allOrgIds } },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+          parentId: true,
+          totalEmployees: true,
+          _count: {
+            select: {
+              members: true,
+              reports: true,
+              documents: true,
+              tickets: true,
+            },
+          },
+        },
+      }),
+      prisma.user.count({
+        where: {
+          organizationId: { in: allOrgIds },
+          membershipStatus: "APPROVED",
+        },
+      }),
+      prisma.report.groupBy({
+        by: ["status"],
+        where: { organizationId: { in: allOrgIds } },
+        _count: { status: true },
+      }),
+      prisma.report.findMany({
+        where: {
+          organizationId: { in: allOrgIds },
+          periodYear: currentYear,
+          periodMonth: currentMonth,
+        },
+        select: { organizationId: true },
+        distinct: ["organizationId"],
+      }),
+      prisma.ticket.groupBy({
+        by: ["status"],
+        where: { organizationId: { in: allOrgIds } },
+        _count: { status: true },
+      }),
+      prisma.user.count({
+        where: {
+          organizationId: { in: allOrgIds },
+          membershipStatus: "APPROVED",
+          createdAt: { gte: thirtyDaysAgo },
+        },
+      }),
+      prisma.report.count({
+        where: {
+          organizationId: { in: allOrgIds },
+          createdAt: { gte: thirtyDaysAgo },
+        },
+      }),
+      prisma.ticket.count({
+        where: {
+          organizationId: { in: allOrgIds },
+          createdAt: { gte: thirtyDaysAgo },
+        },
+      }),
+      ...Array.from({ length: 12 }, (_, i) => {
+        const date = new Date();
+        date.setMonth(date.getMonth() - (11 - i));
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+        return prisma.user.count({
+          where: {
+            organizationId: { in: allOrgIds },
+            membershipStatus: "APPROVED",
+            createdAt: { lte: endOfMonth },
+          },
+        });
+      }),
+    ]);
+
+    const currentTotalEmployees = organizations.reduce((sum, o) => sum + (o.totalEmployees || 0), 0);
     const orgsWithReportIds = orgsWithReport.map((r) => r.organizationId);
     const orgsWithoutReport = organizations.filter(
       (o) => !orgsWithReportIds.includes(o.id) && o.id !== orgHead.organizationId
     );
 
-    // Статистика по обращениям
-    const ticketStats = await prisma.ticket.groupBy({
-      by: ["status"],
-      where: { organizationId: { in: allOrgIds } },
-      _count: { status: true },
-    });
-
-    // Активность за последние 30 дней
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentActivity = {
-      newMembers: await prisma.user.count({
-        where: {
-          organizationId: { in: allOrgIds },
-          membershipStatus: "APPROVED",
-          createdAt: { gte: thirtyDaysAgo },
-        },
-      }),
-      newReports: await prisma.report.count({
-        where: {
-          organizationId: { in: allOrgIds },
-          createdAt: { gte: thirtyDaysAgo },
-        },
-      }),
-      newTickets: await prisma.ticket.count({
-        where: {
-          organizationId: { in: allOrgIds },
-          createdAt: { gte: thirtyDaysAgo },
-        },
-      }),
-    };
-
-    // Временные ряды (последние 12 месяцев)
-    // Данные по количеству членов и проценту членства по месяцам
-    const timeSeriesData: Array<{
-      period: string;
-      month: string;
-      year: number;
-      totalMembers: number;
-      totalEmployees: number;
-      membershipPercent: number;
-    }> = [];
-
-    // Получаем общее количество работников из организаций
-    const orgsWithEmployees = await prisma.organization.findMany({
-      where: { id: { in: allOrgIds } },
-      select: { totalEmployees: true },
-    });
-    const currentTotalEmployees = orgsWithEmployees.reduce((sum, o) => sum + (o.totalEmployees || 0), 0);
-
-    // Генерируем данные для последних 12 месяцев
-    const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
-    
-    for (let i = 11; i >= 0; i--) {
+    const timeSeriesData = Array.from({ length: 12 }, (_, i) => {
       const date = new Date();
-      date.setMonth(date.getMonth() - i);
+      date.setMonth(date.getMonth() - (11 - i));
       const year = date.getFullYear();
-      const month = date.getMonth(); // 0-11
-      
-      // Считаем членов, которые были активны на конец месяца
-      const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
-      
-      const membersCount = await prisma.user.count({
-        where: {
-          organizationId: { in: allOrgIds },
-          membershipStatus: "APPROVED",
-          createdAt: { lte: endOfMonth },
-        },
-      });
-
-      // Для упрощения используем текущее количество работников 
-      // (в реальной системе нужно хранить историю)
-      const employeesCount = currentTotalEmployees;
-      const percent = employeesCount > 0 ? Math.round((membersCount / employeesCount) * 100) : 0;
-
-      timeSeriesData.push({
+      const month = date.getMonth();
+      const membersCount = timeSeriesCounts[i] ?? 0;
+      const percent = currentTotalEmployees > 0 ? Math.round((membersCount / currentTotalEmployees) * 100) : 0;
+      return {
         period: `${year}-${String(month + 1).padStart(2, "0")}`,
         month: monthNames[month],
         year,
         totalMembers: membersCount,
-        totalEmployees: employeesCount,
+        totalEmployees: currentTotalEmployees,
         membershipPercent: percent,
-      });
-    }
+      };
+    });
+
+    const recentActivity = {
+      newMembers: newMembersCount,
+      newReports: newReportsCount,
+      newTickets: newTicketsCount,
+    };
 
     // Формируем иерархию организаций
     const buildHierarchy = (parentId: string | null): any[] => {

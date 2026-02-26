@@ -216,27 +216,23 @@ export async function getOrgHead(userId: string): Promise<OrgHeadData | null> {
 }
 
 /**
- * Получает все подчинённые организации (рекурсивно)
+ * Получает все подчинённые организации (один запрос через рекурсивный CTE)
  * @param organizationId ID организации
  * @returns Массив ID всех подчинённых организаций
  */
 export async function getChildOrganizationIds(organizationId: string): Promise<string[]> {
-  const result: string[] = [];
-
-  async function collectChildren(parentId: string) {
-    const children = await prisma.organization.findMany({
-      where: { parentId, isActive: true },
-      select: { id: true },
-    });
-
-    for (const child of children) {
-      result.push(child.id);
-      await collectChildren(child.id);
-    }
-  }
-
-  await collectChildren(organizationId);
-  return result;
+  type Row = { id: string };
+  const rows = await prisma.$queryRaw<Row[]>`
+    WITH RECURSIVE tree AS (
+      SELECT id FROM "Organization"
+      WHERE "parentId" = ${organizationId} AND "isActive" = true
+      UNION ALL
+      SELECT o.id FROM "Organization" o
+      INNER JOIN tree t ON o."parentId" = t.id AND o."isActive" = true
+    )
+    SELECT id FROM tree
+  `;
+  return rows.map((r) => r.id);
 }
 
 /**

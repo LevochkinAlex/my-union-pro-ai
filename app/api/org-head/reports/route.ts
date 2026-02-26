@@ -31,13 +31,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status");
-    const period = searchParams.get("period");
-    const periodicity = searchParams.get("periodicity");
-    const filterOrgId = searchParams.get("organizationId");
-
-    const scope = await getOrgHeadScope(session.user.id);
+    const scope = await getOrgHeadScope(session.user.id, orgHead);
     if (!scope) {
       return NextResponse.json(
         { error: "Вы не являетесь руководителем организации" },
@@ -45,10 +39,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Определяем организации, отчёты которых нужно показать
-    let organizationIds = scope.organizationIds;
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+    const period = searchParams.get("period");
+    const periodicity = searchParams.get("periodicity");
+    const filterOrgId = searchParams.get("organizationId");
 
-    // Если указан фильтр по организации - проверяем доступ
+    let organizationIds = scope.organizationIds;
     if (filterOrgId) {
       if (!organizationIds.includes(filterOrgId)) {
         return NextResponse.json(
@@ -59,83 +56,71 @@ export async function GET(request: NextRequest) {
       organizationIds = [filterOrgId];
     }
 
-    // Формируем условия запроса
-    const where: any = {
-      organizationId: { in: organizationIds },
-    };
-
-    if (status) {
-      where.status = status;
-    }
-
+    const where: any = { organizationId: { in: organizationIds } };
+    if (status) where.status = status;
     if (period) {
-      // period в формате "YYYY-MM" или "YYYY"
       const [yearStr, monthStr] = period.split("-");
       where.periodYear = parseInt(yearStr);
-      if (monthStr) {
-        where.periodMonth = parseInt(monthStr);
-      }
+      if (monthStr) where.periodMonth = parseInt(monthStr);
     }
+    if (periodicity === "monthly") where.periodMonth = { not: null };
+    else if (periodicity === "annual") where.periodMonth = null;
 
-    if (periodicity === "monthly") {
-      where.periodMonth = { not: null };
-    } else if (periodicity === "annual") {
-      where.periodMonth = null;
-    }
+    const whereScope = { organizationId: { in: organizationIds } };
 
-    // Получаем отчёты
-    const reports = await prisma.report.findMany({
-      where,
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            chairmanName: true,
+    // Параллельно: отчёты, статистика по статусам, по организациям (для МПО/РПО)
+    const [reports, statusStats, rawOrgStatsOrNull] = await Promise.all([
+      prisma.report.findMany({
+        where,
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              chairmanName: true,
+            },
+          },
+          template: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
           },
         },
-        template: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
-      },
-      orderBy: [
-        { periodYear: "desc" },
-        { periodMonth: "desc" },
-        { createdAt: "desc" },
-      ],
-    });
+        orderBy: [
+          { periodYear: "desc" },
+          { periodMonth: "desc" },
+          { createdAt: "desc" },
+        ],
+      }),
+      prisma.report.groupBy({
+        by: ["status"],
+        where: whereScope,
+        _count: { status: true },
+      }),
+      scope.level !== "PPO"
+        ? prisma.report.groupBy({
+            by: ["organizationId"],
+            where: whereScope,
+            _count: true,
+          })
+        : Promise.resolve(null),
+    ]);
 
-    // Статистика по статусам
-    const statusStats = await prisma.report.groupBy({
-      by: ["status"],
-      where: { organizationId: { in: organizationIds } },
-      _count: { status: true },
-    });
-
-    // Статистика по организациям (для МПО/РПО)
     let orgStats: any[] = [];
-    if (scope.level !== "PPO") {
-      const rawOrgStats = await prisma.report.groupBy({
-        by: ["organizationId"],
-        where: { organizationId: { in: organizationIds } },
-        _count: true,
-      });
-
-      // Добавляем названия организаций
+    if (scope.level !== "PPO" && rawOrgStatsOrNull && rawOrgStatsOrNull.length > 0) {
+      const orgIds = rawOrgStatsOrNull.map((s) => s.organizationId);
       const orgs = await prisma.organization.findMany({
-        where: { id: { in: rawOrgStats.map((s) => s.organizationId) } },
+        where: { id: { in: orgIds } },
         select: { id: true, name: true, type: true },
       });
-
-      orgStats = rawOrgStats.map((s) => ({
+      const orgMap = new Map(orgs.map((o) => [o.id, o]));
+      orgStats = rawOrgStatsOrNull.map((s) => ({
         organizationId: s.organizationId,
         count: s._count,
-        organization: orgs.find((o) => o.id === s.organizationId),
+        organization: orgMap.get(s.organizationId),
       }));
     }
 
