@@ -228,76 +228,42 @@ export default function TourGuideSpotlight({
   if (!isOpen || !step) return null;
 
   return (
-    <div className="fixed inset-0 pointer-events-none" style={{ zIndex: Z_OVERLAY }}>
+    <div className={`fixed inset-0 pointer-events-none ${styles.overlay}`}>
       {/* Затемнение: 4 панели вокруг «выреза» (элемент остаётся в foreground) */}
       {targetRect && (
-        <>
+        <div ref={spotlightVarsRef}>
           <div
-            className="bg-black/60 pointer-events-auto"
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: Math.max(0, targetRect.top),
-            }}
+            className={`bg-black/60 pointer-events-auto ${styles.maskTop}`}
             onClick={handleClose}
             aria-hidden
           />
           <div
-            className="bg-black/60 pointer-events-auto"
-            style={{
-              position: "fixed",
-              top: targetRect.top,
-              left: 0,
-              width: Math.max(0, targetRect.left),
-              height: targetRect.height,
-            }}
+            className={`bg-black/60 pointer-events-auto ${styles.maskLeft}`}
             onClick={handleClose}
             aria-hidden
           />
           <div
-            className="bg-black/60 pointer-events-auto"
-            style={{
-              position: "fixed",
-              top: targetRect.top,
-              left: targetRect.left + targetRect.width,
-              right: 0,
-              height: targetRect.height,
-            }}
+            className={`bg-black/60 pointer-events-auto ${styles.maskRight}`}
             onClick={handleClose}
             aria-hidden
           />
           <div
-            className="bg-black/60 pointer-events-auto"
-            style={{
-              position: "fixed",
-              top: targetRect.top + targetRect.height,
-              left: 0,
-              right: 0,
-              bottom: 0,
-            }}
+            className={`bg-black/60 pointer-events-auto ${styles.maskBottom}`}
             onClick={handleClose}
             aria-hidden
           />
           {/* Рамка подсветки вокруг элемента (элемент остаётся в foreground) */}
           <div
-            className="pointer-events-none absolute rounded-xl border-2 border-blue-500 ring-2 ring-blue-400/50 dark:ring-blue-500/50"
-            style={{
-              top: targetRect.top,
-              left: targetRect.left,
-              width: targetRect.width,
-              height: targetRect.height,
-            }}
+            className={`pointer-events-none rounded-xl border-2 border-blue-500 ring-2 ring-blue-400/50 dark:ring-blue-500/50 ${styles.highlight}`}
             aria-hidden
           />
-        </>
+        </div>
       )}
 
       {/* Карточка-подсказка рядом с элементом (или внизу по центру) */}
       <div
-        className="pointer-events-auto flex flex-col rounded-xl border border-blue-200 bg-white shadow-xl dark:border-blue-900/50 dark:bg-gray-900 overflow-hidden"
-        style={tooltipStyle}
+        ref={tooltipRef}
+        className={`pointer-events-auto flex flex-col rounded-xl border border-blue-200 bg-white shadow-xl dark:border-blue-900/50 dark:bg-gray-900 overflow-hidden ${styles.tooltip}`}
       >
         <div className="relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-blue-50/50 to-purple-50 p-4 shadow-lg dark:border-blue-900/50 dark:from-blue-900/20 dark:via-blue-900/10 dark:to-purple-900/20">
           <div className="flex items-center justify-center gap-1.5 mb-3">
