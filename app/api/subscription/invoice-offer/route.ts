@@ -259,7 +259,8 @@ export async function POST(request: NextRequest) {
     });
 
     const filename = `schet-oferta-${offerNumber}.pdf`;
-    return new NextResponse(pdfBuffer, {
+    const pdfBytes = new Uint8Array(pdfBuffer);
+    return new NextResponse(pdfBytes, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
