@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applyMemberLimit, getOrCreateOrgSubscription } from "@/lib/subscription";
 
@@ -7,6 +8,10 @@ type PaymentMeta = {
   memberLimit?: number | null;
   [key: string]: unknown;
 };
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 export async function finalizeSubscriptionPayment(
   localPaymentId: string,
@@ -33,12 +38,12 @@ export async function finalizeSubscriptionPayment(
     where: { id: payment.id },
     data: {
       status: "COMPLETED",
-      metadata: {
+      metadata: toJsonValue({
         ...meta,
         gatewayStatus,
         confirmedAt: new Date().toISOString(),
         gatewayPayload: gatewayPayload ?? null,
-      },
+      }),
     },
   });
 
@@ -76,12 +81,12 @@ export async function markSubscriptionPaymentFailed(
     where: { id: payment.id },
     data: {
       status: "FAILED",
-      metadata: {
+      metadata: toJsonValue({
         ...meta,
         gatewayStatus,
         failedAt: new Date().toISOString(),
         gatewayPayload: gatewayPayload ?? null,
-      },
+      }),
     },
   });
 }
@@ -101,12 +106,12 @@ export async function markSubscriptionPaymentRefunded(
     where: { id: payment.id },
     data: {
       status: "REFUNDED",
-      metadata: {
+      metadata: toJsonValue({
         ...meta,
         gatewayStatus,
         refundedAt: new Date().toISOString(),
         gatewayPayload: gatewayPayload ?? null,
-      },
+      }),
     },
   });
 }
