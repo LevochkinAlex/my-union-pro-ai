@@ -248,14 +248,12 @@ export async function POST(request: NextRequest) {
     y = doc.y + 10;
 
     // Таблица: ширина под A4 (595 - 80 margin = 515), колонки пропорционально
-    const tableWidth = 515;
     const col1 = 22;
     const col2 = 250;
     const col3 = 48;
     const col4 = 90;
     const col5 = 105;
     const rowH = 20;
-    const dataRowH = 48;
 
     doc.rect(x, y, col1, rowH).stroke();
     doc.rect(x + col1, y, col2, rowH).stroke();
@@ -271,13 +269,17 @@ export async function POST(request: NextRequest) {
       .text("Сумма, руб.", x + col1 + col2 + col3 + col4 + 4, y + 6, { width: col5 - 8, align: "right" });
 
     y += rowH;
+    const itemNameFull = `Доступ к SaaS MyUnion Pro, ${tariffLabel}, ${periodLabel(period)}`;
+    doc.font(fontRegular).fontSize(8);
+    const itemNameHeight = doc.heightOfString(itemNameFull, { width: col2 - 8 });
+    const dataRowH = Math.max(36, Math.ceil(itemNameHeight) + 16);
+
     doc.rect(x, y, col1, dataRowH).stroke();
     doc.rect(x + col1, y, col2, dataRowH).stroke();
     doc.rect(x + col1 + col2, y, col3, dataRowH).stroke();
     doc.rect(x + col1 + col2 + col3, y, col4, dataRowH).stroke();
     doc.rect(x + col1 + col2 + col3 + col4, y, col5, dataRowH).stroke();
 
-    const itemNameFull = `Доступ к SaaS MyUnion Pro, ${tariffLabel}, ${periodLabel(period)}`;
     doc.font(fontRegular).fontSize(8)
       .text("1", x + 4, y + 8)
       .text(itemNameFull, x + col1 + 4, y + 8, { width: col2 - 8 })
@@ -286,12 +288,12 @@ export async function POST(request: NextRequest) {
       .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + col4 + 4, y + 12, { width: col5 - 8, align: "right" });
 
     y += dataRowH + 10;
-    doc.font(fontBold).fontSize(10).text(`Итого к оплате: ${formatMoney(amountRub)} ₽`, x, y);
-    y += 6;
+    doc.font(fontBold).fontSize(10).text(`Итого к оплате: ${formatMoney(amountRub)} ₽`, x, y, { width: 515 });
+    y = doc.y + 4;
     doc.font(fontRegular).fontSize(9).text(amountInWordsRub(amountRub), x, y, { width: 515 });
-    y += 18;
-    doc.font(fontRegular).fontSize(9).text(`НДС не облагается (УСН). Тарифная ставка: ${ratePerUserPerMonth} ₽/польз./месяц`, x, y);
-    y += 24;
+    y = doc.y + 4;
+    doc.font(fontRegular).fontSize(9).text(`НДС не облагается (УСН). Тарифная ставка: ${ratePerUserPerMonth} ₽/польз./месяц`, x, y, { width: 515 });
+    y = doc.y + 10;
 
     const offerText = [
       "Настоящий счет-оферта (далее — «Счет») является письменным предложением (офертой) Поставщика заключить договор в соответствии со ст. 432–444 ГК РФ.",
@@ -308,6 +310,11 @@ export async function POST(request: NextRequest) {
     }
 
     y += 18;
+    const signatureBlockHeight = 130;
+    if (y + signatureBlockHeight > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+      y = 40;
+    }
     const signLineY = y;
 
     const podpisPath = path.join(process.cwd(), "public", "podpis.png");

@@ -285,9 +285,11 @@ export default function MembershipBanner({
 
   // Определяем текст и статус
   const getStatusInfo = () => {
+    const isDocumentsInReview = membershipStatus === "DOCUMENTS_PENDING";
+
     // Важен приоритет стадии: если заявления уже отправлены, не откатываем пользователя
     // обратно к шагу "Заполнить анкету" из-за процентов профиля.
-    if (hasDocuments) {
+    if (hasDocuments || isDocumentsInReview) {
       return {
         title: "Ожидайте проверки документов",
         description: "Ваши документы отправлены на проверку. После одобрения вы станете полноправным членом профсоюза",
@@ -423,14 +425,14 @@ export default function MembershipBanner({
           </div>
           <div
             className={`flex items-center gap-2 rounded-lg p-2 ${
-              hasDocuments
+              hasDocuments || membershipStatus === "DOCUMENTS_PENDING"
                 ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
                 : profileProgress >= 100
                 ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
                 : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
             }`}
           >
-            {hasDocuments ? (
+            {hasDocuments || membershipStatus === "DOCUMENTS_PENDING" ? (
               <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"

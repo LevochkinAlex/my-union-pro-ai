@@ -1649,7 +1649,6 @@ export default function QuestionnaireModal({
               <button
                 onClick={async () => {
                   if (isExistingMember) {
-                    await handleGenerateDocuments();
                     await handleComplete();
                   } else {
                     setCurrentStep(4);
@@ -1677,7 +1676,7 @@ export default function QuestionnaireModal({
                 {isGenerating ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                    {isExistingMember ? "Генерация документов..." : "Далее"}
+                    Далее
                   </>
                 ) : (
                   <>

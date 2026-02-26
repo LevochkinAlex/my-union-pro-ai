@@ -52,6 +52,22 @@ export function stripHtml(html: string): string {
 }
 
 /**
+ * Приводит URL уведомления к абсолютному виду для email-клиентов.
+ * Многие почтовики неактивно обрабатывают относительные ссылки вида /dashboard/...
+ */
+function toAbsoluteUrl(url: string): string {
+  const raw = (url || "").trim();
+  if (!raw) {
+    return process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+  const base = (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro").replace(/\/+$/, "");
+  return `${base}${raw.startsWith("/") ? raw : `/${raw}`}`;
+}
+
+/**
  * Отправляет уведомление пользователю с учетом его настроек
  */
 export async function sendUserNotification(data: NotificationData) {
@@ -66,6 +82,7 @@ export async function sendUserNotification(data: NotificationData) {
     const cleanTitle = stripHtml(data.title);
     const cleanBody = stripHtml(data.body);
     const cleanSenderName = data.senderName ? stripHtml(data.senderName) : undefined;
+    const notificationUrl = toAbsoluteUrl(data.url);
 
     // Получаем настройки пользователя
     const user = await prisma.user.findUnique({
@@ -98,7 +115,7 @@ export async function sendUserNotification(data: NotificationData) {
           type: data.type,
           title: cleanTitle,
           body: cleanBody,
-          url: data.url,
+          url: notificationUrl,
           metadata: {
             senderName: cleanSenderName,
             ...(data.metadata || {}), // Сохраняем chatId, messageId и другие данные
@@ -120,7 +137,7 @@ export async function sendUserNotification(data: NotificationData) {
         userId: data.userId,
         type: data.type,
         title: cleanTitle,
-        url: data.url,
+        url: notificationUrl,
       });
       // Продолжаем отправку даже если не удалось сохранить в БД
     }
@@ -144,7 +161,7 @@ export async function sendUserNotification(data: NotificationData) {
                   body: cleanBody,
                 },
                 data: {
-                  url: data.url,
+                  url: notificationUrl,
                   type: data.type,
                   notificationId: notificationRecord?.id || "",
                   ...(data.metadata || {}), // Передаем chatId, messageId и другие данные
@@ -157,7 +174,7 @@ export async function sendUserNotification(data: NotificationData) {
                     requireInteraction: true,
                     tag: data.type,
                     data: {
-                      url: data.url,
+                      url: notificationUrl,
                       type: data.type,
                       ...(data.metadata || {}), // Передаем chatId, messageId для навигации
                     },
@@ -169,7 +186,7 @@ export async function sendUserNotification(data: NotificationData) {
                 token: sub.fcmToken.substring(0, 20) + '...',
                 title: cleanTitle,
                 type: data.type,
-                url: data.url,
+                url: notificationUrl,
               });
               
               await messaging.send(pushPayload);
@@ -205,13 +222,13 @@ export async function sendUserNotification(data: NotificationData) {
     if (shouldSendEmail && user.email) {
       try {
         const emailSubject = getEmailSubject(data.type, cleanSenderName);
-        const emailBody = getEmailBody(data.type, cleanSenderName, cleanBody, data.url, user.firstName);
+        const emailBody = getEmailBody(data.type, cleanSenderName, cleanBody, notificationUrl, user.firstName);
 
         await sendEmail({
           to: user.email,
           subject: emailSubject,
           text: emailBody,
-          html: getEmailHtml(data.type, cleanSenderName, cleanBody, data.url, user.firstName),
+          html: getEmailHtml(data.type, cleanSenderName, cleanBody, notificationUrl, user.firstName),
         });
         results.email = true;
         
@@ -379,6 +396,7 @@ function getEmailHtml(
   
   let message = "";
   let actionText = "Перейти";
+  let showBodyBox = true;
   
   switch (type) {
     case "post_comment":
@@ -400,30 +418,37 @@ function getEmailHtml(
     case "documents_ready":
       message = body;
       actionText = "Открыть документы";
+      showBodyBox = false;
       break;
     case "ticket_response":
       message = body;
       actionText = "Открыть обращение";
+      showBodyBox = false;
       break;
     case "document_regeneration_required":
       message = body;
       actionText = "Открыть профиль пользователя";
+      showBodyBox = false;
       break;
     case "news_published":
       message = body;
       actionText = "Читать новость";
+      showBodyBox = false;
       break;
     case "mass_notification":
       message = body;
       actionText = "Открыть уведомление";
+      showBodyBox = false;
       break;
     case "staff_added":
       message = body;
       actionText = "Перейти в личный кабинет";
+      showBodyBox = false;
       break;
     default:
       message = body;
       actionText = "Перейти";
+      showBodyBox = false;
   }
 
   return `
@@ -449,9 +474,11 @@ function getEmailHtml(
     <div class="content">
       <p>${greeting}</p>
       <p>${message}</p>
+      ${showBodyBox ? `
       <div class="message-box">
         <p style="margin: 0; color: #374151;">${body}</p>
       </div>
+      ` : ""}
       <a href="${url}" class="button">${actionText}</a>
       <div class="footer">
         <p>С уважением,<br>Команда MyUnion</p>
@@ -485,6 +512,7 @@ export async function sendMassNotification(data: {
     // Очищаем HTML из title и body
     const cleanTitle = stripHtml(data.title);
     const cleanBody = stripHtml(data.body);
+    const notificationUrl = toAbsoluteUrl(data.url);
     
     let pushSent = false;
     let emailSent = false;
@@ -549,7 +577,7 @@ export async function sendMassNotification(data: {
             type: data.type!,
             title: cleanTitle,
             body: cleanBody,
-            url: data.url,
+            url: notificationUrl,
             metadata: data.metadata ?? undefined,
             pushSent: false,
             emailSent: false,
@@ -578,7 +606,7 @@ export async function sendMassNotification(data: {
                       body: cleanBody,
                     },
                     data: {
-                      url: data.url,
+                      url: notificationUrl,
                       type: data.type || "mass_notification",
                     },
                     webpush: {
@@ -588,7 +616,7 @@ export async function sendMassNotification(data: {
                         sound: user.pushSoundEnabled ? "default" : undefined,
                         requireInteraction: true,
                         data: {
-                          url: data.url,
+                          url: notificationUrl,
                         },
                       },
                     },
@@ -614,7 +642,7 @@ export async function sendMassNotification(data: {
               await sendEmail({
                 to: user.email,
                 subject: cleanTitle,
-                text: `${cleanBody}\n\nПерейти: ${data.url}`,
+                text: `${cleanBody}\n\nПерейти: ${notificationUrl}`,
                 html: `
 <!DOCTYPE html>
 <html>
@@ -640,7 +668,7 @@ export async function sendMassNotification(data: {
       <div class="message">
         <p>${cleanBody}</p>
       </div>
-      <a href="${data.url}" class="button">Перейти</a>
+      <a href="${notificationUrl}" class="button">Перейти</a>
       <div class="footer">
         <p>С уважением,<br>Команда MyUnion</p>
       </div>
