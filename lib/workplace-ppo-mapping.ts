@@ -113,7 +113,8 @@ export interface PPOOption {
 }
 
 /**
- * Найти все ППО, привязанные к месту работы (по ИНН).
+ * Найти все ППО, привязанные к месту работы (по названию и ИНН).
+ * Сначала ищем точное совпадение по (workplaceName, workplaceInn), затем по ИНН.
  * У одной организации (ИНН) может быть несколько записей в справочнике → несколько ППО на выбор.
  */
 export async function findPPOsByWorkplace(
@@ -125,10 +126,13 @@ export async function findPPOsByWorkplace(
   }
 
   const inn = workplaceInn.trim();
+  const name = workplaceName.trim();
 
-  const mappings = await prisma.workplacePPOMapping.findMany({
+  // Сначала ищем точное совпадение по названию и ИНН (без учёта регистра)
+  let mappings = await prisma.workplacePPOMapping.findMany({
     where: {
       workplaceInn: inn,
+      workplaceName: { equals: name, mode: "insensitive" },
     },
     include: {
       ppoOrganization: {
@@ -143,6 +147,25 @@ export async function findPPOsByWorkplace(
     },
     orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
   });
+
+  // Если нет точного совпадения по названию — fallback: все привязки по ИНН
+  if (mappings.length === 0) {
+    mappings = await prisma.workplacePPOMapping.findMany({
+      where: { workplaceInn: inn },
+      include: {
+        ppoOrganization: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            chairmanName: true,
+            chairmanJobTitle: true,
+          },
+        },
+      },
+      orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
+    });
+  }
 
   const seen = new Set<string>();
   const result: PPOOption[] = [];
