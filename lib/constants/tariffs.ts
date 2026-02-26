@@ -13,8 +13,8 @@ export interface TariffPlan {
   pricePerQuarter: number;
   pricePerHalfYear: number;
   pricePerYear: number;
-  pricePerUserPerMonth: number;
-  pricePerUserPerYear: number;
+  pricePerUserPerMonth: number; // ставка при контракте 6 месяцев (за 1 пользователя/месяц)
+  pricePerUserPerYear: number; // ставка при контракте 12 месяцев (за 1 пользователя/месяц)
   isUnlimited?: boolean;
 }
 
@@ -52,7 +52,7 @@ function buildPlan(key: string, memberLimit: number, label: string): TariffPlan 
     pricePerHalfYear,
     pricePerYear,
     pricePerUserPerMonth: sixMonthRate,
-    pricePerUserPerYear: yearRate * 12,
+    pricePerUserPerYear: yearRate,
   };
 }
 
@@ -93,6 +93,29 @@ export function getTariffByMemberCount(members: number): TariffPlan | undefined 
   const withLimit = TARIFF_PLANS.filter((p) => p.memberLimit != null) as (TariffPlan & { memberLimit: number })[];
   const suitable = withLimit.filter((p) => p.memberLimit >= members).sort((a, b) => a.memberLimit - b.memberLimit);
   return suitable[0] ?? TARIFF_PLANS.find((p) => p.key === "UNLIMITED");
+}
+
+export function getRatesForMemberCount(members: number): { sixMonthRate: number; yearRate: number } {
+  const normalized = Math.max(1, Math.floor(members));
+  return getBandRates(normalized);
+}
+
+export function calculateAmountForMemberCountPeriod(
+  members: number,
+  period: TariffPeriod
+): number {
+  const normalized = Math.max(1, Math.floor(members));
+  const rates = getBandRates(normalized);
+  if (period === "half_year") {
+    return normalized * rates.sixMonthRate * 6;
+  }
+  if (period === "year") {
+    return normalized * rates.yearRate * 12;
+  }
+  if (period === "quarter") {
+    return normalized * rates.sixMonthRate * 3;
+  }
+  return normalized * rates.sixMonthRate;
 }
 
 export function getPriceForPeriod(plan: TariffPlan, period: TariffPeriod): number {

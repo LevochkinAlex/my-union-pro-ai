@@ -508,12 +508,54 @@ model Organization {
   // Подписка (тариф, лимит участников, срок) — для ППО и организаций с платным доступом
   subscription OrganizationSubscription?
   payments     OrganizationPayment[]
+  billingProfile OrganizationBillingProfile?
 
   @@index([type])
   @@index([parentId])
   @@index([inn])
   @@index([level])
   @@index([sortOrder])
+}
+
+enum BillingEntityType {
+  INDIVIDUAL
+  INDIVIDUAL_ENTREPRENEUR
+  LEGAL_ENTITY
+}
+
+model OrganizationBillingProfile {
+  id String @id @default(cuid())
+
+  organizationId String @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  entityType BillingEntityType
+
+  // Для физлица
+  fullName String?
+
+  // Для ИП/ЮЛ
+  companyName String?
+  inn         String?
+  kpp         String?
+  ogrn        String?
+  legalAddress String?
+
+  // Банковские реквизиты плательщика
+  checkingAccount String?
+  bankName        String?
+  bik             String?
+  correspondentAccount String?
+
+  // Контакты
+  contactEmail String?
+  contactPhone String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([entityType])
 }
 
 // Статус подписки организации

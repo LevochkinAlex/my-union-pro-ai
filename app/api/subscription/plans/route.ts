@@ -15,8 +15,10 @@ export async function GET() {
     pricePerQuarter: p.pricePerQuarter,
     pricePerHalfYear: p.pricePerHalfYear,
     pricePerYear: p.pricePerYear,
-    pricePerMonthFormatted: formatPrice(p.pricePerMonth),
+    pricePerHalfYearFormatted: formatPrice(p.pricePerHalfYear),
     pricePerYearFormatted: formatPrice(p.pricePerYear),
+    rateForHalfYear: p.pricePerUserPerMonth,
+    rateForYear: p.pricePerUserPerYear,
     isUnlimited: p.isUnlimited ?? false,
   }));
   return NextResponse.json({ plans });

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import {
   getOrCreateOrgSubscription,
   effectiveMemberLimit,
@@ -10,67 +9,7 @@ import {
   hasActiveAccess,
 } from "@/lib/subscription";
 import { getTariffByKey } from "@/lib/constants/tariffs";
-
-/**
- * Получить организацию пользователя: председатель ППО (по isPPOHead + ppoHeadOrganizationId или viewMode) или сотрудник организации.
- * Так же, как в отчётах и статистике — чтобы председатель всегда видел подписку своей ППО.
- */
-async function getSubscriptionOrganizationId(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      role: true,
-      isPPOHead: true,
-      ppoHeadOrganizationId: true,
-      organizationId: true,
-      viewMode: true,
-    },
-  });
-
-  // Председатель ППО: организация из ppoHeadOrganizationId (не зависим от viewMode, чтобы председатель всегда видел подписку)
-  if (user?.isPPOHead && user.ppoHeadOrganizationId) {
-    return user.ppoHeadOrganizationId;
-  }
-  // Режим кабинета председателя ППО
-  if (user?.viewMode === "PPO_HEAD" && user.ppoHeadOrganizationId) {
-    return user.ppoHeadOrganizationId;
-  }
-  // Председатель, привязанный через organizationId (роль PPO_HEAD или isPPOHead при отсутствии ppoHeadOrganizationId)
-  if ((user?.role === "PPO_HEAD" || user?.isPPOHead) && user?.organizationId) {
-    return user.organizationId;
-  }
-
-  // Fallback: ППО, где пользователь указан председателем (связь Organization.ppoChairman)
-  if (userId) {
-    const ppoAsChairman = await prisma.organization.findFirst({
-      where: {
-        type: "PRIMARY",
-        ppoChairman: { id: userId },
-      },
-      select: { id: true },
-    });
-    if (ppoAsChairman) return ppoAsChairman.id;
-  }
-
-  // Fallback: пользователь — член ППО (organizationId указывает на организацию типа PRIMARY)
-  if (user?.organizationId) {
-    const org = await prisma.organization.findUnique({
-      where: { id: user.organizationId },
-      select: { id: true, type: true },
-    });
-    if (org?.type === "PRIMARY") return org.id;
-  }
-
-  const staffPosition = await prisma.organizationStaff.findFirst({
-    where: {
-      userId,
-      status: "ACTIVE",
-    },
-    select: { organizationId: true },
-  });
-
-  return staffPosition?.organizationId || null;
-}
+import { getSubscriptionOrganizationId } from "@/lib/subscription-org";
 
 /**
  * GET /api/subscription

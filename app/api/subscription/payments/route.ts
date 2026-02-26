@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       payments: payments.map((p) => ({
+        // Внутренний статус в системе подписок
         id: p.id,
         amountCents: p.amountCents,
         amountRub: (p.amountCents / 100).toFixed(2),
@@ -59,6 +60,13 @@ export async function GET(request: NextRequest) {
         periodStart: p.periodStart.toISOString(),
         periodEnd: p.periodEnd.toISOString(),
         status: p.status,
+        // Статус шлюза T-Bank (если есть)
+        gatewayStatus:
+          p.metadata && typeof p.metadata === "object"
+            ? ((p.metadata as Record<string, unknown>).gatewayStatus as string | undefined) ||
+              ((p.metadata as Record<string, unknown>).Status as string | undefined) ||
+              null
+            : null,
         createdAt: p.createdAt.toISOString(),
         externalId: p.externalId,
         metadata: p.metadata,

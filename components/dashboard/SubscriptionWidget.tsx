@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface SubscriptionData {
   subscription: {
@@ -37,7 +38,13 @@ function daysLeft(iso: string | null): number | null {
   return diff;
 }
 
-export default function SubscriptionWidget() {
+interface SubscriptionWidgetProps {
+  onClick?: () => void;
+}
+
+export default function SubscriptionWidget({ onClick }: SubscriptionWidgetProps = {}) {
+  const pathname = usePathname();
+  const isSubscriptionPage = pathname === "/dashboard/subscription";
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -70,11 +77,8 @@ export default function SubscriptionWidget() {
   const isExpiringSoon = days != null && days >= 0 && days <= 7;
   const isExpired = days != null && days < 0;
 
-  return (
-    <Link
-      href="/dashboard/subscription"
-      className="block bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow"
-    >
+  const content = (
+    <>
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -120,6 +124,35 @@ export default function SubscriptionWidget() {
           {isExpired ? "Продлите подписку" : isExpiringSoon ? "Скоро истекает — продлите" : "Оформите подписку"}
         </p>
       )}
+    </>
+  );
+
+  if (isSubscriptionPage && onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full text-left bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  if (isSubscriptionPage) {
+    return (
+      <div className="block bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href="/dashboard/subscription"
+      className="block bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow"
+    >
+      {content}
     </Link>
   );
 }
