@@ -30,8 +30,34 @@ export async function GET() {
     });
   }
 
-  const availableModes = getAvailableViewModes(session);
-  const currentMode = resolveCurrentMode(session.user.viewMode, availableModes);
+  // Для РПО/МПО/ППО берём актуальные флаги из БД, а при ошибке откатываемся на сессию.
+  let sourceUser: any = session.user;
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        role: true,
+        viewMode: true,
+        isPPOHead: true,
+        ppoHeadOrganizationId: true,
+        isMPOHead: true,
+        mpoHeadOrganizationId: true,
+        isRPOHead: true,
+        rpoHeadOrganizationId: true,
+        ppoHeadOrganization: { select: { name: true } },
+        mpoHeadOrganization: { select: { name: true } },
+        rpoHeadOrganization: { select: { name: true } },
+      },
+    });
+    if (dbUser) {
+      sourceUser = dbUser;
+    }
+  } catch (error) {
+    console.warn("[user/view-mode] GET fallback to session:", error);
+  }
+
+  const availableModes = getAvailableViewModes({ user: sourceUser } as any);
+  const currentMode = resolveCurrentMode(sourceUser.viewMode ?? session.user.viewMode, availableModes);
 
   return NextResponse.json({
     currentMode,
