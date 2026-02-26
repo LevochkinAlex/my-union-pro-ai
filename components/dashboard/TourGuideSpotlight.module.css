@@ -1,0 +1,58 @@
+/* Tour spotlight overlay – z-index in CSS to avoid inline style */
+.overlay {
+  z-index: 99998;
+}
+
+/* Mask panels (4 rectangles around the cutout) – layout via CSS variables set from JS */
+.maskTop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--mask-top-h, 0);
+}
+
+.maskLeft {
+  position: fixed;
+  top: var(--rect-top, 0);
+  left: 0;
+  width: var(--mask-left-w, 0);
+  height: var(--rect-height, 0);
+}
+
+.maskRight {
+  position: fixed;
+  top: var(--rect-top, 0);
+  left: calc(var(--rect-left) + var(--rect-width));
+  right: 0;
+  height: var(--rect-height, 0);
+}
+
+.maskBottom {
+  position: fixed;
+  top: calc(var(--rect-top) + var(--rect-height));
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Highlight border around target – position/size via CSS variables */
+.highlight {
+  position: fixed;
+  top: var(--rect-top, 0);
+  left: var(--rect-left, 0);
+  width: var(--rect-width, 0);
+  height: var(--rect-height, 0);
+}
+
+/* Tooltip card – position/size via CSS variables set from JS */
+.tooltip {
+  position: fixed;
+  top: var(--tooltip-top, auto);
+  left: var(--tooltip-left, 50%);
+  bottom: var(--tooltip-bottom, auto);
+  transform: var(--tooltip-transform, translateX(-50%));
+  max-width: var(--tooltip-max-width, min(420px, calc(100vw - 32px)));
+  max-height: var(--tooltip-max-height, 320px);
+  z-index: 99999;
+}

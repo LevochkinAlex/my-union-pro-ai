@@ -8,6 +8,7 @@ import {
   setTourDismissed,
   type TourStep,
 } from "@/lib/tour-guide-steps";
+import styles from "./TourGuideSpotlight.module.css";
 
 const SPOTLIGHT_PADDING = 8;
 const TOOLTIP_OFFSET = 12;
@@ -62,6 +63,8 @@ export default function TourGuideSpotlight({
   const [targetRect, setTargetRect] = useState<Rect | null>(null);
   const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
   const updateRef = useRef<() => void>(() => {});
+  const spotlightVarsRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const step: TourStep = TOUR_STEPS[stepIndex];
   const isFirst = stepIndex === 0;
@@ -154,6 +157,31 @@ export default function TourGuideSpotlight({
     if (!isOpen) return;
     updateTooltipPosition();
   }, [isOpen, targetRect, step?.tooltipPlacement, updateTooltipPosition]);
+
+  /* Set spotlight CSS variables on wrapper (avoids inline style attribute) */
+  useEffect(() => {
+    const el = spotlightVarsRef.current;
+    if (!el || !targetRect) return;
+    el.style.setProperty("--rect-top", `${targetRect.top}px`);
+    el.style.setProperty("--rect-left", `${targetRect.left}px`);
+    el.style.setProperty("--rect-width", `${targetRect.width}px`);
+    el.style.setProperty("--rect-height", `${targetRect.height}px`);
+    el.style.setProperty("--mask-top-h", `${Math.max(0, targetRect.top)}px`);
+    el.style.setProperty("--mask-left-w", `${Math.max(0, targetRect.left)}px`);
+  }, [targetRect]);
+
+  /* Set tooltip CSS variables (avoids inline style attribute) */
+  useEffect(() => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const s = tooltipStyle as Record<string, string | number | undefined>;
+    el.style.setProperty("--tooltip-top", s.top !== undefined ? `${s.top}px` : "auto");
+    el.style.setProperty("--tooltip-bottom", s.bottom !== undefined ? `${s.bottom}px` : "auto");
+    el.style.setProperty("--tooltip-left", typeof s.left === "number" ? `${s.left}px` : (s.left ?? "50%"));
+    el.style.setProperty("--tooltip-transform", (s.transform as string) ?? "translateX(-50%)");
+    el.style.setProperty("--tooltip-max-width", (s.maxWidth as string) ?? "min(420px, calc(100vw - 32px))");
+    el.style.setProperty("--tooltip-max-height", s.maxHeight !== undefined ? `${s.maxHeight}px` : "320px");
+  }, [tooltipStyle]);
 
   const handleClose = useCallback(() => {
     if (dontShowAgain) {
