@@ -7,6 +7,7 @@ import { alertError, alertSuccess } from "@/lib/alert";
 type EntityType = "INDIVIDUAL" | "INDIVIDUAL_ENTREPRENEUR" | "LEGAL_ENTITY";
 
 interface BillingProfile {
+  id?: string;
   entityType: EntityType;
   fullName?: string | null;
   companyName?: string | null;
