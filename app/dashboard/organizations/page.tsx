@@ -10,6 +10,7 @@ interface Organization {
   name: string;
   type: OrganizationType;
   chairmanName: string | null;
+  chairmanJobTitle?: string | null;
   parentId: string | null;
   membersCount: number;
   reportsCount: number;

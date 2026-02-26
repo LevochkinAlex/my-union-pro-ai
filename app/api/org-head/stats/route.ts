@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         name: true,
         type: true,
         chairmanName: true,
+        chairmanJobTitle: true,
         parentId: true,
         _count: {
           select: {
@@ -232,6 +233,7 @@ export async function GET(request: NextRequest) {
         name: o.name,
         type: o.type,
         chairmanName: o.chairmanName,
+        chairmanJobTitle: o.chairmanJobTitle,
         parentId: o.parentId,
         membersCount: o._count.members,
         reportsCount: o._count.reports,
