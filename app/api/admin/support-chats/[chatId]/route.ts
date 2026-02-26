@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSupportUserId } from "@/lib/support-user";
+import { invalidateChatCache } from "@/lib/chat-redis";
+import { emitNewMessage } from "@/server/socket";
 
 function requireSuperAdmin() {
   return async () => {
@@ -151,6 +153,39 @@ export async function POST(
       lastMessageAt: message.createdAt,
     },
   });
+
+  // Инвалидация кэша — чтобы клиент видел новое сообщение при следующей загрузке
+  await invalidateChatCache(chatId).catch((err) =>
+    console.error("[admin/support-chats] Cache invalidation error:", err)
+  );
+
+  // Отправка через WebSocket — чтобы клиент получил сообщение в реальном времени
+  const normalizedMessage = {
+    id: message.id,
+    chatId,
+    senderId: message.senderId,
+    sender: message.sender
+      ? {
+          id: message.sender.id,
+          firstName: message.sender.firstName || null,
+          lastName: message.sender.lastName || null,
+          avatarUrl: message.sender.avatarUrl || null,
+        }
+      : null,
+    content: message.content,
+    messageType: message.messageType,
+    replyTo: null,
+    threadRootId: null,
+    attachments: [],
+    reactions: {},
+    createdAt: message.createdAt,
+    editedAt: message.editedAt,
+  };
+  try {
+    emitNewMessage(chatId, normalizedMessage);
+  } catch (wsErr) {
+    console.error("[admin/support-chats] WebSocket emit error:", wsErr);
+  }
 
   return NextResponse.json({
     message: {

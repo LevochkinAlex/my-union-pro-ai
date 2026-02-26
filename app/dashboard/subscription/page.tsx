@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { alertSuccess, alertError } from "@/lib/alert";
 import SubscriptionWidget from "@/components/dashboard/SubscriptionWidget";
@@ -79,6 +79,8 @@ export default function SubscriptionPage() {
   const [syncPaymentsLoading, setSyncPaymentsLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [customMembersInput, setCustomMembersInput] = useState<string>("");
+  const [isCustomActive, setIsCustomActive] = useState(false);
+  const customInputRef = useRef<HTMLInputElement>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<TariffPeriod>("year");
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   type SubTab = "current" | "tariffs" | "payments";
@@ -254,7 +256,7 @@ export default function SubscriptionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tariffKey: selectedPlan || undefined,
+          tariffKey: customMembers ? undefined : (selectedPlan || undefined),
           customMembers: customMembers ?? undefined,
           period: selectedPeriod,
         }),
@@ -332,7 +334,7 @@ export default function SubscriptionPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tariffKey: selectedPlan || undefined,
+        tariffKey: customMembers ? undefined : (selectedPlan || undefined),
         customMembers: customMembers ?? undefined,
         period: selectedPeriod,
       }),
@@ -548,7 +550,7 @@ export default function SubscriptionPage() {
             onClick={() => setBillingProfileModalOpen(true)}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
-            {billingProfile ? "Изменить реквизиты" : "Заполнить реквизиты"}
+            {billingProfile ? "Редактировать реквизиты" : "Заполнить реквизиты"}
           </button>
         </div>
         {billingProfile && (
@@ -579,6 +581,7 @@ export default function SubscriptionPage() {
                 onClick={() => {
                   setSelectedPlan(plan.key);
                   setCustomMembersInput("");
+                  setIsCustomActive(false);
                 }}
                 className={`text-left p-4 rounded-xl border-2 transition-colors ${
                   selectedPlan === plan.key
@@ -599,32 +602,50 @@ export default function SubscriptionPage() {
                 </p>
               </button>
             ))}
-        </div>
-        <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/30">
-          <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-            Нужное количество лицензий (кастом)
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
+          <label
+            htmlFor="custom-members-input"
+            className={`block text-left p-4 rounded-xl border-2 transition-colors cursor-pointer ${
+              customMembers || isCustomActive
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400"
+                : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+            }`}
+          >
+            <p className="font-medium text-gray-900 dark:text-white">Своё количество лицензий</p>
             <input
+              id="custom-members-input"
+              ref={customInputRef}
               type="number"
               min={1}
-              placeholder="Введите количество лицензий"
+              placeholder="Введите количество"
               value={customMembersInput}
               onChange={(e) => {
                 setCustomMembersInput(e.target.value);
                 if (e.target.value) setSelectedPlan("");
               }}
-              className="w-72 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2"
+              onFocus={() => {
+                setSelectedPlan("");
+                setIsCustomActive(true);
+              }}
+              onBlur={() => {
+                if (!customMembersInput.trim()) setIsCustomActive(false);
+              }}
+              className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
             />
-            {customMembers && customRate && customAmount && (
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                {customRate} ₽/польз./мес., итого {formatRub(customAmount)} за {selectedPeriod === "half_year" ? "6" : "12"} месяцев
+            {customMembers && customRate && customAmount ? (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {customRate} ₽/польз./мес.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                {selectedPeriod === "half_year" ? "6" : "12"} месяцев
               </p>
             )}
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            Если указать кастомное количество лицензий, оплата и счёт‑оферта будут сформированы именно по нему.
-          </p>
+            {customMembers && customAmount && (
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                {formatRub(customAmount)} за {selectedPeriod === "half_year" ? "6" : "12"} мес.
+              </p>
+            )}
+          </label>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Тариф «Более 3600» — по запросу (договорная цена).
@@ -697,7 +718,20 @@ export default function SubscriptionPage() {
       <BillingProfileModal
         isOpen={billingProfileModalOpen}
         onClose={() => setBillingProfileModalOpen(false)}
-        onSaved={() => {
+        onSaved={(profile) => {
+          if (profile) {
+            setBillingProfile({
+              id: profile.id,
+              entityType: profile.entityType,
+              fullName: profile.fullName ?? null,
+              companyName: profile.companyName ?? null,
+              inn: profile.inn ?? null,
+              checkingAccount: profile.checkingAccount ?? null,
+              bankName: profile.bankName ?? null,
+              bik: profile.bik ?? null,
+              correspondentAccount: profile.correspondentAccount ?? null,
+            });
+          }
           void refreshSubscriptionData();
         }}
       />

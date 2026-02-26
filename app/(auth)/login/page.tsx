@@ -832,36 +832,8 @@ function LoginForm() {
                 <div className="mt-8">
                   {/* Социальные сети */}
                   <div className="flex flex-col gap-3">
-                    {/* Telegram - кастомная кнопка */}
+                    {/* Telegram — оставлен; VK, Яндекс, MAX временно отключены */}
                     <TelegramLoginButton />
-
-                    {/* MAX — временно скрыта (CDN MAX не работает) */}
-                    {/* {!insideMax && <MaxLoginButton />} */}
-
-                    {/* VK ID (ВКонтакте / ОК / Mail) — stroke secondary */}
-                    <a
-                      href="/api/auth/vk-id"
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent hover:bg-[#0077FF]/10 dark:hover:bg-[#0077FF]/20 text-[#0077FF] dark:text-white font-medium rounded-lg transition-colors border-2 border-[#0077FF]"
-                    >
-                      <svg className="w-6 h-6 flex-shrink-0" viewBox="0 0 90 90" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                        <path fillRule="evenodd" d="M87.935 21.894c.626-2.086 0-3.619-2.977-3.619h-9.846c-2.504 0-3.658 1.324-4.283 2.785 0 0-5.008 12.204-12.101 20.132c-2.294 2.295-3.337 3.026-4.59 3.026c-.625 0-1.531-.731-1.531-2.816V21.894c0-2.503-.727-3.619-2.813-3.619H34.32c-1.564 0-2.506 1.162-2.506 2.264 0 2.373 3.547 2.921 3.913 9.597v14.499c0 3.179-.574 3.757-1.826 3.757c-3.337 0-11.457-12.26-16.273-26.288c-.944-2.727-1.89-3.828-4.406-3.828H3.376C.562 18.275 0 19.599 0 21.059c0 2.608 3.337 15.543 15.542 32.65c8.136 11.682 19.599 18.016 30.031 18.016c6.258 0 7.033-1.407 7.033-3.83v-8.829c0-2.814.593-3.375 2.575-3.375c1.46 0 3.963.729 9.805 6.362c6.676 6.676 7.776 9.671 11.532 9.671h9.846c2.812 0 4.219-1.407 3.408-4.182c-.889-2.767-4.076-6.781-8.305-11.538c-2.295-2.712-5.738-5.633-6.781-7.094c-1.461-1.877-1.043-2.711 0-4.381C74.687 44.53 86.684 27.631 87.935 21.894z"/>
-                      </svg>
-                      <span>Войти с VK ID</span>
-                    </a>
-
-                    {/* Яндекс — stroke secondary */}
-                    <button
-                      type="button"
-                      onClick={() => signIn("yandex", { callbackUrl: "/dashboard" })}
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-transparent hover:bg-[#FC3F1D]/10 dark:hover:bg-[#FC3F1D]/20 text-[#FC3F1D] dark:text-white font-medium rounded-lg transition-colors border-2 border-[#FC3F1D]"
-                    >
-                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 13L6 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-                        <path d="M12 13L18 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-                        <path d="M12 13V21" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-                      </svg>
-                      <span>Войти с Яндекс</span>
-                    </button>
 
                     {/* Госуслуги (ЕСИА) — пока отключено, tooltip «Скоро» */}
                     <span

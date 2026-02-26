@@ -25,7 +25,7 @@ interface BillingProfile {
 interface BillingProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (profile?: BillingProfile) => void;
 }
 
 const ENTITY_OPTIONS: Array<{ value: EntityType; label: string }> = [
@@ -37,7 +37,7 @@ const ENTITY_OPTIONS: Array<{ value: EntityType; label: string }> = [
 export default function BillingProfileModal({ isOpen, onClose, onSaved }: BillingProfileModalProps) {
   const [loading, setLoading] = useState(false);
   const [autofillLoading, setAutofillLoading] = useState(false);
-  const [form, setForm] = useState<BillingProfile>({
+  const initialForm: BillingProfile = {
     entityType: "LEGAL_ENTITY",
     fullName: "",
     companyName: "",
@@ -51,7 +51,8 @@ export default function BillingProfileModal({ isOpen, onClose, onSaved }: Billin
     correspondentAccount: "",
     contactEmail: "",
     contactPhone: "",
-  });
+  };
+  const [form, setForm] = useState<BillingProfile>(initialForm);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -61,22 +62,26 @@ export default function BillingProfileModal({ isOpen, onClose, onSaved }: Billin
       try {
         const res = await fetch("/api/subscription/billing-profile");
         const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && data.profile) {
-          setForm({
-            entityType: data.profile.entityType || "LEGAL_ENTITY",
-            fullName: data.profile.fullName || "",
-            companyName: data.profile.companyName || "",
-            inn: data.profile.inn || "",
-            kpp: data.profile.kpp || "",
-            ogrn: data.profile.ogrn || "",
-            legalAddress: data.profile.legalAddress || "",
-            checkingAccount: data.profile.checkingAccount || "",
-            bankName: data.profile.bankName || "",
-            bik: data.profile.bik || "",
-            correspondentAccount: data.profile.correspondentAccount || "",
-            contactEmail: data.profile.contactEmail || "",
-            contactPhone: data.profile.contactPhone || "",
-          });
+        if (!cancelled && res.ok) {
+          if (data.profile) {
+            setForm({
+              entityType: data.profile.entityType || "LEGAL_ENTITY",
+              fullName: data.profile.fullName || "",
+              companyName: data.profile.companyName || "",
+              inn: data.profile.inn || "",
+              kpp: data.profile.kpp || "",
+              ogrn: data.profile.ogrn || "",
+              legalAddress: data.profile.legalAddress || "",
+              checkingAccount: data.profile.checkingAccount || "",
+              bankName: data.profile.bankName || "",
+              bik: data.profile.bik || "",
+              correspondentAccount: data.profile.correspondentAccount || "",
+              contactEmail: data.profile.contactEmail || "",
+              contactPhone: data.profile.contactPhone || "",
+            });
+          } else {
+            setForm({ ...initialForm });
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -119,7 +124,7 @@ export default function BillingProfileModal({ isOpen, onClose, onSaved }: Billin
         return;
       }
       alertSuccess("Платежный профиль сохранен");
-      onSaved();
+      onSaved(data.profile ?? undefined);
       onClose();
     } finally {
       setLoading(false);
