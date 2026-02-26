@@ -51,7 +51,6 @@ export default function MobileMenu({
   const [availableModes, setAvailableModes] = useState<ViewModeOption[]>([]);
   const [canSwitch, setCanSwitch] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -174,7 +173,6 @@ export default function MobileMenu({
           });
         }
         setCurrentMode(newMode);
-        setShowModeDropdown(false);
         onClose();
         // Полная перезагрузка страницы с очисткой кеша
         window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
@@ -322,6 +320,42 @@ export default function MobileMenu({
 
           {/* Navigation */}
           <nav className="flex-1 py-4 space-y-2 overflow-y-auto px-4">
+            {/* View Mode Switch - вверху, сразу виден при открытии меню */}
+            {!isAdmin && (availableModes.length > 1 || (isLoading && (availableModes.length > 0 || loadStoredData()?.availableModes?.length > 1))) && (
+              <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Режим работы</p>
+                <div className="space-y-1">
+                  {availableModes.map((mode) => (
+                    <button
+                      key={mode.mode}
+                      onClick={() => handleModeSwitch(mode.mode)}
+                      disabled={isSwitching}
+                      className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                        mode.mode === currentMode
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                      }`}
+                    >
+                      {mode.mode === "PPO_HEAD" || mode.mode === "RPO_HEAD" || mode.mode === "MPO_HEAD" ? (
+                        <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      ) : (
+                        <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      )}
+                      <span className="flex-1 text-left">{mode.label}</span>
+                      {mode.mode === currentMode && (
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Menu items - исключаем "Настройки" и "Профиль", они будут внизу */}
             {items.filter(item => item.href !== "/dashboard/settings" && item.href !== "/admin/settings" && item.href !== "/dashboard/profile").map((item) => {
               const isExpanded = expandedItems.includes(item.href);
@@ -422,64 +456,6 @@ export default function MobileMenu({
               </div>
             )}
 
-            {/* View Mode Switch - показываем после пунктов меню */}
-            {!isAdmin && (availableModes.length > 1 || (isLoading && availableModes.length > 0)) && (
-              <div className="relative mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={() => setShowModeDropdown(!showModeDropdown)}
-                  disabled={isSwitching}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 hover:from-blue-100 hover:to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-400 dark:hover:from-blue-900/40 dark:hover:to-indigo-900/40"
-                >
-                  {currentMode === "PPO_HEAD" ? (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  )}
-                  <span className="flex-1 text-left">
-                    {isSwitching ? "Переключение..." : availableModes.find(m => m.mode === currentMode)?.label || "Режим"}
-                  </span>
-                  <svg className={`h-4 w-4 transition-transform ${showModeDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {showModeDropdown && (
-                  <div className="mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-10">
-                    {availableModes.map((mode) => (
-                      <button
-                        key={mode.mode}
-                        onClick={() => handleModeSwitch(mode.mode)}
-                        disabled={isSwitching}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
-                          mode.mode === currentMode
-                            ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                            : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                        }`}
-                      >
-                        {mode.mode === "PPO_HEAD" ? (
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                        ) : (
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                        )}
-                        <span className="flex-1 text-left">{mode.label}</span>
-                        {mode.mode === currentMode && (
-                          <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </nav>
 
           {/* User section */}

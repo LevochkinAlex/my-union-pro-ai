@@ -33,7 +33,7 @@ function buildAvailableModes(user: UserModeSource): ViewModeOption[] {
   if (isMember) {
     availableModes.push({
       mode: "MEMBER",
-      label: "Член профсоюза",
+      label: "Член участник",
     });
   }
 
@@ -56,7 +56,7 @@ function buildAvailableModes(user: UserModeSource): ViewModeOption[] {
   if (isRPOHead && user.rpoHeadOrganizationId) {
     availableModes.push({
       mode: "RPO_HEAD",
-      label: "Председатель РПО",
+      label: "Региональный",
       organizationName: user.rpoHeadOrganization?.name || undefined,
     });
   }
@@ -64,7 +64,7 @@ function buildAvailableModes(user: UserModeSource): ViewModeOption[] {
   if (availableModes.length === 0) {
     availableModes.push({
       mode: "MEMBER",
-      label: "Член профсоюза",
+      label: "Член участник",
     });
   }
 

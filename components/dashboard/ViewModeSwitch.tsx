@@ -15,10 +15,10 @@ interface ViewModeSwitchProps {
 }
 
 const MODE_LABELS: Record<string, string> = {
-  MEMBER: "Член профсоюза",
+  MEMBER: "Член участник",
   PPO_HEAD: "Председатель ППО",
   MPO_HEAD: "Председатель МПО",
-  RPO_HEAD: "Председатель РПО",
+  RPO_HEAD: "Региональный",
 };
 
 function getModeLabel(mode: string) {
@@ -340,10 +340,10 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   }
 
   return (
-    <div className="relative">
+    <div className="relative mb-2">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-2.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 px-2.5 py-2"
+        className="flex w-full items-center gap-2.5 rounded-lg text-sm font-medium transition-colors px-2.5 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800"
       >
         <span className="flex-shrink-0">{icon}</span>
         <span className="flex-1 text-left">
