@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 import { syncChannelWithChat } from "@/lib/channel-sync";
 import { isDemoUserId } from "@/lib/demo";
+import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
 
 /**
  * GET /api/ppo-head/news-channels
@@ -44,6 +45,8 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       );
     }
+
+    const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
 
     // Получаем каналы организации
     let channels = await prisma.newsChannel.findMany({
@@ -129,7 +132,16 @@ export async function GET(request: NextRequest) {
       return 0;
     });
 
-    return NextResponse.json({ channels });
+    const withRegional = [
+      {
+        ...regionalChannel,
+        _count: { newsPosts: 0 },
+        chat: null,
+      },
+      ...channels,
+    ];
+
+    return NextResponse.json({ channels: withRegional });
   } catch (error: any) {
     console.error("[ppo-head/news-channels] GET error:", error);
     return NextResponse.json(

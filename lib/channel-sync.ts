@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
  */
 export async function syncChannelWithChat(
   newsChannelId: string,
-  organizationId: string
+  organizationId?: string | null
 ): Promise<string | null> {
   try {
     // Проверяем, есть ли уже Chat для этого канала
@@ -40,28 +40,37 @@ export async function syncChannelWithChat(
       return null;
     }
 
-    // Получаем председателя организации
-    const organization = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: {
-        ppoChairman: {
-          select: { id: true },
+    // Получаем председателя организации (или создателя канала для глобального канала)
+    let chairmanId: string | null = null;
+    if (organizationId) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: {
+          ppoChairman: {
+            select: { id: true },
+          },
+          mpoChairman: {
+            select: { id: true },
+          },
+          rpoChairman: {
+            select: { id: true },
+          },
         },
-        mpoChairman: {
-          select: { id: true },
-        },
-        rpoChairman: {
-          select: { id: true },
-        },
-      },
-    });
+      });
 
-    const chairmanId = organization?.ppoChairman?.id || 
-                      organization?.mpoChairman?.id || 
-                      organization?.rpoChairman?.id;
+      chairmanId =
+        organization?.ppoChairman?.id ||
+        organization?.mpoChairman?.id ||
+        organization?.rpoChairman?.id ||
+        null;
+    }
+
+    if (!chairmanId && channel.createdById) {
+      chairmanId = channel.createdById;
+    }
 
     if (!chairmanId) {
-      console.error(`[channel-sync] No chairman found for organization ${organizationId}`);
+      console.error(`[channel-sync] No chairman/creator found for channel ${newsChannelId}`);
       return null;
     }
 
@@ -83,12 +92,18 @@ export async function syncChannelWithChat(
       },
     });
 
-    // Подписываем всех участников организации на канал
+    // Подписываем участников на канал:
+    // - для канала организации: только users этой организации
+    // - для глобального канала: всех одобренных users системы
     const members = await prisma.user.findMany({
-      where: {
-        organizationId,
-        membershipStatus: "APPROVED",
-      },
+      where: organizationId
+        ? {
+            organizationId,
+            membershipStatus: "APPROVED",
+          }
+        : {
+            membershipStatus: "APPROVED",
+          },
       select: { id: true },
     });
 

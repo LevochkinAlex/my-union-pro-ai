@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
 
 /**
  * GET /api/news/channels
@@ -30,8 +31,18 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user?.organizationId) {
+      const regional = await getOrCreateRegionalNewsChannel(session.user.id);
       return NextResponse.json({
-        channels: [],
+        channels: [
+          {
+            id: regional.id,
+            name: regional.name,
+            description: regional.description || "Глобальный канал региональных новостей",
+            subscriberCount: 0,
+            isMain: false,
+            organizationId: null,
+          },
+        ],
         organization: null,
       });
     }
@@ -46,7 +57,7 @@ export async function GET(request: NextRequest) {
     // Получаем каналы организации
     const channelsRaw = await prisma.newsChannel.findMany({
       where: {
-        organizationId: user.organizationId,
+        OR: [{ organizationId: user.organizationId }, { organizationId: null, name: "Региональные новости" }],
       },
       include: {
         _count: {

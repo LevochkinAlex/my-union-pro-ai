@@ -57,6 +57,7 @@ interface UserData {
   bestBenefitsUserId: string | null;
   bestBenefitsStatus: string | null;
   isPPOHead: boolean;
+  isRPOHead: boolean;
   viewMode: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -66,6 +67,10 @@ interface UserData {
     name: string;
   } | null;
   ppoHeadOrganization: {
+    id: string;
+    name: string;
+  } | null;
+  rpoHeadOrganization: {
     id: string;
     name: string;
   } | null;
@@ -135,6 +140,10 @@ export default function AdminUserDetailsPage() {
   const [validating, setValidating] = useState(false);
   const [validationComment, setValidationComment] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
+  const [rpoOrgs, setRpoOrgs] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedRpoOrgId, setSelectedRpoOrgId] = useState("");
+  const [assignRpoLoading, setAssignRpoLoading] = useState(false);
+  const [approveWithRpo, setApproveWithRpo] = useState(true);
   const [deleting, setDeleting] = useState(false);
   // Knowledge base state
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(null);
@@ -163,6 +172,22 @@ export default function AdminUserDetailsPage() {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  const loadRpoOrgs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/organizations?type=REGIONAL");
+      if (res.ok) {
+        const data = await res.json();
+        setRpoOrgs(data.organizations?.map((o: { id: string; name: string }) => ({ id: o.id, name: o.name })) || []);
+      }
+    } catch (err) {
+      console.error("Failed to load RPO orgs:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRpoOrgs();
+  }, [loadRpoOrgs]);
 
   // Load knowledge base when tab is selected
   const loadKnowledgeBase = useCallback(async () => {
@@ -297,6 +322,52 @@ export default function AdminUserDetailsPage() {
     }
   };
 
+  const handleAssignRpo = async () => {
+    if (!selectedRpoOrgId) {
+      alert("Выберите организацию РПО");
+      return;
+    }
+    if (!confirm("Назначить пользователя председателем выбранной РПО?")) return;
+
+    setAssignRpoLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/assign-rpo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: selectedRpoOrgId,
+          approveMembership: approveWithRpo,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка назначения");
+      await loadUser();
+      alert("Пользователь назначен председателем РПО");
+      setSelectedRpoOrgId("");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Ошибка назначения");
+    } finally {
+      setAssignRpoLoading(false);
+    }
+  };
+
+  const handleUnassignRpo = async () => {
+    if (!confirm("Снять пользователя с должности председателя РПО?")) return;
+
+    setAssignRpoLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/assign-rpo`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка");
+      await loadUser();
+      alert("Пользователь снят с должности председателя РПО");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Ошибка");
+    } finally {
+      setAssignRpoLoading(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-8">Загрузка данных пользователя...</div>;
   }
@@ -312,9 +383,8 @@ export default function AdminUserDetailsPage() {
   const pendingDocuments = user.documents.filter(
     (doc) => doc.status === "SIGNED" || doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE"
   );
-  const canValidate = pendingDocuments.length > 0 && 
-    (user.membershipStatus === "DOCUMENTS_PENDING" || 
-     user.membershipStatus === "PENDING_VERIFICATION");
+  const canValidate =
+    (user.membershipStatus !== "APPROVED" && user.membershipStatus !== "REJECTED" && user.membershipStatus !== "SUSPENDED");
 
   // Парсим JSON поля
   const parseJsonField = (field: string | null) => {
@@ -382,6 +452,11 @@ export default function AdminUserDetailsPage() {
                   Председатель ППО
                 </span>
               )}
+              {user.isRPOHead && user.rpoHeadOrganization && (
+                <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                  Председатель РПО
+                </span>
+              )}
               {user.unionCardNumber && (
                 <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
                   Карточка: {user.unionCardNumber}
@@ -421,6 +496,58 @@ export default function AdminUserDetailsPage() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Блок назначения председателем РПО (суперадмин) */}
+        <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-700">
+          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Председатель РПО</h3>
+          {user.isRPOHead && user.rpoHeadOrganization ? (
+            <div className="flex items-center gap-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {user.rpoHeadOrganization.name}
+              </p>
+              <button
+                onClick={handleUnassignRpo}
+                disabled={assignRpoLoading}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:bg-gray-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
+              >
+                {assignRpoLoading ? "..." : "Снять с РПО"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[280px]">
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Организация РПО</label>
+                <select
+                  value={selectedRpoOrgId}
+                  onChange={(e) => setSelectedRpoOrgId(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                  aria-label="Выберите организацию РПО"
+                >
+                  <option value="">— Выберите РПО —</option>
+                  {rpoOrgs.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={approveWithRpo}
+                  onChange={(e) => setApproveWithRpo(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                Одобрить членство
+              </label>
+              <button
+                onClick={handleAssignRpo}
+                disabled={assignRpoLoading || !selectedRpoOrgId}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {assignRpoLoading ? "Назначение..." : "Назначить председателем РПО"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -687,6 +814,9 @@ export default function AdminUserDetailsPage() {
             {user.isPPOHead && user.ppoHeadOrganization && (
               <InfoField label="Председатель ППО" value={user.ppoHeadOrganization.name} />
             )}
+            {user.isRPOHead && user.rpoHeadOrganization && (
+              <InfoField label="Председатель РПО" value={user.rpoHeadOrganization.name} />
+            )}
           </div>
 
           {user.membershipHistory && user.membershipHistory.length > 0 && (
@@ -735,6 +865,7 @@ export default function AdminUserDetailsPage() {
                   value={newChunkType}
                   onChange={(e) => setNewChunkType(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  aria-label="Тип фрагмента базы знаний"
                 >
                   <option value="NOTE">Заметка</option>
                   <option value="PREFERENCE">Предпочтение</option>

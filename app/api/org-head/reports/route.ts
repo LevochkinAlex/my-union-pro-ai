@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead, getChildOrganizationIds } from "@/lib/ppo-head-utils";
+import { getOrgHead } from "@/lib/ppo-head-utils";
+import { getOrgHeadScope } from "@/lib/org-head-permissions";
 
 /**
  * GET /api/org-head/reports
@@ -33,29 +34,29 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const period = searchParams.get("period");
+    const periodicity = searchParams.get("periodicity");
     const filterOrgId = searchParams.get("organizationId");
 
+    const scope = await getOrgHeadScope(session.user.id);
+    if (!scope) {
+      return NextResponse.json(
+        { error: "Вы не являетесь руководителем организации" },
+        { status: 403 }
+      );
+    }
+
     // Определяем организации, отчёты которых нужно показать
-    let organizationIds: string[] = [];
+    let organizationIds = scope.organizationIds;
 
-    if (orgHead.level === "PPO") {
-      // ППО видит только свои отчёты
-      organizationIds = [orgHead.organizationId];
-    } else {
-      // МПО/РПО видит отчёты всех подчинённых организаций
-      const childIds = await getChildOrganizationIds(orgHead.organizationId);
-      organizationIds = [orgHead.organizationId, ...childIds];
-
-      // Если указан фильтр по организации - проверяем доступ
-      if (filterOrgId) {
-        if (!organizationIds.includes(filterOrgId)) {
-          return NextResponse.json(
-            { error: "Нет доступа к отчётам этой организации" },
-            { status: 403 }
-          );
-        }
-        organizationIds = [filterOrgId];
+    // Если указан фильтр по организации - проверяем доступ
+    if (filterOrgId) {
+      if (!organizationIds.includes(filterOrgId)) {
+        return NextResponse.json(
+          { error: "Нет доступа к отчётам этой организации" },
+          { status: 403 }
+        );
       }
+      organizationIds = [filterOrgId];
     }
 
     // Формируем условия запроса
@@ -74,6 +75,12 @@ export async function GET(request: NextRequest) {
       if (monthStr) {
         where.periodMonth = parseInt(monthStr);
       }
+    }
+
+    if (periodicity === "monthly") {
+      where.periodMonth = { not: null };
+    } else if (periodicity === "annual") {
+      where.periodMonth = null;
     }
 
     // Получаем отчёты
@@ -112,7 +119,7 @@ export async function GET(request: NextRequest) {
 
     // Статистика по организациям (для МПО/РПО)
     let orgStats: any[] = [];
-    if (orgHead.level !== "PPO") {
+    if (scope.level !== "PPO") {
       const rawOrgStats = await prisma.report.groupBy({
         by: ["organizationId"],
         where: { organizationId: { in: organizationIds } },
@@ -134,7 +141,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       reports,
-      level: orgHead.level,
+      level: scope.level,
       organization: orgHead.organization,
       stats: {
         byStatus: statusStats.reduce((acc, s) => {

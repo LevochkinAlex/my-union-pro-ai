@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { withCache, getCacheKey } from "@/lib/cache";
 import { isDemoUserId } from "@/lib/demo";
 import { getDemoNews } from "@/lib/demo";
+import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
 
 // GET /api/news - получить список опубликованных новостей
 export async function GET(request: NextRequest) {
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         select: { organizationId: true },
       });
       userOrganizationId = user?.organizationId || null;
+      await getOrCreateRegionalNewsChannel(session.user.id);
     }
 
     // Кешируем новости на 2 минуты (с учётом организации)
@@ -70,9 +72,19 @@ export async function GET(request: NextRequest) {
         // Если пользователь авторизован и у него есть организация
         // показываем ТОЛЬКО новости из каналов его организации
         if (userOrganizationId) {
-          whereClause.channel = {
-            organizationId: userOrganizationId,
-          };
+          whereClause.OR = [
+            {
+              channel: {
+                organizationId: userOrganizationId,
+              },
+            },
+            {
+              channel: {
+                organizationId: null,
+                name: "Региональные новости",
+              },
+            },
+          ];
         } else {
           // Для неавторизованных или пользователей без организации
           // показываем только общие новости без привязки к организации
@@ -153,9 +165,19 @@ export async function GET(request: NextRequest) {
       };
 
       if (userOrganizationId) {
-        whereClause.channel = {
-          organizationId: userOrganizationId,
-        };
+        whereClause.OR = [
+          {
+            channel: {
+              organizationId: userOrganizationId,
+            },
+          },
+          {
+            channel: {
+              organizationId: null,
+              name: "Региональные новости",
+            },
+          },
+        ];
       } else {
         whereClause.OR = [
           { channelId: null },

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { getOrgHead, getPPOHead } from "@/lib/ppo-head-utils";
 import { isDemoUserId } from "@/lib/demo";
 import { getDemoNews } from "@/lib/demo";
+import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
 
 /**
  * GET /api/ppo-head/news
@@ -47,6 +48,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
+
     // Получаем каналы организации
     const channels = await prisma.newsChannel.findMany({
       where: {
@@ -57,7 +60,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const channelIds = channels.map((ch) => ch.id);
+    const channelIds = [regionalChannel.id, ...channels.map((ch) => ch.id)];
 
     // Получаем новости из каналов организации
     const news = await prisma.newsPost.findMany({
@@ -230,10 +233,22 @@ export async function POST(request: NextRequest) {
     // Проверяем, что канал принадлежит организации Председателя
     const channel = await prisma.newsChannel.findUnique({
       where: { id: channelId },
-      select: { organizationId: true },
+      select: { id: true, organizationId: true, name: true },
     });
+    if (!channel) {
+      return NextResponse.json({ error: "Канал не найден" }, { status: 404 });
+    }
 
-    if (!channel || channel.organizationId !== chairman.organizationId) {
+    const isRegionalChannel = channel.organizationId === null && channel.name === "Региональные новости";
+    if (isRegionalChannel) {
+      const orgHead = await getOrgHead(session.user.id);
+      if (!orgHead || orgHead.level !== "RPO") {
+        return NextResponse.json(
+          { error: "Публикация в региональный канал доступна только РПО" },
+          { status: 403 }
+        );
+      }
+    } else if (channel.organizationId !== chairman.organizationId) {
       return NextResponse.json(
         { error: "Канал не найден или не принадлежит вашей организации" },
         { status: 403 }

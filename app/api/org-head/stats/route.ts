@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead, getChildOrganizationIds } from "@/lib/ppo-head-utils";
+import { getOrgHead } from "@/lib/ppo-head-utils";
+import { getOrgHeadScope } from "@/lib/org-head-permissions";
 
 /**
  * GET /api/org-head/stats
@@ -25,9 +26,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Получаем все подчинённые организации
-    const childIds = await getChildOrganizationIds(orgHead.organizationId);
-    const allOrgIds = [orgHead.organizationId, ...childIds];
+    const scope = await getOrgHeadScope(session.user.id);
+    if (!scope) {
+      return NextResponse.json(
+        { error: "Вы не являетесь руководителем организации" },
+        { status: 403 }
+      );
+    }
+
+    const allOrgIds = scope.organizationIds;
 
     // Получаем статистику по организациям
     const organizations = await prisma.organization.findMany({

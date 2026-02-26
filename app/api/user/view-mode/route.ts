@@ -1,9 +1,98 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma, withPrismaRetry } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+
+type ViewModeOption = { mode: string; label: string; organizationName?: string };
+
+type UserModeSource = {
+  role?: string | null;
+  viewMode?: string | null;
+  isPPOHead?: boolean | null;
+  isMPOHead?: boolean | null;
+  isRPOHead?: boolean | null;
+  ppoHeadOrganizationId?: string | null;
+  mpoHeadOrganizationId?: string | null;
+  rpoHeadOrganizationId?: string | null;
+  ppoHeadOrganization?: { name?: string | null } | null;
+  mpoHeadOrganization?: { name?: string | null } | null;
+  rpoHeadOrganization?: { name?: string | null } | null;
+};
+
+function buildAvailableModes(user: UserModeSource): ViewModeOption[] {
+  const availableModes: ViewModeOption[] = [];
+  const role = user.role || null;
+
+  const isMember = role === "MEMBER" || role === "PENDING_MEMBER";
+  const isPPOHead = Boolean(user.isPPOHead || role === "PPO_HEAD");
+  const isMPOHead = Boolean(user.isMPOHead);
+  const isRPOHead = Boolean(user.isRPOHead);
+
+  if (isMember) {
+    availableModes.push({
+      mode: "MEMBER",
+      label: "Член профсоюза",
+    });
+  }
+
+  if (isPPOHead && user.ppoHeadOrganizationId) {
+    availableModes.push({
+      mode: "PPO_HEAD",
+      label: "Председатель ППО",
+      organizationName: user.ppoHeadOrganization?.name || undefined,
+    });
+  }
+
+  if (isMPOHead && user.mpoHeadOrganizationId) {
+    availableModes.push({
+      mode: "MPO_HEAD",
+      label: "Председатель МПО",
+      organizationName: user.mpoHeadOrganization?.name || undefined,
+    });
+  }
+
+  if (isRPOHead && user.rpoHeadOrganizationId) {
+    availableModes.push({
+      mode: "RPO_HEAD",
+      label: "Председатель РПО",
+      organizationName: user.rpoHeadOrganization?.name || undefined,
+    });
+  }
+
+  if (availableModes.length === 0) {
+    availableModes.push({
+      mode: "MEMBER",
+      label: "Член профсоюза",
+    });
+  }
+
+  return availableModes;
+}
+
+function resolveCurrentMode(requestedMode: string | null | undefined, availableModes: ViewModeOption[]) {
+  if (requestedMode && availableModes.some((m) => m.mode === requestedMode)) {
+    return requestedMode;
+  }
+  return availableModes[0]?.mode || "MEMBER";
+}
+
+function normalizeSessionUserModes(user: any): UserModeSource {
+  return {
+    role: user?.role,
+    viewMode: user?.viewMode,
+    isPPOHead: user?.isPPOHead,
+    isMPOHead: user?.isMPOHead,
+    isRPOHead: user?.isRPOHead,
+    ppoHeadOrganizationId: user?.ppoHeadOrganizationId,
+    mpoHeadOrganizationId: user?.mpoHeadOrganizationId,
+    rpoHeadOrganizationId: user?.rpoHeadOrganizationId,
+    ppoHeadOrganization: user?.ppoHeadOrganization,
+    mpoHeadOrganization: user?.mpoHeadOrganization,
+    rpoHeadOrganization: user?.rpoHeadOrganization,
+  };
+}
 
 // GET /api/user/view-mode
 // Получить текущий режим просмотра и доступные режимы
@@ -60,13 +149,29 @@ export async function GET() {
           id: true,
           role: true,
           isPPOHead: true,
+          isMPOHead: true,
+          isRPOHead: true,
           viewMode: true,
           ppoHeadOrganizationId: true,
+          mpoHeadOrganizationId: true,
+          rpoHeadOrganizationId: true,
           ppoHeadOrganization: {
             select: {
               id: true,
               name: true,
             }
+          },
+          mpoHeadOrganization: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          rpoHeadOrganization: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
       });
@@ -75,15 +180,12 @@ export async function GET() {
       console.error("[user/view-mode] Database error:", dbError);
       const u = (session as any)?.user;
       if (u) {
+        const availableModes = buildAvailableModes(normalizeSessionUserModes(u));
+        const currentMode = resolveCurrentMode(u.viewMode, availableModes);
         return NextResponse.json({
-          currentMode: u.viewMode || "MEMBER",
-          availableModes: [
-            { mode: "MEMBER", label: "Член профсоюза" },
-            ...(u.isPPOHead || u.isMPOHead || u.isRPOHead
-              ? [{ mode: "PPO_HEAD", label: "Председатель ППО", organizationName: (u.ppoHeadOrganization as { name?: string })?.name }]
-              : []),
-          ],
-          canSwitch: (u.isPPOHead || u.isMPOHead || u.isRPOHead) && u.viewMode !== "MEMBER",
+          currentMode,
+          availableModes,
+          canSwitch: availableModes.length > 1,
         });
       }
       return NextResponse.json(
@@ -99,64 +201,11 @@ export async function GET() {
       );
     }
 
-    // Определяем доступные режимы
-    const availableModes: Array<{ mode: string; label: string; organizationName?: string }> = [];
-
-    // Определяем, является ли пользователь членом профсоюза
-    // ВАЖНО: Если пользователь имеет роль PPO_HEAD, но также может быть членом (есть организация),
-    // то режим MEMBER должен быть доступен
-    const isMember = user.role === "MEMBER" || user.role === "PENDING_MEMBER";
-    
-    // Определяем, является ли пользователь председателем ППО
-    const isPPOHead = user.isPPOHead || user.role === "PPO_HEAD";
-    
-    // Если пользователь является председателем, но также может быть членом (есть организация),
-    // то оба режима должны быть доступны
-    const hasDualRole = isPPOHead && (isMember || user.ppoHeadOrganizationId);
-    
-    // Режим "Член профсоюза" доступен если:
-    // 1. Пользователь является членом ИЛИ
-    // 2. Пользователь является председателем и имеет организацию (может работать в обоих режимах)
-    if (isMember || (isPPOHead && user.ppoHeadOrganizationId)) {
-      if (!availableModes.find(m => m.mode === "MEMBER")) {
-      availableModes.push({
-        mode: "MEMBER",
-        label: "Член профсоюза",
-      });
-      }
-    }
-
-    // Режим "Председатель ППО" доступен если пользователь является председателем
-    if (isPPOHead) {
-      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
-      availableModes.push({
-        mode: "PPO_HEAD",
-        label: "Председатель ППО",
-        organizationName: user.ppoHeadOrganization?.name,
-      });
-    }
-    }
-    
-    // Дополнительная проверка: если пользователь имеет двойную роль,
-    // убеждаемся что оба режима добавлены
-    if (hasDualRole) {
-      if (!availableModes.find(m => m.mode === "MEMBER")) {
-        availableModes.push({
-          mode: "MEMBER",
-          label: "Член профсоюза",
-        });
-      }
-      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
-        availableModes.push({
-          mode: "PPO_HEAD",
-          label: "Председатель ППО",
-          organizationName: user.ppoHeadOrganization?.name,
-        });
-      }
-    }
+    const availableModes = buildAvailableModes(user);
+    const currentMode = resolveCurrentMode(user.viewMode, availableModes);
 
     return NextResponse.json({
-      currentMode: user.viewMode || "MEMBER",
+      currentMode,
       availableModes,
       canSwitch: availableModes.length > 1,
     });
@@ -181,15 +230,12 @@ export async function GET() {
         }
         const user = (session as any)?.user;
         if (user) {
+          const availableModes = buildAvailableModes(normalizeSessionUserModes(user));
+          const currentMode = resolveCurrentMode(user.viewMode, availableModes);
           return NextResponse.json({
-            currentMode: user.viewMode || "MEMBER",
-            availableModes: [
-              { mode: "MEMBER", label: "Член профсоюза" },
-              ...(user.isPPOHead || user.isMPOHead || user.isRPOHead 
-                ? [{ mode: "PPO_HEAD", label: "Председатель ППО" }] 
-                : [])
-            ],
-            canSwitch: (user.isPPOHead || user.isMPOHead || user.isRPOHead) && user.viewMode !== "MEMBER",
+            currentMode,
+            availableModes,
+            canSwitch: availableModes.length > 1,
           });
         }
       } catch (fallbackError) {
@@ -238,7 +284,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { mode } = body;
 
-    if (!mode || !["MEMBER", "PPO_HEAD"].includes(mode)) {
+    if (!mode || !["MEMBER", "PPO_HEAD", "MPO_HEAD", "RPO_HEAD"].includes(mode)) {
       return NextResponse.json(
         { error: "Неверный режим просмотра" },
         { status: 400 }
@@ -251,7 +297,11 @@ export async function PUT(request: NextRequest) {
         id: true,
         role: true,
         isPPOHead: true,
+        isMPOHead: true,
+        isRPOHead: true,
         ppoHeadOrganizationId: true,
+        mpoHeadOrganizationId: true,
+        rpoHeadOrganizationId: true,
       },
     });
 
@@ -263,13 +313,23 @@ export async function PUT(request: NextRequest) {
     }
 
     // Проверяем что пользователь может переключиться в этот режим
-    if (mode === "PPO_HEAD") {
-      if (!user.isPPOHead && user.role !== "PPO_HEAD") {
-        return NextResponse.json(
-          { error: "У вас нет прав председателя ППО" },
-          { status: 403 }
-        );
-      }
+    if (mode === "PPO_HEAD" && (!user.isPPOHead || !user.ppoHeadOrganizationId)) {
+      return NextResponse.json(
+        { error: "У вас нет прав председателя ППО" },
+        { status: 403 }
+      );
+    }
+    if (mode === "MPO_HEAD" && (!user.isMPOHead || !user.mpoHeadOrganizationId)) {
+      return NextResponse.json(
+        { error: "У вас нет прав председателя МПО" },
+        { status: 403 }
+      );
+    }
+    if (mode === "RPO_HEAD" && (!user.isRPOHead || !user.rpoHeadOrganizationId)) {
+      return NextResponse.json(
+        { error: "У вас нет прав председателя РПО" },
+        { status: 403 }
+      );
     }
 
     // Обновляем режим просмотра
@@ -280,81 +340,51 @@ export async function PUT(request: NextRequest) {
         viewMode: true,
         role: true,
         isPPOHead: true,
+        isMPOHead: true,
+        isRPOHead: true,
         ppoHeadOrganizationId: true,
+        mpoHeadOrganizationId: true,
+        rpoHeadOrganizationId: true,
         ppoHeadOrganization: {
           select: {
             id: true,
             name: true,
           }
         },
+        mpoHeadOrganization: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        rpoHeadOrganization: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
-    // Определяем доступные режимы для ответа (аналогично GET)
-    const availableModes: Array<{ mode: string; label: string; organizationName?: string }> = [];
-
-    // Определяем, является ли пользователь членом профсоюза
-    const isMember = updatedUser.role === "MEMBER" || updatedUser.role === "PENDING_MEMBER";
-    
-    // Определяем, является ли пользователь председателем ППО
-    const isPPOHead = updatedUser.isPPOHead || updatedUser.role === "PPO_HEAD";
-    
-    // Если пользователь является председателем, но также может быть членом (есть организация),
-    // то оба режима должны быть доступны
-    const hasDualRole = isPPOHead && (isMember || updatedUser.ppoHeadOrganizationId);
-    
-    // Режим "Член профсоюза" доступен если:
-    // 1. Пользователь является членом ИЛИ
-    // 2. Пользователь является председателем и имеет организацию (может работать в обоих режимах)
-    if (isMember || (isPPOHead && updatedUser.ppoHeadOrganizationId)) {
-      if (!availableModes.find(m => m.mode === "MEMBER")) {
-      availableModes.push({
-        mode: "MEMBER",
-        label: "Член профсоюза",
-      });
-      }
-    }
-
-    // Режим "Председатель ППО" доступен если пользователь является председателем
-    if (isPPOHead) {
-      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
-      availableModes.push({
-        mode: "PPO_HEAD",
-        label: "Председатель ППО",
-        organizationName: updatedUser.ppoHeadOrganization?.name,
-      });
-      }
-    }
-    
-    // Дополнительная проверка: если пользователь имеет двойную роль,
-    // убеждаемся что оба режима добавлены
-    if (hasDualRole) {
-      if (!availableModes.find(m => m.mode === "MEMBER")) {
-        availableModes.push({
-          mode: "MEMBER",
-          label: "Член профсоюза",
-        });
-      }
-      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
-        availableModes.push({
-          mode: "PPO_HEAD",
-          label: "Председатель ППО",
-          organizationName: updatedUser.ppoHeadOrganization?.name,
-        });
-      }
-    }
+    const availableModes = buildAvailableModes(updatedUser);
+    const currentMode = resolveCurrentMode(updatedUser.viewMode, availableModes);
 
     // Сбрасываем кеш страниц dashboard
     revalidatePath("/dashboard", "layout");
 
     return NextResponse.json({
       success: true,
-      currentMode: updatedUser.viewMode || "MEMBER",
+      currentMode,
       availableModes,
       canSwitch: availableModes.length > 1,
-      message: mode === "PPO_HEAD" 
-        ? "Вы переключились в режим Председателя ППО" 
-        : "Вы переключились в режим Члена профсоюза",
+      message:
+        mode === "PPO_HEAD"
+          ? "Вы переключились в режим Председателя ППО"
+          : mode === "MPO_HEAD"
+          ? "Вы переключились в режим Председателя МПО"
+          : mode === "RPO_HEAD"
+          ? "Вы переключились в режим Председателя РПО"
+          : "Вы переключились в режим Члена профсоюза",
     });
   } catch (error) {
     console.error("[user/view-mode] PUT Error:", error);

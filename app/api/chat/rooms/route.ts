@@ -141,12 +141,15 @@ function formatRoomForUI(chat: ChatInfo, currentUserId: string) {
   if (isBot) {
     displayName = 'МойСоюз Помощник';
   }
-  // Исключаем из бейджа непрочитанных: чаты с ботом и ИИ-Ассистент
+  // Исключаем из бейджа непрочитанных: чаты с ботом, ИИ-Ассистент и Техподдержка
   const isBotOrAssistant =
     isBot ||
     (displayName || '').includes('ИИ-Ассистент') ||
     (chat.displayName || '').includes('ИИ-Ассистент') ||
-    (chat.name || '').includes('ИИ-Ассистент');
+    (chat.name || '').includes('ИИ-Ассистент') ||
+    (displayName || '').includes('Техподдержка') ||
+    (chat.displayName || '').includes('Техподдержка') ||
+    (chat.name || '').includes('Техподдержка');
 
   // Определяем аватар
   let avatarUrl: string | null = null;

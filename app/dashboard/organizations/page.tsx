@@ -15,6 +15,10 @@ interface Organization {
   reportsCount: number;
   documentsCount: number;
   ticketsCount: number;
+  inn?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  totalEmployees?: number;
 }
 
 const ORG_TYPE_LABELS: Record<OrganizationType, string> = {
@@ -38,6 +42,23 @@ export default function OrganizationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<OrganizationType | "ALL">("ALL");
   const [search, setSearch] = useState("");
+  const [editingOrgId, setEditingOrgId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    inn: "",
+    chairmanName: "",
+    chairmanJobTitle: "",
+    totalEmployees: "",
+  });
+  const [assignOpenForOrgId, setAssignOpenForOrgId] = useState<string | null>(null);
+  const [headSearch, setHeadSearch] = useState("");
+  const [headCandidates, setHeadCandidates] = useState<Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; phone: string | null }>>([]);
+  const [selectedHeadUserId, setSelectedHeadUserId] = useState<string | null>(null);
+  const [headJobTitle, setHeadJobTitle] = useState("");
+  const [isAssigningHead, setIsAssigningHead] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -58,6 +79,143 @@ export default function OrganizationsPage() {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!assignOpenForOrgId) return;
+      const q = headSearch.trim();
+      if (q.length < 2) {
+        setHeadCandidates([]);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/chat/users/search?q=${encodeURIComponent(q)}&limit=20`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setHeadCandidates(data.users || []);
+      } catch {
+        setHeadCandidates([]);
+      }
+    };
+    run();
+  }, [headSearch, assignOpenForOrgId]);
+
+  const startEdit = (org: Organization) => {
+    setEditingOrgId(org.id);
+    setEditForm({
+      name: org.name || "",
+      email: org.email || "",
+      phone: org.phone || "",
+      inn: org.inn || "",
+      chairmanName: org.chairmanName || "",
+      chairmanJobTitle: org.chairmanJobTitle || "",
+      totalEmployees: String(org.totalEmployees || 0),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingOrgId(null);
+    setEditForm({
+      name: "",
+      email: "",
+      phone: "",
+      inn: "",
+      chairmanName: "",
+      chairmanJobTitle: "",
+      totalEmployees: "",
+    });
+  };
+
+  const saveEdit = async (orgId: string) => {
+    try {
+      setIsSaving(true);
+      const payload = {
+        name: editForm.name.trim(),
+        email: editForm.email.trim() || null,
+        phone: editForm.phone.trim() || null,
+        inn: editForm.inn.trim() || null,
+        chairmanName: editForm.chairmanName.trim() || null,
+        chairmanJobTitle: editForm.chairmanJobTitle.trim() || null,
+        totalEmployees: Number(editForm.totalEmployees || 0),
+      };
+
+      const res = await fetch(`/api/org-head/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Ошибка сохранения");
+      }
+
+      setOrganizations((prev) =>
+        prev.map((org) =>
+          org.id === orgId
+            ? {
+                ...org,
+                name: payload.name,
+                email: payload.email,
+                phone: payload.phone,
+                inn: payload.inn,
+                chairmanName: payload.chairmanName,
+                chairmanJobTitle: payload.chairmanJobTitle,
+                totalEmployees: payload.totalEmployees,
+              }
+            : org
+        )
+      );
+      cancelEdit();
+    } catch (e: any) {
+      alert(e?.message || "Не удалось сохранить организацию");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const assignHead = async () => {
+    if (!assignOpenForOrgId || !selectedHeadUserId) return;
+    try {
+      setIsAssigningHead(true);
+      const res = await fetch(`/api/org-head/organizations/${assignOpenForOrgId}/assign-head`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: selectedHeadUserId,
+          chairmanJobTitle: headJobTitle.trim() || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Ошибка назначения председателя");
+      }
+
+      const selected = headCandidates.find((u) => u.id === selectedHeadUserId);
+      const fullName = [selected?.lastName, selected?.firstName].filter(Boolean).join(" ").trim();
+      if (fullName) {
+        setOrganizations((prev) =>
+          prev.map((org) =>
+            org.id === assignOpenForOrgId
+              ? { ...org, chairmanName: fullName, chairmanJobTitle: headJobTitle.trim() || null }
+              : org
+          )
+        );
+      }
+
+      setAssignOpenForOrgId(null);
+      setHeadSearch("");
+      setHeadCandidates([]);
+      setSelectedHeadUserId(null);
+      setHeadJobTitle("");
+    } catch (e: any) {
+      alert(e?.message || "Не удалось назначить председателя");
+    } finally {
+      setIsAssigningHead(false);
+    }
+  };
 
   // Фильтрация организаций
   const filteredOrgs = organizations.filter((org) => {
@@ -206,7 +364,18 @@ export default function OrganizationsPage() {
                 filteredOrgs.map((org) => (
                   <tr key={org.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="whitespace-nowrap px-6 py-4">
-                      <p className="font-medium text-gray-900 dark:text-white">{org.name}</p>
+                      {editingOrgId === org.id ? (
+                        <input
+                          aria-label="Название организации"
+                          title="Название организации"
+                          placeholder="Название организации"
+                          value={editForm.name}
+                          onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                      ) : (
+                        <p className="font-medium text-gray-900 dark:text-white">{org.name}</p>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
                       <span className={`rounded-lg px-3 py-1 text-xs font-medium ${ORG_TYPE_COLORS[org.type]}`}>
@@ -214,7 +383,18 @@ export default function OrganizationsPage() {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-gray-600 dark:text-gray-400">
-                      {org.chairmanName || <span className="text-gray-400">Не назначен</span>}
+                      {editingOrgId === org.id ? (
+                        <input
+                          aria-label="ФИО председателя"
+                          title="ФИО председателя"
+                          placeholder="ФИО председателя"
+                          value={editForm.chairmanName}
+                          onChange={(e) => setEditForm((p) => ({ ...p, chairmanName: e.target.value }))}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                      ) : (
+                        org.chairmanName || <span className="text-gray-400">Не назначен</span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-center text-gray-600 dark:text-gray-400">
                       {org.membersCount}
@@ -229,12 +409,44 @@ export default function OrganizationsPage() {
                       {org.ticketsCount}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-right">
-                      <Link
-                        href={`/dashboard/organizations/${org.id}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                      >
-                        Подробнее →
-                      </Link>
+                      {editingOrgId === org.id ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => saveEdit(org.id)}
+                            disabled={isSaving}
+                            className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            Сохранить
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="rounded bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300"
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => startEdit(org)}
+                            className="rounded bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300"
+                          >
+                            Редактировать
+                          </button>
+                          <button
+                            onClick={() => {
+                              setAssignOpenForOrgId(org.id);
+                              setHeadSearch("");
+                              setHeadCandidates([]);
+                              setSelectedHeadUserId(null);
+                              setHeadJobTitle(org.chairmanJobTitle || "");
+                            }}
+                            className="rounded bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700"
+                          >
+                            Назначить председателя
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -251,6 +463,66 @@ export default function OrganizationsPage() {
           </table>
         </div>
       </div>
+
+      {assignOpenForOrgId && (
+        <div className="rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800">
+          <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-white">
+            Назначение председателя
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              value={headSearch}
+              onChange={(e) => setHeadSearch(e.target.value)}
+              placeholder="Поиск пользователя (ФИО, email, телефон)"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+            <input
+              value={headJobTitle}
+              onChange={(e) => setHeadJobTitle(e.target.value)}
+              placeholder="Должность председателя"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+
+          <div className="mt-3 max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+            {headCandidates.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Введите минимум 2 символа для поиска</p>
+            ) : (
+              headCandidates.map((u) => {
+                const fullName = [u.lastName, u.firstName].filter(Boolean).join(" ").trim() || "Без имени";
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => setSelectedHeadUserId(u.id)}
+                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                      selectedHeadUserId === u.id ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                    }`}
+                  >
+                    <span className="font-medium text-gray-900 dark:text-white">{fullName}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{u.email || u.phone || "—"}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              onClick={() => setAssignOpenForOrgId(null)}
+              className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300"
+            >
+              Отмена
+            </button>
+            <button
+              onClick={assignHead}
+              disabled={!selectedHeadUserId || isAssigningHead}
+              className="rounded bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700 disabled:opacity-50"
+            >
+              {isAssigningHead ? "Назначение..." : "Назначить"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getOrgHead } from '@/lib/ppo-head-utils';
 
 /**
  * GET /api/chat/users/search
  * Поиск пользователей для создания нового чата.
- * Закрытый круг: только пользователи того же ППО (organizationId), что и текущий пользователь.
+ * По умолчанию: только пользователи той же организации.
+ * Для RPO_HEAD: глобальный поиск по системе.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,6 +22,8 @@ export async function GET(request: NextRequest) {
       select: { organizationId: true },
     });
     const myOrgId = currentUser?.organizationId ?? null;
+    const orgHead = await getOrgHead(session.user.id);
+    const isGlobalSearchAllowed = orgHead?.level === "RPO";
 
     const searchParams = request.nextUrl.searchParams;
     const q = searchParams.get('q')?.trim();
@@ -29,10 +33,12 @@ export async function GET(request: NextRequest) {
       { id: { not: session.user.id } },
       { membershipStatus: 'APPROVED' as const },
     ];
-    if (myOrgId !== null) {
-      baseConditions.push({ organizationId: myOrgId });
-    } else {
-      baseConditions.push({ organizationId: null });
+    if (!isGlobalSearchAllowed) {
+      if (myOrgId !== null) {
+        baseConditions.push({ organizationId: myOrgId });
+      } else {
+        baseConditions.push({ organizationId: null });
+      }
     }
 
     const whereCondition: any = q && q.length >= 2

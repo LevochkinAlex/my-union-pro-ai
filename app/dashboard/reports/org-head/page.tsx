@@ -108,6 +108,8 @@ export default function OrgHeadReportsPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedPeriodicity, setSelectedPeriodicity] = useState<"all" | "monthly" | "annual">("all");
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -117,6 +119,8 @@ export default function OrgHeadReportsPage() {
         const params = new URLSearchParams();
         if (selectedPeriod) params.set("period", selectedPeriod);
         if (selectedStatus && selectedStatus !== "all") params.set("status", selectedStatus);
+        if (selectedPeriodicity !== "all") params.set("periodicity", selectedPeriodicity);
+        if (selectedOrganizationId !== "all") params.set("organizationId", selectedOrganizationId);
         
         const res = await fetch(`/api/org-head/reports?${params.toString()}`);
         if (!res.ok) {
@@ -133,7 +137,7 @@ export default function OrgHeadReportsPage() {
     };
 
     loadReports();
-  }, [selectedPeriod, selectedStatus]);
+  }, [selectedPeriod, selectedStatus, selectedPeriodicity, selectedOrganizationId]);
 
   // Фильтрация по поиску
   const filteredReports = useMemo(() => {
@@ -168,6 +172,15 @@ export default function OrgHeadReportsPage() {
     
     return options;
   }, []);
+
+  const organizationOptions = useMemo(() => {
+    if (!data?.reports) return [];
+    const map = new Map<string, string>();
+    for (const r of data.reports) {
+      map.set(r.organization.id, r.organization.name);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [data?.reports]);
 
   if (isLoading) {
     return (
@@ -265,6 +278,8 @@ export default function OrgHeadReportsPage() {
 
         {/* Период */}
         <select
+          aria-label="Период отчёта"
+          title="Период отчёта"
           value={selectedPeriod}
           onChange={(e) => setSelectedPeriod(e.target.value)}
           className="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
@@ -276,12 +291,41 @@ export default function OrgHeadReportsPage() {
           ))}
         </select>
 
+        <select
+          aria-label="Тип периодичности отчётов"
+          title="Тип периодичности отчётов"
+          value={selectedPeriodicity}
+          onChange={(e) => setSelectedPeriodicity(e.target.value as "all" | "monthly" | "annual")}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        >
+          <option value="all">Все периоды</option>
+          <option value="monthly">Месячные</option>
+          <option value="annual">Годовые</option>
+        </select>
+
+        <select
+          aria-label="Фильтр по организации"
+          title="Фильтр по организации"
+          value={selectedOrganizationId}
+          onChange={(e) => setSelectedOrganizationId(e.target.value)}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        >
+          <option value="all">Все организации</option>
+          {organizationOptions.map((org) => (
+            <option key={org.id} value={org.id}>
+              {org.name}
+            </option>
+          ))}
+        </select>
+
         {/* Сброс фильтров */}
-        {(selectedStatus !== "all" || searchQuery) && (
+        {(selectedStatus !== "all" || searchQuery || selectedPeriodicity !== "all" || selectedOrganizationId !== "all") && (
           <button
             onClick={() => {
               setSelectedStatus("all");
               setSearchQuery("");
+              setSelectedPeriodicity("all");
+              setSelectedOrganizationId("all");
             }}
             className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
           >

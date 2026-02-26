@@ -1885,6 +1885,9 @@ model NewsChannel {
   // Является ли канал основным (по умолчанию для организации)
   isMain Boolean @default(false)
 
+  // Системный ключ для глобальных каналов (например, "REGIONAL_NEWS_GLOBAL")
+  globalScopeKey String? @unique
+
   // Новости в канале
   newsPosts NewsPost[]
 

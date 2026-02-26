@@ -313,16 +313,16 @@ export default function OrgHeadDashboard() {
           description="Управление структурой"
         />
         <QuickAction
-          href="/dashboard/statistics"
-          icon="📈"
-          title="Статистика"
-          description="Аналитика и графики"
+          href="/dashboard/users/org-head"
+          icon="👥"
+          title="Пользователи"
+          description="Валидация и активные"
         />
         <QuickAction
-          href="/dashboard/appeals"
-          icon="📨"
-          title="Обращения"
-          description="Входящие обращения"
+          href="/dashboard/chats/ppo-head"
+          icon="💬"
+          title="Чаты"
+          description="Общение и поддержка"
         />
       </div>
     </div>

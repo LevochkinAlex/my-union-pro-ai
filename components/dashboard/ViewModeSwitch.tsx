@@ -14,6 +14,33 @@ interface ViewModeSwitchProps {
   collapsed?: boolean;
 }
 
+const MODE_LABELS: Record<string, string> = {
+  MEMBER: "Член профсоюза",
+  PPO_HEAD: "Председатель ППО",
+  MPO_HEAD: "Председатель МПО",
+  RPO_HEAD: "Председатель РПО",
+};
+
+function getModeLabel(mode: string) {
+  return MODE_LABELS[mode] || mode;
+}
+
+function ModeIcon({ mode }: { mode: string }) {
+  if (mode === "MEMBER") {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  );
+}
+
 export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProps) {
   const router = useRouter();
   const [currentMode, setCurrentMode] = useState<string>("MEMBER");
@@ -243,7 +270,7 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   // Используем сохраненные данные, если текущие данные еще не загружены
   const storedDataForDisplay = loadStoredData();
   const fallbackModes = storedDataForDisplay?.availableModes || 
-    [{ mode: currentMode, label: currentMode === "PPO_HEAD" ? "Председатель ППО" : "Член профсоюза" }];
+    [{ mode: currentMode, label: getModeLabel(currentMode) }];
   
   const displayModes = availableModes.length > 0 ? availableModes : fallbackModes;
   
@@ -254,15 +281,7 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   const otherMode = displayModes.find((m) => m.mode !== currentMode);
 
   // В стиле обычного пункта меню
-  const icon = currentMode === "PPO_HEAD" ? (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-    </svg>
-  ) : (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-    </svg>
-  );
+  const icon = <ModeIcon mode={currentMode} />;
 
   if (collapsed) {
     // В свернутом режиме показываем переключатель если:
@@ -328,7 +347,7 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       >
         <span className="flex-shrink-0">{icon}</span>
         <span className="flex-1 text-left">
-          {currentMode === "PPO_HEAD" ? "Режим: Председатель" : "Режим: Участник"}
+          {`Режим: ${getModeLabel(currentMode)}`}
         </span>
         <svg 
           className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} 
@@ -357,16 +376,8 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
                       : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                   } ${isSwitching ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
-                  {mode.mode === "PPO_HEAD" ? (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  )}
-                  <span className="flex-1 text-left">{mode.label}</span>
+                  <ModeIcon mode={mode.mode} />
+                  <span className="flex-1 text-left">{mode.label || getModeLabel(mode.mode)}</span>
                   {mode.mode === currentMode && (
                     <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

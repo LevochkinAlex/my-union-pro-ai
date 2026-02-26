@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
     });
     y += 24;
 
-    doc.font(fontBold).fontSize(10).text("Поставщик:", x, y);
+    doc.font(fontBold).fontSize(10).text("Лицензиат:", x, y);
     doc.font(fontRegular).fontSize(9).text(
       `${supplierName}, ${supplierAddress}, ИНН ${supplierInn}, КПП ${supplierKpp}, ОГРН ${supplierOgrn}, р/с ${supplierRs}, в банке ${supplierBank}, БИК ${supplierBik}, к/с ${supplierKs}`,
       x + 72,
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
         ? `ИНН/КПП ${profile.inn || "—"}/${profile.kpp || "—"}`
         : "";
 
-    doc.font(fontBold).fontSize(10).text("Покупатель:", x, y);
+    doc.font(fontBold).fontSize(10).text("Лицензиар:", x, y);
     doc.font(fontRegular).fontSize(9).text(
       [
         buyerMainName,
@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
       .text("Сумма, руб.", x + col1 + col2 + col3 + col4 + 4, y + 6, { width: col5 - 8, align: "right" });
 
     y += rowH;
-    const itemNameFull = `Доступ к SaaS MyUnion Pro, ${tariffLabel}, ${periodLabel(period)}`;
+    const itemNameFull = `Доступ к SaaS MyUnion Pro, ${tariffLabel}, ${periodLabel(period)}, 1 усл. ед. (код 876)`;
     doc.font(fontRegular).fontSize(8);
     const itemNameHeight = doc.heightOfString(itemNameFull, { width: col2 - 8 });
     const dataRowH = Math.max(36, Math.ceil(itemNameHeight) + 16);
@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
     doc.font(fontRegular).fontSize(8)
       .text("1", x + 4, y + 8)
       .text(itemNameFull, x + col1 + 4, y + 8, { width: col2 - 8 })
-      .text(String(memberLimit), x + col1 + col2 + 4, y + 12)
+      .text("1", x + col1 + col2 + 4, y + 12)
       .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + 4, y + 12, { width: col4 - 8, align: "right" })
       .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + col4 + 4, y + 12, { width: col5 - 8, align: "right" });
 
@@ -296,12 +296,12 @@ export async function POST(request: NextRequest) {
     y = doc.y + 10;
 
     const offerText = [
-      "Настоящий счет-оферта (далее — «Счет») является письменным предложением (офертой) Поставщика заключить договор в соответствии со ст. 432–444 ГК РФ.",
-      "Акцептом оферты является полная оплата настоящего Счета Покупателем (п. 3 ст. 438 ГК РФ).",
+      "Настоящий счет-оферта (далее — «Счет») является письменным предложением (офертой) Лицензиата заключить договор в соответствии со ст. 432–444 ГК РФ.",
+      "Акцептом оферты является полная оплата настоящего Счета Лицензиаром (п. 3 ст. 438 ГК РФ).",
       "Счет действителен 7 (семь) рабочих дней с даты выставления.",
       "Предмет договора: предоставление доступа к SaaS MyUnion Pro по выбранному тарифу. Публичная оферта: https://myunion.pro/license",
       "Период предоставления услуг: " + periodLabel(period) + " с момента поступления денежных средств на счёт.",
-      "Споры подлежат рассмотрению по месту нахождения Поставщика.",
+      "Споры подлежат рассмотрению по месту нахождения Лицензиата.",
     ];
     doc.font(fontRegular).fontSize(9);
     for (const line of offerText) {

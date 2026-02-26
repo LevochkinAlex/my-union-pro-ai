@@ -15,20 +15,24 @@ interface UseChatOptions {
   onError?: (error: string) => void;
 }
 
-/** Чат бота/ИИ-ассистента не учитывается в бейдже непрочитанных */
+/** Чат бота/ИИ-ассистента/техподдержки не учитывается в бейдже непрочитанных */
 function isExcludedFromUnreadBadge(c: {
   name?: string | null;
   displayName?: string | null;
   otherUser?: { id?: string; firstName?: string | null; lastName?: string | null } | null;
+  isSupportChat?: boolean;
 }) {
   const n = (c.name ?? '') || (c.displayName ?? '');
   const ou = c.otherUser;
   return (
+    (c as any).isSupportChat === true ||
+    n.includes('Техподдержка') ||
     n.includes('МойСоюз Помощник') ||
     n.includes('ИИ-Ассистент') ||
     n.includes('AI Помощник') ||
     ou?.id === 'ai-assistant-bot' ||
-    (ou?.firstName === 'AI' && ou?.lastName === 'Помощник')
+    (ou?.firstName === 'AI' && ou?.lastName === 'Помощник') ||
+    (ou?.firstName === 'Техподдержка' && ou?.lastName === 'МойСоюз')
   );
 }
 

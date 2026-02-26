@@ -47,6 +47,8 @@ export async function GET(
       where: { id: userId },
       include: {
         organization: true,
+        ppoHeadOrganization: true,
+        rpoHeadOrganization: true,
         documents: {
           orderBy: { createdAt: "desc" },
         },
