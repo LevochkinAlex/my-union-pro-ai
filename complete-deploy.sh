@@ -7,6 +7,27 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$SCRIPT_DIR/vds.deploy.env" ] && source "$SCRIPT_DIR/vds.deploy.env"
 VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD или создайте vds.deploy.env с export VDS_PASSWORD='...'}"
 
+read_env_value() {
+  local file="$1"
+  local key="$2"
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+
+  local line
+  line=$(grep -E "^${key}=" "$file" | tail -n 1 || true)
+  if [ -z "$line" ]; then
+    return 0
+  fi
+
+  local value="${line#*=}"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  printf "%s" "$value"
+}
+
 COMMIT_MSG="${1:-Fix: обновления и исправления}"
 
 echo "=========================================="
@@ -33,12 +54,51 @@ git push
 
 echo ""
 echo "Step 5: Deploying to server..."
-# Подтягиваем VK_ID_CLIENT_ID из vds.deploy.env или .env для записи на сервер
+# Подтягиваем VK_ID_CLIENT_ID из vds.deploy.env или .env.local/.env без source (чтобы не падать на спецсимволах)
 [ -f "$SCRIPT_DIR/vds.deploy.env" ] && source "$SCRIPT_DIR/vds.deploy.env"
-[ -f "$SCRIPT_DIR/.env" ] && source "$SCRIPT_DIR/.env" 2>/dev/null || true
+
+if [ -z "$VK_ID_CLIENT_ID" ]; then
+  VK_ID_CLIENT_ID="$(read_env_value "$SCRIPT_DIR/.env.local" "VK_ID_CLIENT_ID")"
+fi
+if [ -z "$VK_ID_CLIENT_ID" ]; then
+  VK_ID_CLIENT_ID="$(read_env_value "$SCRIPT_DIR/.env" "VK_ID_CLIENT_ID")"
+fi
+
 if [ -n "$VK_ID_CLIENT_ID" ]; then
   sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 "grep -q '^VK_ID_CLIENT_ID=' /opt/my-union-pro/.env.local 2>/dev/null || echo 'VK_ID_CLIENT_ID=$VK_ID_CLIENT_ID' >> /opt/my-union-pro/.env.local" && echo "✅ VK_ID_CLIENT_ID прописан на проде"
 fi
+
+# T-Bank эквайринг: подтягиваем из vds.deploy.env или .env.local/.env и дописываем на прод при отсутствии
+if [ -z "$TBANK_TERMINAL_KEY" ]; then
+  TBANK_TERMINAL_KEY="$(read_env_value "$SCRIPT_DIR/.env.local" "TBANK_TERMINAL_KEY")"
+fi
+if [ -z "$TBANK_TERMINAL_KEY" ]; then
+  TBANK_TERMINAL_KEY="$(read_env_value "$SCRIPT_DIR/.env" "TBANK_TERMINAL_KEY")"
+fi
+if [ -z "$TBANK_TERMINAL_PASSWORD" ]; then
+  TBANK_TERMINAL_PASSWORD="$(read_env_value "$SCRIPT_DIR/.env.local" "TBANK_TERMINAL_PASSWORD")"
+fi
+if [ -z "$TBANK_TERMINAL_PASSWORD" ]; then
+  TBANK_TERMINAL_PASSWORD="$(read_env_value "$SCRIPT_DIR/.env" "TBANK_TERMINAL_PASSWORD")"
+fi
+if [ -z "$TBANK_API_BASE_URL" ]; then
+  TBANK_API_BASE_URL="$(read_env_value "$SCRIPT_DIR/.env.local" "TBANK_API_BASE_URL")"
+fi
+if [ -z "$TBANK_API_BASE_URL" ]; then
+  TBANK_API_BASE_URL="$(read_env_value "$SCRIPT_DIR/.env" "TBANK_API_BASE_URL")"
+fi
+if [ -z "$TBANK_API_BASE_URL" ]; then
+  TBANK_API_BASE_URL="https://securepay.tinkoff.ru/v2"
+fi
+
+if [ -n "$TBANK_TERMINAL_KEY" ] || [ -n "$TBANK_TERMINAL_PASSWORD" ]; then
+  sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 "cd /opt/my-union-pro && \
+    (grep -q '^TBANK_TERMINAL_KEY=' .env.local 2>/dev/null || echo \"TBANK_TERMINAL_KEY=$TBANK_TERMINAL_KEY\" >> .env.local); \
+    (grep -q '^TBANK_TERMINAL_PASSWORD=' .env.local 2>/dev/null || echo \"TBANK_TERMINAL_PASSWORD=$TBANK_TERMINAL_PASSWORD\" >> .env.local); \
+    (grep -q '^TBANK_API_BASE_URL=' .env.local 2>/dev/null || echo \"TBANK_API_BASE_URL=$TBANK_API_BASE_URL\" >> .env.local)"
+  echo "✅ T-Bank env проверен/прописан на проде"
+fi
+
 sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'EOF'
 cd /opt/my-union-pro
 echo "--- Pulling code ---"
