@@ -74,6 +74,7 @@ export default async function DashboardLayout({
         viewMode = getViewMode(fakeSession);
         serverViewModes = getAvailableViewModes(fakeSession);
       }
+      console.log("[dashboard/layout] userId:", session.user.id, "dbUser:", dbUser ? { role: dbUser.role, isRPOHead: dbUser.isRPOHead, rpoHeadOrganizationId: dbUser.rpoHeadOrganizationId, viewMode: dbUser.viewMode } : "null", "serverViewModes:", serverViewModes);
       if (staffResult.isStaff && staffResult.permissions) {
         staffPermissions = { isStaff: true, permissions: staffResult.permissions };
       }
@@ -82,9 +83,7 @@ export default async function DashboardLayout({
     }
   }
 
-  if (process.env.NODE_ENV === "development") {
-    console.log("[dashboard/layout] User:", session.user.id, "viewMode:", viewMode);
-  }
+  console.log("[dashboard/layout] FINAL userId:", session.user.id, "viewMode:", viewMode, "modes:", JSON.stringify(serverViewModes), "isImpersonating:", isImpersonating);
 
   // Редирект супер-админов в админ-панель (только если не в режиме impersonation)
   if (userRole === "SUPER_ADMIN" && !isImpersonating) {
