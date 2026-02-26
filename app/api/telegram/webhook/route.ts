@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendWelcomeMessage, sendTelegramMessage, sendReturningUserWelcome } from "@/lib/telegram-bot";
+import { sendTelegramMessage, sendReturningUserWelcome } from "@/lib/telegram-bot";
 
 /**
  * POST /api/telegram/webhook
@@ -745,11 +745,127 @@ ${loginUrl}
       return NextResponse.json({ ok: true });
     }
 
-    // Команда /restart или /start (в т.ч. с пробелами/параметром, кроме link_phone и AUTH_phone)
+    // Команда /start login - авторизация через кнопку в боте
+    // ВАЖНО: обрабатываем до общего /start, иначе "/start login" попадет в ветку isStartCommand.
+    if (trimmedText === "/start login" || trimmedText === "/login") {
+      console.log("[Telegram Webhook] Команда login от пользователя:", chatId);
+      
+      // Проверяем, есть ли пользователь с этим chat_id
+      const user = await prisma.user.findUnique({
+        where: { telegramChatId: chatId },
+      });
+
+      if (!user) {
+        // Пользователь не привязан - запрашиваем номер телефона
+        await sendTelegramMessage(
+          chatId,
+          `👋 <b>Добро пожаловать в МойСоюз!</b>
+
+Для регистрации или входа нам нужен ваш номер телефона.
+
+Поделитесь номером телефона, нажав кнопку ниже:`,
+        );
+        
+        // Отправляем кнопку для шаринга телефона
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "Нажмите кнопку, чтобы поделиться номером:",
+            parse_mode: "HTML",
+            reply_markup: {
+              keyboard: [
+                [
+                  {
+                    text: "📱 Поделиться номером телефона",
+                    request_contact: true,
+                  }
+                ]
+              ],
+              one_time_keyboard: true,
+              resize_keyboard: true,
+            },
+          }),
+        });
+        
+        return NextResponse.json({ ok: true });
+      }
+      
+      // Если у пользователя нет номера телефона - запрашиваем
+      if (!user.phone) {
+        await sendTelegramMessage(
+          chatId,
+          `📱 <b>Нужен номер телефона</b>
+
+Для завершения регистрации поделитесь вашим номером телефона:`,
+        );
+        
+        // Отправляем кнопку для шаринга телефона
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "Нажмите кнопку, чтобы поделиться номером:",
+            parse_mode: "HTML",
+            reply_markup: {
+              keyboard: [
+                [
+                  {
+                    text: "📱 Поделиться номером телефона",
+                    request_contact: true,
+                  }
+                ]
+              ],
+              one_time_keyboard: true,
+              resize_keyboard: true,
+            },
+          }),
+        });
+        
+        return NextResponse.json({ ok: true });
+      }
+
+      // Пользователь привязан - создаем токен и отправляем кнопку для входа
+      const crypto = await import("crypto");
+      const loginToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+      await prisma.loginToken.create({
+        data: {
+          token: loginToken,
+          userId: user.id,
+          expiresAt,
+        },
+      });
+
+      console.log("[Telegram Webhook] Создан токен для быстрого входа");
+
+      // Определяем правильный baseUrl
+      const host = request.headers.get("host") || "localhost:3000";
+      const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+      const baseUrl = isLocalhost 
+        ? `http://${host}` 
+        : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+
+      await sendReturningUserWelcome(chatId, loginToken, user.firstName ?? undefined, baseUrl);
+      
+      return NextResponse.json({ ok: true });
+    }
+
+    // Команда /restart или /start (в т.ч. с пробелами/параметром, кроме link_phone, AUTH_phone и login)
     const isStartCommand =
       (trimmedText === "/restart" || trimmedText === "/start" || trimmedText.startsWith("/start ")) &&
       !trimmedText.startsWith("/start AUTH_phone_") &&
-      !trimmedText.startsWith("/start link_phone_");
+      !trimmedText.startsWith("/start link_phone_") &&
+      trimmedText !== "/start login";
 
     // Обычная команда /start (без параметра)
     if (isStartCommand) {
@@ -862,120 +978,6 @@ ${loginUrl}
         });
       }
 
-      return NextResponse.json({ ok: true });
-    }
-
-    // Команда /start login - авторизация через кнопку в боте
-    if (text === "/start login" || text === "/login") {
-      console.log("[Telegram Webhook] Команда login от пользователя:", chatId);
-      
-      // Проверяем, есть ли пользователь с этим chat_id
-      const user = await prisma.user.findUnique({
-        where: { telegramChatId: chatId },
-      });
-
-      if (!user) {
-        // Пользователь не привязан - запрашиваем номер телефона
-        await sendTelegramMessage(
-          chatId,
-          `👋 <b>Добро пожаловать в МойСоюз!</b>
-
-Для регистрации или входа нам нужен ваш номер телефона.
-
-Поделитесь номером телефона, нажав кнопку ниже:`,
-        );
-        
-        // Отправляем кнопку для шаринга телефона
-        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        
-        await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: "Нажмите кнопку, чтобы поделиться номером:",
-            parse_mode: "HTML",
-            reply_markup: {
-              keyboard: [
-                [
-                  {
-                    text: "📱 Поделиться номером телефона",
-                    request_contact: true,
-                  }
-                ]
-              ],
-              one_time_keyboard: true,
-              resize_keyboard: true,
-            },
-          }),
-        });
-        
-        return NextResponse.json({ ok: true });
-      }
-      
-      // Если у пользователя нет номера телефона - запрашиваем
-      if (!user.phone) {
-        await sendTelegramMessage(
-          chatId,
-          `📱 <b>Нужен номер телефона</b>
-
-Для завершения регистрации поделитесь вашим номером телефона:`,
-        );
-        
-        // Отправляем кнопку для шаринга телефона
-        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        
-        await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: "Нажмите кнопку, чтобы поделиться номером:",
-            parse_mode: "HTML",
-            reply_markup: {
-              keyboard: [
-                [
-                  {
-                    text: "📱 Поделиться номером телефона",
-                    request_contact: true,
-                  }
-                ]
-              ],
-              one_time_keyboard: true,
-              resize_keyboard: true,
-            },
-          }),
-        });
-        
-        return NextResponse.json({ ok: true });
-      }
-
-      // Пользователь привязан - создаем токен и отправляем кнопку для входа
-      const crypto = await import("crypto");
-      const loginToken = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
-
-      await prisma.loginToken.create({
-        data: {
-          token: loginToken,
-          userId: user.id,
-          expiresAt,
-        },
-      });
-
-      console.log("[Telegram Webhook] Создан токен для быстрого входа");
-
-      // Определяем правильный baseUrl
-      const host = request.headers.get("host") || "localhost:3000";
-      const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-      const baseUrl = isLocalhost 
-        ? `http://${host}` 
-        : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
-
-      await sendReturningUserWelcome(chatId, loginToken, user.firstName ?? undefined, baseUrl);
-      
       return NextResponse.json({ ok: true });
     }
 

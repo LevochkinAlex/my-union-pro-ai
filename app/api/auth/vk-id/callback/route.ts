@@ -103,59 +103,67 @@ export async function GET(request: NextRequest) {
 
   let user = await prisma.user.findUnique({ where: { vkId: vkUserId } });
 
-  if (!user) {
-    // Собираем всех кандидатов по email и телефону для слияния при совпадении
-    const candidateIds = new Set<string>();
-    let byEmail: { id: string; telegramChatId: string | null }[] = [];
-    let byPhone: { id: string; telegramChatId: string | null }[] = [];
-    let byPhoneFallback: { id: string }[] = [];
+  // Собираем кандидатов для объединения (включая уже найденного по vkId).
+  const candidateIds = new Set<string>();
+  let byEmail: { id: string; telegramChatId: string | null }[] = [];
+  let byPhone: { id: string; telegramChatId: string | null }[] = [];
+  let byPhoneFallback: { id: string; telegramChatId: string | null }[] = [];
 
-    if (email) {
-      byEmail = await prisma.user.findMany({
-        where: { email: { equals: email, mode: "insensitive" } },
-        select: { id: true, telegramChatId: true },
-      });
-      byEmail.forEach((u) => candidateIds.add(u.id));
-    }
-    if (phone) {
-      byPhone = await prisma.user.findMany({
-        where: { OR: [{ phone }, { authPhone: phone }] },
-        select: { id: true, telegramChatId: true },
-      });
-      byPhone.forEach((u) => candidateIds.add(u.id));
-    }
-    if (candidateIds.size === 0 && phone) {
-      const phoneDigits = phone.replace(/\D/g, "");
-      const allWithPhone = await prisma.user.findMany({
-        where: { OR: [{ phone: { not: null } }, { authPhone: { not: null } }] },
-        select: { id: true, phone: true, authPhone: true, telegramChatId: true },
-      });
-      const matches = allWithPhone.filter(
-        (u) =>
-          (u.phone && normalizePhone(u.phone)?.replace(/\D/g, "") === phoneDigits) ||
-          (u.authPhone && normalizePhone(u.authPhone)?.replace(/\D/g, "") === phoneDigits),
-      );
-      byPhoneFallback = matches.map((u) => ({ id: u.id, telegramChatId: u.telegramChatId }));
-      matches.forEach((u) => candidateIds.add(u.id));
-    }
+  if (user) {
+    candidateIds.add(user.id);
+  }
 
-    // Выбираем одного пользователя: приоритет — с telegramChatId, иначе первый из объединённого списка
-    const allCandidates = [...byEmail, ...byPhone, ...byPhoneFallback];
-    const uniqueById = Array.from(new Map(allCandidates.map((u) => [u.id, u])).values());
-    const preferred = uniqueById.find((u) => "telegramChatId" in u && u.telegramChatId != null) ?? uniqueById[0];
-    if (preferred) {
-      user = await prisma.user.findUnique({ where: { id: preferred.id } });
-      // Если найдено несколько разных аккаунтов (по email и по телефону) — сливаем в один
-      if (user && candidateIds.size > 1) {
-        const primaryId = user.id;
-        for (const id of candidateIds) {
-          if (id === primaryId) continue;
-          const { ok, error } = await mergeUsers(prisma, primaryId, id);
-          if (!ok) console.warn("[VK ID] Не удалось слить аккаунт:", id, error);
-        }
-        user = await prisma.user.findUnique({ where: { id: primaryId } }) ?? user;
+  if (email) {
+    byEmail = await prisma.user.findMany({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true, telegramChatId: true },
+    });
+    byEmail.forEach((u) => candidateIds.add(u.id));
+  }
+  if (phone) {
+    byPhone = await prisma.user.findMany({
+      where: { OR: [{ phone }, { authPhone: phone }] },
+      select: { id: true, telegramChatId: true },
+    });
+    byPhone.forEach((u) => candidateIds.add(u.id));
+  }
+  if (candidateIds.size === 0 && phone) {
+    const phoneDigits = phone.replace(/\D/g, "");
+    const allWithPhone = await prisma.user.findMany({
+      where: { OR: [{ phone: { not: null } }, { authPhone: { not: null } }] },
+      select: { id: true, phone: true, authPhone: true, telegramChatId: true },
+    });
+    const matches = allWithPhone.filter(
+      (u) =>
+        (u.phone && normalizePhone(u.phone)?.replace(/\D/g, "") === phoneDigits) ||
+        (u.authPhone && normalizePhone(u.authPhone)?.replace(/\D/g, "") === phoneDigits),
+    );
+    byPhoneFallback = matches.map((u) => ({ id: u.id, telegramChatId: u.telegramChatId }));
+    matches.forEach((u) => candidateIds.add(u.id));
+  }
+
+  // Приоритет primary-аккаунта: с telegramChatId (чтобы не ломать вход через Telegram), иначе первый найденный.
+  const allCandidates = [
+    ...(user ? [{ id: user.id, telegramChatId: user.telegramChatId ?? null }] : []),
+    ...byEmail,
+    ...byPhone,
+    ...byPhoneFallback,
+  ];
+  const uniqueById = Array.from(new Map(allCandidates.map((u) => [u.id, u])).values());
+  const preferred = uniqueById.find((u) => u.telegramChatId != null) ?? uniqueById[0];
+
+  if (preferred) {
+    const primaryId = preferred.id;
+
+    if (candidateIds.size > 1) {
+      for (const id of candidateIds) {
+        if (id === primaryId) continue;
+        const { ok, error } = await mergeUsers(prisma, primaryId, id);
+        if (!ok) console.warn("[VK ID] Не удалось слить аккаунт:", id, error);
       }
     }
+
+    user = await prisma.user.findUnique({ where: { id: primaryId } }) ?? user;
   }
 
   // VK ID может отдавать ФИО латиницей — переводим в кириллицу для профиля
