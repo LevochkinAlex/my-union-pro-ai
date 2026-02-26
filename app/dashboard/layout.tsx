@@ -94,6 +94,24 @@ export default async function DashboardLayout({
   const isPPOHead = userData?.isPPOHead || false;
   const isMPOHead = userData?.isMPOHead || false;
   const isRPOHead = userData?.isRPOHead || false;
+
+  // Режимы для переключателя (с сервера — чтобы переключатель был виден сразу)
+  const serverViewModes: { mode: string; label: string }[] = [];
+  if (userRole === "MEMBER" || userRole === "PENDING_MEMBER") {
+    serverViewModes.push({ mode: "MEMBER", label: "Член участник" });
+  }
+  if (userData?.isPPOHead && userData?.ppoHeadOrganizationId) {
+    serverViewModes.push({ mode: "PPO_HEAD", label: "Председатель ППО" });
+  }
+  if (userData?.isMPOHead && userData?.mpoHeadOrganizationId) {
+    serverViewModes.push({ mode: "MPO_HEAD", label: "Председатель МПО" });
+  }
+  if (userData?.isRPOHead && userData?.rpoHeadOrganizationId) {
+    serverViewModes.push({ mode: "RPO_HEAD", label: "Региональный" });
+  }
+  if (serverViewModes.length === 0) {
+    serverViewModes.push({ mode: "MEMBER", label: "Член участник" });
+  }
   
   console.log("[dashboard/layout] ✅ User authenticated:", {
     userId: session.user.id,
@@ -664,6 +682,8 @@ export default async function DashboardLayout({
           items={menuItems}
           userInitial={getUserInitial()}
           avatarUrl={user?.avatarUrl || null}
+          serverViewModes={serverViewModes}
+          serverViewMode={viewMode}
         />
 
         {/* Desktop Sidebar */}
@@ -671,6 +691,8 @@ export default async function DashboardLayout({
           items={menuItems}
           userInitial={getUserInitial()}
           avatarUrl={user?.avatarUrl || null}
+          serverViewModes={serverViewModes}
+          serverViewMode={viewMode}
         />
 
         {/* Main content */}

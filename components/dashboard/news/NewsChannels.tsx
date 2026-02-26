@@ -1,9 +1,8 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 
-interface NewsChannel {
+export interface NewsChannel {
   id: string;
   name: string;
   description: string | null;
@@ -12,8 +11,12 @@ interface NewsChannel {
   organizationId: string | null;
 }
 
-function NewsChannelsComponent() {
-  const { data: session } = useSession();
+interface NewsChannelsProps {
+  selectedChannelId?: string | null;
+  onSelectChannel?: (channelId: string | null) => void;
+}
+
+function NewsChannelsComponent({ selectedChannelId = null, onSelectChannel }: NewsChannelsProps) {
   const [channels, setChannels] = useState<NewsChannel[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -103,10 +106,16 @@ function NewsChannelsComponent() {
         </h2>
 
         <div className="space-y-3">
-          {channels.map((channel) => (
-            <div
+          {channels.map((channel) => {
+            const isSelected = selectedChannelId === channel.id;
+            return (
+            <button
               key={channel.id}
-              className="group flex items-start gap-3 rounded-lg p-3 transition hover:bg-gray-50 dark:hover:bg-gray-700/50"
+              type="button"
+              onClick={() => onSelectChannel?.(isSelected ? null : channel.id)}
+              className={`group w-full flex items-start gap-3 rounded-lg p-3 text-left transition hover:bg-gray-50 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                isSelected ? "bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-200 dark:ring-blue-800" : ""
+              }`}
             >
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                 <svg
@@ -144,8 +153,9 @@ function NewsChannelsComponent() {
                   {channel.subscriberCount.toLocaleString()} участников
                 </p>
               </div>
-            </div>
-          ))}
+            </button>
+            );
+          })}
         </div>
       </div>
 

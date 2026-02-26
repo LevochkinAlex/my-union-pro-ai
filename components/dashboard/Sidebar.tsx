@@ -18,14 +18,21 @@ interface NavItem {
   subItems?: { href: string; label: string }[];
 }
 
+interface ViewModeOption {
+  mode: string;
+  label: string;
+}
+
 interface SidebarProps {
   items: NavItem[];
   userInitial: string;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  serverViewModes?: ViewModeOption[];
+  serverViewMode?: string;
 }
 
-export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false }: SidebarProps) {
+export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false, serverViewModes = [], serverViewMode }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [manuallyCollapsed, setManuallyCollapsed] = useState<string[]>([]); // Пункты, которые пользователь вручную свернул
@@ -84,7 +91,11 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
         <nav className={`flex-1 min-h-0 py-2 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 ${isCollapsed ? "px-1 flex flex-col items-center" : "px-3"}`}>
           {/* View Mode Switch - в начале меню для пользователей с двойной ролью */}
           {!isAdmin && (
-            <ViewModeSwitch collapsed={isCollapsed} />
+            <ViewModeSwitch
+              collapsed={isCollapsed}
+              serverViewModes={serverViewModes}
+              serverViewMode={serverViewMode}
+            />
           )}
           
           {/* Menu items */}

@@ -61,30 +61,31 @@ export default function NewsPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
-  const isLoadingRef = useRef(false); // Ref для предотвращения дублирования
+  const isLoadingRef = useRef(false);
   const loadNewsRef = useRef<((pageNum?: number) => Promise<void>) | null>(null);
 
-  const loadNews = useCallback(async (pageNum = 1, retryCount = 0) => {
-    // Предотвращаем повторные запросы через ref
+  const loadNews = useCallback(async (pageNum = 1, retryCount = 0, channelIdFilter?: string | null) => {
     if (isLoadingRef.current) return;
     isLoadingRef.current = true;
+    const channelId = channelIdFilter !== undefined ? channelIdFilter : selectedChannelId;
 
     try {
       if (pageNum === 1) {
         setLoading(true);
-        setError(""); // Очищаем ошибку при новой попытке
+        setError("");
       } else {
         setIsLoadingMore(true);
       }
 
-      // Добавляем timeout для запроса (10 секунд)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       try {
-        // Добавляем cache: 'no-cache' для избежания проблем с кешем
-        const response = await fetch(`/api/news?page=${pageNum}&limit=10`, {
+        const params = new URLSearchParams({ page: String(pageNum), limit: "10" });
+        if (channelId) params.set("channelId", channelId);
+        const response = await fetch(`/api/news?${params.toString()}`, {
           cache: 'no-cache',
           headers: {
             'Cache-Control': 'no-cache',
@@ -150,17 +151,18 @@ export default function NewsPage() {
       setIsLoadingMore(false);
       isLoadingRef.current = false;
     }
-  }, []);
+  }, [selectedChannelId]);
 
-  // Сохраняем функцию в ref для использования в IntersectionObserver
   useEffect(() => {
     loadNewsRef.current = loadNews;
   }, [loadNews]);
 
-  // Загружаем первую страницу только один раз
+  // Первая загрузка и перезагрузка при смене канала
   useEffect(() => {
-    loadNews();
-  }, []);
+    setPage(1);
+    isLoadingRef.current = false;
+    loadNews(1, 0, selectedChannelId);
+  }, [selectedChannelId, loadNews]);
 
   // Infinite scroll с Intersection Observer
   useEffect(() => {
@@ -378,7 +380,10 @@ export default function NewsPage() {
         {/* Правый сайдбар - фиксированный на широких экранах */}
         <aside className="hidden xl:block w-80 flex-shrink-0">
           <div className="sticky top-6 space-y-4">
-            <NewsChannels />
+            <NewsChannels
+              selectedChannelId={selectedChannelId}
+              onSelectChannel={setSelectedChannelId}
+            />
             <UnionMembers />
           </div>
         </aside>

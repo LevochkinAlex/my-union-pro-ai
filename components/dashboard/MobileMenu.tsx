@@ -23,6 +23,8 @@ interface MobileMenuProps {
   userInitial: string;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  serverViewModes?: ViewModeOption[];
+  serverViewMode?: string;
 }
 
 interface ViewModeOption {
@@ -38,6 +40,8 @@ export default function MobileMenu({
   userInitial,
   avatarUrl,
   isAdmin = false,
+  serverViewModes = [],
+  serverViewMode,
 }: MobileMenuProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -45,13 +49,21 @@ export default function MobileMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [avatarError, setAvatarError] = useState(false);
+
+  const hasServerModes = serverViewModes.length > 1;
+  const initialMode =
+    serverViewMode && serverViewModes.some((m) => m.mode === serverViewMode)
+      ? serverViewMode
+      : serverViewModes[0]?.mode || "MEMBER";
   
-  // Состояние для переключения режимов
-  const [currentMode, setCurrentMode] = useState<string>("MEMBER");
-  const [availableModes, setAvailableModes] = useState<ViewModeOption[]>([]);
-  const [canSwitch, setCanSwitch] = useState(false);
+  // Состояние для переключения режимов (с сервера — сразу видно переключатель)
+  const [currentMode, setCurrentMode] = useState<string>(initialMode);
+  const [availableModes, setAvailableModes] = useState<ViewModeOption[]>(
+    serverViewModes.length > 0 ? serverViewModes : []
+  );
+  const [canSwitch, setCanSwitch] = useState(hasServerModes);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!hasServerModes);
   const [retryCount, setRetryCount] = useState(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 

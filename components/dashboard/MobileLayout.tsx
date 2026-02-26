@@ -11,11 +11,18 @@ interface NavItem {
   subItems?: { href: string; label: string }[];
 }
 
+interface ViewModeOption {
+  mode: string;
+  label: string;
+}
+
 interface MobileLayoutProps {
   items: NavItem[];
   userInitial: string;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  serverViewModes?: ViewModeOption[];
+  serverViewMode?: string;
 }
 
 export default function MobileLayout({
@@ -23,6 +30,8 @@ export default function MobileLayout({
   userInitial,
   avatarUrl,
   isAdmin,
+  serverViewModes = [],
+  serverViewMode,
 }: MobileLayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -36,6 +45,8 @@ export default function MobileLayout({
         userInitial={userInitial}
         avatarUrl={avatarUrl}
         isAdmin={isAdmin}
+        serverViewModes={serverViewModes}
+        serverViewMode={serverViewMode}
       />
     </>
   );

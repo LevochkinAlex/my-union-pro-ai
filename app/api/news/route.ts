@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
+    const channelId = searchParams.get("channelId") || null;
     const skip = (page - 1) * limit;
 
     // Демо-режим: мок-новости без БД
@@ -54,24 +55,37 @@ export async function GET(request: NextRequest) {
       await getOrCreateRegionalNewsChannel(session.user.id);
     }
 
-    // Кешируем новости на 2 минуты (с учётом организации)
-    // withCache всегда выполняет функцию, даже если Redis недоступен
-    const cacheKey = getCacheKey("news:list", { page, limit, orgId: userOrganizationId });
+    // Проверяем доступ к каналу, если передан channelId
+    let allowedChannelId: string | null = null;
+    if (channelId && session?.user?.id) {
+      const channel = await prisma.newsChannel.findUnique({
+        where: { id: channelId },
+        select: { id: true, organizationId: true, name: true },
+      });
+      if (channel) {
+        const isOrgChannel = userOrganizationId && channel.organizationId === userOrganizationId;
+        const isRegional = channel.organizationId === null && channel.name === "Региональные новости";
+        if (isOrgChannel || isRegional) allowedChannelId = channel.id;
+      }
+    }
+
+    // Кешируем новости на 2 минуты (с учётом организации и канала)
+    const cacheKey = getCacheKey("news:list", { page, limit, orgId: userOrganizationId, channelId: allowedChannelId || channelId });
     
     let cachedData;
     try {
       cachedData = await withCache(
       cacheKey,
       async () => {
-        // Фильтруем новости ТОЛЬКО по организации пользователя
-        // Каждая организация создает свой ареал - пользователи видят только новости своей организации
         const whereClause: any = {
           isPublished: true,
         };
 
-        // Если пользователь авторизован и у него есть организация
-        // показываем ТОЛЬКО новости из каналов его организации
-        if (userOrganizationId) {
+        // Фильтр по одному каналу (переключатель каналов)
+        if (allowedChannelId) {
+          whereClause.channelId = allowedChannelId;
+        } else if (userOrganizationId) {
+          // Показываем новости из всех каналов организации + региональный
           whereClause.OR = [
             {
               channel: {
@@ -86,8 +100,6 @@ export async function GET(request: NextRequest) {
             },
           ];
         } else {
-          // Для неавторизованных или пользователей без организации
-          // показываем только общие новости без привязки к организации
           whereClause.OR = [
             { channelId: null },
             { channel: { organizationId: null } },
@@ -163,20 +175,12 @@ export async function GET(request: NextRequest) {
       const whereClause: any = {
         isPublished: true,
       };
-
-      if (userOrganizationId) {
+      if (allowedChannelId) {
+        whereClause.channelId = allowedChannelId;
+      } else if (userOrganizationId) {
         whereClause.OR = [
-          {
-            channel: {
-              organizationId: userOrganizationId,
-            },
-          },
-          {
-            channel: {
-              organizationId: null,
-              name: "Региональные новости",
-            },
-          },
+          { channel: { organizationId: userOrganizationId } },
+          { channel: { organizationId: null, name: "Региональные новости" } },
         ];
       } else {
         whereClause.OR = [

@@ -12,6 +12,9 @@ interface ViewModeOption {
 
 interface ViewModeSwitchProps {
   collapsed?: boolean;
+  /** Режимы с сервера — переключатель показывается сразу, без ожидания API */
+  serverViewModes?: { mode: string; label: string }[];
+  serverViewMode?: string;
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -41,12 +44,18 @@ function ModeIcon({ mode }: { mode: string }) {
   );
 }
 
-export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProps) {
+export default function ViewModeSwitch({ collapsed = false, serverViewModes = [], serverViewMode }: ViewModeSwitchProps) {
   const router = useRouter();
-  const [currentMode, setCurrentMode] = useState<string>("MEMBER");
-  const [availableModes, setAvailableModes] = useState<ViewModeOption[]>([]);
-  const [canSwitch, setCanSwitch] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const hasServerModes = serverViewModes.length > 1;
+  const initialMode = serverViewMode && serverViewModes.some((m) => m.mode === serverViewMode)
+    ? serverViewMode
+    : serverViewModes[0]?.mode || "MEMBER";
+  const [currentMode, setCurrentMode] = useState<string>(initialMode);
+  const [availableModes, setAvailableModes] = useState<ViewModeOption[]>(
+    serverViewModes.length > 0 ? serverViewModes : []
+  );
+  const [canSwitch, setCanSwitch] = useState(hasServerModes);
+  const [isLoading, setIsLoading] = useState(!hasServerModes);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
