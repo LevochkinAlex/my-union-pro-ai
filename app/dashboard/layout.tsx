@@ -35,23 +35,31 @@ export default async function DashboardLayout({
   const isImpersonating = session.user.isImpersonating || false;
   const isDemo = session.user.id === DEMO_USER_ID || session.user.isDemo === true;
 
-  // Единый источник прав: сессия (viewMode и флаги председателей уже в auth callbacks)
-  const viewMode = getViewMode(session);
-  const serverViewModes = getAvailableViewModes(session);
-  const isPPOHead = session.user.isPPOHead ?? false;
-
-  // Запрашиваем только аватар и права сотрудника (не дублируем запрос прав из сессии)
+  // Берём флаги ролей и аватар из БД (fallback на сессию при ошибке)
+  let viewMode = getViewMode(session);
+  let serverViewModes = getAvailableViewModes(session);
+  let isPPOHead = session.user.isPPOHead ?? false;
   let avatarUrl: string | null | undefined = undefined;
   let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
 
   if (session.user.id !== DEMO_MEMBER_USER_ID && !isDemo) {
     const LAYOUT_DB_TIMEOUT_MS = 2000;
     try {
-      const [avatarResult, staffResult] = await Promise.all([
+      const [dbUser, staffResult] = await Promise.all([
         prisma.user.findUnique({
           where: { id: session.user.id },
-          select: { avatarUrl: true },
-        }).then((u) => u?.avatarUrl ?? null),
+          select: {
+            avatarUrl: true,
+            viewMode: true,
+            isPPOHead: true,
+            ppoHeadOrganizationId: true,
+            isMPOHead: true,
+            mpoHeadOrganizationId: true,
+            isRPOHead: true,
+            rpoHeadOrganizationId: true,
+            role: true,
+          },
+        }),
         Promise.race([
           checkUserPermissions(session.user.id),
           new Promise<{ isStaff: false; permissions: Record<string, boolean> }>((resolve) =>
@@ -59,7 +67,13 @@ export default async function DashboardLayout({
           ),
         ]).catch(() => ({ isStaff: false, permissions: {} })),
       ]);
-      avatarUrl = avatarResult ?? undefined;
+      if (dbUser) {
+        avatarUrl = dbUser.avatarUrl ?? undefined;
+        isPPOHead = dbUser.isPPOHead ?? false;
+        const fakeSession = { user: dbUser } as any;
+        viewMode = getViewMode(fakeSession);
+        serverViewModes = getAvailableViewModes(fakeSession);
+      }
       if (staffResult.isStaff && staffResult.permissions) {
         staffPermissions = { isStaff: true, permissions: staffResult.permissions };
       }
