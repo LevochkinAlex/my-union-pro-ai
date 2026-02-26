@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
     });
     y += 24;
 
-    doc.font(fontBold).fontSize(10).text("Лицензиат:", x, y);
+    doc.font(fontBold).fontSize(10).text("Лицензиар:", x, y);
     doc.font(fontRegular).fontSize(9).text(
       `${supplierName}, ${supplierAddress}, ИНН ${supplierInn}, КПП ${supplierKpp}, ОГРН ${supplierOgrn}, р/с ${supplierRs}, в банке ${supplierBank}, БИК ${supplierBik}, к/с ${supplierKs}`,
       x + 72,
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
         ? `ИНН/КПП ${profile.inn || "—"}/${profile.kpp || "—"}`
         : "";
 
-    doc.font(fontBold).fontSize(10).text("Лицензиар:", x, y);
+    doc.font(fontBold).fontSize(10).text("Лицензиат:", x, y);
     doc.font(fontRegular).fontSize(9).text(
       [
         buyerMainName,
@@ -296,12 +296,12 @@ export async function POST(request: NextRequest) {
     y = doc.y + 10;
 
     const offerText = [
-      "Настоящий счет-оферта (далее — «Счет») является письменным предложением (офертой) Лицензиата заключить договор в соответствии со ст. 432–444 ГК РФ.",
-      "Акцептом оферты является полная оплата настоящего Счета Лицензиаром (п. 3 ст. 438 ГК РФ).",
+      "Настоящий счет-оферта (далее — «Счет») является письменным предложением (офертой) Лицензиара заключить договор в соответствии со ст. 432–444 ГК РФ.",
+      "Акцептом оферты является полная оплата настоящего Счета Лицензиатом (п. 3 ст. 438 ГК РФ).",
       "Счет действителен 7 (семь) рабочих дней с даты выставления.",
       "Предмет договора: предоставление доступа к SaaS MyUnion Pro по выбранному тарифу. Публичная оферта: https://myunion.pro/license",
       "Период предоставления услуг: " + periodLabel(period) + " с момента поступления денежных средств на счёт.",
-      "Споры подлежат рассмотрению по месту нахождения Лицензиата.",
+      "Споры подлежат рассмотрению по месту нахождения Лицензиара.",
     ];
     doc.font(fontRegular).fontSize(9);
     for (const line of offerText) {
