@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { FileText, Trophy, AlertTriangle } from "lucide-react";
 import { alertSuccess, alertError } from "@/lib/alert";
 import { Modal } from "@/components/ui/modal";
 
@@ -859,7 +860,7 @@ export default function MembersPage() {
                                   : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
                               }`}
                             >
-                              📄 {doc.type === "MEMBERSHIP_APPLICATION" ? "Вступл." : doc.type === "CONTRIBUTION_APPLICATION" ? "Взносы" : "Док."}
+                              <><FileText className="inline h-3.5 w-3.5 align-middle mr-0.5" /> {doc.type === "MEMBERSHIP_APPLICATION" ? "Вступл." : doc.type === "CONTRIBUTION_APPLICATION" ? "Взносы" : "Док."}</>
                             </a>
                           ))}
                         </div>
@@ -1395,7 +1396,7 @@ export default function MembersPage() {
                               {awards.map((a: any, i: number) => (
                                 <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-2xl">🏆</span>
+                                    <Trophy className="h-6 w-6 shrink-0 text-amber-500" />
                                     <span className={`rounded-full px-3 py-1 text-xs font-medium ${
                                       a.type === "государственная" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
                                       a.type === "ведомственная" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
@@ -1475,7 +1476,7 @@ export default function MembersPage() {
                                     {/* Дополнительная информация о статусе */}
                                     {!doc.signedFilePath && doc.filePath && (
                                       <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                                        ⚠️ Документ сформирован, но пользователь ещё не загрузил подписанную версию
+                                        <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Документ сформирован, но пользователь ещё не загрузил подписанную версию</span>
                                       </p>
                                     )}
                                   </div>

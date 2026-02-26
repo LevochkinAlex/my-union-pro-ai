@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
+import { User, FileText, Medal, GraduationCap, Trophy } from "lucide-react";
 
 type TabKey = "profile" | "additional" | "membership" | "education" | "awards";
 
@@ -10,13 +11,21 @@ interface ProfileTabsProps {
   children: ReactNode;
 }
 
+const TAB_ICONS: Record<TabKey, ReactNode> = {
+  profile: <User className="h-4 w-4" />,
+  additional: <FileText className="h-4 w-4" />,
+  membership: <Medal className="h-4 w-4" />,
+  education: <GraduationCap className="h-4 w-4" />,
+  awards: <Trophy className="h-4 w-4" />,
+};
+
 export default function ProfileTabs({ activeTab, onTabChange, children }: ProfileTabsProps) {
-  const tabs = [
-    { key: "profile" as TabKey, label: "Основное", icon: "👤" },
-    { key: "additional" as TabKey, label: "Дополнительно", icon: "📝" },
-    { key: "membership" as TabKey, label: "Членство", icon: "🎖️" },
-    { key: "education" as TabKey, label: "Образование", icon: "🎓" },
-    { key: "awards" as TabKey, label: "Награды", icon: "🏆" },
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "profile", label: "Основное" },
+    { key: "additional", label: "Дополнительно" },
+    { key: "membership", label: "Членство" },
+    { key: "education", label: "Образование" },
+    { key: "awards", label: "Награды" },
   ];
 
   return (
@@ -29,7 +38,7 @@ export default function ProfileTabs({ activeTab, onTabChange, children }: Profil
               key={tab.key}
               onClick={() => onTabChange(tab.key)}
               className={`
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                inline-flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
                 ${
                   activeTab === tab.key
                     ? "border-blue-500 text-blue-600 dark:text-blue-400"
@@ -37,7 +46,7 @@ export default function ProfileTabs({ activeTab, onTabChange, children }: Profil
                 }
               `}
             >
-              <span className="mr-2">{tab.icon}</span>
+              <span className="mr-2 inline-flex shrink-0">{TAB_ICONS[tab.key]}</span>
               {tab.label}
             </button>
           ))}

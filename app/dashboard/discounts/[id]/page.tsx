@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { PartyPopper } from "lucide-react";
 import { DiscountItem, DiscountOption } from "@/types/discounts";
 import Image from "next/image";
 import QRCode from "qrcode";
@@ -1106,7 +1107,7 @@ export default function DiscountDetailPage() {
                       </div>
                     ) : (
                       <div className="text-center">
-                        <div className="text-5xl mb-2">🎉</div>
+                        <div className="mb-2 flex justify-center"><PartyPopper className="h-14 w-14 text-white" /></div>
                         <p className="text-white/90 font-medium text-sm sm:text-base max-w-xs">
                           {discount.shortDescription 
                             ? discount.shortDescription.replace(/<[^>]*>/g, '').substring(0, 100)

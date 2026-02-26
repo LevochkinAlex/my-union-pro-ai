@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { OrganizationType } from "@prisma/client";
+import { Building2, Users, BarChart3, Mail, TrendingUp, AlertTriangle, CheckCircle, MessageCircle } from "lucide-react";
 
 interface OrgStats {
   level: "PPO" | "MPO" | "RPO";
@@ -126,33 +127,33 @@ export default function OrgHeadDashboard() {
         <StatCard
           title="Организаций"
           value={stats.stats.totalOrganizations}
-          icon="🏛️"
+          icon={<Building2 className="h-6 w-6" />}
           color="bg-blue-500"
         />
         <StatCard
           title="Членов профсоюза"
           value={stats.stats.totalMembers}
-          icon="👥"
+          icon={<Users className="h-6 w-6" />}
           color="bg-green-500"
         />
         <StatCard
           title="Отчётов всего"
           value={stats.stats.reports.total}
-          icon="📊"
+          icon={<BarChart3 className="h-6 w-6" />}
           color="bg-purple-500"
         />
         <StatCard
           title="Обращений"
           value={stats.stats.tickets.total}
-          icon="📨"
+          icon={<Mail className="h-6 w-6" />}
           color="bg-orange-500"
         />
       </div>
 
       {/* Активность за 30 дней */}
       <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-          📈 Активность за последние 30 дней
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+          <TrendingUp className="h-5 w-5" /> Активность за последние 30 дней
         </h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
@@ -180,8 +181,8 @@ export default function OrgHeadDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Отчёты по статусам */}
         <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            📊 Статус отчётов
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <BarChart3 className="h-5 w-5" /> Статус отчётов
           </h2>
           <div className="space-y-3">
             {Object.entries(stats.stats.reports.byStatus).map(([status, count]) => (
@@ -202,8 +203,8 @@ export default function OrgHeadDashboard() {
 
         {/* Организации без отчёта */}
         <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            ⚠️ Не сдали отчёт за {formatPeriod(stats.stats.currentPeriod)}
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <AlertTriangle className="h-5 w-5" /> Не сдали отчёт за {formatPeriod(stats.stats.currentPeriod)}
           </h2>
           {stats.stats.orgsWithoutReport.length > 0 ? (
             <div className="max-h-[300px] space-y-2 overflow-y-auto">
@@ -225,8 +226,8 @@ export default function OrgHeadDashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-green-600 dark:text-green-400">
-              ✅ Все организации сдали отчёт
+            <p className="flex items-center justify-center gap-2 text-center text-green-600 dark:text-green-400">
+              <CheckCircle className="h-5 w-5 shrink-0" /> Все организации сдали отчёт
             </p>
           )}
         </div>
@@ -235,8 +236,8 @@ export default function OrgHeadDashboard() {
       {/* Список организаций */}
       <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            🏛️ Подчинённые организации
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <Building2 className="h-5 w-5" /> Подчинённые организации
           </h2>
           <Link
             href="/dashboard/organizations"
@@ -302,25 +303,25 @@ export default function OrgHeadDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <QuickAction
           href="/dashboard/reports"
-          icon="📊"
+          icon={<BarChart3 className="h-8 w-8" />}
           title="Отчёты"
           description="Просмотр и утверждение"
         />
         <QuickAction
           href="/dashboard/organizations"
-          icon="🏛️"
+          icon={<Building2 className="h-8 w-8" />}
           title="Организации"
           description="Управление структурой"
         />
         <QuickAction
           href="/dashboard/users/org-head"
-          icon="👥"
+          icon={<Users className="h-8 w-8" />}
           title="Пользователи"
           description="Валидация и активные"
         />
         <QuickAction
           href="/dashboard/chats/ppo-head"
-          icon="💬"
+          icon={<MessageCircle className="h-8 w-8" />}
           title="Чаты"
           description="Общение и поддержка"
         />
@@ -338,13 +339,13 @@ function StatCard({
 }: {
   title: string;
   value: number;
-  icon: string;
+  icon: React.ReactNode;
   color: string;
 }) {
   return (
     <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
       <div className="flex items-center gap-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${color} text-2xl text-white`}>
+        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${color} text-white`}>
           {icon}
         </div>
         <div>
@@ -364,7 +365,7 @@ function QuickAction({
   description,
 }: {
   href: string;
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   description: string;
 }) {
@@ -373,7 +374,7 @@ function QuickAction({
       href={href}
       className="flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md dark:bg-gray-800"
     >
-      <span className="text-3xl">{icon}</span>
+      <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{icon}</span>
       <div>
         <p className="font-medium text-gray-900 dark:text-white">{title}</p>
         <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>

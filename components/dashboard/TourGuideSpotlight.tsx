@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { Lightbulb } from "lucide-react";
 import {
   TOUR_STEPS,
   setTourDismissed,
@@ -300,7 +301,7 @@ export default function TourGuideSpotlight({
             <p className="whitespace-pre-wrap">{renderContent(step.content)}</p>
             {step.sidebarHint && (
               <p className="mt-2 rounded-lg bg-blue-100/80 px-2 py-1.5 text-xs text-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
-                💡 {step.sidebarHint}
+                <span className="inline-flex items-center gap-1"><Lightbulb className="h-3.5 w-3.5 shrink-0" /> {step.sidebarHint}</span>
               </p>
             )}
           </div>

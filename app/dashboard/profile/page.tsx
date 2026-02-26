@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { AlertTriangle } from "lucide-react";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
@@ -2400,7 +2401,7 @@ export default function ProfilePage() {
                 </p>
                 {membershipData.currentOrganization.type === "text" && (
                   <p className="mt-2 text-xs text-orange-600 dark:text-orange-400">
-                    ⚠️ Организация не привязана к справочнику. Пожалуйста, обновите профиль и выберите организацию из списка.
+                    <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Организация не привязана к справочнику. Пожалуйста, обновите профиль и выберите организацию из списка.</span>
                   </p>
                 )}
                 {membershipData.currentOrganization.inn && (
@@ -2420,7 +2421,7 @@ export default function ProfilePage() {
             {!membershipData.currentOrganization && (
               <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-900/20">
                 <p className="text-sm text-orange-800 dark:text-orange-200">
-                  ⚠️ Организация не указана. Пожалуйста, заполните анкету и выберите организацию из списка.
+                  <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0 inline" /> Организация не указана. Пожалуйста, заполните анкету и выберите организацию из списка.</span>
                 </p>
               </div>
             )}

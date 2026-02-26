@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { OrganizationType } from "@prisma/client";
+import { Building2 } from "lucide-react";
 
 interface Organization {
   id: string;
@@ -258,8 +259,8 @@ export default function OrganizationsPage() {
       {/* Заголовок */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            🏛️ Подчинённые организации
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
+            <Building2 className="h-7 w-7" /> Подчинённые организации
           </h1>
           <p className="mt-1 text-gray-500 dark:text-gray-400">
             Всего организаций: {organizations.length}

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { OrganizationType } from "@prisma/client";
+import { BarChart3, Building2, Users, ClipboardList, Mail, TrendingUp, User, AlertTriangle, Trophy } from "lucide-react";
+import styles from "./statistics.module.css";
 
 interface TimeSeriesData {
   period: string;
@@ -113,8 +115,8 @@ export default function StatisticsPage() {
     <div className="space-y-6">
       {/* Заголовок */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          📊 Статистика и аналитика
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
+          <BarChart3 className="h-7 w-7" /> Статистика и аналитика
         </h1>
         <p className="mt-1 text-gray-500 dark:text-gray-400">
           {levelLabel}: {stats.organization?.name}
@@ -126,25 +128,25 @@ export default function StatisticsPage() {
         <MetricCard
           title="Организаций"
           value={stats.stats.totalOrganizations}
-          icon="🏛️"
+          icon={<Building2 className="h-8 w-8" />}
           color="from-blue-500 to-blue-600"
         />
         <MetricCard
           title="Членов профсоюза"
           value={stats.stats.totalMembers}
-          icon="👥"
+          icon={<Users className="h-8 w-8" />}
           color="from-green-500 to-green-600"
         />
         <MetricCard
           title="Отчётов"
           value={stats.stats.reports.total}
-          icon="📋"
+          icon={<ClipboardList className="h-8 w-8" />}
           color="from-purple-500 to-purple-600"
         />
         <MetricCard
           title="Обращений"
           value={stats.stats.tickets.total}
-          icon="📨"
+          icon={<Mail className="h-8 w-8" />}
           color="from-orange-500 to-orange-600"
         />
       </div>
@@ -154,8 +156,8 @@ export default function StatisticsPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* График количества членов */}
           <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-              👥 Количество членов профсоюза
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+              <Users className="h-5 w-5" /> Количество членов профсоюза
             </h2>
             <div className="h-64">
               <AreaChart data={stats.timeSeries} dataKey="totalMembers" color="#3b82f6" />
@@ -176,27 +178,27 @@ export default function StatisticsPage() {
 
       {/* Активность за 30 дней */}
       <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-          📈 Активность за последние 30 дней
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+          <TrendingUp className="h-5 w-5" /> Активность за последние 30 дней
         </h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <ActivityCard
             label="Новых членов"
             value={stats.stats.recentActivity.newMembers}
             color="green"
-            icon="👤"
+            icon={<User className="h-6 w-6" />}
           />
           <ActivityCard
             label="Отчётов подано"
             value={stats.stats.recentActivity.newReports}
             color="purple"
-            icon="📊"
+            icon={<BarChart3 className="h-6 w-6" />}
           />
           <ActivityCard
             label="Обращений"
             value={stats.stats.recentActivity.newTickets}
             color="orange"
-            icon="✉️"
+            icon={<Mail className="h-6 w-6" />}
           />
         </div>
       </div>
@@ -205,8 +207,8 @@ export default function StatisticsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Отчёты по статусам */}
         <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            📋 Отчёты по статусам
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <ClipboardList className="h-5 w-5" /> Отчёты по статусам
           </h2>
           {Object.keys(stats.stats.reports.byStatus).length > 0 ? (
             <div className="space-y-4">
@@ -225,8 +227,7 @@ export default function StatisticsPage() {
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                       <div
-                        className={`h-full ${statusInfo.color} transition-all duration-500`}
-                        style={{ width: `${percentage}%` }}
+                        className={`h-full ${statusInfo.color} transition-all duration-500 w-[${percentage}%]`}
                       />
                     </div>
                   </div>
@@ -240,8 +241,8 @@ export default function StatisticsPage() {
 
         {/* Обращения по статусам */}
         <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            📨 Обращения по статусам
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <Mail className="h-5 w-5" /> Обращения по статусам
           </h2>
           {Object.keys(stats.stats.tickets.byStatus).length > 0 ? (
             <div className="space-y-4">
@@ -260,8 +261,8 @@ export default function StatisticsPage() {
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                       <div
-                        className={`h-full ${statusInfo.color} transition-all duration-500`}
-                        style={{ width: `${percentage}%` }}
+                        className={`h-full ${statusInfo.color} transition-all duration-500 ${styles.progressFill}`}
+                        style={{ "--progress-width": `${percentage}%` } as React.CSSProperties}
                       />
                     </div>
                   </div>
@@ -276,8 +277,8 @@ export default function StatisticsPage() {
 
       {/* Топ организаций по членам */}
       <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-          🏆 Топ организаций по количеству членов
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+          <Trophy className="h-5 w-5" /> Топ организаций по количеству членов
         </h2>
         <div className="space-y-3">
           {stats.organizations
@@ -310,8 +311,8 @@ export default function StatisticsPage() {
       {/* Организации без отчёта */}
       {stats.stats.orgsWithoutReport.length > 0 && (
         <div className="rounded-xl bg-red-50 p-6 shadow-sm dark:bg-red-900/20">
-          <h2 className="mb-4 text-lg font-semibold text-red-800 dark:text-red-300">
-            ⚠️ Организации без отчёта за {formatPeriod(stats.stats.currentPeriod)}
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-red-800 dark:text-red-300">
+            <AlertTriangle className="h-5 w-5" /> Организации без отчёта за {formatPeriod(stats.stats.currentPeriod)}
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stats.stats.orgsWithoutReport.map((org) => (
@@ -340,7 +341,7 @@ function MetricCard({
 }: {
   title: string;
   value: number;
-  icon: string;
+  icon: React.ReactNode;
   color: string;
 }) {
   return (
@@ -350,7 +351,7 @@ function MetricCard({
           <p className="text-sm font-medium text-white/80">{title}</p>
           <p className="mt-1 text-3xl font-bold">{value}</p>
         </div>
-        <span className="text-4xl opacity-80">{icon}</span>
+        <span className="opacity-80">{icon}</span>
       </div>
     </div>
   );
@@ -365,7 +366,7 @@ function ActivityCard({
   label: string;
   value: number;
   color: "green" | "purple" | "orange";
-  icon: string;
+  icon: React.ReactNode;
 }) {
   const colors = {
     green: "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400",
@@ -376,7 +377,7 @@ function ActivityCard({
   return (
     <div className={`rounded-lg p-4 ${colors[color]}`}>
       <div className="flex items-center gap-2">
-        <span className="text-2xl">{icon}</span>
+        <span className="shrink-0">{icon}</span>
         <div>
           <p className="text-sm opacity-80">{label}</p>
           <p className="text-2xl font-bold">+{value}</p>
