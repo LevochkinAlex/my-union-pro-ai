@@ -40,16 +40,8 @@ interface NewsPost {
   }>;
 }
 
-export default function NewsPage() {
-  const { data: session } = useSession();
-  
-  const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
-  const showPPOHeadView = !isDemoMember && isChairmanView(session);
-
-  if (showPPOHeadView) {
-    return <PPOHeadNewsPage />;
-  }
-
+/** Лента новостей для участников (без раннего return, чтобы не ломать правила хуков) */
+function MemberNewsFeed() {
   const [news, setNews] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -386,5 +378,13 @@ export default function NewsPage() {
     </div>
     </MembershipGate>
   );
+}
+
+export default function NewsPage() {
+  const { data: session } = useSession();
+  const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
+  const showPPOHeadView = !isDemoMember && isChairmanView(session);
+  if (showPPOHeadView) return <PPOHeadNewsPage />;
+  return <MemberNewsFeed />;
 }
 
