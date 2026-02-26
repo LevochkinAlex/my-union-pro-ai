@@ -27,6 +27,69 @@ function periodLabel(period: TariffPeriod): string {
   return period;
 }
 
+/** Сумма прописью для рублей (рубль/рубля/рублей, копейка/копейки/копеек) */
+function amountInWordsRub(amount: number): string {
+  const intPart = Math.floor(amount + 0.005);
+  const kopecks = Math.round((amount - intPart) * 100) % 100;
+  const kStr = kopecks < 10 ? `0${kopecks}` : String(kopecks);
+
+  const ones = ["", "один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять"];
+  const onesF = ["", "одна", "две", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять"];
+  const tens = ["", "десять", "двадцать", "тридцать", "сорок", "пятьдесят", "шестьдесят", "семьдесят", "восемьдесят", "девяносто"];
+  const teens = ["десять", "одиннадцать", "двенадцать", "тринадцать", "четырнадцать", "пятнадцать", "шестнадцать", "семнадцать", "восемнадцать", "девятнадцать"];
+  const hundreds = ["", "сто", "двести", "триста", "четыреста", "пятьсот", "шестьсот", "семьсот", "восемьсот", "девятьсот"];
+
+  function triadToWords(n: number, feminine: boolean): string {
+    if (n === 0) return "";
+    const h = Math.floor(n / 100);
+    const t = Math.floor((n % 100) / 10);
+    const o = n % 10;
+    const parts: string[] = [];
+    if (h > 0) parts.push(hundreds[h]);
+    if (t === 1) {
+      parts.push(teens[o]);
+    } else {
+      if (t > 0) parts.push(tens[t]);
+      if (o > 0) parts.push(feminine ? onesF[o] : ones[o]);
+    }
+    return parts.join(" ");
+  }
+
+  function pluralize(n: number, forms: [string, string, string]): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return forms[2];
+    if (mod10 === 1) return forms[0];
+    if (mod10 >= 2 && mod10 <= 4) return forms[1];
+    return forms[2];
+  }
+
+  if (intPart === 0) {
+    return `Ноль рублей ${kStr} ${pluralize(kopecks, ["копейка", "копейки", "копеек"])}`;
+  }
+
+  const parts: string[] = [];
+  const millions = Math.floor(intPart / 1_000_000);
+  const thousands = Math.floor((intPart % 1_000_000) / 1000);
+  const units = intPart % 1000;
+
+  if (millions > 0) {
+    parts.push(triadToWords(millions, false) + " " + pluralize(millions, ["миллион", "миллиона", "миллионов"]));
+  }
+  if (thousands > 0) {
+    parts.push(triadToWords(thousands, true) + " " + pluralize(thousands, ["тысяча", "тысячи", "тысяч"]));
+  }
+  if (units > 0) {
+    parts.push(triadToWords(units, false) + " " + pluralize(units, ["рубль", "рубля", "рублей"]));
+  } else {
+    parts.push(pluralize(intPart, ["рубль", "рубля", "рублей"]));
+  }
+
+  let result = parts.join(" ");
+  if (result[0]) result = result[0].toUpperCase() + result.slice(1);
+  return `${result} ${kStr} ${pluralize(kopecks, ["копейка", "копейки", "копеек"])}`;
+}
+
 /**
  * POST /api/subscription/invoice-offer
  * Генерация счет-оферты PDF по выбранному тарифу/периоду и сохраненному платежному профилю
@@ -203,9 +266,9 @@ export async function POST(request: NextRequest) {
     doc.font(fontBold).fontSize(8)
       .text("№", x + 4, y + 6)
       .text("Наименование", x + col1 + 4, y + 6, { width: col2 - 8 })
-      .text("Кол-во", x + col1 + col2 + 4, y + 6)
-      .text("Цена", x + col1 + col2 + col3 + 4, y + 6, { width: col4 - 8, align: "right" })
-      .text("Сумма", x + col1 + col2 + col3 + col4 + 4, y + 6, { width: col5 - 8, align: "right" });
+      .text("Кол-во, ед.", x + col1 + col2 + 4, y + 6)
+      .text("Цена, руб.", x + col1 + col2 + col3 + 4, y + 6, { width: col4 - 8, align: "right" })
+      .text("Сумма, руб.", x + col1 + col2 + col3 + col4 + 4, y + 6, { width: col5 - 8, align: "right" });
 
     y += rowH;
     doc.rect(x, y, col1, dataRowH).stroke();
@@ -224,6 +287,8 @@ export async function POST(request: NextRequest) {
 
     y += dataRowH + 10;
     doc.font(fontBold).fontSize(10).text(`Итого к оплате: ${formatMoney(amountRub)} ₽`, x, y);
+    y += 6;
+    doc.font(fontRegular).fontSize(9).text(amountInWordsRub(amountRub), x, y, { width: 515 });
     y += 18;
     doc.font(fontRegular).fontSize(9).text(`НДС не облагается (УСН). Тарифная ставка: ${ratePerUserPerMonth} ₽/польз./месяц`, x, y);
     y += 24;
@@ -233,7 +298,7 @@ export async function POST(request: NextRequest) {
       "Акцептом оферты является полная оплата настоящего Счета Покупателем (п. 3 ст. 438 ГК РФ).",
       "Счет действителен 7 (семь) рабочих дней с даты выставления.",
       "Предмет договора: предоставление доступа к SaaS MyUnion Pro по выбранному тарифу. Публичная оферта: https://myunion.pro/license",
-      "Период предоставления услуг: " + periodLabel(period) + ".",
+      "Период предоставления услуг: " + periodLabel(period) + " с момента поступления на счёт.",
       "Споры подлежат рассмотрению по месту нахождения Поставщика.",
     ];
     doc.font(fontRegular).fontSize(9);
@@ -243,28 +308,29 @@ export async function POST(request: NextRequest) {
     }
 
     y += 18;
-    doc.font(fontRegular).fontSize(10).text("Генеральный директор ООО «ЯППИКС»", x, y);
     const signLineY = y;
 
     const podpisPath = path.join(process.cwd(), "public", "podpis.png");
     const stampPath = path.join(process.cwd(), "public", "Печать.png");
 
+    // Сначала печать и подпись (рисуются сзади), затем текст поверх
     if (fs.existsSync(podpisPath)) {
       try {
-        doc.image(podpisPath, 220, signLineY - 8, { fit: [100, 36] });
+        doc.image(podpisPath, 320, signLineY - 8, { fit: [100, 36] });
       } catch (imgError) {
         console.warn("[invoice-offer] podpis image render warning:", imgError);
       }
     }
-    doc.font(fontRegular).fontSize(10).text("Усманов Р.Р.", 330, signLineY);
-
     if (fs.existsSync(stampPath)) {
       try {
-        doc.image(stampPath, 380, signLineY - 40, { fit: [120, 120] });
+        doc.image(stampPath, 430, signLineY - 40, { fit: [120, 120] });
       } catch (imgError) {
         console.warn("[invoice-offer] stamp image render warning:", imgError);
       }
     }
+
+    doc.font(fontRegular).fontSize(10).text("Генеральный директор ООО «ЯППИКС»", x, y);
+    doc.font(fontRegular).fontSize(10).text("Усманов Р.Р.", 430, signLineY);
 
     doc.end();
     const pdfBuffer: Buffer = await new Promise((resolve, reject) => {

@@ -285,6 +285,17 @@ export default function MembershipBanner({
 
   // Определяем текст и статус
   const getStatusInfo = () => {
+    // Важен приоритет стадии: если заявления уже отправлены, не откатываем пользователя
+    // обратно к шагу "Заполнить анкету" из-за процентов профиля.
+    if (hasDocuments) {
+      return {
+        title: "Ожидайте проверки документов",
+        description: "Ваши документы отправлены на проверку. После одобрения вы станете полноправным членом профсоюза",
+        buttonText: "Просмотреть документы",
+        buttonAction: () => router.push("/dashboard/documents"),
+      };
+    }
+
     if (profileProgress < 100) {
       return {
         title: "Заполните анкету, чтобы стать членом профсоюза",
@@ -392,12 +403,12 @@ export default function MembershipBanner({
         <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div
             className={`flex items-center gap-2 rounded-lg p-2 ${
-              profileProgress >= 33
+              profileProgress >= 100 || hasDocuments || membershipStatus === "APPROVED"
                 ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
                 : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
             }`}
           >
-            {profileProgress >= 33 ? (
+            {profileProgress >= 100 || hasDocuments || membershipStatus === "APPROVED" ? (
               <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"

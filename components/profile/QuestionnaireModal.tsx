@@ -64,7 +64,6 @@ export default function QuestionnaireModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [downloadingDocIds, setDownloadingDocIds] = useState<Set<string>>(new Set());
-  const QUESTIONNAIRE_STEP_KEY = "questionnaireStep";
   const [currentStep, setCurrentStep] = useState(1);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSavedField, setLastSavedField] = useState<string | null>(null);
@@ -101,13 +100,6 @@ export default function QuestionnaireModal({
   const [sendingPpoRequest, setSendingPpoRequest] = useState(false);
   const [generateProgress, setGenerateProgress] = useState<number | null>(null);
   const [justGeneratedDocuments, setJustGeneratedDocuments] = useState(false);
-
-  // Запоминаем шаг анкеты при переключении (чтобы при повторном открытии не откатываться назад)
-  useEffect(() => {
-    if (isOpen && typeof window !== "undefined" && window.sessionStorage) {
-      window.sessionStorage.setItem(QUESTIONNAIRE_STEP_KEY, String(currentStep));
-    }
-  }, [isOpen, currentStep]);
 
   useEffect(() => {
     if (isOpen) {
@@ -323,15 +315,9 @@ export default function QuestionnaireModal({
         } else if (isProfileComplete) {
           initialStep = 2; // Профиль заполнен, сверка данных
         }
-        const savedStepRaw = typeof window !== "undefined" && window.sessionStorage
-          ? window.sessionStorage.getItem(QUESTIONNAIRE_STEP_KEY)
-          : null;
-        const savedStep = savedStepRaw ? parseInt(savedStepRaw, 10) : NaN;
-        const stepToUse =
-          !isNaN(savedStep) && savedStep >= 1 && savedStep <= 4 && savedStep >= initialStep
-            ? savedStep
-            : initialStep;
-        setCurrentStep(stepToUse);
+        // Стартуем строго от фактических данных в БД/документах, чтобы
+        // повторное открытие всегда показывало актуальную стадию анкеты.
+        setCurrentStep(initialStep);
 
         console.log("[QuestionnaireModal] Determined initial step:", {
           isProfileComplete,
@@ -345,8 +331,7 @@ export default function QuestionnaireModal({
             signedFilePath: !!d.signedFilePath 
           })),
           initialStep,
-          savedStep: savedStepRaw ?? undefined,
-          stepToUse
+          stepToUse: initialStep
         });
       }
     } catch (error) {
