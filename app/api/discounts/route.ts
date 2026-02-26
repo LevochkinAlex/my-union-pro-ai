@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isDemoUserId } from "@/lib/demo";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
-import type { DiscountSearchParams, DiscountOption } from "@/types/discounts";
+import type { DiscountSearchParams, DiscountOption, DiscountItem } from "@/types/discounts";
 import { prisma } from "@/lib/prisma";
 import { getValidActivatedDiscounts, needsSync } from "@/lib/discount-activation";
 import { decryptPassword } from "@/lib/best-benefits-password";
@@ -33,6 +33,14 @@ export async function GET(request: NextRequest) {
     const params = buildSearchParams(request);
     await enrichParamsWithPreference(params, session.user.id);
     const payload = await fetchBestBenefitsDiscounts(params);
+
+    // Для выборки по конкретным IDs (favorites/claimed) добавляем fallback к локальной БД:
+    // BestBenefits иногда не отдает отдельные скидки по /products/{id}, хотя они есть локально.
+    if (params.ids && payload.discounts?.length > 0) {
+      payload.discounts = await mergeMissingDiscountsFromLocal(payload.discounts, params.ids);
+    } else if (params.ids && (!payload.discounts || payload.discounts.length === 0)) {
+      payload.discounts = await mergeMissingDiscountsFromLocal([], params.ids);
+    }
 
     // ОСНОВНОЙ ИСТОЧНИК: получаем активированные скидки из DiscountActivation
     const activations = await getValidActivatedDiscounts(session.user.id);
@@ -266,4 +274,74 @@ async function enrichParamsWithPreference(params: DiscountSearchParams, userId: 
   } catch (error) {
     console.warn("[api/discounts] Failed to load preference filters:", error);
   }
+}
+
+async function mergeMissingDiscountsFromLocal(
+  remoteDiscounts: any[],
+  idsParam: string
+): Promise<DiscountItem[]> {
+  const requestedIds = idsParam
+    .split(",")
+    .map((id) => Number(id.trim()))
+    .filter((id) => Number.isFinite(id));
+
+  if (requestedIds.length === 0) {
+    return remoteDiscounts as DiscountItem[];
+  }
+
+  const remoteById = new Map<number, any>();
+  for (const discount of remoteDiscounts) {
+    if (discount?.id && Number.isFinite(Number(discount.id))) {
+      remoteById.set(Number(discount.id), discount);
+    }
+  }
+
+  const missingIds = requestedIds.filter((id) => !remoteById.has(id));
+  if (missingIds.length === 0) {
+    return remoteDiscounts as DiscountItem[];
+  }
+
+  const now = new Date();
+  const localMissing = await prisma.discount.findMany({
+    where: {
+      id: { in: missingIds },
+      OR: [{ validUntil: null }, { validUntil: { gte: now } }],
+    },
+  });
+
+  const localById = new Map<number, DiscountItem>(
+    localMissing.map((discount) => [
+      discount.id,
+      {
+        id: discount.id,
+        title: discount.title,
+        description: discount.description,
+        shortDescription: discount.shortDescription,
+        discountValue: discount.discountValue,
+        promoCode: null,
+        partnerUrl: discount.partnerUrl,
+        imageUrl: discount.imageUrl,
+        tags: (discount.tags as string[]) || [],
+        isPremium: Boolean(discount.isPremium),
+        categories: (discount.categories as any[]) || [],
+        mainCategory: discount.mainCategoryId
+          ? {
+              id: discount.mainCategoryId,
+              name: discount.mainCategoryName || "",
+              order: null,
+            }
+          : null,
+        cities: (discount.cities as any[]) || [],
+        updatedAt: discount.bbUpdatedAt?.toISOString() || null,
+        validUntil: discount.validUntil?.toISOString() || null,
+        options: (discount.options as any[]) || undefined,
+      },
+    ])
+  );
+
+  const merged = requestedIds
+    .map((id) => remoteById.get(id) ?? localById.get(id))
+    .filter(Boolean) as DiscountItem[];
+
+  return merged;
 }

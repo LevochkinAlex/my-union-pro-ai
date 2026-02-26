@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
     const col4 = 90;
     const col5 = 105;
     const rowH = 20;
-    const dataRowH = 36;
+    const dataRowH = 48;
 
     doc.rect(x, y, col1, rowH).stroke();
     doc.rect(x + col1, y, col2, rowH).stroke();
@@ -215,10 +215,9 @@ export async function POST(request: NextRequest) {
     doc.rect(x + col1 + col2 + col3 + col4, y, col5, dataRowH).stroke();
 
     const itemNameFull = `Доступ к SaaS MyUnion Pro, ${tariffLabel}, ${periodLabel(period)}`;
-    const itemName = itemNameFull.length > 55 ? itemNameFull.slice(0, 52) + "…" : itemNameFull;
     doc.font(fontRegular).fontSize(8)
       .text("1", x + 4, y + 8)
-      .text(itemName, x + col1 + 4, y + 8, { width: col2 - 8 })
+      .text(itemNameFull, x + col1 + 4, y + 8, { width: col2 - 8 })
       .text(String(memberLimit), x + col1 + col2 + 4, y + 12)
       .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + 4, y + 12, { width: col4 - 8, align: "right" })
       .text(`${formatMoney(amountRub)}`, x + col1 + col2 + col3 + col4 + 4, y + 12, { width: col5 - 8, align: "right" });

@@ -111,14 +111,15 @@ async function updatePreferences(request: NextRequest) {
       ? { ...existingFilters, ...body.filters }
       : existingFilters;
     
-    // Если favorites переданы, мерджим их правильно (объединяем массивы и убираем дубликаты)
-    if (body.filters?.favorites && Array.isArray(body.filters.favorites)) {
-      const existingFavorites = Array.isArray(existingFilters.favorites) 
-        ? existingFilters.favorites 
-        : [];
-      // Объединяем и убираем дубликаты
-      const mergedFavorites = [...new Set([...existingFavorites, ...body.filters.favorites])];
-      updatedFilters = { ...updatedFilters, favorites: mergedFavorites };
+    // Если favorites переданы, сохраняем их как источник истины (без merge),
+    // иначе невозможно корректно удалять скидки из избранного.
+    if (Array.isArray(body.filters?.favorites)) {
+      const normalizedFavorites = [...new Set(
+        body.filters.favorites
+          .map((id: any) => Number(id))
+          .filter((id: number) => Number.isFinite(id))
+      )];
+      updatedFilters = { ...updatedFilters, favorites: normalizedFavorites };
     } else if (body.filters && 'favorites' in body.filters && body.filters.favorites === null) {
       // Если явно передано null, очищаем favorites
       updatedFilters = { ...updatedFilters, favorites: [] };

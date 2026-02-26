@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+import { cleanupExpiredDiscounts } from "@/lib/discount-activation";
 import crypto from "crypto";
 
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
@@ -11,6 +12,17 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * Проверяет авторизацию cron запроса
  */
 function validateCronRequest(request: NextRequest): boolean {
+  // 0. Вызов от Vercel Cron
+  const vercelCron = request.headers.get("x-vercel-cron");
+  if (vercelCron === "true") {
+    return true;
+  }
+
+  // Без секрета не валидируем пользовательские запросы
+  if (!CRON_SECRET) {
+    return false;
+  }
+
   // 1. Проверка секретного ключа в заголовке
   const authHeader = request.headers.get("authorization");
   if (authHeader === `Bearer ${CRON_SECRET}`) {
@@ -21,12 +33,6 @@ function validateCronRequest(request: NextRequest): boolean {
   const url = new URL(request.url);
   const secretParam = url.searchParams.get("secret");
   if (secretParam === CRON_SECRET) {
-    return true;
-  }
-
-  // 3. Проверка заголовка от Vercel Cron (если используется)
-  const vercelCron = request.headers.get("x-vercel-cron");
-  if (vercelCron === "true") {
     return true;
   }
 
@@ -203,12 +209,11 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   // Проверяем авторизацию
-  if (!CRON_SECRET) {
-    console.error("[cron] CRON_SECRET not configured");
-    return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
-  }
-
   if (!validateCronRequest(request)) {
+    if (!CRON_SECRET) {
+      console.error("[cron] CRON_SECRET not configured (and request is not x-vercel-cron)");
+      return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
+    }
     console.warn("[cron] Unauthorized cron request");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -330,6 +335,15 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Дополнительно проверяем срок действия пользовательских активаций
+    // (чтобы просроченные промокоды не оставались до следующего user-triggered запроса).
+    let expiredActivationsRemoved = 0;
+    try {
+      expiredActivationsRemoved = await cleanupExpiredDiscounts();
+    } catch (cleanupError) {
+      errors.push(`Cleanup expired activations failed: ${cleanupError}`);
+    }
+
     const duration = Date.now() - startTime;
     console.log(`[cron] Sync completed in ${duration}ms: ${created} created, ${updated} updated`);
 
@@ -338,6 +352,7 @@ export async function GET(request: NextRequest) {
       synced: created + updated,
       created,
       updated,
+      expiredActivationsRemoved,
       imagesProcessed,
       errors: errors.slice(0, 10),
       duration,

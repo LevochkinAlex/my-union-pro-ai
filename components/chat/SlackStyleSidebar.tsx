@@ -848,13 +848,14 @@ export default function SlackStyleSidebar({
   }, [chats, searchQuery, currentUserId, openFolderId, chatsInFolders]);
 
   const displayedChats = useMemo(() => {
+    // ИИ и Техподдержка показываем на всех вкладках
     switch (activeTab) {
       case "work":
-        return { work: workChats, personal: [], channels: channels, archived: [], ai: null, support: null };
+        return { work: workChats, personal: [], channels: channels, archived: [], ai: aiChat, support: supportChat };
       case "personal":
-        return { work: [], personal: personalChats, channels: [], archived: [], ai: null, support: null };
+        return { work: [], personal: personalChats, channels: [], archived: [], ai: aiChat, support: supportChat };
       case "archived":
-        return { work: [], personal: [], channels: [], archived: archivedChats, ai: null, support: null };
+        return { work: [], personal: [], channels: [], archived: archivedChats, ai: aiChat, support: supportChat };
       default:
         return { work: workChats, personal: personalChats, channels: channels, archived: [], ai: aiChat, support: supportChat };
     }
