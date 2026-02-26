@@ -25,12 +25,13 @@ function buildAvailableModes(user: UserModeSource): ViewModeOption[] {
   const availableModes: ViewModeOption[] = [];
   const role = user.role || null;
 
-  const isMember = role === "MEMBER" || role === "PENDING_MEMBER";
+  const isMemberRole = role === "MEMBER" || role === "PENDING_MEMBER";
   const isPPOHead = Boolean(user.isPPOHead || role === "PPO_HEAD");
   const isMPOHead = Boolean(user.isMPOHead);
   const isRPOHead = Boolean(user.isRPOHead);
+  const canUseMemberMode = isMemberRole || isPPOHead || isMPOHead || isRPOHead;
 
-  if (isMember) {
+  if (canUseMemberMode) {
     availableModes.push({
       mode: "MEMBER",
       label: "Член участник",
@@ -40,7 +41,7 @@ function buildAvailableModes(user: UserModeSource): ViewModeOption[] {
   if (isPPOHead && user.ppoHeadOrganizationId) {
     availableModes.push({
       mode: "PPO_HEAD",
-      label: "Председатель ППО",
+      label: "Председатель",
       organizationName: user.ppoHeadOrganization?.name || undefined,
     });
   }

@@ -19,7 +19,7 @@ interface ViewModeSwitchProps {
 
 const MODE_LABELS: Record<string, string> = {
   MEMBER: "Член участник",
-  PPO_HEAD: "Председатель ППО",
+  PPO_HEAD: "Председатель",
   MPO_HEAD: "Председатель МПО",
   RPO_HEAD: "Региональный",
 };
@@ -99,37 +99,28 @@ export default function ViewModeSwitch({ collapsed = false, serverViewModes = []
   };
 
   useEffect(() => {
-    // Загружаем сохраненные данные сразу для немедленного отображения
+    // Если сервер уже передал режимы — не вызываем API, ускоряем загрузку
+    if (hasServerModes) {
+      setIsLoading(false);
+      return;
+    }
     const storedData = loadStoredData();
     if (storedData) {
       setCurrentMode(storedData.currentMode);
       setAvailableModes(storedData.availableModes);
       setCanSwitch(storedData.canSwitch);
-      // Если сохраненные данные старше 1 минуты, помечаем как загрузку для обновления
       if (storedData.timestamp && Date.now() - storedData.timestamp > 60 * 1000) {
         setIsLoading(true);
       }
     }
-    
-    // Затем загружаем актуальные данные
     loadViewMode();
-    
-    // Периодически обновляем данные (каждые 30 секунд), чтобы они не устаревали
-    const refreshInterval = setInterval(() => {
-      loadViewMode();
-    }, 30000);
-    
-    // Очистка таймеров при размонтировании
+    const refreshInterval = setInterval(() => loadViewMode(), 60000);
     return () => {
       clearInterval(refreshInterval);
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-      }
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     };
-  }, []);
+  }, [hasServerModes]);
 
   // Повторная загрузка при изменении retryCount (для повторных попыток)
   useEffect(() => {

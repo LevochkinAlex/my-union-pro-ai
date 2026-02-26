@@ -43,7 +43,9 @@ export default async function DashboardLayout({
       mpoHeadOrganizationId: string | null;
       isRPOHead: boolean;
       rpoHeadOrganizationId: string | null;
+      avatarUrl?: string | null;
     } | null = null;
+    let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
 
     if (session.user.id === DEMO_MEMBER_USER_ID) {
       userData = {
@@ -66,7 +68,7 @@ export default async function DashboardLayout({
         rpoHeadOrganizationId: null,
       };
     } else {
-      const LAYOUT_DB_TIMEOUT_MS = 5000;
+      const LAYOUT_DB_TIMEOUT_MS = 2000;
       try {
         const dbPromise = prisma.user.findUnique({
           where: { id: session.user.id },
@@ -78,12 +80,20 @@ export default async function DashboardLayout({
             mpoHeadOrganizationId: true,
             isRPOHead: true,
             rpoHeadOrganizationId: true,
+            avatarUrl: true,
           },
         });
         const timeoutPromise = new Promise<null>((resolve) =>
           setTimeout(() => resolve(null), LAYOUT_DB_TIMEOUT_MS)
         );
-        userData = await Promise.race([dbPromise, timeoutPromise]);
+        const [userResult, staffResult] = await Promise.all([
+          Promise.race([dbPromise, timeoutPromise]),
+          checkUserPermissions(session.user.id).catch(() => ({ isStaff: false, permissions: {} })),
+        ]);
+        userData = userResult;
+        if (staffResult.isStaff && staffResult.permissions) {
+          staffPermissions = { isStaff: true, permissions: staffResult.permissions };
+        }
       } catch (error) {
         console.error("[dashboard/layout] Database query error:", error);
         userData = null;
@@ -95,17 +105,18 @@ export default async function DashboardLayout({
   const isPPOHead = userData?.isPPOHead ?? su.isPPOHead ?? false;
   const isMPOHead = userData?.isMPOHead ?? su.isMPOHead ?? false;
   const isRPOHead = userData?.isRPOHead ?? su.isRPOHead ?? false;
+  const canUseMemberMode = userRole === "MEMBER" || userRole === "PENDING_MEMBER" || isPPOHead || isMPOHead || isRPOHead;
   const ppoHeadOrganizationId = userData?.ppoHeadOrganizationId ?? su.ppoHeadOrganizationId ?? null;
   const mpoHeadOrganizationId = userData?.mpoHeadOrganizationId ?? su.mpoHeadOrganizationId ?? null;
   const rpoHeadOrganizationId = userData?.rpoHeadOrganizationId ?? su.rpoHeadOrganizationId ?? null;
 
   // Режимы для переключателя (с сервера + fallback на сессию при таймауте БД)
   const serverViewModes: { mode: string; label: string }[] = [];
-  if (userRole === "MEMBER" || userRole === "PENDING_MEMBER") {
+  if (canUseMemberMode) {
     serverViewModes.push({ mode: "MEMBER", label: "Член участник" });
   }
   if (isPPOHead && ppoHeadOrganizationId) {
-    serverViewModes.push({ mode: "PPO_HEAD", label: "Председатель ППО" });
+    serverViewModes.push({ mode: "PPO_HEAD", label: "Председатель" });
   }
   if (isMPOHead && mpoHeadOrganizationId) {
     serverViewModes.push({ mode: "MPO_HEAD", label: "Председатель МПО" });
@@ -117,15 +128,9 @@ export default async function DashboardLayout({
     serverViewModes.push({ mode: "MEMBER", label: "Член участник" });
   }
   
-  console.log("[dashboard/layout] ✅ User authenticated:", {
-    userId: session.user.id,
-    role: userRole,
-    viewMode,
-    isPPOHead,
-    isMPOHead,
-    isRPOHead,
-    isImpersonating
-  });
+  if (process.env.NODE_ENV === "development") {
+    console.log("[dashboard/layout] User:", session.user.id, "viewMode:", viewMode);
+  }
 
   // Редирект супер-админов в админ-панель (только если не в режиме impersonation)
   if (userRole === "SUPER_ADMIN" && !isImpersonating) {
@@ -139,18 +144,7 @@ export default async function DashboardLayout({
   const showRPOHeadMenu = viewMode === "RPO_HEAD";
   const showOrgHeadMenu = showMPOHeadMenu || showRPOHeadMenu; // МПО или РПО
 
-  // Сотрудники ППО (не председатель): показываем меню интерфейса ППО, отфильтрованное по правам роли
-  let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
-  if (!showPPOHeadMenu && !isDemo && session.user.id !== DEMO_MEMBER_USER_ID) {
-    try {
-      const check = await checkUserPermissions(session.user.id);
-      if (check.isStaff && check.permissions) {
-        staffPermissions = { isStaff: true, permissions: check.permissions };
-      }
-    } catch (e) {
-      console.warn("[dashboard/layout] checkUserPermissions failed:", e);
-    }
-  }
+  // staffPermissions уже загружены параллельно с userData выше
   const showStaffMenu = staffPermissions?.isStaff === true;
   const perm = staffPermissions?.permissions ?? {};
 
@@ -654,18 +648,8 @@ export default async function DashboardLayout({
     });
   }
 
-  // Get user avatar (не для демо — демо-пользователя нет в БД)
-  let user: { avatarUrl: string | null } | null = null;
-  if (session.user?.id && session.user.id !== DEMO_USER_ID && session.user.id !== DEMO_MEMBER_USER_ID) {
-    try {
-      user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { avatarUrl: true },
-      });
-    } catch (error) {
-      console.error("[dashboard/layout] Error fetching user avatar:", error);
-    }
-  }
+  // Avatar уже в userData (загружен вместе с viewMode)
+  const avatarUrl = userData?.avatarUrl ?? null;
 
   // Безопасное получение инициала пользователя
   const getUserInitial = () => {
@@ -685,7 +669,7 @@ export default async function DashboardLayout({
         <MobileLayout
           items={menuItems}
           userInitial={getUserInitial()}
-          avatarUrl={user?.avatarUrl || null}
+          avatarUrl={avatarUrl}
           serverViewModes={serverViewModes}
           serverViewMode={viewMode}
         />
@@ -694,7 +678,7 @@ export default async function DashboardLayout({
         <Sidebar
           items={menuItems}
           userInitial={getUserInitial()}
-          avatarUrl={user?.avatarUrl || null}
+          avatarUrl={avatarUrl}
           serverViewModes={serverViewModes}
           serverViewMode={viewMode}
         />
