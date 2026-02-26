@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 import { prisma } from "@/lib/prisma";
@@ -15,6 +16,10 @@ import {
   getTariffByKey as getPlan,
 } from "@/lib/constants/tariffs";
 import { isTBankConfigured, tbankInitPayment } from "@/lib/tbank-acquiring";
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 /**
  * POST /api/subscription/checkout
@@ -162,7 +167,7 @@ export async function POST(request: NextRequest) {
             ratePerUserPerMonth,
             customMembers: Number.isFinite(customMembers) && customMembers > 0 ? finalMemberLimit : null,
             source: "tbank_checkout",
-            tbank: tbank as unknown as Record<string, unknown>,
+            tbank: toJsonValue(tbank),
           },
         },
       });
