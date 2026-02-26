@@ -56,6 +56,7 @@ export async function POST(
         firstName: true,
         lastName: true,
         middleName: true,
+        role: true,
       },
     });
 
@@ -88,6 +89,7 @@ export async function POST(
         rpoHeadOrganizationId: string;
         viewMode: string;
         membershipStatus?: "APPROVED";
+        role?: "MEMBER";
       } = {
         isRPOHead: true,
         rpoHeadOrganizationId: organization.id,
@@ -96,6 +98,11 @@ export async function POST(
 
       if (approveMembership) {
         updateData.membershipStatus = "APPROVED";
+        // При одобрении переводим в обычного члена, чтобы был доступ к "режиму участника"
+        // и всем пользовательским разделам.
+        if (user.role === "PENDING_MEMBER") {
+          updateData.role = "MEMBER";
+        }
       }
 
       await tx.user.update({
