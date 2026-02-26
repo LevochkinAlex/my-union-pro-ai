@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { getPPOHead, getOrgHead } from "@/lib/ppo-head-utils";
 import { syncChannelWithChat } from "@/lib/channel-sync";
 import { isDemoUserId } from "@/lib/demo";
 import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
 
 /**
  * GET /api/ppo-head/news-channels
- * Получить список каналов публикации для Председателя
+ * Получить список каналов публикации для Председателя (ППО/МПО/РПО)
+ * Для РПО — только один канал «Региональные новости», создание каналов недоступно.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +20,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Демо: один виртуальный канал для отображения новостей (только чтение)
     if (isDemoUserId(session.user.id)) {
       return NextResponse.json({
         channels: [
@@ -36,8 +36,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
+    const chairman = await getOrgHead(session.user.id);
 
     if (!chairman) {
       return NextResponse.json(
@@ -48,7 +47,23 @@ export async function GET(request: NextRequest) {
 
     const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
 
-    // Получаем каналы организации
+    // РПО: только один канал — «Региональные новости», без возможности создавать каналы
+    if (chairman.level === "RPO") {
+      const count = await prisma.newsPost.count({
+        where: { channelId: regionalChannel.id, isPublished: true },
+      });
+      return NextResponse.json({
+        channels: [
+          {
+            ...regionalChannel,
+            _count: { newsPosts: count },
+            chat: null,
+          },
+        ],
+      });
+    }
+
+    // ППО/МПО: каналы организации + региональный
     let channels = await prisma.newsChannel.findMany({
       where: {
         organizationId: chairman.organizationId,
@@ -156,7 +171,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/ppo-head/news-channels
- * Создать новый канал публикации
+ * Создать новый канал публикации. Для РПО запрещено — только один региональный канал.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -166,12 +181,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
+    const chairman = await getOrgHead(session.user.id);
 
     if (!chairman) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
+        { status: 403 }
+      );
+    }
+
+    if (chairman.level === "RPO") {
+      return NextResponse.json(
+        { error: "Для регионального кабинета РПО доступен только один канал «Региональные новости». Создание каналов отключено." },
         { status: 403 }
       );
     }

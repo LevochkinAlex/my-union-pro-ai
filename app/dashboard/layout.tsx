@@ -90,23 +90,27 @@ export default async function DashboardLayout({
       }
     }
   
-  const viewMode = userData?.viewMode || "MEMBER";
-  const isPPOHead = userData?.isPPOHead || false;
-  const isMPOHead = userData?.isMPOHead || false;
-  const isRPOHead = userData?.isRPOHead || false;
+  const su = session.user as { viewMode?: string; isPPOHead?: boolean; ppoHeadOrganizationId?: string | null; isMPOHead?: boolean; mpoHeadOrganizationId?: string | null; isRPOHead?: boolean; rpoHeadOrganizationId?: string | null };
+  const viewMode = userData?.viewMode ?? su.viewMode ?? "MEMBER";
+  const isPPOHead = userData?.isPPOHead ?? su.isPPOHead ?? false;
+  const isMPOHead = userData?.isMPOHead ?? su.isMPOHead ?? false;
+  const isRPOHead = userData?.isRPOHead ?? su.isRPOHead ?? false;
+  const ppoHeadOrganizationId = userData?.ppoHeadOrganizationId ?? su.ppoHeadOrganizationId ?? null;
+  const mpoHeadOrganizationId = userData?.mpoHeadOrganizationId ?? su.mpoHeadOrganizationId ?? null;
+  const rpoHeadOrganizationId = userData?.rpoHeadOrganizationId ?? su.rpoHeadOrganizationId ?? null;
 
-  // Режимы для переключателя (с сервера — чтобы переключатель был виден сразу)
+  // Режимы для переключателя (с сервера + fallback на сессию при таймауте БД)
   const serverViewModes: { mode: string; label: string }[] = [];
   if (userRole === "MEMBER" || userRole === "PENDING_MEMBER") {
     serverViewModes.push({ mode: "MEMBER", label: "Член участник" });
   }
-  if (userData?.isPPOHead && userData?.ppoHeadOrganizationId) {
+  if (isPPOHead && ppoHeadOrganizationId) {
     serverViewModes.push({ mode: "PPO_HEAD", label: "Председатель ППО" });
   }
-  if (userData?.isMPOHead && userData?.mpoHeadOrganizationId) {
+  if (isMPOHead && mpoHeadOrganizationId) {
     serverViewModes.push({ mode: "MPO_HEAD", label: "Председатель МПО" });
   }
-  if (userData?.isRPOHead && userData?.rpoHeadOrganizationId) {
+  if (isRPOHead && rpoHeadOrganizationId) {
     serverViewModes.push({ mode: "RPO_HEAD", label: "Региональный" });
   }
   if (serverViewModes.length === 0) {

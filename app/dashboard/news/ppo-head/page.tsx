@@ -69,6 +69,7 @@ interface Poll {
 export default function PPOHeadNewsPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const isRPOHead = (session?.user as { viewMode?: string })?.viewMode === "RPO_HEAD";
   const [news, setNews] = useState<NewsPost[]>([]);
   const [channels, setChannels] = useState<NewsChannel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -482,13 +483,15 @@ export default function PPOHeadNewsPage() {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() => setShowChannelModal(true)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-                >
-                  + Добавить канал
-                </button>
+                {!isRPOHead && (
+                  <button
+                    type="button"
+                    onClick={() => setShowChannelModal(true)}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                  >
+                    + Добавить канал
+                  </button>
+                )}
               </div>
             </div>
 
@@ -675,18 +678,20 @@ export default function PPOHeadNewsPage() {
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                     Новостные каналы
                   </h2>
-                  <button
-                    onClick={() => setShowChannelModal(true)}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                  >
-                    + Создать
-                  </button>
+                  {!isRPOHead && (
+                    <button
+                      onClick={() => setShowChannelModal(true)}
+                      className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    >
+                      + Создать
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-3">
                   {channels.length === 0 ? (
                     <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
-                      Создайте первый канал
+                      {isRPOHead ? "Региональный канал загружается..." : "Создайте первый канал"}
                     </div>
                   ) : (
                     channels.map((channel) => (

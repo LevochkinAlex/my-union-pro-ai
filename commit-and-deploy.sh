@@ -41,7 +41,8 @@ echo "=== Applying database migrations ==="
 npx prisma migrate deploy
 bash scripts/fix-chat-participant-columns-on-server.sh
 echo ""
-echo "=== Building project ==="
+echo "=== Full clean build ==="
+rm -rf .next node_modules/.cache
 pnpm build
 echo ""
 echo "=== Restarting PM2 ==="
