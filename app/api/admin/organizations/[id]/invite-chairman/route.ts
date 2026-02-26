@@ -46,14 +46,6 @@ export async function POST(
       existingUserId, // ID существующего пользователя (если выбран в админке)
     } = body;
 
-    // Валидация
-    if (!email || !phone || !firstName || !lastName) {
-      return NextResponse.json(
-        { error: "Email, телефон, имя и фамилия обязательны" },
-        { status: 400 }
-      );
-    }
-
     // Проверяем существование организации
     const organization = await prisma.organization.findUnique({
       where: { id },
@@ -75,6 +67,7 @@ export async function POST(
           email: true,
           firstName: true,
           lastName: true,
+          middleName: true,
           role: true,
           isPPOHead: true,
           ppoHeadOrganizationId: true,
@@ -129,11 +122,15 @@ export async function POST(
         data: updateData,
       });
 
+      const resolvedFirstName = firstName || existingUser.firstName || "";
+      const resolvedLastName = lastName || existingUser.lastName || "";
+      const resolvedMiddleName = middleName || existingUser.middleName || "";
+
       // Обновляем организацию - указываем ФИО и должность председателя
       await prisma.organization.update({
         where: { id },
         data: {
-          chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
+          chairmanName: [resolvedLastName, resolvedFirstName, resolvedMiddleName].filter(Boolean).join(" "),
           chairmanJobTitle: jobTitle || null,
         },
       });
@@ -143,12 +140,14 @@ export async function POST(
 
       // Отправляем email с уведомлением о новых правах
       const userEmail = existingUser.email || email;
-      await sendPPOHeadPromotionEmail(
-        userEmail,
-        existingUser.firstName || firstName,
-        existingUser.lastName || lastName,
-        organization.name
-      );
+      if (userEmail) {
+        await sendPPOHeadPromotionEmail(
+          userEmail,
+          resolvedFirstName,
+          resolvedLastName,
+          organization.name
+        );
+      }
 
       return NextResponse.json({
         success: true,
@@ -156,6 +155,14 @@ export async function POST(
         userId: existingUserId,
         existingUserPromoted: true,
       });
+    }
+
+    // Валидация для сценария создания/обновления через email/phone
+    if (!email || !phone || !firstName || !lastName) {
+      return NextResponse.json(
+        { error: "Email, телефон, имя и фамилия обязательны" },
+        { status: 400 }
+      );
     }
 
     // Проверяем, не существует ли уже пользователь с таким email

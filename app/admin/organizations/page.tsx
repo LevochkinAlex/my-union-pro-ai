@@ -542,12 +542,10 @@ export default function OrganizationsPage() {
         // повторно инвайт не отправляем.
         const hasChairmanContacts = !!(
           formData.chairmanEmail &&
-          formData.chairmanPhone &&
-          formData.chairmanFirstName &&
-          formData.chairmanLastName
+          formData.chairmanPhone
         );
         const shouldSendInvite =
-          hasChairmanContacts && (isCreating || userConfirmed || !formData.existingUserId);
+          hasChairmanContacts && (isCreating || userConfirmed || !formData.existingUserId || !!existingUser);
 
         if (shouldSendInvite) {
           try {
@@ -561,7 +559,7 @@ export default function OrganizationsPage() {
                 lastName: formData.chairmanLastName,
                 middleName: formData.chairmanMiddleName,
                 jobTitle: formData.chairmanJobTitle,
-                existingUserId: formData.existingUserId || undefined, // Передаём ID существующего пользователя
+                existingUserId: formData.existingUserId || existingUser?.id || undefined, // Автоматически используем найденного пользователя
               }),
             });
 
