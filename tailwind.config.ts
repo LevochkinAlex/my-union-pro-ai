@@ -1,7 +1,9 @@
 import type { Config } from "tailwindcss";
 import { heroui } from "@heroui/react";
 
-const config: Config = {
+type TailwindConfig = Config & { safelist?: string[] };
+
+const config: TailwindConfig = {
   safelist: [
     // Progress bar widths (dynamic percentage in statistics)
     ...Array.from({ length: 101 }, (_, i) => `w-[${i}%]`),
