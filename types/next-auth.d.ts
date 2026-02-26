@@ -20,12 +20,17 @@ declare module "next-auth" {
       firstName?: string | null;
       lastName?: string | null;
       avatarUrl?: string | null;
-      originalAdminId?: string; // ID админа при impersonation
-      isImpersonating?: boolean; // Флаг режима impersonation
-      viewMode?: string; // Текущий режим работы: MEMBER или PPO_HEAD
-      isPPOHead?: boolean; // Является ли пользователь председателем ППО
-      ppoHeadOrganizationId?: string | null; // ID организации председателя
-      isDemo?: boolean; // Демо-режим: данные не сохраняются в БД
+      originalAdminId?: string;
+      isImpersonating?: boolean;
+      /** Текущий режим кабинета: MEMBER | PPO_HEAD | MPO_HEAD | RPO_HEAD */
+      viewMode?: string;
+      isPPOHead?: boolean;
+      ppoHeadOrganizationId?: string | null;
+      isMPOHead?: boolean;
+      mpoHeadOrganizationId?: string | null;
+      isRPOHead?: boolean;
+      rpoHeadOrganizationId?: string | null;
+      isDemo?: boolean;
     };
   }
 }
@@ -40,8 +45,15 @@ declare module "next-auth/jwt" {
     avatarUrl?: string | null;
     email?: string | null;
     name?: string | null;
-    originalAdminId?: string; // ID админа при impersonation
-    isImpersonating?: boolean; // Флаг режима impersonation
-    isDemo?: boolean; // Демо-режим
+    originalAdminId?: string;
+    isImpersonating?: boolean;
+    isDemo?: boolean;
+    viewMode?: string;
+    isPPOHead?: boolean;
+    ppoHeadOrganizationId?: string | null;
+    isMPOHead?: boolean;
+    mpoHeadOrganizationId?: string | null;
+    isRPOHead?: boolean;
+    rpoHeadOrganizationId?: string | null;
   }
 }

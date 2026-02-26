@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { getOrgHead } from "@/lib/ppo-head-utils";
+
+function canAccessChannel(
+  chairman: { level: string; organizationId: string },
+  channel: { organizationId: string | null; name: string } | null
+): boolean {
+  if (!channel) return false;
+  const isRegional = channel.organizationId === null && channel.name === "Региональные новости";
+  if (isRegional && chairman.level === "RPO") return true;
+  return channel.organizationId === chairman.organizationId;
+}
 
 /**
  * PUT /api/ppo-head/news/[id]
- * Обновление новости Председателем ППО
+ * Обновление новости Председателем (ППО/МПО/РПО)
  */
 export async function PUT(
   request: NextRequest,
@@ -19,11 +29,11 @@ export async function PUT(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
+    const chairman = await getOrgHead(session.user.id);
 
     if (!chairman || !chairman.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен. Только для Председателей ППО" },
+        { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
       );
     }
@@ -32,33 +42,28 @@ export async function PUT(
     const body = await request.json();
     const { title, content, coverImage, channelId, isPublished } = body;
 
-    // Проверяем, что новость принадлежит организации Председателя
     const existingNews = await prisma.newsPost.findUnique({
       where: { id },
-      include: {
-        channel: true,
-      },
+      include: { channel: true },
     });
 
     if (!existingNews) {
       return NextResponse.json({ error: "Новость не найдена" }, { status: 404 });
     }
 
-    // Проверяем, что канал принадлежит организации Председателя
-    if (existingNews.channel?.organizationId !== chairman.organizationId) {
+    if (!canAccessChannel(chairman, existingNews.channel)) {
       return NextResponse.json(
         { error: "Нет прав на редактирование этой новости" },
         { status: 403 }
       );
     }
 
-    // Если указан новый канал, проверяем что он тоже принадлежит организации
     if (channelId && channelId !== existingNews.channelId) {
       const newChannel = await prisma.newsChannel.findUnique({
         where: { id: channelId },
+        select: { organizationId: true, name: true },
       });
-
-      if (!newChannel || newChannel.organizationId !== chairman.organizationId) {
+      if (!newChannel || !canAccessChannel(chairman, newChannel)) {
         return NextResponse.json(
           { error: "Указанный канал не найден или недоступен" },
           { status: 400 }
@@ -118,7 +123,7 @@ export async function PUT(
 
 /**
  * DELETE /api/ppo-head/news/[id]
- * Удаление новости Председателем ППО
+ * Удаление новости Председателем (ППО/МПО/РПО)
  */
 export async function DELETE(
   request: NextRequest,
@@ -131,31 +136,27 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
+    const chairman = await getOrgHead(session.user.id);
 
     if (!chairman || !chairman.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен. Только для Председателей ППО" },
+        { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
       );
     }
 
     const { id } = await params;
 
-    // Проверяем, что новость принадлежит организации Председателя
     const existingNews = await prisma.newsPost.findUnique({
       where: { id },
-      include: {
-        channel: true,
-      },
+      include: { channel: true },
     });
 
     if (!existingNews) {
       return NextResponse.json({ error: "Новость не найдена" }, { status: 404 });
     }
 
-    // Проверяем, что канал принадлежит организации Председателя
-    if (existingNews.channel?.organizationId !== chairman.organizationId) {
+    if (!canAccessChannel(chairman, existingNews.channel)) {
       return NextResponse.json(
         { error: "Нет прав на удаление этой новости" },
         { status: 403 }

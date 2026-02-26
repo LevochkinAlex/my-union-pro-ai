@@ -466,24 +466,26 @@ export default function PPOHeadNewsPage() {
           </h2>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Канал публикации *
-              </label>
-              <div className="flex gap-2">
-                <select
-                  value={selectedChannelId}
-                  onChange={(e) => setSelectedChannelId(e.target.value)}
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                >
-                  <option value="">Выберите канал</option>
-                  {channels.map((channel) => (
-                    <option key={channel.id} value={channel.id}>
-                      {channel.name}
-                    </option>
-                  ))}
-                </select>
-                {!isRPOHead && (
+            {!isRPOHead && (
+              <div>
+                <label htmlFor="news-channel-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Канал публикации *
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    id="news-channel-select"
+                    aria-label="Канал публикации"
+                    value={selectedChannelId}
+                    onChange={(e) => setSelectedChannelId(e.target.value)}
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                  >
+                    <option value="">Выберите канал</option>
+                    {channels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.name}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     onClick={() => setShowChannelModal(true)}
@@ -491,9 +493,9 @@ export default function PPOHeadNewsPage() {
                   >
                     + Добавить канал
                   </button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -573,8 +575,9 @@ export default function PPOHeadNewsPage() {
                           type="button"
                           onClick={() => handleRemovePoll(pollIndex)}
                           className="ml-2 text-red-600 hover:text-red-700"
+                          aria-label="Удалить вопрос опроса"
                         >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -594,8 +597,9 @@ export default function PPOHeadNewsPage() {
                                 type="button"
                                 onClick={() => handleRemovePollOption(pollIndex, optionIndex)}
                                 className="text-red-600 hover:text-red-700"
+                                aria-label="Удалить вариант ответа"
                               >
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                               </button>

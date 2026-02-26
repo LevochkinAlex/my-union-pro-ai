@@ -20,22 +20,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, является ли пользователь председателем
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
         id: true,
-        role: true,
         isPPOHead: true,
-        ppoHeadOrganizationId: true,
+        isMPOHead: true,
+        isRPOHead: true,
       },
     });
 
-    const isPPOHead = user?.isPPOHead || user?.role === "PPO_HEAD";
-    
-    if (!isPPOHead) {
+    const isOrgHead = user?.isPPOHead || user?.isMPOHead || user?.isRPOHead;
+    if (!isOrgHead) {
       return NextResponse.json(
-        { error: "Только председатели ППО могут загружать изображения" },
+        { error: "Только председатели (ППО/МПО/РПО) могут загружать изображения для новостей" },
         { status: 403 }
       );
     }

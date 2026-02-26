@@ -12,42 +12,27 @@ export default function ChatUnreadBadge() {
     if (!session?.user?.id) return;
     
     try {
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем fetchJsonWithRetry для обработки сетевых ошибок
+      // Лёгкий endpoint: не тянем весь список комнат ради бейджа.
       const { fetchJsonWithRetry } = await import('@/lib/api-client');
-      const data = await fetchJsonWithRetry<{ rooms: any[] }>('/api/chat/rooms');
+      const data = await fetchJsonWithRetry<{ totalUnread?: number }>('/api/chat/unread-count');
       
-      if (!data || !data.rooms) {
-        console.warn('[ChatUnreadBadge] No rooms data received, setting count to 0');
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке сбрасываем счетчик в 0, чтобы не показывать фейковую цифру
+      if (!data || typeof data.totalUnread !== 'number') {
+        console.warn('[ChatUnreadBadge] No unread data received, setting count to 0');
         setUnreadCount(0);
         setIsInitialized(true);
         return;
       }
-      
-      const rooms = data.rooms || [];
-      // Не учитываем в бейдже чаты бота и ИИ-Ассистент (МойСоюз Помощник, ИИ-Ассистент)
-      const roomsForBadge = rooms.filter((r: any) => !r.excludeFromUnreadBadge);
-      
-      const roomsWithUnread = roomsForBadge.filter((r: any) => {
-        const count = typeof r.unreadCount === 'number' ? r.unreadCount : 0;
-        return count > 0;
-      });
-      
-      const total = roomsWithUnread.reduce((sum: number, room: any) => {
-        const count = typeof room.unreadCount === 'number' ? room.unreadCount : 0;
-        return sum + Math.max(0, count);
-      }, 0);
+
+      const total = Math.max(0, Number(data.totalUnread) || 0);
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('[ChatUnreadBadge] FETCHED UNREAD COUNT:', total, '| rooms:', roomsForBadge.length, '| with unread:', roomsWithUnread.length);
+        console.log('[ChatUnreadBadge] FETCHED UNREAD COUNT:', total);
       }
       
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Всегда обновляем счетчик, даже если он 0
       setUnreadCount(total);
       setIsInitialized(true);
     } catch (err) {
       console.error('[ChatUnreadBadge] Failed to fetch unread count:', err);
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке сбрасываем счетчик в 0, чтобы не показывать фейковую цифру
       setUnreadCount(0);
       setIsInitialized(true);
     }

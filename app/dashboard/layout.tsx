@@ -11,6 +11,7 @@ import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import DemoBanner from "@/components/dashboard/DemoBanner";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { getViewMode, getAvailableViewModes } from "@/lib/session-user";
 
 // Указываем, что layout динамический (использует getServerSession)
 export const dynamic = 'force-dynamic';
@@ -32,102 +33,41 @@ export default async function DashboardLayout({
   const userRole = session.user.role;
   const membershipStatus = session.user.membershipStatus;
   const isImpersonating = session.user.isImpersonating || false;
-  
-    // Демо-режим: не обращаемся к БД
-    const isDemo = session.user.id === DEMO_USER_ID || (session.user as { isDemo?: boolean }).isDemo;
-    let userData: {
-      viewMode: string;
-      isPPOHead: boolean;
-      ppoHeadOrganizationId: string | null;
-      isMPOHead: boolean;
-      mpoHeadOrganizationId: string | null;
-      isRPOHead: boolean;
-      rpoHeadOrganizationId: string | null;
-      avatarUrl?: string | null;
-    } | null = null;
-    let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
+  const isDemo = session.user.id === DEMO_USER_ID || session.user.isDemo === true;
 
-    if (session.user.id === DEMO_MEMBER_USER_ID) {
-      userData = {
-        viewMode: "MEMBER",
-        isPPOHead: false,
-        ppoHeadOrganizationId: null,
-        isMPOHead: false,
-        mpoHeadOrganizationId: null,
-        isRPOHead: false,
-        rpoHeadOrganizationId: null,
-      };
-    } else if (isDemo) {
-      userData = {
-        viewMode: "PPO_HEAD",
-        isPPOHead: true,
-        ppoHeadOrganizationId: null,
-        isMPOHead: false,
-        mpoHeadOrganizationId: null,
-        isRPOHead: false,
-        rpoHeadOrganizationId: null,
-      };
-    } else {
-      const LAYOUT_DB_TIMEOUT_MS = 2000;
-      try {
-        const dbPromise = prisma.user.findUnique({
+  // Единый источник прав: сессия (viewMode и флаги председателей уже в auth callbacks)
+  const viewMode = getViewMode(session);
+  const serverViewModes = getAvailableViewModes(session);
+  const isPPOHead = session.user.isPPOHead ?? false;
+
+  // Запрашиваем только аватар и права сотрудника (не дублируем запрос прав из сессии)
+  let avatarUrl: string | null | undefined = undefined;
+  let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
+
+  if (session.user.id !== DEMO_MEMBER_USER_ID && !isDemo) {
+    const LAYOUT_DB_TIMEOUT_MS = 2000;
+    try {
+      const [avatarResult, staffResult] = await Promise.all([
+        prisma.user.findUnique({
           where: { id: session.user.id },
-          select: {
-            viewMode: true,
-            isPPOHead: true,
-            ppoHeadOrganizationId: true,
-            isMPOHead: true,
-            mpoHeadOrganizationId: true,
-            isRPOHead: true,
-            rpoHeadOrganizationId: true,
-            avatarUrl: true,
-          },
-        });
-        const timeoutPromise = new Promise<null>((resolve) =>
-          setTimeout(() => resolve(null), LAYOUT_DB_TIMEOUT_MS)
-        );
-        const [userResult, staffResult] = await Promise.all([
-          Promise.race([dbPromise, timeoutPromise]),
-          checkUserPermissions(session.user.id).catch(() => ({ isStaff: false, permissions: {} })),
-        ]);
-        userData = userResult;
-        if (staffResult.isStaff && staffResult.permissions) {
-          staffPermissions = { isStaff: true, permissions: staffResult.permissions };
-        }
-      } catch (error) {
-        console.error("[dashboard/layout] Database query error:", error);
-        userData = null;
+          select: { avatarUrl: true },
+        }).then((u) => u?.avatarUrl ?? null),
+        Promise.race([
+          checkUserPermissions(session.user.id),
+          new Promise<{ isStaff: false; permissions: Record<string, boolean> }>((resolve) =>
+            setTimeout(() => resolve({ isStaff: false, permissions: {} }), LAYOUT_DB_TIMEOUT_MS)
+          ),
+        ]).catch(() => ({ isStaff: false, permissions: {} })),
+      ]);
+      avatarUrl = avatarResult ?? undefined;
+      if (staffResult.isStaff && staffResult.permissions) {
+        staffPermissions = { isStaff: true, permissions: staffResult.permissions };
       }
+    } catch (error) {
+      console.error("[dashboard/layout] Database query error:", error);
     }
-  
-  const su = session.user as { viewMode?: string; isPPOHead?: boolean; ppoHeadOrganizationId?: string | null; isMPOHead?: boolean; mpoHeadOrganizationId?: string | null; isRPOHead?: boolean; rpoHeadOrganizationId?: string | null };
-  const viewMode = userData?.viewMode ?? su.viewMode ?? "MEMBER";
-  const isPPOHead = userData?.isPPOHead ?? su.isPPOHead ?? false;
-  const isMPOHead = userData?.isMPOHead ?? su.isMPOHead ?? false;
-  const isRPOHead = userData?.isRPOHead ?? su.isRPOHead ?? false;
-  const canUseMemberMode = userRole === "MEMBER" || userRole === "PENDING_MEMBER" || isPPOHead || isMPOHead || isRPOHead;
-  const ppoHeadOrganizationId = userData?.ppoHeadOrganizationId ?? su.ppoHeadOrganizationId ?? null;
-  const mpoHeadOrganizationId = userData?.mpoHeadOrganizationId ?? su.mpoHeadOrganizationId ?? null;
-  const rpoHeadOrganizationId = userData?.rpoHeadOrganizationId ?? su.rpoHeadOrganizationId ?? null;
+  }
 
-  // Режимы для переключателя (с сервера + fallback на сессию при таймауте БД)
-  const serverViewModes: { mode: string; label: string }[] = [];
-  if (canUseMemberMode) {
-    serverViewModes.push({ mode: "MEMBER", label: "Член участник" });
-  }
-  if (isPPOHead && ppoHeadOrganizationId) {
-    serverViewModes.push({ mode: "PPO_HEAD", label: "Председатель" });
-  }
-  if (isMPOHead && mpoHeadOrganizationId) {
-    serverViewModes.push({ mode: "MPO_HEAD", label: "Председатель МПО" });
-  }
-  if (isRPOHead && rpoHeadOrganizationId) {
-    serverViewModes.push({ mode: "RPO_HEAD", label: "Региональный" });
-  }
-  if (serverViewModes.length === 0) {
-    serverViewModes.push({ mode: "MEMBER", label: "Член участник" });
-  }
-  
   if (process.env.NODE_ENV === "development") {
     console.log("[dashboard/layout] User:", session.user.id, "viewMode:", viewMode);
   }
@@ -144,7 +84,6 @@ export default async function DashboardLayout({
   const showRPOHeadMenu = viewMode === "RPO_HEAD";
   const showOrgHeadMenu = showMPOHeadMenu || showRPOHeadMenu; // МПО или РПО
 
-  // staffPermissions уже загружены параллельно с userData выше
   const showStaffMenu = staffPermissions?.isStaff === true;
   const perm = staffPermissions?.permissions ?? {};
 
@@ -647,9 +586,6 @@ export default async function DashboardLayout({
         ),
     });
   }
-
-  // Avatar уже в userData (загружен вместе с viewMode)
-  const avatarUrl = userData?.avatarUrl ?? null;
 
   // Безопасное получение инициала пользователя
   const getUserInitial = () => {

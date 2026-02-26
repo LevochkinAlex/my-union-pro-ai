@@ -1018,17 +1018,6 @@ async function getUnreadCountsForChats(
     results.set(chatId, 0);
   }
 
-  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем информацию о типах чатов для правильной обработки
-  const chats = await prisma.chat.findMany({
-    where: { id: { in: chatIds } },
-    select: { id: true, type: true },
-  });
-  
-  const chatTypeMap = new Map<string, string>();
-  for (const chat of chats) {
-    chatTypeMap.set(chat.id, chat.type);
-  }
-
   // Получаем участников для всех чатов
   const participants = await prisma.chatParticipant.findMany({
     where: {
@@ -1078,8 +1067,6 @@ async function getUnreadCountsForChats(
         readAt: readAtMap.get(chatId)!,
       }));
 
-      // Используем raw query для эффективного подсчета всех чатов одним запросом
-      // Или делаем параллельные запросы с ограничением
       const counts = await Promise.all(
         readChatsData.map(async ({ chatId, readAt }) => {
           try {
@@ -1090,81 +1077,6 @@ async function getUnreadCountsForChats(
                 createdAt: { gt: readAt },
               },
             });
-            
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
-            const chatType = chatTypeMap.get(chatId) || 'UNKNOWN';
-            
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем информацию о сообщениях для диагностики
-            const recentMessages = await prisma.chatMessage.findMany({
-              where: {
-                chatId,
-                senderId: { not: userId },
-                createdAt: { gt: readAt },
-              },
-              select: {
-                id: true,
-                senderId: true,
-                content: true,
-                createdAt: true,
-              },
-              take: 10,
-              orderBy: { createdAt: 'desc' },
-            });
-            
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем общее количество сообщений для диагностики
-            const totalMessages = await prisma.chatMessage.count({
-              where: { chatId },
-            });
-            const messagesFromOthers = await prisma.chatMessage.count({
-              where: {
-                chatId,
-                senderId: { not: userId },
-              },
-            });
-            const messagesFromUser = await prisma.chatMessage.count({
-              where: {
-                chatId,
-                senderId: userId,
-              },
-            });
-            
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем все сообщения после readAt для диагностики
-            const allMessagesAfterReadAt = await prisma.chatMessage.findMany({
-              where: {
-                chatId,
-                createdAt: { gt: readAt },
-              },
-              select: {
-                id: true,
-                senderId: true,
-                createdAt: true,
-              },
-              orderBy: { createdAt: 'asc' },
-            });
-            
-            console.log(`[chat-service] ========== UNREAD COUNT FOR CHAT ==========`);
-            console.log(`[chat-service] Chat ID:`, chatId);
-            console.log(`[chat-service] Chat Type:`, chatType);
-            console.log(`[chat-service] User ID:`, userId);
-            console.log(`[chat-service] Read At:`, readAt.toISOString());
-            console.log(`[chat-service] Unread Count:`, count);
-            console.log(`[chat-service] Total Messages:`, totalMessages);
-            console.log(`[chat-service] Messages From Others:`, messagesFromOthers);
-            console.log(`[chat-service] Messages From User:`, messagesFromUser);
-            console.log(`[chat-service] Recent Unread Messages:`, recentMessages.map(m => ({
-              id: m.id,
-              senderId: m.senderId,
-              content: m.content?.substring(0, 50),
-              createdAt: m.createdAt.toISOString(),
-            })));
-            console.log(`[chat-service] ALL Messages After ReadAt:`, allMessagesAfterReadAt.map(m => ({
-              id: m.id,
-              senderId: m.senderId,
-              isFromUser: m.senderId === userId,
-              createdAt: m.createdAt.toISOString(),
-            })));
-            console.log(`[chat-service] ==========================================`);
-            
             return { chatId, count };
           } catch (error) {
             console.error(`[chat-service] Error counting unread for chat ${chatId}:`, error);

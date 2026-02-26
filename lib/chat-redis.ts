@@ -7,6 +7,22 @@
 import type { Redis } from "ioredis";
 
 let redisClient: Redis | null = null;
+let connectPromise: Promise<Redis | null> | null = null;
+let disabledUntil = 0;
+let lastErrorLogAt = 0;
+let hasMissingRedisUrlWarned = false;
+
+const REDIS_RETRY_COOLDOWN_MS = 30_000;
+const REDIS_ERROR_LOG_THROTTLE_MS = 10_000;
+
+function shouldLogNow() {
+  const now = Date.now();
+  if (now - lastErrorLogAt >= REDIS_ERROR_LOG_THROTTLE_MS) {
+    lastErrorLogAt = now;
+    return true;
+  }
+  return false;
+}
 
 async function getRedisClient(): Promise<Redis | null> {
   if (redisClient && redisClient.status === "ready") {
@@ -18,27 +34,73 @@ async function getRedisClient(): Promise<Redis | null> {
     return null;
   }
 
+  // Если Redis не настроен явно, не пытаемся подключаться в бесконечном цикле.
+  if (!process.env.REDIS_URL) {
+    if (!hasMissingRedisUrlWarned) {
+      console.warn("[chat-redis] REDIS_URL is not set. Redis features are disabled.");
+      hasMissingRedisUrlWarned = true;
+    }
+    return null;
+  }
+
+  if (Date.now() < disabledUntil) {
+    return null;
+  }
+
+  if (connectPromise) {
+    return connectPromise;
+  }
+
+  connectPromise = (async () => {
   try {
     // Динамический импорт для избежания проблем при сборке
     const { default: Redis } = await import("ioredis");
     const { getRedisOptions } = await import("./redis");
     const options = getRedisOptions();
-    redisClient = new Redis(options);
-    
+    redisClient = new Redis({
+      ...options,
+      lazyConnect: true,
+      connectTimeout: 1000,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      retryStrategy: () => null,
+      reconnectOnError: () => false,
+    });
+
     redisClient.on("error", (err) => {
-      console.error("[chat-redis] Connection error:", err.message);
-      redisClient = null;
+      if (shouldLogNow()) {
+        console.error("[chat-redis] Connection error:", err.message);
+      }
     });
 
     redisClient.on("connect", () => {
       console.log("[chat-redis] ✅ Connected");
     });
 
+    redisClient.on("end", () => {
+      redisClient = null;
+    });
+
+    await redisClient.connect();
     return redisClient;
   } catch (error) {
-    console.error("[chat-redis] Failed to create client:", error);
+    disabledUntil = Date.now() + REDIS_RETRY_COOLDOWN_MS;
+    if (shouldLogNow()) {
+      console.error("[chat-redis] Failed to create client:", error);
+    }
+    try {
+      await redisClient?.quit();
+    } catch (_) {
+      // ignore
+    }
+    redisClient = null;
     return null;
+  } finally {
+    connectPromise = null;
   }
+  })();
+
+  return connectPromise;
 }
 
 // ============================================================================

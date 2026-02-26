@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead, getPPOHead } from "@/lib/ppo-head-utils";
+import { getOrgHead } from "@/lib/ppo-head-utils";
 import { isDemoUserId } from "@/lib/demo";
 import { getDemoNews } from "@/lib/demo";
 import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
@@ -38,8 +38,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ news });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
+    const chairman = await getOrgHead(session.user.id);
 
     if (!chairman) {
       return NextResponse.json(
@@ -50,17 +49,16 @@ export async function GET(request: NextRequest) {
 
     const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
 
-    // Получаем каналы организации
-    const channels = await prisma.newsChannel.findMany({
-      where: {
-        organizationId: chairman.organizationId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    const channelIds = [regionalChannel.id, ...channels.map((ch) => ch.id)];
+    let channelIds: string[];
+    if (chairman.level === "RPO") {
+      channelIds = [regionalChannel.id];
+    } else {
+      const channels = await prisma.newsChannel.findMany({
+        where: { organizationId: chairman.organizationId },
+        select: { id: true },
+      });
+      channelIds = [regionalChannel.id, ...channels.map((ch) => ch.id)];
+    }
 
     // Получаем новости из каналов организации
     const news = await prisma.newsPost.findMany({
@@ -211,8 +209,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
+    const chairman = await getOrgHead(session.user.id);
 
     if (!chairman) {
       return NextResponse.json(
@@ -241,8 +238,7 @@ export async function POST(request: NextRequest) {
 
     const isRegionalChannel = channel.organizationId === null && channel.name === "Региональные новости";
     if (isRegionalChannel) {
-      const orgHead = await getOrgHead(session.user.id);
-      if (!orgHead || orgHead.level !== "RPO") {
+      if (chairman.level !== "RPO") {
         return NextResponse.json(
           { error: "Публикация в региональный канал доступна только РПО" },
           { status: 403 }

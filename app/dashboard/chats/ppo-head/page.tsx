@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { isChairmanView } from "@/lib/session-user";
 
 // Lazy load SlackStyleChat компонент
 const SlackStyleChat = dynamic(() => import("@/components/chat/SlackStyleChat"), {
@@ -31,21 +31,14 @@ function PPOHeadChatsContent() {
   const { data: session } = useSession();
   const router = useRouter();
 
-  // Демо-член не должен видеть раздел председателя — редирект на «Чат»
   const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
-  const isDemoChairman = session?.user?.id === DEMO_USER_ID;
-  const isPPOHead =
-    isDemoChairman ||
-    (session?.user?.viewMode === "PPO_HEAD" ||
-      session?.user?.viewMode === "MPO_HEAD" ||
-      session?.user?.viewMode === "RPO_HEAD" ||
-      ((session?.user as { role?: string; isPPOHead?: boolean })?.role === "PPO_HEAD" && (session?.user as { isPPOHead?: boolean })?.isPPOHead === true));
+  const isChairman = isChairmanView(session);
 
   useEffect(() => {
-    if (session && (isDemoMember || !isPPOHead)) {
+    if (session && (isDemoMember || !isChairman)) {
       router.replace("/dashboard/chat");
     }
-  }, [session, isDemoMember, isPPOHead, router]);
+  }, [session, isDemoMember, isChairman, router]);
 
   if (!session) {
     return <ChatSkeleton />;

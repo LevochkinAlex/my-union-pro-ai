@@ -21,6 +21,16 @@ function normalizePhone(phone: string): string {
   return cleaned;
 }
 
+function copyHeadFlagsFromToken(session: { user: Record<string, unknown> }, t: Record<string, unknown>) {
+  (session.user as any).viewMode = t.viewMode ?? "MEMBER";
+  (session.user as any).isPPOHead = t.isPPOHead ?? false;
+  (session.user as any).ppoHeadOrganizationId = t.ppoHeadOrganizationId ?? null;
+  (session.user as any).isMPOHead = t.isMPOHead ?? false;
+  (session.user as any).mpoHeadOrganizationId = t.mpoHeadOrganizationId ?? null;
+  (session.user as any).isRPOHead = t.isRPOHead ?? false;
+  (session.user as any).rpoHeadOrganizationId = t.rpoHeadOrganizationId ?? null;
+}
+
 /**
  * Парсинг ФИО из данных Яндекс API.
  * ВАЖНО: firstName = имя (given name), lastName = фамилия (surname). Не менять местами.
@@ -860,6 +870,34 @@ export const authOptions: NextAuthOptions = {
         } else {
           token.isDemo = undefined;
         }
+        // При логине подтягиваем viewMode и флаги РПО/ППО/МПО в токен (fallback на проде при таймауте БД в session)
+        if (user?.id && process.env.DATABASE_URL) {
+          try {
+            const u = await prisma.user.findUnique({
+              where: { id: user.id as string },
+              select: {
+                viewMode: true,
+                isPPOHead: true,
+                ppoHeadOrganizationId: true,
+                isMPOHead: true,
+                mpoHeadOrganizationId: true,
+                isRPOHead: true,
+                rpoHeadOrganizationId: true,
+              },
+            });
+            if (u) {
+              (token as any).viewMode = u.viewMode ?? "MEMBER";
+              (token as any).isPPOHead = u.isPPOHead ?? false;
+              (token as any).ppoHeadOrganizationId = u.ppoHeadOrganizationId ?? null;
+              (token as any).isMPOHead = u.isMPOHead ?? false;
+              (token as any).mpoHeadOrganizationId = u.mpoHeadOrganizationId ?? null;
+              (token as any).isRPOHead = u.isRPOHead ?? false;
+              (token as any).rpoHeadOrganizationId = u.rpoHeadOrganizationId ?? null;
+            }
+          } catch (_) {
+            // при ошибке оставляем токен без изменений
+          }
+        }
       }
       
       // Демо-пользователь: не обновляем из БД
@@ -929,11 +967,13 @@ export const authOptions: NextAuthOptions = {
           session.user.lastName = token.lastName || "Сидорова";
           session.user.name = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ").trim() || "Анна Сидорова";
         } else {
-          // Получаем актуальные данные из БД при каждом запросе сессии
+          // Получаем актуальные данные из БД при каждом запросе; при ошибке/таймауте — fallback из токена (на проде не теряем РПО)
           const userId = typeof token.id === "string" && token.id.trim() ? token.id.trim() : null;
+          const t = token as any;
           if (userId && process.env.DATABASE_URL) {
             try {
-              const userData = await prisma.user.findUnique({
+              const AUTH_SESSION_DB_MS = 4000;
+              const dbPromise = prisma.user.findUnique({
                 where: { id: userId },
                 select: {
                   role: true,
@@ -949,7 +989,10 @@ export const authOptions: NextAuthOptions = {
                   lastName: true,
                 },
               });
-
+              const timeoutPromise = new Promise<null>((resolve) =>
+                setTimeout(() => resolve(null), AUTH_SESSION_DB_MS)
+              );
+              const userData = await Promise.race([dbPromise, timeoutPromise]);
               if (userData) {
                 session.user.role = userData.role;
                 session.user.membershipStatus = userData.membershipStatus;
@@ -964,19 +1007,15 @@ export const authOptions: NextAuthOptions = {
                 if (userData.lastName != null) session.user.lastName = userData.lastName;
                 const fullNameFromDb = [userData.firstName, userData.lastName].filter(Boolean).join(" ").trim();
                 if (fullNameFromDb) session.user.name = fullNameFromDb;
+              } else {
+                copyHeadFlagsFromToken(session, t);
               }
             } catch (error) {
               console.error("[Auth] Error fetching user data from DB:", error);
-              (session.user as any).viewMode = "MEMBER";
-              (session.user as any).isPPOHead = false;
-              (session.user as any).isMPOHead = false;
-              (session.user as any).isRPOHead = false;
+              copyHeadFlagsFromToken(session, t);
             }
           } else {
-            (session.user as any).viewMode = "MEMBER";
-            (session.user as any).isPPOHead = false;
-            (session.user as any).isMPOHead = false;
-            (session.user as any).isRPOHead = false;
+            copyHeadFlagsFromToken(session, t);
           }
         }
         
