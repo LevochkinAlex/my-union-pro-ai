@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
+import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
 import * as Sentry from "@sentry/nextjs";
 import { isDemoUserId } from "@/lib/demo";
 
@@ -439,6 +440,12 @@ export async function POST(request: NextRequest) {
         lastMessageAt: botMessage.createdAt,
       },
     });
+
+    // Инвалидация кэша чата, чтобы при следующей загрузке сообщений ответ ИИ не пропадал
+    await Promise.all([
+      invalidateChatCache(chat.id),
+      invalidateUserChatsCache(userId),
+    ]).catch((err) => console.warn("[chat/ai] Cache invalidation error:", err));
 
     // Сохраняем взаимодействие в персональную базу знаний пользователя (супер-админка: под каждым пользователем)
     saveUserInteractionToKnowledgeBase(
