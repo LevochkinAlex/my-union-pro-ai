@@ -346,10 +346,19 @@ export async function GET(request: NextRequest) {
         mpoHeadOrganizationId: true,
         isRPOHead: true,
         rpoHeadOrganizationId: true,
+        organizationId: true,
       },
     });
 
     const isMemberMode = user?.viewMode === "MEMBER";
+    const currentOrgId =
+      user?.viewMode === "RPO_HEAD"
+        ? user.rpoHeadOrganizationId ?? null
+        : user?.viewMode === "MPO_HEAD"
+          ? user.mpoHeadOrganizationId ?? null
+          : user?.viewMode === "PPO_HEAD"
+            ? user.ppoHeadOrganizationId ?? null
+            : user?.organizationId ?? null;
     const isPPOHeadMode = user?.viewMode === "PPO_HEAD" || 
       (user?.isPPOHead && !user?.viewMode) || // Обратная совместимость
       (user?.isMPOHead && !user?.viewMode) ||
@@ -552,9 +561,20 @@ export async function GET(request: NextRequest) {
         if (!chat || !chat.id) return false;
         if (chat.type === "PRIVATE") return true;
         if (chat.ticketId && userTicketChatIds.includes(chat.id)) return true;
-        if (chat.type === "CHANNEL") return true;
+        if (chat.type === "CHANNEL") {
+          const channelOrgId = chat.newsChannelOrganizationId ?? null;
+          if (channelOrgId === null) return true;
+          return currentOrgId != null && channelOrgId === currentOrgId;
+        }
         if (chat.type === "GROUP" && chat.meetingId) return true;
         return false;
+      });
+    } else if (currentOrgId != null) {
+      filteredChats = filteredChats.filter((chat: any) => {
+        if (!chat || chat.type !== "CHANNEL") return true;
+        const channelOrgId = chat.newsChannelOrganizationId ?? null;
+        if (channelOrgId === null) return true;
+        return channelOrgId === currentOrgId;
       });
     }
 

@@ -50,6 +50,8 @@ export interface ChatInfo {
   ticketTitle: string | null;
   /** Чат заседания (групповой чат участников заседания) */
   meetingId: string | null;
+  /** Организация канала (null = региональный канал). Для фильтрации: показывать только каналы своей org или региональный */
+  newsChannelOrganizationId: string | null;
   // Другой участник (для PRIVATE чатов или основной собеседник в GROUP)
   otherUser: OtherUserInfo | null;
 }
@@ -373,6 +375,10 @@ export async function getUserChats(
           id: true,
           name: true,
           iconUrl: true,
+          organizationId: true,
+          organization: {
+            select: { name: true },
+          },
         },
       },
       ticket: {
@@ -530,6 +536,10 @@ export async function getChatById(
           id: true,
           name: true,
           iconUrl: true,
+          organizationId: true,
+          organization: {
+            select: { name: true },
+          },
         },
       },
       ticket: {
@@ -1136,8 +1146,12 @@ export function formatChatInfo(
   let otherUser: OtherUserInfo;
 
   if (isChannel) {
-    // Для каналов используем данные из NewsChannel или Chat
-    displayName = chat.newsChannel?.name || chat.name || "Канал";
+    // Название канала = организация (ППО), чтобы в списке было видно, какому ППО канал принадлежит; региональный — по имени канала
+    displayName =
+      (chat.newsChannel as any)?.organization?.name ||
+      chat.newsChannel?.name ||
+      chat.name ||
+      "Канал";
     displayAvatar = chat.newsChannel?.iconUrl || chat.iconUrl || null;
     otherUser = {
       id: chat.id,
@@ -1294,6 +1308,7 @@ export function formatChatInfo(
     ticketPublicId,
     ticketTitle,
     meetingId: chat.meetingId ?? null,
+    newsChannelOrganizationId: chat.type === "CHANNEL" ? (chat.newsChannel?.organizationId ?? null) : null,
     otherUser,
   };
 }

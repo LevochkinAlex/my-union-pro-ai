@@ -45,10 +45,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
-
     // РПО: только один канал — «Региональные новости», без возможности создавать каналы
     if (chairman.level === "RPO") {
+      const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
       const count = await prisma.newsPost.count({
         where: { channelId: regionalChannel.id, isPublished: true },
       });
@@ -58,12 +57,13 @@ export async function GET(request: NextRequest) {
             ...regionalChannel,
             _count: { newsPosts: count },
             chat: null,
+            canPublish: true,
           },
         ],
       });
     }
 
-    // ППО/МПО: каналы организации + региональный
+    // ППО/МПО: каналы своей организации + региональный канал (для просмотра; публиковать в региональный может только РПО)
     let channels = await prisma.newsChannel.findMany({
       where: {
         organizationId: chairman.organizationId,
@@ -137,7 +137,16 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      return NextResponse.json({ channels: [defaultChannel] });
+      const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
+      const regionalCount = await prisma.newsPost.count({
+        where: { channelId: regionalChannel.id, isPublished: true },
+      });
+      return NextResponse.json({
+        channels: [
+          { ...regionalChannel, _count: { newsPosts: regionalCount }, chat: null, canPublish: false },
+          { ...defaultChannel, canPublish: true },
+        ],
+      });
     }
     
     // Сортируем: "Основной" канал всегда первый
@@ -147,13 +156,18 @@ export async function GET(request: NextRequest) {
       return 0;
     });
 
+    const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
+    const regionalCount = await prisma.newsPost.count({
+      where: { channelId: regionalChannel.id, isPublished: true },
+    });
     const withRegional = [
       {
         ...regionalChannel,
-        _count: { newsPosts: 0 },
+        _count: { newsPosts: regionalCount },
         chat: null,
+        canPublish: false, // Публиковать в региональный могут только РПО
       },
-      ...channels,
+      ...channels.map((ch) => ({ ...ch, canPublish: true })),
     ];
 
     return NextResponse.json({ channels: withRegional });

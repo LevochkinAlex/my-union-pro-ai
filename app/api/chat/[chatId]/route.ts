@@ -659,34 +659,25 @@ export async function GET(
     const postIds: string[] = [];
     const existingPostIds = new Set<string>();
     
-    // Собираем ID постов из существующих сообщений
+    // Собираем ID постов из существующих сообщений.
+    // Также ловим сообщения, у которых content содержит channel_post JSON,
+    // но messageType был записан неверно (например 'text') — исправляем на лету.
     resultMessages.forEach((msg: any) => {
-      if (msg.messageType === 'channel_post') {
-        try {
-          const postData = JSON.parse(msg.content);
-          if (postData.postId) {
+      const isChannelPostType = msg.messageType === 'channel_post';
+      try {
+        const postData = JSON.parse(msg.content);
+        if (postData?.postId) {
+          if (!existingPostIds.has(postData.postId)) {
             postIds.push(postData.postId);
             existingPostIds.add(postData.postId);
           }
-        } catch (e) {
-          // Игнорируем ошибки парсинга
-        }
-      }
-    });
-
-    // Также собираем ID постов из пересланных сообщений (если они есть)
-    resultMessages.forEach((msg: any) => {
-      if (msg.messageType === 'channel_post') {
-        try {
-          const postData = JSON.parse(msg.content);
-          // Для пересланных постов также нужно загрузить данные поста
-          if (postData.postId && !existingPostIds.has(postData.postId)) {
-            postIds.push(postData.postId);
-            existingPostIds.add(postData.postId);
+          // Патчим messageType прямо на объекте из БД, чтобы форматтер ниже работал правильно
+          if (!isChannelPostType && postData.type === 'channel_post') {
+            msg.messageType = 'channel_post';
           }
-        } catch (e) {
-          // Игнорируем ошибки парсинга
         }
+      } catch (e) {
+        // Не JSON — обычное сообщение
       }
     });
 
@@ -1098,17 +1089,15 @@ export async function GET(
       const virtualMessages: any[] = [];
       
       for (const [postId, postData] of postsMap.entries()) {
-        // Проверяем, есть ли уже сообщение для этого поста
+        // Проверяем, есть ли уже сообщение для этого поста.
+        // Проверяем по postId в content, независимо от messageType (на случай некорректно сохранённых сообщений).
         const hasMessage = formattedMessages.some((msg: any) => {
-          if (msg.messageType === 'channel_post') {
-            try {
-              const parsed = JSON.parse(msg.content);
-              return parsed.postId === postId;
-            } catch (e) {
-              return false;
-            }
+          try {
+            const parsed = JSON.parse(msg.content);
+            return parsed.postId === postId;
+          } catch (e) {
+            return false;
           }
-          return false;
         });
 
         // Если сообщения нет, создаем виртуальное

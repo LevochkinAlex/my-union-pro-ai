@@ -1427,7 +1427,8 @@ const MessageBubble = memo(function MessageBubble({
   isAIMessage = false,
 }: MessageBubbleProps) {
   const isDeleted = !!message.deletedAt;
-  const isChannelPost = message.messageType === 'channel_post' && message.post;
+  // Для channel_post никогда не показываем raw JSON в message.content.
+  const isChannelPost = message.messageType === 'channel_post';
 
   return (
     <div 
@@ -1510,25 +1511,31 @@ const MessageBubble = memo(function MessageBubble({
               Сообщение удалено
             </div>
           ) : isChannelPost ? (
-            // Отображение поста канала
-            <ChannelPostDisplay 
-              post={message.post!} 
-              isOwn={isOwn}
-              onPollVote={onPollVote}
-              onImageClick={onImageClick}
-              messageId={message.id}
-              messageReactions={message.reactions || undefined}
-              onReaction={(msgId, emoji) => {
-                // Передаем messageId и emoji в родительский обработчик
-                if (onReaction) {
-                  onReaction(msgId, emoji);
-                }
-              }}
-              currentUserId={currentUserId}
-              onOpenThread={onOpenThread}
-              commentsCount={message.post?._count.comments || 0}
-              threadParticipants={[]} // Загружается внутри компонента
-            />
+            message.post ? (
+              // Отображение поста канала
+              <ChannelPostDisplay
+                post={message.post}
+                isOwn={isOwn}
+                onPollVote={onPollVote}
+                onImageClick={onImageClick}
+                messageId={message.id}
+                messageReactions={message.reactions || undefined}
+                onReaction={(msgId, emoji) => {
+                  // Передаем messageId и emoji в родительский обработчик
+                  if (onReaction) {
+                    onReaction(msgId, emoji);
+                  }
+                }}
+                currentUserId={currentUserId}
+                onOpenThread={onOpenThread}
+                commentsCount={message.post?._count.comments || 0}
+                threadParticipants={[]} // Загружается внутри компонента
+              />
+            ) : (
+              <div className={`text-sm ${isOwn ? 'text-white/90' : 'text-gray-700 dark:text-gray-200'}`}>
+                📢 Пост в канале
+              </div>
+            )
           ) : (
             <>
               {/* Attachments (с прогресс-баром во время загрузки) */}
@@ -1569,6 +1576,14 @@ const MessageBubble = memo(function MessageBubble({
               {(() => {
                 const contentString = normalizeMessageContent(message.content);
                 if (!contentString) return null;
+
+                // Если контент — JSON поста канала (messageType мог быть сохранён неверно),
+                // не показываем сырой JSON — сервер должен был исправить тип, но подстрахуемся.
+                try {
+                  const parsed = JSON.parse(contentString);
+                  if (parsed?.type === 'channel_post' && parsed?.postId) return null;
+                } catch { /* не JSON — ок */ }
+
                 // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем, является ли это начальным сообщением обращения
                 const isAppealInitialMessage = contentString.includes('**Обращение #') &&
                                                 contentString.includes('**Тема:**') &&

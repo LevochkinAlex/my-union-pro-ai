@@ -86,6 +86,7 @@ export function useChat(options: UseChatOptions = {}) {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reloadChatsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const socketErrorLoggedRef = useRef(false);
+  const aiSendInProgressRef = useRef(false);
 
   // Синхронизация refs
   useEffect(() => {
@@ -814,6 +815,11 @@ export function useChat(options: UseChatOptions = {}) {
     try {
       // Для ИИ-чата используем специальный endpoint
       if (isAIChat && !file) {
+        if (aiSendInProgressRef.current) {
+          setSending(false);
+          return false;
+        }
+        aiSendInProgressRef.current = true;
         console.log(`[useChat] Sending message to AI chat via /api/chat/ai`);
         const tempMessageId = `temp-ai-user-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         const optimisticUserMessage: Message = {
@@ -892,6 +898,8 @@ export function useChat(options: UseChatOptions = {}) {
           setAiTyping(false);
           setSending(false);
           return false;
+        } finally {
+          aiSendInProgressRef.current = false;
         }
       }
 

@@ -60,12 +60,18 @@ export async function GET(request: NextRequest) {
       channelIds = [regionalChannel.id, ...channels.map((ch) => ch.id)];
     }
 
-    // Получаем новости из каналов организации
+    // Фильтр по выбранному каналу (переключатель на странице)
+    const requestedChannelId = request.nextUrl.searchParams.get("channelId");
+    const filterChannelId =
+      requestedChannelId && channelIds.includes(requestedChannelId)
+        ? requestedChannelId
+        : null;
+
     const news = await prisma.newsPost.findMany({
       where: {
-        channelId: {
-          in: channelIds,
-        },
+        channelId: filterChannelId
+          ? filterChannelId
+          : { in: channelIds },
       },
       include: {
         author: {

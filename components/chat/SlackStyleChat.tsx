@@ -1372,6 +1372,8 @@ export default function SlackStyleChat({
             if (response.ok) {
               showToast("Пост создан", "success");
               await loadChats();
+              // Перезагружаем сообщения, чтобы карточка поста появилась сразу
+              if (selectedChat?.id) await loadMessages(selectedChat.id);
             } else {
               const error = await safeJsonParse(response) || { error: "Ошибка создания поста" };
               showToast(error.error || "Ошибка создания поста", "error");

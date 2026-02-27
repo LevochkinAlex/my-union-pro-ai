@@ -48,7 +48,8 @@ interface NewsChannel {
   name: string;
   description: string | null;
   iconUrl: string | null;
-  isMain?: boolean; // Опционально, может отсутствовать
+  isMain?: boolean;
+  canPublish?: boolean; // false для регионального канала у ППО/МПО (публиковать могут только РПО)
   _count: {
     newsPosts: number;
   };
@@ -96,43 +97,31 @@ export default function PPOHeadNewsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      await Promise.all([loadNews(), loadChannels()]);
+      const chRes = await fetch("/api/ppo-head/news-channels");
+      const chData = chRes.ok ? await chRes.json() : { channels: [] };
+      const chList = chData.channels || [];
+      setChannels(chList);
+
+      const mainChannel = chList.find((ch: NewsChannel) => ch.name === "Основной" || ch.isMain === true);
+      const initialChannelId = mainChannel?.id ?? chList[0]?.id ?? "";
+      setSelectedChannelId(initialChannelId);
+
+      await loadNews(initialChannelId);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadNews = async () => {
+  const loadNews = async (channelId?: string) => {
     try {
-      const response = await fetch("/api/ppo-head/news");
+      const url = channelId ? `/api/ppo-head/news?channelId=${encodeURIComponent(channelId)}` : "/api/ppo-head/news";
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setNews(data.news || []);
       }
     } catch (error) {
       console.error("Ошибка загрузки новостей:", error);
-    }
-  };
-
-  const loadChannels = async () => {
-    try {
-      const response = await fetch("/api/ppo-head/news-channels");
-      if (response.ok) {
-        const data = await response.json();
-        setChannels(data.channels || []);
-        
-        // Автоматически выбираем основной канал (по имени "Основной" или isMain флагу)
-        const mainChannel = data.channels?.find((ch: NewsChannel) => 
-          ch.name === "Основной" || ch.isMain === true
-        );
-        if (mainChannel) {
-          setSelectedChannelId(mainChannel.id);
-        } else if (data.channels?.length > 0) {
-          setSelectedChannelId(data.channels[0].id);
-        }
-      }
-    } catch (error) {
-      console.error("Ошибка загрузки каналов:", error);
     }
   };
 
@@ -338,7 +327,11 @@ export default function PPOHeadNewsPage() {
       return;
     }
 
-    if (!selectedChannelId) {
+    const channelsForPublish = channels.filter((ch) => ch.canPublish !== false);
+    const effectiveChannelId = channelsForPublish.some((c) => c.id === selectedChannelId)
+      ? selectedChannelId
+      : channelsForPublish[0]?.id ?? "";
+    if (!effectiveChannelId) {
       alertError("Выберите канал публикации");
       return;
     }
@@ -375,7 +368,7 @@ export default function PPOHeadNewsPage() {
             title: title.trim(),
             content: content.trim(),
             coverImage: coverImage || null,
-            channelId: selectedChannelId,
+            channelId: effectiveChannelId,
             isPublished,
           }),
         });
@@ -395,7 +388,7 @@ export default function PPOHeadNewsPage() {
             title: title.trim(),
             content: content.trim(),
             coverImage: coverImage || null,
-            channelId: selectedChannelId,
+            channelId: effectiveChannelId,
             isPublished,
             polls: polls.length > 0 ? polls : undefined,
           }),
@@ -416,7 +409,7 @@ export default function PPOHeadNewsPage() {
       setCoverImage(null);
       setPolls([]);
       setIsPublished(false);
-      await loadNews();
+      await loadNews(selectedChannelId || undefined);
     } catch (error) {
       console.error("Ошибка сохранения новости:", error);
       alertError(error instanceof Error ? error.message : "Не удалось сохранить новость");
@@ -472,20 +465,29 @@ export default function PPOHeadNewsPage() {
                   Канал публикации *
                 </label>
                 <div className="flex gap-2">
+                  {(() => {
+                    const channelsForPublish = channels.filter((ch) => ch.canPublish !== false);
+                    const effectivePublishChannelId =
+                      channelsForPublish.some((c) => c.id === selectedChannelId)
+                        ? selectedChannelId
+                        : channelsForPublish[0]?.id ?? "";
+                    return (
                   <select
                     id="news-channel-select"
                     aria-label="Канал публикации"
-                    value={selectedChannelId}
+                    value={effectivePublishChannelId}
                     onChange={(e) => setSelectedChannelId(e.target.value)}
                     className="flex-1 rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                   >
                     <option value="">Выберите канал</option>
-                    {channels.map((channel) => (
+                    {channelsForPublish.map((channel) => (
                       <option key={channel.id} value={channel.id}>
                         {channel.name}
                       </option>
                     ))}
                   </select>
+                    );
+                  })()}
                   <button
                     type="button"
                     onClick={() => setShowChannelModal(true)}
@@ -706,7 +708,10 @@ export default function PPOHeadNewsPage() {
                             ? "bg-blue-50 dark:bg-blue-900/20"
                             : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                         }`}
-                        onClick={() => setSelectedChannelId(channel.id)}
+                        onClick={() => {
+                          setSelectedChannelId(channel.id);
+                          loadNews(channel.id);
+                        }}
                       >
                         {channel.iconUrl ? (
                           <img

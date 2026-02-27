@@ -31,10 +31,21 @@ export async function GET() {
         mpoHeadOrganizationId: true,
         isRPOHead: true,
         rpoHeadOrganizationId: true,
+        organizationId: true,
       },
     });
 
     const isMemberMode = user?.viewMode === "MEMBER";
+
+    // Текущая организация пользователя (для фильтрации каналов: показываем только каналы своей org + региональный)
+    const currentOrgId =
+      user?.viewMode === "RPO_HEAD"
+        ? user.rpoHeadOrganizationId ?? null
+        : user?.viewMode === "MPO_HEAD"
+          ? user.mpoHeadOrganizationId ?? null
+          : user?.viewMode === "PPO_HEAD"
+            ? user.ppoHeadOrganizationId ?? null
+            : user?.organizationId ?? null;
 
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем тот же метод создания AI чата, что и /api/chat
     // чтобы избежать создания дублирующих чатов
@@ -70,11 +81,24 @@ export async function GET() {
         // Свои обращения - показываем
         if (chat.ticketId && userTicketChatIds.includes(chat.id)) return true;
         
-        // Каналы - показываем только те, где пользователь участник
-        if (chat.type === "CHANNEL") return true;
+        // Каналы - только своей организации или региональный (null)
+        if (chat.type === "CHANNEL") {
+          const channelOrgId = chat.newsChannelOrganizationId ?? null;
+          if (channelOrgId === null) return true; // региональный канал
+          if (currentOrgId && channelOrgId === currentOrgId) return true;
+          return false;
+        }
         
         // Групповые чаты (не обращения) - скрываем в режиме участника
         return false;
+      });
+    } else if (currentOrgId != null) {
+      // В режиме председателя: каналы только своей организации + региональный
+      filteredChats = filteredChats.filter((chat: ChatInfo) => {
+        if (!chat || chat.type !== "CHANNEL") return true;
+        const channelOrgId = chat.newsChannelOrganizationId ?? null;
+        if (channelOrgId === null) return true;
+        return channelOrgId === currentOrgId;
       });
     }
 
