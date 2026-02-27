@@ -121,12 +121,14 @@ export async function GET(request: NextRequest) {
         select: { name: true },
       });
 
+      const orgName = organization?.name || "организации";
       const defaultChannel = await prisma.newsChannel.create({
         data: {
-          name: "Основной",
-          description: `Основной канал новостей ${organization?.name || "организации"}`,
+          name: orgName,
+          description: `Канал новостей ${orgName}`,
           organizationId: chairman.organizationId,
           createdById: chairman.id,
+          isMain: true,
         },
         include: {
           _count: {
@@ -149,10 +151,10 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Сортируем: "Основной" канал всегда первый
+    // Сортируем: основной канал (isMain) всегда первый
     channels.sort((a, b) => {
-      if (a.name === "Основной") return -1;
-      if (b.name === "Основной") return 1;
+      if (a.isMain) return -1;
+      if (b.isMain) return 1;
       return 0;
     });
 

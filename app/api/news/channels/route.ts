@@ -83,11 +83,11 @@ export async function GET(request: NextRequest) {
       name: channel.name,
       description: channel.description || channel.organization?.name || null,
       subscriberCount: memberCount,
-      isMain: channel.name === "Основной",
+      isMain: channel.isMain,
       organizationId: channel.organizationId,
     }));
     
-    // Сортируем: "Основной" канал всегда первый
+    // Сортируем: основной канал (isMain) всегда первый
     channels.sort((a, b) => {
       if (a.isMain) return -1;
       if (b.isMain) return 1;

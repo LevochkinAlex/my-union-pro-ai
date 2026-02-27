@@ -80,12 +80,14 @@ export async function POST(request: NextRequest) {
     // Если каналов нет, создаём основной
     if (!mainChannel) {
       try {
+        const orgName = chairman.ppoHeadOrganization.name;
         mainChannel = await prisma.newsChannel.create({
           data: {
-            name: "Основной",
-            description: `Основной канал новостей ${chairman.ppoHeadOrganization.name}`,
+            name: orgName,
+            description: `Канал новостей ${orgName}`,
             organizationId: organizationId,
             createdById: chairman.id,
+            isMain: true,
           },
         });
       } catch (createError: any) {
