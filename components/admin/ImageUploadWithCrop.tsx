@@ -108,14 +108,13 @@ export default function ImageUploadWithCrop({
       formData.append("file", croppedImageBlob, "cover.jpg");
 
       // Определяем, какой endpoint использовать (для админа или председателя)
-      // Проверяем роль пользователя и режим просмотра
-      const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+      // Режим председателя: ППО, МПО или РПО (Региональный) — все используют ppo-head endpoint
+      const viewMode = (session?.user as { viewMode?: string })?.viewMode ?? "";
+      const isOrgHead = ["PPO_HEAD", "MPO_HEAD", "RPO_HEAD"].includes(viewMode) ||
         (session?.user?.role === "PPO_HEAD" && !(session?.user as any)?.isPPOHead);
       const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
-      
-      // Используем endpoint для председателя, если пользователь в режиме председателя
-      // Иначе используем админский endpoint (для супер-админов)
-      const endpoint = isPPOHead && !isSuperAdmin
+
+      const endpoint = isOrgHead && !isSuperAdmin
         ? "/api/ppo-head/news/upload-image"
         : "/api/admin/news/upload-image";
 
