@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function AdminUsersInvitePage() {
   return (
-    <div className="p-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="mx-auto max-w-2xl rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Приглашение пользователя

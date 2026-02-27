@@ -214,7 +214,7 @@ export default async function AdminLayout({
       <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300 min-w-0 bg-gray-50 dark:bg-gray-900">
         <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0 min-h-full">
           <div className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0 bg-gray-50 dark:bg-gray-900 min-h-full">
-            <div className="px-4 py-8 sm:px-8 lg:px-12 min-h-full w-full max-w-full min-w-0 bg-gray-50 dark:bg-gray-900">
+            <div className="px-4 py-4 sm:px-6 lg:px-8 min-h-full w-full max-w-full min-w-0 bg-gray-50 dark:bg-gray-900">
               {children}
             </div>
           </div>

@@ -292,7 +292,7 @@ export default function KnowledgeBaseDetailsPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="space-y-6 min-w-0 w-full">
         <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
       </div>
     );
@@ -300,14 +300,14 @@ export default function KnowledgeBaseDetailsPage() {
 
   if (!kb) {
     return (
-      <div className="p-8">
+      <div className="space-y-6 min-w-0 w-full">
         <p className="text-red-600 dark:text-red-400">База знаний не найдена</p>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="mb-6 flex items-center gap-4">
         <Link
           href="/admin/ai-chat"
@@ -362,6 +362,7 @@ export default function KnowledgeBaseDetailsPage() {
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                aria-label="База знаний активна"
               />
               <Label htmlFor="isActive" className="mb-0">
                 Активна

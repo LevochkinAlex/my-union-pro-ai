@@ -1,132 +1,257 @@
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 
-export default async function AdminUsers() {
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    include: {
-      documents: {
-        where: {
-          type: {
-            in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
-          },
-          status: {
-            in: ["SIGNED", "PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "DRAFT"],
-          },
-        },
-      },
-    },
-  });
+const PAGE_SIZE = 20;
+
+interface UserDoc {
+  id: string;
+  type: string;
+  status: string;
+}
+
+interface UserRow {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  role: string;
+  membershipStatus: string;
+  createdAt: string;
+  documents: UserDoc[];
+}
+
+export default function AdminUsers() {
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const loadUsers = useCallback(async (pageNum: number, searchQuery: string) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(pageNum));
+      params.set("limit", String(PAGE_SIZE));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      if (!res.ok) throw new Error("Ошибка загрузки");
+      const data = await res.json();
+      setUsers(data.users || []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+      setPage(data.page ?? pageNum);
+    } catch {
+      setUsers([]);
+      setTotal(0);
+      setTotalPages(0);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadUsers(1, search);
+  }, [search, loadUsers]);
+
+  const goToPage = (p: number) => {
+    const next = Math.max(1, Math.min(p, totalPages));
+    loadUsers(next, search);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput.trim());
+    setPage(1);
+  };
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="space-y-6 min-w-0 w-full">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Управление пользователями
         </h1>
         <Link
           href="/admin/users/invite"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-blue-700"
         >
           Пригласить пользователя
         </Link>
       </div>
 
-      {/* Users Table */}
-      <div className="overflow-x-auto rounded-lg bg-white shadow dark:bg-gray-800">
-        <table className="w-full">
-          <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
-            <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                Имя
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                Роль
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                Статус
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                Дата регистрации
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                Действия
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {users.map((user) => {
-              // Проверяем, есть ли документы, ожидающие проверки
-              const hasPendingDocuments = user.documents.length > 0;
-              const needsAttention = hasPendingDocuments && 
-                (user.membershipStatus === "DOCUMENTS_PENDING" || 
-                 user.membershipStatus === "PENDING_VERIFICATION");
-              
-              return (
-              <tr 
-                key={user.id} 
-                className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                  needsAttention 
-                    ? "bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 animate-pulse" 
-                    : ""
-                }`}
-              >
-                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                  {user.email}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                  {user.firstName} {user.lastName}
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                    {user.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                      user.membershipStatus === "APPROVED"
-                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                        : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+      {/* Поиск */}
+      <form onSubmit={handleSearchSubmit}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Поиск по email, имени, фамилии..."
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-lg bg-gray-200 px-4 py-2 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+          >
+            Найти
+          </button>
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                setSearch("");
+              }}
+              className="rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            >
+              Сбросить
+            </button>
+          )}
+        </div>
+      </form>
+
+      {/* Таблица */}
+      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+              <tr>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Имя
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Роль
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Статус
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Дата регистрации
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Действия
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {users.map((user) => {
+                const hasPendingDocuments = (user.documents?.length ?? 0) > 0;
+                const needsAttention =
+                  hasPendingDocuments &&
+                  (user.membershipStatus === "DOCUMENTS_PENDING" ||
+                    user.membershipStatus === "PENDING_VERIFICATION");
+
+                return (
+                  <tr
+                    key={user.id}
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                      needsAttention
+                        ? "border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 animate-pulse"
+                        : ""
                     }`}
                   >
-                    {user.membershipStatus}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                  {user.createdAt.toLocaleDateString("ru-RU")}
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <div className="flex items-center gap-3">
-                    <Link
-                      href={`/admin/users/${user.id}`}
-                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                    >
-                      Просмотр
-                    </Link>
-                    <ImpersonateButton userId={user.id} userEmail={user.email || ""} />
-                  </div>
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                      {user.email ?? "—"}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                      {[user.firstName, user.lastName].filter(Boolean).join(" ") || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                          user.membershipStatus === "APPROVED"
+                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                        }`}
+                      >
+                        {user.membershipStatus}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                      {user.createdAt
+                        ? new Date(user.createdAt).toLocaleDateString("ru-RU")
+                        : "—"}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                          href={`/admin/users/${user.id}`}
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                        >
+                          Просмотр
+                        </Link>
+                        <ImpersonateButton
+                          userId={user.id}
+                          userEmail={user.email || ""}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        {!loading && users.length === 0 && (
+          <div className="py-12 text-center text-gray-600 dark:text-gray-400">
+            Пользователей не найдено
+          </div>
+        )}
       </div>
 
-      {users.length === 0 && (
-        <div className="rounded-lg bg-white p-8 text-center shadow dark:bg-gray-800">
-          <p className="text-gray-600 dark:text-gray-400">
-            Пользователей не найдено
+      {/* Пагинация */}
+      {!loading && totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} из {total}
           </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => goToPage(page - 1)}
+              disabled={page <= 1}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Назад
+            </button>
+            <span className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+              Страница {page} из {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => goToPage(page + 1)}
+              disabled={page >= totalPages}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Вперёд
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
-

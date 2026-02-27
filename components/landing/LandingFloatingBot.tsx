@@ -27,7 +27,6 @@ export default function LandingFloatingBot() {
   const [isLoading, setIsLoading] = useState(false);
   const [initialRequestDone, setInitialRequestDone] = useState(false);
   const [aiChatId, setAiChatId] = useState<string | null>(null);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -40,7 +39,6 @@ export default function LandingFloatingBot() {
   useEffect(() => {
     if (prevUserIdRef.current !== userId) {
       prevUserIdRef.current = userId ?? null;
-      setHistoryLoaded(false);
       setAiChatId(null);
       setMessages([]);
       setInitialRequestDone(false);
@@ -59,43 +57,45 @@ export default function LandingFloatingBot() {
     textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
   }, [input]);
 
-  // Для авторизованных: при открытии подтягиваем чат с ИИ и историю (как в дашборде)
+  const loadAuthenticatedHistory = useCallback(async () => {
+    if (!isAuthenticated || !userId) return;
+    const aiRes = await fetch("/api/chat/ai");
+    const aiData = await aiRes.json();
+    if (!aiRes.ok || aiData.error) {
+      setMessages([]);
+      return;
+    }
+    const chat = aiData.chat;
+    const cid = chat?.id;
+    if (!cid) {
+      setMessages([]);
+      return;
+    }
+    setAiChatId(cid);
+    const msgRes = await fetch(`/api/chat/${cid}?limit=100`);
+    const msgData = await msgRes.json();
+    const list: Array<{ id: string; senderId: string; content: string; messageType: string; createdAt: string }> =
+      msgData?.messages ?? [];
+    const mapped: ChatMessage[] = list.map((m) => ({
+      id: m.id,
+      role: m.messageType === "assistant" ? "assistant" : "user",
+      content: m.content || "",
+      timestamp: new Date(m.createdAt).getTime(),
+    }));
+    setMessages(mapped);
+  }, [isAuthenticated, userId]);
+
+  // Для авторизованных: при каждом открытии подтягиваем каноничную историю ИИ-чата
   useEffect(() => {
-    if (!open || !isAuthenticated || !userId || historyLoaded) return;
-    setHistoryLoaded(true);
+    if (!open || !isAuthenticated || !userId) return;
     setIsLoading(true);
-    (async () => {
-      try {
-        const aiRes = await fetch("/api/chat/ai");
-        const aiData = await aiRes.json();
-        if (!aiRes.ok || aiData.error) {
-          setMessages([]);
-          setInitialRequestDone(true);
-          return;
-        }
-        const chat = aiData.chat;
-        const cid = chat?.id;
-        if (cid) setAiChatId(cid);
-        const msgRes = await fetch(`/api/chat/${cid}?limit=100`);
-        const msgData = await msgRes.json();
-        const list: Array<{ id: string; senderId: string; content: string; messageType: string; createdAt: string }> =
-          msgData?.messages ?? [];
-        const mapped: ChatMessage[] = list.map((m) => ({
-          id: m.id,
-          role: m.messageType === "assistant" ? "assistant" : "user",
-          content: m.content || "",
-          timestamp: new Date(m.createdAt).getTime(),
-        }));
-        setMessages(mapped);
+    loadAuthenticatedHistory()
+      .catch(() => setMessages([]))
+      .finally(() => {
         setInitialRequestDone(true);
-      } catch {
-        setMessages([]);
-        setInitialRequestDone(true);
-      } finally {
         setIsLoading(false);
-      }
-    })();
-  }, [open, isAuthenticated, userId, historyLoaded]);
+      });
+  }, [open, isAuthenticated, userId, loadAuthenticatedHistory]);
 
   // Для гостей: при первом открытии запрашиваем приветствие у бота (лендинг-чат)
   const chatEndpointGuest = "/api/landing-chat";
@@ -168,19 +168,10 @@ export default function LandingFloatingBot() {
 
       if (isAuthenticated) {
         sendAuthenticated(text)
-          .then((data) => {
-            const botContent = data?.botMessage?.content ?? data?.message;
-            if (botContent) {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  role: "assistant",
-                  content: typeof botContent === "string" ? botContent : "",
-                  timestamp: Date.now(),
-                  id: data?.botMessage?.id ?? `ai-${Date.now()}`,
-                },
-              ]);
-            }
+          .then(async () => {
+            // После отправки перечитываем каноничную историю из основного ИИ-чата,
+            // чтобы лендинг-виджет и чат в дашборде были полностью синхронизированы.
+            await loadAuthenticatedHistory();
           })
           .catch(() => {
             setMessages((prev) => [
@@ -210,7 +201,7 @@ export default function LandingFloatingBot() {
         })
         .finally(() => setIsLoading(false));
     },
-    [canSend, input, messages, isAuthenticated, sendAuthenticated, fetchAIGuest]
+    [canSend, input, messages, isAuthenticated, sendAuthenticated, fetchAIGuest, loadAuthenticatedHistory]
   );
 
   if (status === "loading") {

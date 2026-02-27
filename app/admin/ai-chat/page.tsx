@@ -132,19 +132,22 @@ export default function AdminAIChatPage() {
   };
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="space-y-6 min-w-0 w-full">
+      <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Управление AI чатом
         </h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          Базы знаний, боты и API провайдеры
+        </p>
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab("knowledge")}
-            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium ${
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
               activeTab === "knowledge"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -177,7 +180,7 @@ export default function AdminAIChatPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
           <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
         </div>
       ) : activeTab === "knowledge" ? (
@@ -193,7 +196,7 @@ export default function AdminAIChatPage() {
               <Link
                 key={kb.id}
                 href={`/admin/ai-chat/knowledge-bases/${kb.id}`}
-                className="rounded-lg border border-gray-200 bg-white p-6 shadow transition-shadow hover:shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:p-6 shadow-sm transition-shadow hover:shadow-md"
               >
                 <div className="mb-2 flex items-start justify-between">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -267,7 +270,7 @@ export default function AdminAIChatPage() {
               <Link
                 key={bot.id}
                 href={`/admin/ai-chat/bots/${bot.id}`}
-                className="rounded-lg border border-gray-200 bg-white p-6 shadow transition-shadow hover:shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:p-6 shadow-sm transition-shadow hover:shadow-md"
               >
                 <div className="mb-2 flex items-start justify-between">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -357,7 +360,7 @@ export default function AdminAIChatPage() {
               {providers.map((provider) => (
                 <div
                   key={provider.id}
-                  className="rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800"
+                  className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:p-6 shadow-sm"
                 >
                   <div className="mb-2 flex items-start justify-between">
                     <div>

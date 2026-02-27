@@ -179,7 +179,7 @@ export default function NewBotPage() {
   const hasModelOptions = providerModels.length > 0;
 
   return (
-    <div className="p-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="mb-6 flex items-center gap-4">
         <Link
           href="/admin/ai-chat"
@@ -222,6 +222,7 @@ export default function NewBotPage() {
               value={tone}
               onChange={(e) => setTone(e.target.value)}
               className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              aria-label="Тон общения"
             >
               <option value="professional">Профессиональный</option>
               <option value="friendly">Дружелюбный</option>
@@ -414,6 +415,7 @@ export default function NewBotPage() {
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            aria-label="Бот по умолчанию"
           />
           <Label htmlFor="isDefault" className="mb-0">
             Бот по умолчанию

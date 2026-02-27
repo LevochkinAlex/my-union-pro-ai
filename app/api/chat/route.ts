@@ -22,6 +22,36 @@ const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot";
 const SUPPORT_CHAT_DISPLAY_NAME = "Техподдержка";
 
+function isAnyAIChat(chat: any): boolean {
+  if (!chat) return false;
+  if (chat.isAIChat === true) return true;
+
+  const name = String(chat.displayName || chat.name || "").toLowerCase();
+  const aiPatterns = [
+    "ии-ассистент",
+    "ии ассистент",
+    "ai assistant",
+    "ai-assistant",
+    "помощник ai",
+    "ai помощник",
+    "мойсоюз помощник",
+  ];
+
+  if (aiPatterns.some((p) => name.includes(p))) return true;
+
+  const ou = chat.otherUser;
+  if (!ou) return false;
+  if (ou.id === AI_BOT_ID) return true;
+
+  const firstName = String(ou.firstName || "").toLowerCase();
+  const lastName = String(ou.lastName || "").toLowerCase();
+  if ((firstName === "ai" && lastName.includes("помощник")) || (firstName === "ии" && lastName.includes("ассистент"))) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Получает или создает чат с ИИ-ассистентом (экспорт для /api/chat/rooms)
  */
@@ -499,7 +529,7 @@ export async function GET(request: NextRequest) {
     const supportUserId = await getSupportUserId().catch(() => null);
     let filteredChats = Array.isArray(chats) ? chats.filter((c: any) => {
       if (!c) return false;
-      if (c.name === AI_CHAT_NAME) return false;
+      if (isAnyAIChat(c)) return false;
       if (supportUserId && c.otherUser?.id === supportUserId) return false;
       return true;
     }) : [];
@@ -547,6 +577,15 @@ export async function GET(request: NextRequest) {
       if (head.length) finalChats = [...head, ...filteredChats];
     }
 
+    // Гарантия одного ИИ-чата в списке: оставляем только первый попавшийся AI-чат
+    let seenOneAiChat = false;
+    finalChats = (finalChats || []).filter((c: any) => {
+      if (!isAnyAIChat(c)) return true;
+      if (seenOneAiChat) return false;
+      seenOneAiChat = true;
+      return true;
+    });
+
     return NextResponse.json({ chats: finalChats || [] });
   } catch (error: any) {
     console.error("[chat] GET Error:", error);
@@ -589,7 +628,12 @@ export async function POST(request: NextRequest) {
         prisma.user.findUnique({ where: { id: targetUserId }, select: { organizationId: true, email: true } }),
       ]);
       const isAIBot = target?.email === "ai-assistant@myunion.pro";
-      if (!isAIBot) {
+      if (isAIBot) {
+        // Для ИИ всегда используем единый каноничный чат "ИИ-Ассистент",
+        // чтобы не создавать отдельные приватные "ветки" с ботом.
+        chat = await getOrCreateAIChat(userId);
+        isNew = false;
+      } else {
         const myOrg = me?.organizationId ?? null;
         const targetOrg = target?.organizationId ?? null;
         if (myOrg !== targetOrg) {
@@ -598,10 +642,10 @@ export async function POST(request: NextRequest) {
             { status: 403 }
           );
         }
+        const result = await getOrCreatePrivateChat(userId, targetUserId);
+        chat = result.chat;
+        isNew = result.isNew;
       }
-      const result = await getOrCreatePrivateChat(userId, targetUserId);
-      chat = result.chat;
-      isNew = result.isNew;
     } 
     // Создаем групповой чат
     else if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {

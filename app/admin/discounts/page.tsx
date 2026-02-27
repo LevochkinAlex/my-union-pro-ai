@@ -175,7 +175,7 @@ export default function AdminDiscountsPage() {
   };
 
   return (
-    <div className="space-y-8 p-6">
+    <div className="space-y-6 min-w-0 w-full">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">

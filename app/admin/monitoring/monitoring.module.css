@@ -1,0 +1,10 @@
+/* Grafana iframe container */
+.grafanaContainer {
+  height: calc(100vh - 300px);
+  min-height: 600px;
+}
+
+/* Memory bar fill – width set via CSS variable from JS (ref + setProperty) */
+.memoryBarFill {
+  width: var(--memory-pct, 0);
+}

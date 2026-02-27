@@ -257,7 +257,7 @@ export default function DocumentTemplatesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -298,44 +298,50 @@ export default function DocumentTemplatesPage() {
       </div>
 
       {(isEditing || isCreating) && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:p-6 shadow-sm">
           <h2 className="mb-4 text-xl font-semibold">
             {isCreating ? "Создание шаблона" : "Редактирование шаблона"}
           </h2>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="templateName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Название
               </label>
               <input
+                id="templateName"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                placeholder="Название шаблона"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="templateDescription" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Описание
               </label>
               <textarea
+                id="templateDescription"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                 rows={2}
+                placeholder="Краткое описание шаблона"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="templateType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Тип документа
               </label>
               <select
+                id="templateType"
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as DocumentType })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                aria-label="Тип документа"
               >
                 <optgroup label="Заявления">
                   <option value="MEMBERSHIP_APPLICATION">
@@ -374,7 +380,7 @@ export default function DocumentTemplatesPage() {
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label htmlFor="htmlContent" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   HTML содержимое (используйте переменные вида {"{{variableName}}"})
                 </label>
                 <div className="flex gap-2">
@@ -447,20 +453,25 @@ export default function DocumentTemplatesPage() {
                     onChange={(e) => setFormData({ ...formData, htmlContent: e.target.value })}
                     className="block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-gray-600 dark:bg-gray-700"
                     rows={15}
+                    placeholder="HTML-содержимое шаблона, переменные в виде {{variableName}}"
+                    aria-label="HTML содержимое шаблона"
                   />
                 </div>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="templateCssStyles" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 CSS стили (опционально)
               </label>
               <textarea
+                id="templateCssStyles"
                 value={formData.cssStyles}
                 onChange={(e) => setFormData({ ...formData, cssStyles: e.target.value })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-gray-600 dark:bg-gray-700"
                 rows={8}
+                placeholder="Дополнительные CSS-стили (опционально)"
+                aria-label="CSS стили шаблона"
               />
             </div>
 
@@ -511,7 +522,7 @@ export default function DocumentTemplatesPage() {
         {templates.map((template) => (
           <div
             key={template.id}
-            className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+            className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-sm"
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -555,7 +566,7 @@ export default function DocumentTemplatesPage() {
       </div>
 
       {templates.length === 0 && !isCreating && (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-8 text-center">
           <p className="text-gray-600 dark:text-gray-400">
             Шаблонов пока нет. Создайте первый шаблон.
           </p>

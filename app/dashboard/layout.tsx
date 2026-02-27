@@ -648,7 +648,7 @@ export default async function DashboardLayout({
           </main>
         </div>
         
-        {/* Мини-чат виджет (показывается на всех страницах кроме чатов) */}
+        {/* Мини-чат виджет (синхронизирован с основным чатом ИИ-Ассистент) */}
         <MiniChatWrapperConditional />
       </div>
     </TourGuideProvider>

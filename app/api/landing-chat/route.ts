@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOpenRouterConfig } from "@/lib/settings";
 import { COMPANY, CONTACTS } from "@/lib/constants/landing";
+import { prisma } from "@/lib/prisma";
 
 const LANDING_SYSTEM_PROMPT = `Ты — ИИ-помощник на лендинге платформы MyUnion Pro. Твоя цель: вести диалог с гостем, понять, кто он (председатель ППО, член профсоюза, представитель организации), уговорить попробовать демо, собрать имя и телефон, затем предложить зарегистрироваться (войти).
 
@@ -87,6 +88,34 @@ export async function POST(request: NextRequest) {
         { error: "Не удалось получить ответ. Попробуйте ещё раз." },
         { status: 502 }
       );
+    }
+
+    // Лид-лог для будущей CRM-разработки: сохраняем диалог гостя в БД,
+    // не создавая пользовательский чат и не требуя авторизации.
+    try {
+      const conversation = [...conversationSlice, { role: "user", content: message }, { role: "assistant", content: aiMessage }];
+      const phoneMatch = message.match(/(?:\+7|8)\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/);
+      await prisma.systemLog.create({
+        data: {
+          level: "INFO",
+          source: "landing-chat-lead",
+          message: "Гостевой диалог в лендинговом ИИ-чате",
+          details: {
+            userMessage: message,
+            aiMessage,
+            historyTail: conversation.slice(-8),
+            extractedPhone: phoneMatch?.[0] ?? null,
+          },
+          metadata: {
+            endpoint: "/api/landing-chat",
+            userAgent: request.headers.get("user-agent"),
+            forwardedFor: request.headers.get("x-forwarded-for"),
+            referer: request.headers.get("referer"),
+          },
+        },
+      });
+    } catch (logError) {
+      console.warn("[landing-chat] Failed to persist guest lead log:", logError);
     }
 
     return NextResponse.json({ message: aiMessage });

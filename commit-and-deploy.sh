@@ -41,6 +41,10 @@ echo "=== Applying database migrations ==="
 npx prisma migrate deploy
 bash scripts/fix-chat-participant-columns-on-server.sh
 echo ""
+echo "=== Data migrations (AI chat merge & welcome normalize) ==="
+node scripts/merge-ai-chat-branches.mjs || true
+node scripts/normalize-ai-welcome-messages.mjs || true
+echo ""
 echo "=== Full clean build ==="
 rm -rf .next node_modules/.cache
 pnpm build

@@ -125,8 +125,9 @@ export default function TourGuideSpotlight({
       position: "fixed",
       top: Math.max(16, Math.min(top, vh - cardMaxHeight - 16)),
       left: Math.max(16, Math.min(left, vw - cardMaxWidth - 16)),
-      maxWidth: cardMaxWidth,
-      maxHeight: cardMaxHeight,
+      transform: "none",
+      maxWidth: `${cardMaxWidth}px`,
+      maxHeight: `${cardMaxHeight}px`,
       zIndex: Z_TOOLTIP,
     });
   }, [step?.tooltipPlacement, targetRect]);
@@ -175,12 +176,16 @@ export default function TourGuideSpotlight({
     const el = tooltipRef.current;
     if (!el) return;
     const s = tooltipStyle as Record<string, string | number | undefined>;
+    const toCssValue = (value: string | number | undefined, fallback: string): string => {
+      if (value === undefined) return fallback;
+      return typeof value === "number" ? `${value}px` : value;
+    };
     el.style.setProperty("--tooltip-top", s.top !== undefined ? `${s.top}px` : "auto");
     el.style.setProperty("--tooltip-bottom", s.bottom !== undefined ? `${s.bottom}px` : "auto");
     el.style.setProperty("--tooltip-left", typeof s.left === "number" ? `${s.left}px` : (s.left ?? "50%"));
     el.style.setProperty("--tooltip-transform", (s.transform as string) ?? "translateX(-50%)");
-    el.style.setProperty("--tooltip-max-width", (s.maxWidth as string) ?? "min(420px, calc(100vw - 32px))");
-    el.style.setProperty("--tooltip-max-height", s.maxHeight !== undefined ? `${s.maxHeight}px` : "320px");
+    el.style.setProperty("--tooltip-max-width", toCssValue(s.maxWidth, "min(420px, calc(100vw - 32px))"));
+    el.style.setProperty("--tooltip-max-height", toCssValue(s.maxHeight, "320px"));
   }, [tooltipStyle]);
 
   const handleClose = useCallback(() => {

@@ -157,7 +157,7 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="space-y-8 p-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Административные настройки
@@ -180,7 +180,7 @@ export default function AdminSettingsPage() {
       )}
 
       {/* Firebase & API Settings */}
-      <div className="w-full rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-4 lg:p-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
           🔥 Firebase & API Настройки
         </h2>
@@ -331,7 +331,7 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Broadcast Notifications */}
-      <div className="w-full rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-4 lg:p-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
           📢 Массовые уведомления
         </h2>

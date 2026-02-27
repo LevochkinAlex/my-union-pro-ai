@@ -86,7 +86,7 @@ export default function GenerateDocumentsPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Generate Documents</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
@@ -96,7 +96,7 @@ export default function GenerateDocumentsPage() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Generate for Single User */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Generate for Single User
           </h2>
@@ -127,7 +127,7 @@ export default function GenerateDocumentsPage() {
         </div>
 
         {/* Generate for All Users */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Generate for All Users
           </h2>
@@ -157,7 +157,7 @@ export default function GenerateDocumentsPage() {
 
       {/* Results */}
       {result && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             {result.results ? "Bulk Generation Results" : "Result"}
           </h3>

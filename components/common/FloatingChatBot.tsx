@@ -159,25 +159,10 @@ export default function FloatingChatBot() {
         id: msg.id ?? `${msg.messageType === "assistant" ? "assistant" : "user"}-${msg.id || Date.now()}-${Math.random()}`,
       }));
 
-      setMessages((prev) => {
-        if (!isSendingMessageRef.current && prev.length === 0) {
-          conversationHistoryRef.current = chatMessages;
-          return chatMessages;
-        }
-        const existingIds = new Set(prev.map((m) => m.id).filter(Boolean));
-        const existingContent = new Set(
-          prev.map((m) => `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`)
-        );
-        const newMessages = chatMessages.filter((m) => {
-          if (m.id && existingIds.has(m.id)) return false;
-          const contentKey = `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`;
-          return !existingContent.has(contentKey);
-        });
-        if (newMessages.length === 0) return prev;
-        const merged = [...prev, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
-        conversationHistoryRef.current = merged;
-        return merged;
-      });
+      // Всегда используем каноничную историю из основного чата ИИ,
+      // чтобы виджет не уходил в отдельную «ветку» и не дублировал сообщения.
+      conversationHistoryRef.current = chatMessages;
+      setMessages(chatMessages);
     } catch (error) {
       console.error("[FloatingChatBot] Error loading chat history:", error);
     }

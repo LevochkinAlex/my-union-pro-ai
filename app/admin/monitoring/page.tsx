@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle, XCircle, Activity, Server, Database, Clock, ExternalLink } from "lucide-react";
+import styles from "./monitoring.module.css";
 
 interface SystemMetrics {
   status: "online" | "offline" | "error";
@@ -76,7 +77,7 @@ export default function MonitoringPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Мониторинг системы</h1>
@@ -137,7 +138,7 @@ export default function MonitoringPage() {
 
       {/* Grafana Tab */}
       {activeTab === "grafana" && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" style={{ height: "calc(100vh - 300px)", minHeight: "600px" }}>
+        <div className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm ${styles.grafanaContainer}`}>
           <iframe
             src="/grafana/d/myunion-overview?kiosk=tv&theme=dark"
             className="w-full h-full border-0"
@@ -158,7 +159,7 @@ export default function MonitoringPage() {
         <>
           {/* System Status */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 lg:p-6 shadow-sm min-w-0 overflow-hidden">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Статус</p>
@@ -180,7 +181,7 @@ export default function MonitoringPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 lg:p-6 shadow-sm min-w-0 overflow-hidden">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Время работы</p>
@@ -192,7 +193,7 @@ export default function MonitoringPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 lg:p-6 shadow-sm min-w-0 overflow-hidden">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Память</p>
@@ -201,14 +202,16 @@ export default function MonitoringPage() {
                   </p>
                   <div className="mt-2 w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                     <div
-                      className={`h-2 rounded-full ${
+                      ref={(el) => {
+                        if (el) el.style.setProperty("--memory-pct", `${metrics.memory.percentage}%`);
+                      }}
+                      className={`h-2 rounded-full ${styles.memoryBarFill} ${
                         metrics.memory.percentage > 80
                           ? "bg-red-500"
                           : metrics.memory.percentage > 60
                           ? "bg-yellow-500"
                           : "bg-green-500"
                       }`}
-                      style={{ width: `${metrics.memory.percentage}%` }}
                     />
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -219,7 +222,7 @@ export default function MonitoringPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 lg:p-6 shadow-sm min-w-0 overflow-hidden">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">CPU</p>
@@ -233,7 +236,7 @@ export default function MonitoringPage() {
           </div>
 
           {/* API Health */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 lg:p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Проверка API
             </h2>

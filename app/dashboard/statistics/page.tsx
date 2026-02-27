@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { OrganizationType } from "@prisma/client";
 import { BarChart3, Building2, Users, ClipboardList, Mail, TrendingUp, User, AlertTriangle, Trophy } from "lucide-react";
+import chartStyles from "./statistics.module.css";
 
 interface TimeSeriesData {
   period: string;
@@ -12,6 +13,26 @@ interface TimeSeriesData {
   totalMembers: number;
   totalEmployees: number;
   membershipPercent: number;
+}
+
+interface OrgWithoutReport {
+  id: string;
+  name: string;
+  type: OrganizationType;
+  chairmanName?: string | null;
+}
+
+interface OrgWithStats {
+  id: string;
+  name: string;
+  type: OrganizationType;
+  chairmanName?: string | null;
+  chairmanJobTitle?: string | null;
+  parentId?: string | null;
+  membersCount: number;
+  reportsCount: number;
+  documentsCount: number;
+  ticketsCount: number;
 }
 
 interface Stats {
@@ -35,7 +56,7 @@ interface Stats {
       total: number;
     };
     currentPeriod: string;
-    orgsWithoutReport: any[];
+    orgsWithoutReport: OrgWithoutReport[];
     recentActivity: {
       newMembers: number;
       newReports: number;
@@ -43,7 +64,7 @@ interface Stats {
     };
   };
   timeSeries: TimeSeriesData[];
-  organizations: any[];
+  organizations: OrgWithStats[];
 }
 
 const REPORT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -62,7 +83,7 @@ const TICKET_STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function StatisticsPage() {
-  const { data: session } = useSession();
+  useSession();
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,8 +98,8 @@ export default function StatisticsPage() {
         }
         const data = await res.json();
         setStats(data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
       } finally {
         setIsLoading(false);
       }
@@ -404,6 +425,11 @@ function AreaChart({
   dataKey: keyof TimeSeriesData;
   color: string;
 }) {
+  const valueRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (valueRef.current) valueRef.current.style.setProperty("--chart-value-color", color);
+  }, [color]);
+
   const maxValue = Math.max(...data.map((d) => Number(d[dataKey]) || 0));
   const minValue = Math.min(...data.map((d) => Number(d[dataKey]) || 0));
   const range = maxValue - minValue || 1;
@@ -467,7 +493,10 @@ function AreaChart({
       </div>
       
       {/* Текущее значение */}
-      <div className="absolute right-0 top-0 rounded-lg bg-white/80 px-2 py-1 text-sm font-bold dark:bg-gray-800/80" style={{ color }}>
+      <div
+        ref={valueRef}
+        className={`absolute right-0 top-0 rounded-lg bg-white/80 px-2 py-1 text-sm font-bold dark:bg-gray-800/80 ${chartStyles.chartValue}`}
+      >
         {data[data.length - 1]?.[dataKey]}
       </div>
     </div>
@@ -484,6 +513,11 @@ function BarChart({
   dataKey: keyof TimeSeriesData;
   color: string;
 }) {
+  const valueRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (valueRef.current) valueRef.current.style.setProperty("--chart-value-color", color);
+  }, [color]);
+
   const maxValue = Math.max(...data.map((d) => Number(d[dataKey]) || 0), 100);
   
   return (
@@ -491,17 +525,18 @@ function BarChart({
       <div className="flex flex-1 items-end justify-between gap-1 px-1">
         {data.map((d, i) => {
           const value = Number(d[dataKey]) || 0;
-          const height = (value / maxValue) * 100;
-          
+          const heightPct = (value / maxValue) * 100;
+          const setBarVars = (el: HTMLDivElement | null) => {
+            if (!el) return;
+            el.style.setProperty("--bar-height", `${heightPct}%`);
+            el.style.setProperty("--bar-color", color);
+            el.style.setProperty("--bar-min-height", value > 0 ? "4px" : "0");
+          };
           return (
             <div key={i} className="group relative flex flex-1 flex-col items-center">
               <div
-                className="w-full min-w-[8px] max-w-[24px] rounded-t-sm transition-all duration-300 group-hover:opacity-80"
-                style={{
-                  height: `${height}%`,
-                  backgroundColor: color,
-                  minHeight: value > 0 ? "4px" : "0",
-                }}
+                ref={setBarVars}
+                className={`w-full min-w-[8px] max-w-[24px] rounded-t-sm transition-all duration-300 group-hover:opacity-80 ${chartStyles.barFill}`}
               />
               
               {/* Tooltip */}
@@ -521,7 +556,10 @@ function BarChart({
       </div>
       
       {/* Текущее значение */}
-      <div className="mt-2 text-center text-lg font-bold" style={{ color }}>
+      <div
+        ref={valueRef}
+        className={`mt-2 text-center text-lg font-bold ${chartStyles.chartValue}`}
+      >
         {data[data.length - 1]?.[dataKey]}%
       </div>
     </div>

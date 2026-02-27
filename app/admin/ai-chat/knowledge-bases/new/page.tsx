@@ -42,7 +42,7 @@ export default function NewKnowledgeBasePage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="mb-6 flex items-center gap-4">
         <Link
           href="/admin/ai-chat"

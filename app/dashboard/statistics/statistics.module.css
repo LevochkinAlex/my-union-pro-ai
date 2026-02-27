@@ -1,0 +1,11 @@
+/* Chart current value – color set via CSS variable from JS (ref) */
+.chartValue {
+  color: var(--chart-value-color, inherit);
+}
+
+/* Bar chart bar – dimensions/color set via CSS variables from JS (ref callback) */
+.barFill {
+  height: var(--bar-height, 0);
+  background-color: var(--bar-color, transparent);
+  min-height: var(--bar-min-height, 0);
+}

@@ -94,7 +94,7 @@ export default function AdminNewsPage() {
   }
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
@@ -133,7 +133,7 @@ export default function AdminNewsPage() {
       )}
 
       {news.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-12 text-center shadow-sm">
           <svg
             className="mx-auto h-12 w-12 text-gray-400"
             fill="none"
@@ -165,7 +165,7 @@ export default function AdminNewsPage() {
           {news.map((post) => (
             <div
               key={post.id}
-              className="rounded-lg border border-gray-200 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm transition hover:shadow-md"
             >
               <div className="p-4 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:gap-4">

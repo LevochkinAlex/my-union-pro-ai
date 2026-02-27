@@ -272,7 +272,7 @@ export default function BotDetailsPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="space-y-6 min-w-0 w-full">
         <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
       </div>
     );
@@ -280,7 +280,7 @@ export default function BotDetailsPage() {
 
   if (error || !bot) { // combined error and not found state
     return (
-      <div className="p-8">
+      <div className="space-y-6 min-w-0 w-full">
         <p className="text-red-600 dark:text-red-400">{error || "Бот не найден"}</p>
          <div className="mt-6">
              <Link
@@ -298,7 +298,7 @@ export default function BotDetailsPage() {
   const hasModelOptions = providerModels.length > 0;
 
   return (
-    <div className="p-8">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="mb-6 flex items-center gap-4">
         <Link
           href="/admin/ai-chat"
@@ -533,6 +533,7 @@ export default function BotDetailsPage() {
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              aria-label="Бот активен"
             />
             <Label htmlFor="isActive" className="mb-0">
               Активен
@@ -546,6 +547,7 @@ export default function BotDetailsPage() {
               checked={isDefault}
               onChange={(e) => setIsDefault(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              aria-label="Бот по умолчанию"
             />
             <Label htmlFor="isDefault" className="mb-0">
               Бот по умолчанию

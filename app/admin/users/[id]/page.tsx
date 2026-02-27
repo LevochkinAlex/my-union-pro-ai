@@ -369,15 +369,15 @@ export default function AdminUserDetailsPage() {
   };
 
   if (loading) {
-    return <div className="p-8">Загрузка данных пользователя...</div>;
+    return <div className="space-y-6 min-w-0 w-full py-4">Загрузка данных пользователя...</div>;
   }
 
   if (error) {
-    return <div className="p-8 text-red-500">{error}</div>;
+    return <div className="space-y-6 min-w-0 w-full py-4 text-red-500">{error}</div>;
   }
   
   if (!user) {
-    return <div className="p-8">Пользователь не найден.</div>;
+    return <div className="space-y-6 min-w-0 w-full py-4">Пользователь не найден.</div>;
   }
 
   const pendingDocuments = user.documents.filter(
@@ -403,7 +403,7 @@ export default function AdminUserDetailsPage() {
   const educations = parseJsonField(user.educations);
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="space-y-6 min-w-0 w-full">
       <div className="mb-6 flex items-center gap-4">
         <Link href="/admin/users" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
           ← Назад к списку пользователей
