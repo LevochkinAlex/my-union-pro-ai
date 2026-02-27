@@ -154,7 +154,7 @@ export default function PPOHeadNewsPage() {
       setNewChannelName("");
       setNewChannelDescription("");
       setNewChannelIcon(null);
-      await loadChannels();
+      await loadData();
       
       // Выбираем новый канал
       if (data.channel) {
