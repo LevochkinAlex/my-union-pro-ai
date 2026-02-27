@@ -506,10 +506,15 @@ export async function GET(
       console.warn(`[chat/${chatId}] ⚠️ CACHE INCONSISTENCY: DB has ${totalMessagesCount} messages but cache was empty!`);
     }
     
+    // Без курсора (первичная загрузка) — грузим НОВЕЙШИЕ сообщения (desc), потом разворачиваем.
+    // С курсором: older → desc, newer → asc (как раньше).
+    const needsReverse = !cursor || direction === 'older';
+    const orderDirection = needsReverse ? 'desc' : 'asc';
+
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
       take: limit + 1, // +1 для проверки hasMore
-      orderBy: { createdAt: direction === 'older' ? 'desc' : 'asc' },
+      orderBy: { createdAt: orderDirection as 'asc' | 'desc' },
       include: {
         sender: {
           select: {
@@ -629,8 +634,8 @@ export async function GET(
     const hasMore = messages.length > limit;
     const resultMessages = hasMore ? messages.slice(0, limit) : messages;
     
-    // Если загружаем старые - нужно перевернуть обратно в хронологическом порядке
-    if (direction === 'older') {
+    // Разворачиваем в хронологический порядок, если грузили desc (без курсора или direction=older)
+    if (needsReverse) {
       resultMessages.reverse();
     }
 

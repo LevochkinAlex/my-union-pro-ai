@@ -874,12 +874,6 @@ export function useChat(options: UseChatOptions = {}) {
               return next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
             });
             loadChats();
-            // Повторная подгрузка с сервера через 1 с, чтобы ответ ИИ не пропадал при гонках/кэше
-            setTimeout(() => {
-              if (selectedChatRef.current?.id === effectiveChatId) {
-                loadMessages(effectiveChatId);
-              }
-            }, 1000);
             setSending(false);
             return true;
           } else {
