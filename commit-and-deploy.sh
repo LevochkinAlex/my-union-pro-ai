@@ -1,9 +1,14 @@
 #!/bin/bash
 set -e
 
+# Подхват только VDS_PASSWORD из .env, если не задан в окружении
+if [ -z "$VDS_PASSWORD" ] && [ -f .env ]; then
+  VDS_PASSWORD=$(grep -E '^VDS_PASSWORD=' .env 2>/dev/null | sed 's/^VDS_PASSWORD=//' | sed 's/^["'\'']//;s/["'\'']$//' | head -1)
+fi
+
 # Сервер: 194.87.49.210, путь: /opt/my-union-pro
-# Пароль: export VDS_PASSWORD='...' (не хранить в репо!)
-VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD: export VDS_PASSWORD='your_password'}"
+# Пароль: в .env (VDS_PASSWORD) или export VDS_PASSWORD='...'
+VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD в .env или: export VDS_PASSWORD='your_password'}"
 
 COMMIT_MSG="${1:-Fix: обновления и исправления}"
 
