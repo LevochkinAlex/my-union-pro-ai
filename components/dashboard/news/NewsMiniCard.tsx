@@ -69,7 +69,10 @@ export default function NewsMiniCard({ post, priority = false }: NewsMiniCardPro
     setMounted(true);
   }, []);
   
-  const authorName = [post.author.firstName, post.author.lastName].filter(Boolean).join(" ") || "Автор";
+  const authorName =
+    (post as any).authorDisplayName ||
+    [post.author?.firstName, post.author?.lastName].filter(Boolean).join(" ") ||
+    "Автор";
   const plainText = getPlainText(post.content);
   // Показываем дату только после монтирования чтобы избежать hydration mismatch
   const formattedDate = mounted ? formatDate(post.publishedAt) : "";

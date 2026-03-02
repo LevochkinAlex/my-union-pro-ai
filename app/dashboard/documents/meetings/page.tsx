@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
 
@@ -803,8 +804,10 @@ export default function MeetingsPage() {
                 id="meeting-date"
                 type="date"
                 aria-label="Дата заседания"
+                min={DATE_INPUT_MIN}
+                max={DATE_INPUT_MAX}
                 value={formData.scheduledDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: normalizeDateInputValue(e.target.value) }))}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               />
             </div>

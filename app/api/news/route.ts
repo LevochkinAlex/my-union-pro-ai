@@ -6,6 +6,7 @@ import { withCache, getCacheKey } from "@/lib/cache";
 import { isDemoUserId } from "@/lib/demo";
 import { getDemoNews } from "@/lib/demo";
 import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
+import { normalizeCoverImageForDisplay } from "@/lib/cdn";
 
 // GET /api/news - получить список опубликованных новостей
 export async function GET(request: NextRequest) {
@@ -44,14 +45,24 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Получаем организацию пользователя для фильтрации
+    // Организация пользователя: член ППО или председатель (чтобы видеть новости своей org + региональные)
     let userOrganizationId: string | null = null;
     if (session?.user?.id) {
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { organizationId: true },
+        select: {
+          organizationId: true,
+          ppoHeadOrganizationId: true,
+          mpoHeadOrganizationId: true,
+          rpoHeadOrganizationId: true,
+        },
       });
-      userOrganizationId = user?.organizationId || null;
+      userOrganizationId =
+        user?.organizationId ||
+        user?.ppoHeadOrganizationId ||
+        user?.mpoHeadOrganizationId ||
+        user?.rpoHeadOrganizationId ||
+        null;
       await getOrCreateRegionalNewsChannel(session.user.id);
     }
 
@@ -69,126 +80,24 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Кешируем новости на 2 минуты (с учётом организации и канала)
-    const cacheKey = getCacheKey("news:list", { page, limit, orgId: userOrganizationId, channelId: allowedChannelId || channelId });
-    
-    let cachedData;
-    try {
-      cachedData = await withCache(
-      cacheKey,
-      async () => {
-        const whereClause: any = {
-          isPublished: true,
-        };
+    const whereClause: any = {
+      isPublished: true,
+    };
+    if (allowedChannelId) {
+      whereClause.channelId = allowedChannelId;
+    } else if (userOrganizationId) {
+      whereClause.OR = [
+        { channel: { organizationId: userOrganizationId } },
+        { channel: { organizationId: null, name: "Региональные новости" } },
+      ];
+    } else {
+      whereClause.OR = [
+        { channelId: null },
+        { channel: { organizationId: null } },
+      ];
+    }
 
-        // Фильтр по одному каналу (переключатель каналов)
-        if (allowedChannelId) {
-          whereClause.channelId = allowedChannelId;
-        } else if (userOrganizationId) {
-          // Показываем новости из всех каналов организации + региональный
-          whereClause.OR = [
-            {
-              channel: {
-                organizationId: userOrganizationId,
-              },
-            },
-            {
-              channel: {
-                organizationId: null,
-                name: "Региональные новости",
-              },
-            },
-          ];
-        } else {
-          whereClause.OR = [
-            { channelId: null },
-            { channel: { organizationId: null } },
-          ];
-        }
-
-        // Получаем только опубликованные новости с оптимизированным select
-        const [newsRaw, total] = await Promise.all([
-          prisma.newsPost.findMany({
-            where: whereClause,
-            select: {
-              id: true,
-              title: true,
-              content: true,
-              coverImage: true,
-              publishedAt: true,
-              viewCount: true,
-              author: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  avatarUrl: true,
-                },
-              },
-              _count: {
-                select: {
-                  likes: true,
-                  comments: true,
-                },
-              },
-              polls: {
-                select: {
-                  id: true,
-                  question: true,
-                  options: true,
-                  isClosed: true,
-                  _count: {
-                    select: {
-                      votes: true,
-                    },
-                  },
-                },
-              },
-            },
-            orderBy: {
-              publishedAt: "desc",
-            },
-            skip,
-            take: limit,
-          }),
-          prisma.newsPost.count({
-            where: whereClause,
-          }),
-        ]);
-        
-        // Возвращаем полный контент - клиент сам обрежет для превью
-        // Это позволяет показывать полный текст при нажатии "Показать полностью"
-        const news = newsRaw.map(n => {
-          return {
-            ...n,
-            content: n.content || '', // Возвращаем полный контент
-            coverImage: n.coverImage, // Возвращаем coverImage как есть
-          };
-        });
-        return { news, total };
-      },
-      120 // 2 минуты
-    );
-    } catch (cacheError) {
-      // Если ошибка кеша, пробуем загрузить данные напрямую
-      console.error("[api/news] Cache error, loading directly:", cacheError);
-      const whereClause: any = {
-        isPublished: true,
-      };
-      if (allowedChannelId) {
-        whereClause.channelId = allowedChannelId;
-      } else if (userOrganizationId) {
-        whereClause.OR = [
-          { channel: { organizationId: userOrganizationId } },
-          { channel: { organizationId: null, name: "Региональные новости" } },
-        ];
-      } else {
-        whereClause.OR = [
-          { channelId: null },
-          { channel: { organizationId: null } },
-        ];
-      }
-
+    const fetchNews = async (): Promise<{ news: any[]; total: number }> => {
       const [newsRaw, total] = await Promise.all([
         prisma.newsPost.findMany({
           where: whereClause,
@@ -199,12 +108,18 @@ export async function GET(request: NextRequest) {
             coverImage: true,
             publishedAt: true,
             viewCount: true,
+            channel: {
+              select: { id: true, name: true, organizationId: true },
+            },
             author: {
               select: {
                 id: true,
                 firstName: true,
                 lastName: true,
                 avatarUrl: true,
+                rpoHeadOrganization: {
+                  select: { name: true },
+                },
               },
             },
             _count: {
@@ -227,25 +142,42 @@ export async function GET(request: NextRequest) {
               },
             },
           },
-          orderBy: {
-            publishedAt: "desc",
-          },
+          orderBy: { publishedAt: "desc" },
           skip,
           take: limit,
         }),
-        prisma.newsPost.count({
-          where: whereClause,
-        }),
+        prisma.newsPost.count({ where: whereClause }),
       ]);
+      const isRegionalChannel = (ch: { organizationId: string | null; name: string } | null) =>
+        ch && ch.organizationId === null && ch.name === "Региональные новости";
+      const news = newsRaw.map(n => {
+        const { channel, ...rest } = n;
+        const authorDisplayName =
+          isRegionalChannel(channel) && (n.author as any)?.rpoHeadOrganization?.name
+            ? (n.author as any).rpoHeadOrganization.name
+            : null;
+        return {
+          ...rest,
+          content: (n as any).content || '',
+          coverImage: normalizeCoverImageForDisplay(n.coverImage) ?? n.coverImage,
+          authorDisplayName,
+        };
+      });
+      return { news, total };
+    };
 
-      cachedData = {
-        news: newsRaw.map(n => ({
-          ...n,
-          content: n.content || '',
-          coverImage: n.coverImage,
-        })),
-        total,
-      };
+    // При выборе канала (в т.ч. «Региональные новости») не кешируем — всегда актуальный список
+    let cachedData: { news: any[]; total: number };
+    try {
+      if (allowedChannelId) {
+        cachedData = await fetchNews();
+      } else {
+        const cacheKey = getCacheKey("news:list", { page, limit, orgId: userOrganizationId });
+        cachedData = await withCache(cacheKey, fetchNews, 120);
+      }
+    } catch (cacheError) {
+      console.error("[api/news] Cache error, loading directly:", cacheError);
+      cachedData = await fetchNews();
     }
     
     const { news, total } = cachedData;

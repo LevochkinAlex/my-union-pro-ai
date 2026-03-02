@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { requireChatAccess, ChatAccessError, ChatNotFoundError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
-import { getFileUrlWithCDN } from '@/lib/cdn';
+import { getFileUrlWithCDN, normalizeCoverImageForDisplay } from '@/lib/cdn';
 import * as Sentry from '@sentry/nextjs';
 import { sendUserNotification, stripHtml } from '@/lib/notifications';
 import { 
@@ -751,6 +751,9 @@ export async function GET(
       const posts = await prisma.newsPost.findMany({
         where: { id: { in: postIds } },
         include: {
+          channel: {
+            select: { id: true, name: true, organizationId: true },
+          },
           author: {
             select: {
               id: true,
@@ -758,6 +761,9 @@ export async function GET(
               lastName: true,
               middleName: true,
               avatarUrl: true,
+              rpoHeadOrganization: {
+                select: { name: true },
+              },
             },
           },
           polls: {
@@ -882,14 +888,23 @@ export async function GET(
           })
         );
 
+        const isRegional =
+          (post as any).channel &&
+          (post as any).channel.organizationId === null &&
+          (post as any).channel.name === "Региональные новости";
+        const authorDisplayName =
+          isRegional && (post.author as any)?.rpoHeadOrganization?.name
+            ? (post.author as any).rpoHeadOrganization.name
+            : null;
         postsMap.set(post.id, {
           id: post.id,
           title: post.title,
           content: post.content,
-          coverImage: post.coverImage,
+          coverImage: normalizeCoverImageForDisplay(post.coverImage) ?? post.coverImage,
           polls: pollsWithStats,
           _count: post._count,
           isLiked: userLikes.has(post.id),
+          authorDisplayName,
         });
       }
       

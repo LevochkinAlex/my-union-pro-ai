@@ -4,6 +4,7 @@ import { useState, useEffect, use, useRef, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
 
@@ -2376,7 +2377,7 @@ export default function MeetingDetailPage({
                       </div>
                       <div>
                         <label htmlFor="protocol-doc-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Дата документа</label>
-                        <input id="protocol-doc-date" type="date" value={protocolDocDate} onChange={(e) => setProtocolDocDate(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} />
+                        <input id="protocol-doc-date" type="date" min={DATE_INPUT_MIN} max={DATE_INPUT_MAX} value={protocolDocDate} onChange={(e) => setProtocolDocDate(normalizeDateInputValue(e.target.value))} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} />
                       </div>
                       <div>
                         <label htmlFor="protocol-meeting-time" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Начало заседания</label>

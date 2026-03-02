@@ -81,6 +81,9 @@ export async function GET(request: NextRequest) {
             lastName: true,
             email: true,
             avatarUrl: true,
+            rpoHeadOrganization: {
+              select: { name: true },
+            },
           },
         },
         channel: {
@@ -88,6 +91,7 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             iconUrl: true,
+            organizationId: true,
           },
         },
         _count: {
@@ -154,8 +158,15 @@ export async function GET(request: NextRequest) {
       }, {} as Record<string, { optionId: string; count: number }[]>);
     }
 
+    const isRegionalChannel = (ch: { organizationId: string | null; name: string } | null) =>
+      ch && ch.organizationId === null && ch.name === "Региональные новости";
     return NextResponse.json({
-      news: news.map((post) => ({
+      news: news.map((post) => {
+        const authorDisplayName =
+          isRegionalChannel(post.channel) && (post.author as any)?.rpoHeadOrganization?.name
+            ? (post.author as any).rpoHeadOrganization.name
+            : null;
+        return {
         id: post.id,
         title: post.title,
         content: post.content,
@@ -164,6 +175,7 @@ export async function GET(request: NextRequest) {
         viewCount: post.viewCount,
         author: post.author,
         channel: post.channel,
+        authorDisplayName,
         _count: post._count,
         isLiked: post.likes.length > 0,
         polls: post.polls.map((poll) => {
@@ -189,7 +201,8 @@ export async function GET(request: NextRequest) {
             isClosed: poll.isClosed,
           };
         }),
-      })),
+      };
+      }),
     });
   } catch (error: any) {
     console.error("[ppo-head/news] GET error:", error);

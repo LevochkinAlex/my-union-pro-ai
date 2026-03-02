@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
+import { getOrCreateRegionalNewsChannel, REGIONAL_NEWS_CHANNEL_NAME } from "@/lib/regional-news";
 
 /**
  * GET /api/news/channels
@@ -47,6 +47,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    await getOrCreateRegionalNewsChannel(session.user.id);
+
     // Получаем количество пользователей в организации
     const memberCount = await prisma.user.count({
       where: {
@@ -54,10 +56,10 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Получаем каналы организации
+    // Получаем каналы организации + глобальный региональный канал
     const channelsRaw = await prisma.newsChannel.findMany({
       where: {
-        OR: [{ organizationId: user.organizationId }, { organizationId: null, name: "Региональные новости" }],
+        OR: [{ organizationId: user.organizationId }, { organizationId: null, name: REGIONAL_NEWS_CHANNEL_NAME }],
       },
       include: {
         _count: {
@@ -76,21 +78,28 @@ export async function GET(request: NextRequest) {
         { createdAt: "asc" },
       ],
     });
-    
+
+    // Убираем каналы ППО с именем "Региональные новости", чтобы в списке был только глобальный региональный канал
+    const filteredRaw = channelsRaw.filter(
+      (ch) => ch.organizationId === null || ch.name !== REGIONAL_NEWS_CHANNEL_NAME
+    );
+
     // Форматируем данные для клиента
-    const channels = channelsRaw.map((channel) => ({
+    const channels = filteredRaw.map((channel) => ({
       id: channel.id,
       name: channel.name,
-      description: channel.description || channel.organization?.name || null,
+      description: channel.description || (channel.organization as { name?: string } | null)?.name || null,
       subscriberCount: memberCount,
       isMain: channel.isMain,
       organizationId: channel.organizationId,
     }));
-    
-    // Сортируем: основной канал (isMain) всегда первый
+
+    // Сортируем: основной канал (isMain) первый, затем глобальный региональный, затем остальные
     channels.sort((a, b) => {
       if (a.isMain) return -1;
       if (b.isMain) return 1;
+      if (a.organizationId === null) return -1;
+      if (b.organizationId === null) return 1;
       return 0;
     });
 

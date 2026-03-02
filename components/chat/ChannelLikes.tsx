@@ -70,6 +70,7 @@ export default function ChannelLikes({
     try {
       const response = await fetch(`/api/news/${postId}/like`, {
         method: "POST",
+        credentials: "same-origin",
       });
       
       if (response.ok) {

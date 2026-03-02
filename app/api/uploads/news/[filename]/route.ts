@@ -1,10 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
+import fs from "fs/promises";
 import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
   initVDSStorageFromEnv();
+}
+
+const MIME_TYPES: { [key: string]: string } = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".svg": "image/svg+xml",
+};
+
+async function tryLocalFile(filename: string): Promise<Buffer | null> {
+  const dir = path.join(process.cwd(), "public", "uploads", "news");
+  const candidates = [
+    path.join(dir, filename),
+    ...(filename.startsWith("news-") ? [] : [path.join(dir, `news-${filename}`)]),
+  ];
+  for (const filePath of candidates) {
+    try {
+      await fs.access(filePath);
+      return await fs.readFile(filePath);
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 export async function GET(
@@ -19,48 +48,38 @@ export async function GET(
       return NextResponse.json({ error: "Filename is required" }, { status: 400 });
     }
 
-    // Защита от path traversal атак
     if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
       return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     }
 
-    // Определяем MIME тип по расширению
     const ext = path.extname(filename).toLowerCase();
-    const mimeTypes: { [key: string]: string } = {
-      ".jpg": "image/jpeg",
-      ".jpeg": "image/jpeg",
-      ".png": "image/png",
-      ".gif": "image/gif",
-      ".webp": "image/webp",
-      ".heic": "image/heic",
-      ".heif": "image/heif",
-      ".svg": "image/svg+xml",
-    };
+    const contentType = MIME_TYPES[ext] || "application/octet-stream";
 
-    const contentType = mimeTypes[ext] || "application/octet-stream";
+    let fileBuffer: Buffer | null = null;
 
-    // Загружаем файл только с VDS
-    if (!isVDSStorageConfigured()) {
-      console.error("[uploads/news] VDS storage is not configured");
-      return NextResponse.json({ error: "Storage not configured" }, { status: 500 });
+    if (isVDSStorageConfigured()) {
+      try {
+        const fileKey = `news/${filename}`;
+        fileBuffer = await getFileFromVDS(fileKey);
+      } catch (vdsError) {
+        // Fallback: локальная папка public/uploads/news (dev или миграция)
+        fileBuffer = await tryLocalFile(filename);
+      }
+    } else {
+      fileBuffer = await tryLocalFile(filename);
     }
 
-    try {
-      const fileKey = `news/${filename}`;
-      const fileBuffer = await getFileFromVDS(fileKey);
-
-      // Return file with proper headers
-      return new NextResponse(fileBuffer as any, {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "public, max-age=31536000, immutable",
-        },
-      });
-    } catch (vdsError) {
-      console.error("[uploads/news] VDS error:", vdsError);
+    if (!fileBuffer) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
+
+    return new NextResponse(fileBuffer as any, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=31536000, immutable",
+      },
+    });
   } catch (error) {
     console.error("[uploads/news] Error serving file:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

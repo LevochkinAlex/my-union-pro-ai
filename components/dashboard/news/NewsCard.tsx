@@ -6,6 +6,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import NewsComments from "./NewsComments";
 import { getFileUrlWithCDN } from "@/lib/cdn";
+import styles from "./NewsCard.module.css";
 
 interface NewsPost {
   id: string;
@@ -207,9 +208,10 @@ export default function NewsCard({
   };
 
   const authorName =
-    post.author.firstName && post.author.lastName
+    (post as any).authorDisplayName ||
+    (post.author?.firstName && post.author?.lastName
       ? `${post.author.firstName} ${post.author.lastName}`
-      : "Автор";
+      : "Автор");
 
   return (
     <article ref={cardRef} className="rounded-xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
@@ -412,8 +414,10 @@ export default function NewsCard({
                         {poll.totalVotes > 0 && (
                           <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                             <div
-                              className="h-full bg-blue-500 transition-all dark:bg-blue-400"
-                              style={{ width: `${percentage}%` }}
+                              ref={(el) => {
+                                if (el) el.style.setProperty("--poll-pct", `${percentage}%`);
+                              }}
+                              className={clsx("h-full bg-blue-500 transition-all dark:bg-blue-400", styles.pollBarFill)}
                             />
                           </div>
                         )}
@@ -434,7 +438,12 @@ export default function NewsCard({
         {/* Actions */}
         <div className="flex items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => onLikeToggle(post.id)}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onLikeToggle(post.id);
+            }}
             className={clsx(
               "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition",
               post.isLiked
@@ -461,7 +470,12 @@ export default function NewsCard({
           </button>
 
           <button
-            onClick={() => setShowComments(!showComments)}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowComments((prev) => !prev);
+            }}
             className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
           >
             <svg

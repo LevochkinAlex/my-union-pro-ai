@@ -1117,7 +1117,12 @@ function ChannelPostDisplay({
   threadParticipants = [],
 }: ChannelPostDisplayProps) {
   const [participants, setParticipants] = useState<Array<{ id: string; avatarUrl: string | null }>>(threadParticipants);
-  
+  const [coverImageError, setCoverImageError] = useState(false);
+
+  useEffect(() => {
+    setCoverImageError(false);
+  }, [post.id, post.coverImage]);
+
   // Загружаем участников треда для мини-аватарок
   useEffect(() => {
     if (commentsCount > 0 && participants.length === 0) {
@@ -1200,8 +1205,17 @@ function ChannelPostDisplay({
           </a>
         </div>
       )}
-      {/* Cover Image */}
-      {post.coverImage && (
+      {/* Автор для региональных новостей — показываем организацию (МООП РЗ РФ), а не ФИО */}
+      {(post as any).authorDisplayName && (
+        <div className={clsx(
+          "text-xs font-medium",
+          isOwn ? 'text-white/80' : 'text-gray-600 dark:text-gray-400'
+        )}>
+          {(post as any).authorDisplayName}
+        </div>
+      )}
+      {/* Cover Image — скрываем блок при ошибке загрузки, чтобы не показывать сломанную иконку */}
+      {post.coverImage && !coverImageError && (
         <div className="rounded-xl overflow-hidden">
           <button
             onClick={() => onImageClick?.(post.coverImage!, post.title)}
@@ -1213,6 +1227,7 @@ function ChannelPostDisplay({
               alt={post.title}
               className="w-full max-h-96 object-cover rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
               loading="lazy"
+              onError={() => setCoverImageError(true)}
             />
           </button>
         </div>

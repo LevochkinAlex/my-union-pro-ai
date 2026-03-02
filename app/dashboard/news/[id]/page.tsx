@@ -104,6 +104,7 @@ export default function NewsDetailPage() {
     try {
       const response = await fetch(`/api/news/${news.id}/like`, {
         method: "POST",
+        credentials: "same-origin",
       });
 
       if (response.ok) {
@@ -188,7 +189,10 @@ export default function NewsDetailPage() {
     );
   }
 
-  const authorName = [news.author.firstName, news.author.lastName].filter(Boolean).join(" ") || "Автор";
+  const authorName =
+    (news as any).authorDisplayName ||
+    [news.author?.firstName, news.author?.lastName].filter(Boolean).join(" ") ||
+    "Автор";
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">

@@ -55,6 +55,7 @@ export async function POST(
       data: {
         membershipStatus: "EXCLUDED",
         unionMembershipStatus: "REMOVED",
+        role: "PENDING_MEMBER",
         membershipExcludedAt: new Date(),
         membershipExclusionReason: reason || null,
       },

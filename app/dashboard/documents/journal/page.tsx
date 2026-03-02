@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 
 type DocumentCategory = "INCOMING" | "OUTGOING" | "INTERNAL" | "DRAFT";
 type DocumentStatus = 
@@ -609,8 +610,10 @@ function CreateDocumentModal({
               <div className="flex-1">
                 <input
                   type="date"
+                  min={DATE_INPUT_MIN}
+                  max={DATE_INPUT_MAX}
                   value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, dueDate: normalizeDateInputValue(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700"
                   placeholder="Срок исполнения"
                 />
@@ -644,8 +647,10 @@ function CreateDocumentModal({
                   />
                   <input
                     type="date"
+                    min={DATE_INPUT_MIN}
+                    max={DATE_INPUT_MAX}
                     value={formData.senderDate}
-                    onChange={(e) => setFormData({ ...formData, senderDate: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, senderDate: normalizeDateInputValue(e.target.value) })}
                     className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-600"
                   />
                 </div>

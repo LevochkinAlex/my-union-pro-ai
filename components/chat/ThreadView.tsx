@@ -17,6 +17,8 @@ interface ThreadMessage {
   };
   content: string;
   createdAt: string;
+  messageType?: string;
+  post?: { title?: string };
   reactions?: Array<{
     emoji: string;
     count: number;
@@ -182,6 +184,33 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
     return 'Пользователь';
   };
 
+  /** Для постов канала не показываем сырой JSON/HTML — только заголовок или краткую подпись. */
+  const getRootMessageDisplayContent = (msg: ThreadMessage | null): string => {
+    if (!msg) return '';
+    if (msg.messageType === 'channel_post' && msg.post?.title) {
+      return msg.post.title;
+    }
+    try {
+      const parsed = JSON.parse(msg.content);
+      if (parsed?.type === 'channel_post' && parsed?.title) return parsed.title;
+      if (parsed?.type === 'channel_post') return 'Пост в канале';
+    } catch {
+      // не JSON — обычный текст
+    }
+    return msg.content;
+  };
+
+  const isChannelPostRoot = (msg: ThreadMessage | null): boolean => {
+    if (!msg) return false;
+    if (msg.messageType === 'channel_post') return true;
+    try {
+      const parsed = JSON.parse(msg.content);
+      return parsed?.type === 'channel_post';
+    } catch {
+      return false;
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full bg-white dark:bg-gray-900 flex items-center justify-center">
@@ -237,8 +266,11 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
                   </span>
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300">
+                  {isChannelPostRoot(rootMessage) && (
+                    <span className="inline-block text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">📢 Пост в канале</span>
+                  )}
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {rootMessage.content}
+                    {getRootMessageDisplayContent(rootMessage)}
                   </ReactMarkdown>
                 </div>
               </div>
@@ -321,13 +353,15 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
               }
             }}
             placeholder="Напишите ответ в треде..."
-            className="w-full px-3 py-2 pr-12 bg-transparent border-none outline-none resize-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed"
+            className="w-full px-3 py-2 pr-12 bg-transparent border-none outline-none resize-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed max-h-[200px] min-h-[42px]"
             rows={1}
-            style={{ maxHeight: '200px', minHeight: '42px' }}
           />
           <button
+            type="button"
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
+            title="Отправить"
+            aria-label="Отправить"
             className={`
               absolute right-2 bottom-2 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200
               ${newMessage.trim() && !sending
@@ -335,9 +369,8 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
               }
             `}
-            type="button"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-4 h-4" aria-hidden />
           </button>
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { alertSuccess, alertError } from "@/lib/alert";
+import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 
 // Типы документов
 type DocumentType = 
@@ -543,8 +544,10 @@ export default function PPOHeadDocumentsPage() {
                   id="ppo-head-meeting-date"
                   type="date"
                   aria-label="Дата заседания"
+                  min={DATE_INPUT_MIN}
+                  max={DATE_INPUT_MAX}
                   value={formData.meetingDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, meetingDate: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, meetingDate: normalizeDateInputValue(e.target.value) }))}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                 />
               </div>

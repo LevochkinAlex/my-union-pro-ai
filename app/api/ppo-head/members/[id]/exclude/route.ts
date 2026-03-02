@@ -76,12 +76,15 @@ export async function POST(
       // Если тело запроса пустое, продолжаем без причины
     }
 
-    // Обновляем статус на "EXCLUDED" и сбрасываем все связанные поля
+    // Обновляем статус на "EXCLUDED", закрываем доступ как до валидации (role PENDING_MEMBER),
+    // сбрасываем учёт в профсоюзе; organizationId не трогаем — при смене места работы пользователь
+    // сам обновит организацию, тогда его увидит председатель нового ППО в списке на валидацию
     await prisma.user.update({
       where: { id: memberId },
       data: {
         membershipStatus: "EXCLUDED",
         unionMembershipStatus: "REMOVED",
+        role: "PENDING_MEMBER",
         membershipExcludedAt: new Date(),
         membershipExclusionReason: reason || null,
       },

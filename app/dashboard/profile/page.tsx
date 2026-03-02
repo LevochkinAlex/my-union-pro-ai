@@ -1775,9 +1775,10 @@ export default function ProfilePage() {
                               id={`child-birthDate-${index}`}
                               type="date"
                               aria-label="Дата рождения ребёнка"
+                              min="1900-01-01"
+                              max={new Date().toISOString().split('T')[0]}
                               value={child.birthDate}
                               onChange={(e) => updateChild(index, "birthDate", e.target.value)}
-                              max={new Date().toISOString().split('T')[0]}
                               className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-white ${
                                 childErrors[index]
                                   ? "border-red-500 bg-red-50 text-gray-900 focus:border-red-500 focus:ring-red-500 dark:border-red-500 dark:bg-red-900/20"
@@ -2361,9 +2362,10 @@ export default function ProfilePage() {
                   <input
                     id="profile-edit-joined-date"
                     type="date"
+                    min="1900-01-01"
+                    max={new Date().toISOString().split("T")[0]}
                     value={editJoinedDateValue}
                     onChange={(e) => setEditJoinedDateValue(e.target.value)}
-                    max={new Date().toISOString().split("T")[0]}
                     className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   />
                 </div>

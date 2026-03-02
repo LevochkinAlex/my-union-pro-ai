@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireChatAccess } from "@/lib/chat-service";
 import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
+import { invalidateNewsCache } from "@/lib/cache-invalidation";
 import { emitNewMessage } from "@/server/socket";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
 import * as Sentry from "@sentry/nextjs";
@@ -83,9 +84,16 @@ export async function POST(
       );
     }
 
-    // Проверяем, что пользователь - админ канала
+    // Проверяем право на публикацию: админ канала ИЛИ РПО в региональном канале
     const participant = chat.participants[0];
-    if (!participant || participant.role !== "admin") {
+    const isRegionalChannel =
+      chat.newsChannel &&
+      chat.newsChannel.organizationId === null &&
+      chat.newsChannel.name === "Региональные новости";
+    const canPublishAsAdmin = participant?.role === "admin";
+    const canPublishAsRPO = isRegionalChannel && !!user?.isRPOHead;
+
+    if (!canPublishAsAdmin && !canPublishAsRPO) {
       return NextResponse.json(
         { error: "Только председатель может создавать посты в канале" },
         { status: 403 }
@@ -377,10 +385,11 @@ export async function POST(
       })
     );
 
-    // Инвалидируем кэш
+    // Инвалидируем кэш чата и ленты новостей (пост из чата должен сразу появиться в разделе «Новости»)
     await Promise.allSettled([
       invalidateChatCache(chatId),
       ...allParticipants.map((p) => invalidateUserChatsCache(p.userId)),
+      invalidateNewsCache(),
     ]).catch((err) => console.warn("[chat/posts] Cache invalidation error:", err));
 
     return NextResponse.json({

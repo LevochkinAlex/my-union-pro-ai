@@ -37,8 +37,9 @@ export async function GET(request: NextRequest) {
     };
 
     if (status === "pending") {
+      // В том числе EXCLUDED: после смены организации пользователь появится у нового председателя для повторной валидации
       where.membershipStatus = {
-        in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
+        in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE", "EXCLUDED"],
       };
     } else if (status === "approved") {
       where.membershipStatus = "APPROVED";

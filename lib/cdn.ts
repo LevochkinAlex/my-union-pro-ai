@@ -173,6 +173,33 @@ export function extractFilePathFromUrl(url: string): string {
 }
 
 /**
+ * Нормализует coverImage для отображения в UI (чат, лента новостей).
+ * Исправляет: полный URL с другим origin → относительный путь; /uploads/ → /api/uploads/.
+ */
+export function normalizeCoverImageForDisplay(
+  coverImage: string | null | undefined
+): string | null {
+  if (!coverImage || typeof coverImage !== "string") return null;
+  const s = coverImage.trim();
+  if (!s) return null;
+  if (s.startsWith("data:")) return s;
+  if (s.startsWith("http://") || s.startsWith("https://")) {
+    try {
+      const pathname = new URL(s).pathname;
+      if (pathname.startsWith("/api/uploads/")) return pathname;
+      if (pathname.startsWith("/uploads/")) return pathname.replace("/uploads/", "/api/uploads/");
+      return pathname;
+    } catch {
+      return s;
+    }
+  }
+  if (s.startsWith("/uploads/") && !s.startsWith("/api/uploads/"))
+    return s.replace("/uploads/", "/api/uploads/");
+  if (s.startsWith("/api/uploads/")) return s;
+  return getFileUrlWithCDN(s);
+}
+
+/**
  * Получает URL для файла документа
  */
 export function getDocumentUrl(filePath: string | null | undefined): string {

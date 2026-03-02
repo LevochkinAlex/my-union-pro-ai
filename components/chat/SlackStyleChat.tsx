@@ -1181,12 +1181,22 @@ export default function SlackStyleChat({
                     onDelete={(id) => setDeleteConfirm({ isOpen: true, messageId: id })}
                     onReaction={(id, emoji) => toggleReaction(id, emoji)}
                     onOpenThread={(msg) => {
-                      // Для каналов открываем тред канала, для обычных чатов - обычный тред
-                      if (selectedChat?.type === 'CHANNEL' && msg.post) {
-                        setActiveChannelThread({ postId: msg.post.id, messageId: msg.id });
-                      } else {
-                        setActiveThread(msg as any);
+                      // Для каналов открываем тред канала (по post или по postId из content)
+                      if (selectedChat?.type === 'CHANNEL') {
+                        const postId = msg.post?.id ?? (() => {
+                          try {
+                            const parsed = typeof msg.content === 'string' ? JSON.parse(msg.content) : null;
+                            return parsed?.type === 'channel_post' ? parsed.postId : null;
+                          } catch {
+                            return null;
+                          }
+                        })();
+                        if (postId) {
+                          setActiveChannelThread({ postId, messageId: msg.id });
+                          return;
+                        }
                       }
+                      setActiveThread(msg as any);
                     }}
                     onImageClick={(url, name) => setSelectedImage({ url, name })}
                     onPollVote={async (pollId, optionId) => {

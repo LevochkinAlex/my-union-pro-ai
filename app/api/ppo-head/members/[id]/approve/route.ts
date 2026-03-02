@@ -75,13 +75,16 @@ export async function POST(
       );
     }
 
-    // Обновляем статус
+    // Обновляем статус и полностью активируем кабинет (в т.ч. после повторной валидации исключённого, сменившего ППО)
     const updatedMember = await prisma.user.update({
       where: { id },
       data: {
         membershipStatus: "APPROVED",
-        unionMembershipStatus: "ACCEPTED", // Принят на учет
+        unionMembershipStatus: "ACCEPTED",
+        role: "MEMBER",
         membershipJoinedAt,
+        membershipExcludedAt: null,
+        membershipExclusionReason: null,
       },
     });
 

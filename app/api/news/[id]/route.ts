@@ -16,6 +16,9 @@ export async function GET(
     const newsPost = await prisma.newsPost.findUnique({
       where: { id },
       include: {
+        channel: {
+          select: { id: true, name: true, organizationId: true },
+        },
         author: {
           select: {
             id: true,
@@ -23,6 +26,9 @@ export async function GET(
             lastName: true,
             email: true,
             avatarUrl: true,
+            rpoHeadOrganization: {
+              select: { name: true },
+            },
           },
         },
         _count: {
@@ -125,10 +131,20 @@ export async function GET(
       })
     );
 
+    const isRegional =
+      newsPost.channel &&
+      newsPost.channel.organizationId === null &&
+      newsPost.channel.name === "Региональные новости";
+    const authorDisplayName =
+      isRegional && (newsPost.author as any)?.rpoHeadOrganization?.name
+        ? (newsPost.author as any).rpoHeadOrganization.name
+        : null;
+    const { channel, ...rest } = newsPost;
     return NextResponse.json({
-      ...newsPost,
+      ...rest,
       isLiked,
       polls: pollsWithStats,
+      authorDisplayName,
     });
   } catch (error) {
     console.error("[api/news/[id]] Error:", error);

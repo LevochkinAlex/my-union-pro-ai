@@ -237,6 +237,7 @@ export default function PPOHeadNewsPage() {
     try {
       const response = await fetch(`/api/news/${newsId}/like`, {
         method: "POST",
+        credentials: "same-origin",
       });
 
       if (response.ok) {

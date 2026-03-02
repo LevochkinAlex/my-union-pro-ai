@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { REGIONAL_NEWS_CHANNEL_NAME } from "@/lib/regional-news";
 
 /**
  * Создает Chat для NewsChannel, если его еще нет
@@ -40,29 +41,29 @@ export async function syncChannelWithChat(
       return null;
     }
 
-    // Получаем председателя организации (или создателя канала для глобального канала)
+    // Получаем председателя: для org — председатель организации, для регионального канала — РПО
     let chairmanId: string | null = null;
     if (organizationId) {
       const organization = await prisma.organization.findUnique({
         where: { id: organizationId },
         select: {
-          ppoChairman: {
-            select: { id: true },
-          },
-          mpoChairman: {
-            select: { id: true },
-          },
-          rpoChairman: {
-            select: { id: true },
-          },
+          ppoChairman: { select: { id: true } },
+          mpoChairman: { select: { id: true } },
+          rpoChairman: { select: { id: true } },
         },
       });
-
       chairmanId =
         organization?.ppoChairman?.id ||
         organization?.mpoChairman?.id ||
         organization?.rpoChairman?.id ||
         null;
+    } else if (channel.name === REGIONAL_NEWS_CHANNEL_NAME) {
+      // Региональный канал: админом должен быть председатель РПО
+      const rpoOrg = await prisma.organization.findFirst({
+        where: { type: "REGIONAL" },
+        select: { rpoChairman: { select: { id: true } } },
+      });
+      chairmanId = rpoOrg?.rpoChairman?.id ?? null;
     }
 
     if (!chairmanId && channel.createdById) {

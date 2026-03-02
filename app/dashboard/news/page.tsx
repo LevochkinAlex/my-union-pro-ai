@@ -10,6 +10,7 @@ import PPOHeadNewsPage from "./ppo-head/page";
 import { MembershipGate } from "@/components/MembershipGate";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { isChairmanView } from "@/lib/session-user";
+import { alertError } from "@/lib/alert";
 
 interface NewsPost {
   id: string;
@@ -178,16 +179,20 @@ function MemberNewsFeed() {
   }, [hasMore, loading, isLoadingMore, page]); // Убрали loadNews из зависимостей
 
   const handleLikeToggle = async (newsId: string) => {
+    if (!newsId) return;
     try {
       const response = await fetch(`/api/news/${newsId}/like`, {
         method: "POST",
+        credentials: "same-origin",
       });
 
-      if (!response.ok) {
-        throw new Error("Не удалось поставить лайк");
-      }
+      const data = await response.json().catch(() => ({}));
 
-      const data = await response.json();
+      if (!response.ok) {
+        const msg = (data && typeof data.error === "string") ? data.error : "Не удалось поставить лайк";
+        alertError(msg);
+        return;
+      }
 
       setNews((prev) =>
         prev.map((post) =>
@@ -197,7 +202,7 @@ function MemberNewsFeed() {
                 isLiked: data.liked,
                 _count: {
                   ...post._count,
-                  likes: data.count,
+                  likes: data.count ?? post._count.likes,
                 },
               }
             : post
@@ -205,6 +210,7 @@ function MemberNewsFeed() {
       );
     } catch (err) {
       console.error("Failed to toggle like:", err);
+      alertError(err instanceof Error ? err.message : "Не удалось поставить лайк");
     }
   };
 

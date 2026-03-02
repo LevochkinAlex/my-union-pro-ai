@@ -1,0 +1,4 @@
+/* Poll option progress bar – width set via CSS variable from JS */
+.pollBarFill {
+  width: var(--poll-pct, 0);
+}

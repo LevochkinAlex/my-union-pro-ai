@@ -63,6 +63,24 @@ export default async function PrivacyPage() {
           Актуальная редакция Политики от 24.02.2026.
         </div>
 
+        <div className="mb-8 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+          <p className="font-medium text-gray-900 dark:text-white mb-1">
+            Реестр Роскомнадзора
+          </p>
+          <p className="mb-2">
+            ООО «ЯППИКС» внесено в реестр операторов, осуществляющих обработку персональных данных (Роскомнадзор). Сведения об операторе являются общедоступными в соответствии с Федеральным законом от 27.07.2006 № 152-ФЗ «О персональных данных».
+          </p>
+          <a
+            href="https://pd.rkn.gov.ru/operators-registry/operators-list/?id=77-26-537390"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline underline-offset-2"
+          >
+            Запись в реестре операторов РКН
+            <span className="sr-only"> (откроется в новой вкладке)</span>
+          </a>
+        </div>
+
         <div className="prose prose-gray dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
           {loadError ? (
             <p>
