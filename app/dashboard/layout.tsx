@@ -41,11 +41,12 @@ export default async function DashboardLayout({
   let isPPOHead = session.user.isPPOHead ?? false;
   let avatarUrl: string | null | undefined = undefined;
   let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
+  let dbUser: { membershipStatus?: string; unionMembershipStatus?: string; organizationId?: string | null } | null = null;
 
   if (session.user.id !== DEMO_MEMBER_USER_ID && !isDemo) {
     const LAYOUT_DB_TIMEOUT_MS = 2000;
     try {
-      const [dbUser, staffResult] = await Promise.all([
+      const [dbUserResult, staffResult] = await Promise.all([
         prisma.user.findUnique({
           where: { id: session.user.id },
           select: {
@@ -58,6 +59,9 @@ export default async function DashboardLayout({
             isRPOHead: true,
             rpoHeadOrganizationId: true,
             role: true,
+            membershipStatus: true,
+            unionMembershipStatus: true,
+            organizationId: true,
           },
         }),
         Promise.race([
@@ -67,14 +71,15 @@ export default async function DashboardLayout({
           ),
         ]).catch(() => ({ isStaff: false, permissions: {} })),
       ]);
-      if (dbUser) {
-        avatarUrl = dbUser.avatarUrl ?? undefined;
-        isPPOHead = dbUser.isPPOHead ?? false;
-        const fakeSession = { user: dbUser } as any;
+      if (dbUserResult) {
+        avatarUrl = dbUserResult.avatarUrl ?? undefined;
+        isPPOHead = dbUserResult.isPPOHead ?? false;
+        const fakeSession = { user: dbUserResult } as any;
         viewMode = getViewMode(fakeSession);
         serverViewModes = getAvailableViewModes(fakeSession);
+        dbUser = dbUserResult;
       }
-      console.log("[dashboard/layout] userId:", session.user.id, "dbUser:", dbUser ? { role: dbUser.role, isRPOHead: dbUser.isRPOHead, rpoHeadOrganizationId: dbUser.rpoHeadOrganizationId, viewMode: dbUser.viewMode } : "null", "serverViewModes:", serverViewModes);
+      console.log("[dashboard/layout] userId:", session.user.id, "dbUser:", dbUserResult ? { role: dbUserResult.role, isRPOHead: dbUserResult.isRPOHead, rpoHeadOrganizationId: dbUserResult.rpoHeadOrganizationId, viewMode: dbUserResult.viewMode } : "null", "serverViewModes:", serverViewModes);
       if (staffResult.isStaff && staffResult.permissions) {
         staffPermissions = { isStaff: true, permissions: staffResult.permissions };
       }
@@ -98,6 +103,12 @@ export default async function DashboardLayout({
   const showOrgHeadMenu = showMPOHeadMenu || showRPOHeadMenu; // МПО или РПО
 
   const showStaffMenu = staffPermissions?.isStaff === true;
+
+  // Исключённый член ППО (не re-applying): только Главная, Профиль, Мои скидки, Чат
+  const dbMembershipStatus = (dbUser as { membershipStatus?: string; unionMembershipStatus?: string } | null)?.membershipStatus;
+  const dbUnionStatus = (dbUser as { unionMembershipStatus?: string } | null)?.unionMembershipStatus;
+  const isReApplying = dbUnionStatus === "REMOVED" && (dbMembershipStatus === "DOCUMENTS_PENDING" || dbMembershipStatus === "PROFILE_INCOMPLETE");
+  const isExcluded = (dbMembershipStatus === "EXCLUDED" || dbUnionStatus === "REMOVED") && !isReApplying;
   const perm = staffPermissions?.permissions ?? {};
 
   // Создаем базовое меню
@@ -118,8 +129,38 @@ export default async function DashboardLayout({
     },
   ];
 
+  // Исключённый член ППО: только Главная, Профиль, Мои скидки, Чат (без новостей, каталога скидок и др.)
+  if (isExcluded) {
+    menuItems.push({
+      href: "/dashboard/discounts/my",
+      label: "Мои скидки",
+      icon: (
+        <svg key="icon-discounts-excluded" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+        </svg>
+      ),
+    });
+    menuItems.push({
+      href: "/dashboard/chat",
+      label: "Чат",
+      icon: (
+        <svg key="icon-chat-excluded" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+    });
+    menuItems.push({
+      href: "/dashboard/profile",
+      label: "Профиль",
+      icon: (
+        <svg key="icon-profile-excluded" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      ),
+    });
+  }
   // Для Председателя добавляем специальные пункты меню
-  if (showPPOHeadMenu) {
+  else if (showPPOHeadMenu) {
     menuItems.push({
       href: "/dashboard/documents",
       label: "Документы",
@@ -498,8 +539,8 @@ export default async function DashboardLayout({
     });
   }
 
-  // Для обычных членов профсоюза добавляем стандартные пункты (не председатель, не МПО/РПО, не сотрудник ППО)
-  if (!showPPOHeadMenu && !showOrgHeadMenu && !showStaffMenu) {
+  // Для обычных членов профсоюза добавляем стандартные пункты (не председатель, не МПО/РПО, не сотрудник ППО, не исключённый)
+  if (!showPPOHeadMenu && !showOrgHeadMenu && !showStaffMenu && !isExcluded) {
     // Обращения: у председателя в режиме «участник» — Входящие/Исходящие, у остальных — один пункт
     menuItems.push({
       href: isPPOHead ? "/dashboard/appeals?tab=incoming" : "/dashboard/appeals",

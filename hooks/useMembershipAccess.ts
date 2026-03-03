@@ -103,6 +103,14 @@ export function useMembershipAccess(): MembershipAccessResult {
       return "subscription_blocked";
     }
 
+    // Исключённый снова подал документы или сменил организацию — показываем как «ожидает одобрения», как при первой регистрации
+    const reApplyingAfterExclusion =
+      unionMembershipStatus === "REMOVED" &&
+      (membershipStatus === "DOCUMENTS_PENDING" || membershipStatus === "PROFILE_INCOMPLETE");
+    if (reApplyingAfterExclusion) {
+      return "pending";
+    }
+
     // Исключённые из профсоюза — блокируем до проверки ACCEPTED
     if (membershipStatus === "EXCLUDED" || unionMembershipStatus === "REMOVED") {
       return "excluded";

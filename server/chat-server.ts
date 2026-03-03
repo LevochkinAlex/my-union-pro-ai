@@ -264,6 +264,36 @@ io.on("connection", (socket) => {
         return;
       }
 
+      // Исключённый не может писать тем, кто в ППО, из которого его исключили
+      const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { membershipStatus: true, unionMembershipStatus: true, organizationId: true },
+      });
+      const isExcluded = currentUser?.membershipStatus === "EXCLUDED" || currentUser?.unionMembershipStatus === "REMOVED";
+      const isReApplying = currentUser?.unionMembershipStatus === "REMOVED" &&
+        (currentUser?.membershipStatus === "DOCUMENTS_PENDING" || currentUser?.membershipStatus === "PROFILE_INCOMPLETE");
+      if (isExcluded && !isReApplying && currentUser?.organizationId) {
+        const chatWithOrgs = await prisma.chat.findUnique({
+          where: { id: chatId },
+          include: {
+            participants: {
+              where: { leftAt: null },
+              include: { user: { select: { organizationId: true } } },
+            },
+          },
+        });
+        if (chatWithOrgs) {
+          const otherOrgs = chatWithOrgs.participants
+            .filter((p) => p.userId !== userId)
+            .map((p) => p.user?.organizationId)
+            .filter((org): org is string => !!org);
+          if (otherOrgs.includes(currentUser.organizationId)) {
+            callback({ success: false, error: "Вы исключены из профсоюза. Отправка сообщений участникам вашей прежней организации недоступна." });
+            return;
+          }
+        }
+      }
+
       // Если это ответ в треде, проверяем что тред существует
       if (threadRootId) {
         const threadRoot = await prisma.chatMessage.findFirst({

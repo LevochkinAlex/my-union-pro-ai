@@ -31,6 +31,21 @@ export async function GET(request: NextRequest) {
     }
 
     const params = buildSearchParams(request);
+
+    // Исключённый: только «Мои скидки» (активные/использованные) — доступ по ids
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { membershipStatus: true, unionMembershipStatus: true },
+    });
+    const isExcluded = user?.membershipStatus === "EXCLUDED" || user?.unionMembershipStatus === "REMOVED";
+    const isReApplying = user?.unionMembershipStatus === "REMOVED" &&
+      (user?.membershipStatus === "DOCUMENTS_PENDING" || user?.membershipStatus === "PROFILE_INCOMPLETE");
+    if (isExcluded && !isReApplying && (!params.ids || params.ids.length === 0)) {
+      return NextResponse.json(
+        { error: "Доступ к каталогу скидок закрыт. Доступны только активированные скидки в разделе «Мои скидки»." },
+        { status: 403 }
+      );
+    }
     await enrichParamsWithPreference(params, session.user.id);
     const payload = await fetchBestBenefitsDiscounts(params);
 

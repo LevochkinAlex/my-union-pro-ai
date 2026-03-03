@@ -12,6 +12,8 @@ interface MembershipGateProps {
   title?: string;
   /** Описание */
   description?: string;
+  /** Разрешить исключённым доступ (только чтение чата, без отправки в старое ППО) */
+  allowExcludedForChat?: boolean;
 }
 
 /**
@@ -23,6 +25,7 @@ export function MembershipGate({
   showBlur = true,
   title = "Станьте членом профсоюза",
   description,
+  allowExcludedForChat = false,
 }: MembershipGateProps) {
   const { status, isApproved, isLoading, message } = useMembershipAccess();
 
@@ -40,6 +43,11 @@ export function MembershipGate({
 
   // Если одобрен - показываем контент
   if (isApproved) {
+    return <>{children}</>;
+  }
+
+  // Исключённым разрешён доступ к чату (чтение + ограничение отправки на API/socket)
+  if (status === "excluded" && allowExcludedForChat) {
     return <>{children}</>;
   }
 

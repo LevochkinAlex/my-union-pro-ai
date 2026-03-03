@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useMembershipAccess } from "@/hooks/useMembershipAccess";
 import type { DiscountItem } from "@/types/discounts";
 import Image from "next/image";
 import { generatePromoCard } from "@/lib/promo-card-generator";
@@ -12,6 +13,8 @@ import { useAutoSyncDiscounts } from "@/hooks/useAutoSyncDiscounts";
 export default function MyDiscountsPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { status } = useMembershipAccess();
+  const isExcluded = status === "excluded";
   const [discounts, setDiscounts] = useState<DiscountItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"claimed" | "favorites">("claimed");
@@ -575,12 +578,14 @@ export default function MyDiscountsPage() {
               ? "Активируйте скидки, чтобы они появились здесь"
               : "Добавьте скидки в избранное для быстрого доступа"}
           </p>
-          <button
-            onClick={() => router.push("/dashboard/discounts")}
-            className="mt-6 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
-          >
-            Перейти к скидкам
-          </button>
+          {!isExcluded && (
+            <button
+              onClick={() => router.push("/dashboard/discounts")}
+              className="mt-6 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              Перейти к скидкам
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4 pb-20">

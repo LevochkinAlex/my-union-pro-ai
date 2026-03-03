@@ -319,6 +319,8 @@ export async function PUT(request: NextRequest) {
         profession: true,
         education: true,
         organizationId: true,
+        membershipStatus: true,
+        unionMembershipStatus: true,
         profileChangedAfterDocuments: true, // Нужен для проверки изменения флага
         bestBenefitsUserId: true,
         bestBenefitsPassword: true,
@@ -534,6 +536,13 @@ export async function PUT(request: NextRequest) {
     if (organizationId !== undefined) {
       updateData.organizationId = organizationId; // null или непустая строка
       updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
+      // Исключённый сменил организацию — переводим в «ожидает одобрения», как при первой подаче
+      const isExcluded = userBeforeUpdate?.membershipStatus === "EXCLUDED" || userBeforeUpdate?.unionMembershipStatus === "REMOVED";
+      const orgChanged = String(userBeforeUpdate?.organizationId || "") !== String(organizationId ?? "");
+      if (isExcluded && orgChanged) {
+        updateData.membershipStatus = "PROFILE_INCOMPLETE";
+        updateData.unionMembershipStatus = "NOT_ACCEPTED";
+      }
     }
     
     // Устанавливаем флаг изменения профиля, если есть документы и данные изменились

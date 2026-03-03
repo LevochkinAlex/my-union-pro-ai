@@ -89,7 +89,6 @@ export default function NotificationsPage() {
   };
 
   const clearAllNotifications = async () => {
-    if (notifications.length === 0) return;
     if (!confirm("Удалить все уведомления? Это действие нельзя отменить.")) return;
     try {
       setClearing(true);
@@ -254,18 +253,16 @@ export default function NotificationsPage() {
                 <span>Прочитать все</span>
               </button>
             )}
-            {notifications.length > 0 && (
-              <button
-                onClick={clearAllNotifications}
-                disabled={clearing}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 sm:px-6 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 whitespace-nowrap"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                <span>{clearing ? "Очистка…" : "Очистить"}</span>
-              </button>
-            )}
+            <button
+              onClick={clearAllNotifications}
+              disabled={clearing}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 sm:px-6 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 whitespace-nowrap"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>{clearing ? "Очистка…" : "Очистить уведомления"}</span>
+            </button>
           </div>
         </div>
 

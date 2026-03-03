@@ -171,6 +171,34 @@ export default function MembershipBanner({
     return null;
   }
 
+  // Исключённый: баннер с ограниченным доступом
+  if (membershipStatus === "EXCLUDED") {
+    if (!isVisible) return null;
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100">
+              Вы исключены из профсоюза
+            </h3>
+            <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">
+              Доступ ограничен. Вам доступны: Мои скидки (активные и использованные), Чат (чтение переписки, без отправки сообщений в прежнюю организацию), Профиль. Для восстановления членства обновите организацию в профиле и подайте документы заново.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsVisible(false)}
+            className="rounded-lg p-1 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-800/50"
+            aria-label="Закрыть"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Если пользователь APPROVED - показываем баннер для доп. информации
   if (membershipStatus === "APPROVED") {
     const getApprovedStatusInfo = () => {
@@ -291,8 +319,8 @@ export default function MembershipBanner({
     // обратно к шагу "Заполнить анкету" из-за процентов профиля.
     if (hasDocuments || isDocumentsInReview) {
       return {
-        title: "Ожидайте проверки документов",
-        description: "Ваши документы отправлены на проверку. После одобрения вы станете полноправным членом профсоюза",
+        title: "Вас должны одобрить — ожидайте",
+        description: "Ваши документы отправлены на проверку. Председатель должен одобрить заявку — ожидайте, как при первой подаче. После одобрения вы станете полноправным членом профсоюза.",
         buttonText: "Просмотреть документы",
         buttonAction: () => router.push("/dashboard/documents"),
       };
@@ -319,8 +347,8 @@ export default function MembershipBanner({
       };
     } else {
       return {
-        title: "Ожидайте проверки документов",
-        description: "Ваши документы отправлены на проверку. После одобрения вы станете полноправным членом профсоюза",
+        title: "Вас должны одобрить — ожидайте",
+        description: "Ваши документы отправлены на проверку. Председатель должен одобрить заявку — ожидайте, как при первой подаче. После одобрения вы станете полноправным членом профсоюза.",
         buttonText: "Просмотреть документы",
         buttonAction: () => router.push("/dashboard/documents"),
       };

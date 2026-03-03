@@ -104,6 +104,7 @@ export default function ChatPage() {
       showBlur={true}
       title="Чаты для членов профсоюза"
       description="Общайтесь с коллегами и председателем. Станьте членом профсоюза для доступа к чатам."
+      allowExcludedForChat={true}
     >
       <ChatContent />
     </MembershipGate>
