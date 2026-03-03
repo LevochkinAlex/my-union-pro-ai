@@ -32,6 +32,7 @@
     "seed:default-bot": "dotenv -e .env.local -- node scripts/create-default-bot.mjs",
     "seed:document-templates": "dotenv -e .env.local -- node scripts/seed-document-templates.mjs",
     "seed:reports": "dotenv -e .env.local -- npx tsx prisma/seed-reports.ts",
+    "seed:demo-chairmen": "dotenv -e .env.local -- tsx scripts/seed-demo-chairmen.ts",
     "export:templates": "dotenv -e .env.local -- node scripts/export-document-templates.mjs",
     "import:templates": "dotenv -e .env.local -- node scripts/import-document-templates.mjs",
     "migrate:files-to-vds": "dotenv -e .env.local -- node scripts/migrate-files-to-vds.mjs",
