@@ -296,6 +296,20 @@ export async function PUT(request: NextRequest) {
     if (body.dateOfBirth) {
       const date = new Date(body.dateOfBirth);
       if (!Number.isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        const now = new Date();
+        if (year < 1900 || year > 2100) {
+          return NextResponse.json(
+            { error: "Год рождения должен быть в диапазоне 1900–2100" },
+            { status: 400 }
+          );
+        }
+        if (date > now) {
+          return NextResponse.json(
+            { error: "Дата рождения не может быть в будущем" },
+            { status: 400 }
+          );
+        }
         dateOfBirth = date;
       }
     }

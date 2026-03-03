@@ -79,12 +79,22 @@ export default function DateInput({
     const monthNum = parseInt(month, 10);
     const yearNum = parseInt(year, 10);
     
-    // Проверка корректности даты
-    if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12 || yearNum < 1900 || yearNum > 2100) {
-      return null; // Некорректная дата, но не ошибка возраста
+    // Проверка диапазона года
+    if (yearNum < 1900 || yearNum > 2100) {
+      return "Год должен быть в диапазоне 1900–2100";
+    }
+    
+    // Проверка дня и месяца
+    if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) {
+      return "Некорректная дата";
     }
     
     const birthDate = new Date(yearNum, monthNum - 1, dayNum);
+    // Проверка, что дата реальна (например, 31.02 невалидна)
+    if (birthDate.getFullYear() !== yearNum || birthDate.getMonth() !== monthNum - 1 || birthDate.getDate() !== dayNum) {
+      return "Некорректная дата";
+    }
+    
     const today = new Date();
     
     // Проверка, что дата не в будущем
@@ -132,28 +142,28 @@ export default function DateInput({
     const formatted = formatDate(e.target.value);
     setDisplayValue(formatted);
 
-    // Конвертируем в ISO формат для сохранения
-    const isoDate = convertToISODate(formatted);
-    const finalValue = isoDate || formatted;
-    
     // Валидация возраста
     const ageError = validateAge(formatted);
     setValidationError(ageError);
     
-    if (onChange.length === 1) {
-      // Новый интерфейс: onChange(value: string)
-      (onChange as (value: string) => void)(finalValue);
-    } else {
-      // Старый интерфейс: onChange(e: React.ChangeEvent<HTMLInputElement>)
-      const syntheticEvent = {
-        ...e,
-        target: {
-          ...e.target,
-          name: name || "",
-          value: finalValue,
-        },
-      } as React.ChangeEvent<HTMLInputElement>;
-      (onChange as (e: React.ChangeEvent<HTMLInputElement>) => void)(syntheticEvent);
+    // При ошибке не вызываем onChange — родитель сохраняет предыдущее значение, кривые даты не сохраняются.
+    const isoDate = convertToISODate(formatted);
+    const finalValue = ageError ? null : (isoDate || formatted);
+    
+    if (finalValue !== null) {
+      if (onChange.length === 1) {
+        (onChange as (value: string) => void)(finalValue);
+      } else {
+        const syntheticEvent = {
+          ...e,
+          target: {
+            ...e.target,
+            name: name || "",
+            value: finalValue,
+          },
+        } as React.ChangeEvent<HTMLInputElement>;
+        (onChange as (e: React.ChangeEvent<HTMLInputElement>) => void)(syntheticEvent);
+      }
     }
   };
 
