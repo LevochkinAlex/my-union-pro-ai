@@ -27,9 +27,12 @@ export async function GET(request: NextRequest) {
     };
 
     if (status === "pending") {
+      // Только те, кто ещё не принят на учёт: не одобренные и не принятые на уровне союза.
+      // Исключаем APPROVED и unionMembershipStatus === "ACCEPTED", чтобы уже валидированные не попадали в список.
       where.membershipStatus = {
         in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
       };
+      where.unionMembershipStatus = { not: "ACCEPTED" };
     } else if (status === "approved") {
       where.membershipStatus = "APPROVED";
     }
@@ -58,6 +61,7 @@ export async function GET(request: NextRequest) {
           phone: true,
           avatarUrl: true,
           membershipStatus: true,
+          unionMembershipStatus: true,
           createdAt: true,
           organizationId: true,
           organization: {

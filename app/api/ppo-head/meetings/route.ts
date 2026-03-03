@@ -17,6 +17,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { membershipStatus: true, unionMembershipStatus: true },
+    });
+    if (
+      currentUser?.membershipStatus === "EXCLUDED" ||
+      currentUser?.unionMembershipStatus === "REMOVED"
+    ) {
+      return NextResponse.json(
+        { error: "Доступ закрыт: вы исключены из профсоюза" },
+        { status: 403 }
+      );
+    }
+
     const orgHead = await getOrgHead(session.user.id);
     const organizationId = orgHead?.organizationId ?? null;
     const isOrgHead = !!orgHead;

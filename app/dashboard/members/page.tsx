@@ -156,7 +156,7 @@ const EMPLOYMENT_STATUS_MAP: Record<string, string> = {
 export default function MembersPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"validation" | "active">("validation");
+  const [activeTab, setActiveTab] = useState<"validation" | "active" | "excluded">("validation");
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +218,9 @@ export default function MembersPage() {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/ppo-head/members?status=${activeTab === "validation" ? "pending" : "approved"}`);
+      const statusParam =
+        activeTab === "validation" ? "pending" : activeTab === "excluded" ? "excluded" : "approved";
+      const response = await fetch(`/api/ppo-head/members?status=${statusParam}`);
       if (!response.ok) {
         throw new Error("Ошибка загрузки членов профсоюза");
       }
@@ -684,6 +686,21 @@ export default function MembersPage() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("excluded")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+              activeTab === "excluded"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Исключённые
+            {activeTab === "excluded" && members.length > 0 && (
+              <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-600 dark:text-gray-200">
+                {members.length}
+              </span>
+            )}
+          </button>
         </nav>
       </div>
 
@@ -718,6 +735,15 @@ export default function MembersPage() {
                 {isBulkProcessing ? "Обработка..." : `✕ Исключить (${selectedIds.size})`}
               </button>
             )}
+            {activeTab === "excluded" && (
+              <button
+                onClick={() => openApproveModal(Array.from(selectedIds))}
+                disabled={isBulkProcessing}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                ✓ Одобрить снова ({selectedIds.size})
+              </button>
+            )}
             <button
               onClick={() => setSelectedIds(new Set())}
               className="rounded-lg bg-gray-200 dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -744,12 +770,18 @@ export default function MembersPage() {
             />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-            {activeTab === "validation" ? "Нет заявок на проверку" : "Нет активных членов"}
+            {activeTab === "validation"
+              ? "Нет заявок на проверку"
+              : activeTab === "excluded"
+                ? "Нет исключённых членов"
+                : "Нет активных членов"}
           </h3>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             {activeTab === "validation"
               ? "Все заявки обработаны"
-              : "В вашей организации пока нет активных членов"}
+              : activeTab === "excluded"
+                ? "Исключённые члены появятся здесь после исключения из активных"
+                : "В вашей организации пока нет активных членов"}
           </p>
         </div>
       ) : (
@@ -901,6 +933,14 @@ export default function MembersPage() {
                             className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
                           >
                             Исключить
+                          </button>
+                        )}
+                        {activeTab === "excluded" && (
+                          <button
+                            onClick={() => openApproveModal([member.id])}
+                            className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
+                          >
+                            Одобрить снова
                           </button>
                         )}
                       </div>

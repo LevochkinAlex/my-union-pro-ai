@@ -77,14 +77,17 @@ export async function POST(
     }
 
     // Обновляем статус на "EXCLUDED", закрываем доступ как до валидации (role PENDING_MEMBER),
-    // сбрасываем учёт в профсоюзе; organizationId не трогаем — при смене места работы пользователь
-    // сам обновит организацию, тогда его увидит председатель нового ППО в списке на валидацию
+    // снимаем права председателя/сотрудника, чтобы не видел раздел «Заседания профкома» и др.;
+    // organizationId не трогаем — при смене места работы пользователь сам обновит организацию
     await prisma.user.update({
       where: { id: memberId },
       data: {
         membershipStatus: "EXCLUDED",
         unionMembershipStatus: "REMOVED",
         role: "PENDING_MEMBER",
+        isPPOHead: false,
+        ppoHeadOrganizationId: null,
+        viewMode: "MEMBER",
         membershipExcludedAt: new Date(),
         membershipExclusionReason: reason || null,
       },

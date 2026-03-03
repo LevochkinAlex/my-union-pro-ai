@@ -24,15 +24,24 @@ export async function GET(request: NextRequest) {
     );
     const skip = (page - 1) * limit;
 
+    // Поиск: при вводе ФИО целиком разбиваем на слова — каждое слово должно совпасть с одним из полей
     const where = search
-      ? {
-          OR: [
-            { email: { contains: search, mode: "insensitive" as const } },
-            { firstName: { contains: search, mode: "insensitive" as const } },
-            { lastName: { contains: search, mode: "insensitive" as const } },
-            { middleName: { contains: search, mode: "insensitive" as const } },
-          ],
-        }
+      ? (() => {
+          const words = search.split(/\s+/).filter((w) => w.length > 0);
+          if (words.length === 0) return undefined;
+          const ilike = (field: string, value: string) => ({ [field]: { contains: value, mode: "insensitive" as const } });
+          const orForWord = (word: string) => ({
+            OR: [
+              ilike("email", word),
+              ilike("firstName", word),
+              ilike("lastName", word),
+              ilike("middleName", word),
+            ],
+          });
+          return words.length === 1
+            ? orForWord(words[0])
+            : { AND: words.map((w) => orForWord(w)) };
+        })()
       : undefined;
 
     const [users, total] = await Promise.all([

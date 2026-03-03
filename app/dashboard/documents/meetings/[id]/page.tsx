@@ -7,6 +7,7 @@ import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
+import { MembershipGate } from "@/components/MembershipGate";
 
 interface Participant {
   id: string;
@@ -802,29 +803,23 @@ export default function MeetingDetailPage({
     }
   };
 
-  if (isLoading) {
-    return (
+  return (
+    <MembershipGate>
+  {isLoading ? (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
           <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
         </div>
       </div>
-    );
-  }
-
-  if (!meeting) {
-    return (
+  ) : !meeting ? (
       <div className="text-center py-12">
         <p className="text-gray-600 dark:text-gray-400">Заседание не найдено</p>
         <Link href="/dashboard/documents/meetings" className="mt-4 text-blue-600 hover:underline">
           ← Назад к списку
         </Link>
       </div>
-    );
-  }
-
-  return (
+  ) : (
     <div className="space-y-6">
       {/* Шапка */}
       <div className="flex items-start justify-between">
@@ -3290,5 +3285,7 @@ export default function MeetingDetailPage({
         </div>
       </Modal>
     </div>
+  )}
+    </MembershipGate>
   );
 }

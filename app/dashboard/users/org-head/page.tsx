@@ -10,6 +10,7 @@ type Member = {
   email: string | null;
   phone: string | null;
   membershipStatus: string;
+  unionMembershipStatus?: string | null;
   createdAt: string;
   organization?: { id: string; name: string; type: string } | null;
 };

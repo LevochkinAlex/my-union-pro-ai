@@ -32,22 +32,32 @@ export default function AdminUsers() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadUsers = useCallback(async (pageNum: number, searchQuery: string) => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       params.set("page", String(pageNum));
       params.set("limit", String(PAGE_SIZE));
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       const res = await fetch(`/api/admin/users?${params.toString()}`);
-      if (!res.ok) throw new Error("Ошибка загрузки");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data.error || (res.status === 403 ? "Недостаточно прав. Войдите как суперадмин." : "Ошибка загрузки");
+        setLoadError(msg);
+        setUsers([]);
+        setTotal(0);
+        setTotalPages(0);
+        return;
+      }
       setUsers(data.users || []);
       setTotal(data.total ?? 0);
       setTotalPages(data.totalPages ?? 1);
       setPage(data.page ?? pageNum);
     } catch {
+      setLoadError("Ошибка сети");
       setUsers([]);
       setTotal(0);
       setTotalPages(0);
@@ -118,6 +128,12 @@ export default function AdminUsers() {
           )}
         </div>
       </form>
+
+      {loadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+          {loadError}
+        </div>
+      )}
 
       {/* Таблица */}
       <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
@@ -214,7 +230,7 @@ export default function AdminUsers() {
           </table>
         )}
 
-        {!loading && users.length === 0 && (
+        {!loading && users.length === 0 && !loadError && (
           <div className="py-12 text-center text-gray-600 dark:text-gray-400">
             Пользователей не найдено
           </div>

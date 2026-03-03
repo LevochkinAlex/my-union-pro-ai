@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status"); // "pending" или "approved"
+    const status = searchParams.get("status"); // "pending" | "approved" | "excluded"
     const q = searchParams.get("q")?.trim() || ""; // поиск по ФИО, должности
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
     const skip = Math.max(0, parseInt(searchParams.get("skip") || "0", 10));
@@ -37,12 +37,14 @@ export async function GET(request: NextRequest) {
     };
 
     if (status === "pending") {
-      // В том числе EXCLUDED: после смены организации пользователь появится у нового председателя для повторной валидации
+      // Только заявки на проверку, без исключённых (исключённые — отдельная вкладка)
       where.membershipStatus = {
-        in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE", "EXCLUDED"],
+        in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
       };
     } else if (status === "approved") {
       where.membershipStatus = "APPROVED";
+    } else if (status === "excluded") {
+      where.membershipStatus = "EXCLUDED";
     }
 
     if (q.length >= 1) {

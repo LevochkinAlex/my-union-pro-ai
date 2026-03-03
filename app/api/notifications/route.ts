@@ -136,3 +136,31 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+// DELETE /api/notifications - удалить все уведомления пользователя (очистить список)
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const result = await prisma.userNotification.deleteMany({
+      where: {
+        userId: session.user.id,
+        type: { not: "chat_message" }, // не трогаем уведомления чата — они в сайдбаре
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: result.count,
+    });
+  } catch (error) {
+    console.error("[api/notifications] DELETE error:", error);
+    return NextResponse.json(
+      { error: "Ошибка при очистке уведомлений" },
+      { status: 500 }
+    );
+  }
+}

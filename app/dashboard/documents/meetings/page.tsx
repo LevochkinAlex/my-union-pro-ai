@@ -7,6 +7,7 @@ import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
+import { MembershipGate } from "@/components/MembershipGate";
 
 interface Meeting {
   id: string;
@@ -514,6 +515,7 @@ export default function MeetingsPage() {
   }
 
   return (
+    <MembershipGate>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -1530,5 +1532,6 @@ export default function MeetingsPage() {
         );
       })()}
     </div>
+    </MembershipGate>
   );
 }
