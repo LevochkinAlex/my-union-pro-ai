@@ -160,29 +160,18 @@ export async function POST(
         .filter(uid => uid !== session.user.id) || [];
     }
 
-    // Send notifications to all participants
+    // Уведомляем участников чата (только через sendMassNotification — он сам создаёт записи в БД и шлёт push/email, иначе получаются дубли)
     if (participantUserIds.length > 0) {
       const notificationTitle = `Обращение #${ticket.publicId} закрыто`;
       const notificationBody = `${userName} закрыл обращение. Оценка: ${rating}/5${comment ? `. Комментарий: ${comment}` : ''}`;
-      
-      // Create in-app notifications for all participants
-      await prisma.userNotification.createMany({
-        data: participantUserIds.map(userId => ({
-          userId,
-          type: 'TICKET',
-          title: notificationTitle,
-          body: notificationBody,
-          url: `/dashboard/appeals/ppo-head?id=${ticket.publicId}`,
-        })),
-      });
-      
-      // Send push and email notifications
+
       await sendMassNotification({
         userIds: participantUserIds,
         title: notificationTitle,
         body: notificationBody,
         url: `/dashboard/appeals/ppo-head?id=${ticket.publicId}`,
         type: 'ticket_closed',
+        metadata: { ticketId: ticket.id, publicId: ticket.publicId },
       });
     }
 
