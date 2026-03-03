@@ -47,7 +47,7 @@ export default function DocumentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") === "outgoing" ? "outgoing" : "incoming";
-  const { status, unionMembershipStatus } = useMembershipAccess();
+  const { status, unionMembershipStatus, isApproved } = useMembershipAccess();
   const isReApplying = status === "pending" && unionMembershipStatus === "REMOVED";
 
   const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">(tabParam);
@@ -197,12 +197,12 @@ export default function DocumentsPage() {
   }, [tabParam]);
 
   // Члены выборного органа: Исходящие = заседания (редирект на страницу заседаний).
-  // Re-applying (исключён, снова подал): не редиректим — показываем заявления на этой странице.
+  // Не редиректим, если: re-applying, или не одобрен (pending/incomplete) — показываем заявления.
   useEffect(() => {
-    if (!isLoading && isElectedBody && activeTab === "outgoing" && !isReApplying) {
+    if (!isLoading && isElectedBody && activeTab === "outgoing" && !isReApplying && isApproved) {
       router.replace("/dashboard/documents/meetings");
     }
-  }, [isLoading, isElectedBody, activeTab, router, isReApplying]);
+  }, [isLoading, isElectedBody, activeTab, router, isReApplying, isApproved]);
 
   const handleRegenerateDocuments = async () => {
     const confirmed = await confirm("Вы уверены, что хотите переформировать документы? Старые документы будут заменены.", "Подтвердите переформирование");
@@ -542,8 +542,9 @@ export default function DocumentsPage() {
     );
   }
 
-  // Члены выборного органа: Исходящие = страница заседаний (редирект)
-  if (isElectedBody && activeTab === "outgoing") {
+  // Члены выборного органа (одобренные): Исходящие = страница заседаний.
+  // Не одобренным и обычным членам показываем заявления на этой странице.
+  if (isElectedBody && isApproved && activeTab === "outgoing") {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
@@ -599,7 +600,7 @@ export default function DocumentsPage() {
               </span>
             )}
           </button>
-          {isElectedBody ? (
+          {isElectedBody && isApproved ? (
             <Link
               href="/dashboard/documents/meetings"
               className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${

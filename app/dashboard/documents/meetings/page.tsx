@@ -8,6 +8,7 @@ import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/d
 import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
 import { MembershipGate } from "@/components/MembershipGate";
+import { useMembershipAccess } from "@/hooks/useMembershipAccess";
 
 interface Meeting {
   id: string;
@@ -78,8 +79,17 @@ type TabKey = (typeof TAB_FROM_URL)[number];
 export default function MeetingsPage() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { isApproved, isLoading: isMembershipLoading } = useMembershipAccess();
   const tabParam = searchParams.get("tab");
   const initialTab: TabKey = TAB_FROM_URL.includes(tabParam as TabKey) ? (tabParam as TabKey) : "all";
+
+  // Не одобренным — редирект на документы (заявления), заседания им недоступны
+  useEffect(() => {
+    if (!isMembershipLoading && !isApproved) {
+      router.replace("/dashboard/documents?tab=outgoing");
+    }
+  }, [isApproved, isMembershipLoading, router]);
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isOrgHead, setIsOrgHead] = useState<boolean>(true);
@@ -91,7 +101,6 @@ export default function MeetingsPage() {
   const [showProtocolFromAgendaModal, setShowProtocolFromAgendaModal] = useState(false);
   const [createdMeetingId, setCreatedMeetingId] = useState<string | null>(null);
   const [postCreateStep, setPostCreateStep] = useState<"choose" | "generating" | null>(null);
-  const router = useRouter();
 
   // Синхронизация таба с URL при переходе по пунктам меню
   useEffect(() => {
