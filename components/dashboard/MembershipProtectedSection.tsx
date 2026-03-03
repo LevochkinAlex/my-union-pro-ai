@@ -17,7 +17,12 @@ export default function MembershipProtectedSection({
   children,
   title = "Доступно членам профсоюза",
 }: MembershipProtectedSectionProps) {
-  const { isApproved, isLoading } = useMembershipAccess();
+  const { status, isApproved, isLoading } = useMembershipAccess();
+
+  // Исключённый: не показываем секцию вообще (ни контент, ни блюр)
+  if (status === "excluded") {
+    return null;
+  }
 
   // Если одобрен - показываем контент
   if (isApproved) {

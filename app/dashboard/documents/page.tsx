@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { useMembershipAccess } from "@/hooks/useMembershipAccess";
 
 interface Document {
   id: string;
@@ -46,6 +47,8 @@ export default function DocumentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") === "outgoing" ? "outgoing" : "incoming";
+  const { status, unionMembershipStatus } = useMembershipAccess();
+  const isReApplying = status === "pending" && unionMembershipStatus === "REMOVED";
 
   const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">(tabParam);
   const [incomingDocuments, setIncomingDocuments] = useState<Document[]>([]);
@@ -193,12 +196,13 @@ export default function DocumentsPage() {
     setActiveTab(tabParam);
   }, [tabParam]);
 
-  // Члены выборного органа: Исходящие = заседания (редирект на страницу заседаний)
+  // Члены выборного органа: Исходящие = заседания (редирект на страницу заседаний).
+  // Re-applying (исключён, снова подал): не редиректим — показываем заявления на этой странице.
   useEffect(() => {
-    if (!isLoading && isElectedBody && activeTab === "outgoing") {
+    if (!isLoading && isElectedBody && activeTab === "outgoing" && !isReApplying) {
       router.replace("/dashboard/documents/meetings");
     }
-  }, [isLoading, isElectedBody, activeTab, router]);
+  }, [isLoading, isElectedBody, activeTab, router, isReApplying]);
 
   const handleRegenerateDocuments = async () => {
     const confirmed = await confirm("Вы уверены, что хотите переформировать документы? Старые документы будут заменены.", "Подтвердите переформирование");

@@ -23,9 +23,13 @@ export async function GET(
       where: { id: session.user.id },
       select: { membershipStatus: true, unionMembershipStatus: true },
     });
+    const isReApplying =
+      currentUser?.unionMembershipStatus === "REMOVED" &&
+      (currentUser?.membershipStatus === "DOCUMENTS_PENDING" ||
+        currentUser?.membershipStatus === "PROFILE_INCOMPLETE");
     if (
       currentUser?.membershipStatus === "EXCLUDED" ||
-      currentUser?.unionMembershipStatus === "REMOVED"
+      (currentUser?.unionMembershipStatus === "REMOVED" && !isReApplying)
     ) {
       return NextResponse.json(
         { error: "Доступ закрыт: вы исключены из профсоюза" },

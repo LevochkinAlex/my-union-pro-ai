@@ -171,7 +171,7 @@ export default async function DashboardLayout({
       ),
       subItems: [
         { href: "/dashboard/documents?tab=incoming", label: "Входящие" },
-        { href: "/dashboard/documents/meetings", label: "Исходящие" },
+        { href: isReApplying ? "/dashboard/documents?tab=outgoing" : "/dashboard/documents/meetings", label: "Исходящие" },
       ],
     });
     
@@ -316,7 +316,7 @@ export default async function DashboardLayout({
         ),
         subItems: [
           { href: "/dashboard/documents?tab=incoming", label: "Входящие" },
-          { href: "/dashboard/documents/meetings", label: "Исходящие" },
+          { href: isReApplying ? "/dashboard/documents?tab=outgoing" : "/dashboard/documents/meetings", label: "Исходящие" },
         ],
       });
     }

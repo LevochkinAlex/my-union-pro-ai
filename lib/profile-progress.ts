@@ -3,13 +3,14 @@
  */
 
 interface UserProfile {
-  // Основная информация (обязательная для документов)
+  // Основная информация (обязательная для документов — как в validateUserForMembershipDocuments)
   firstName?: string | null;
   lastName?: string | null;
   middleName?: string | null;
   dateOfBirth?: Date | null;
   phone?: string | null;
   address?: string | null;
+  workplace?: string | null;
   jobTitle?: string | null;
   profession?: string | null;
   education?: string | null;
@@ -64,23 +65,24 @@ export function calculateProfileProgress(user: UserProfile | null): ProfileProgr
     };
   }
 
-  // Обязательные поля для генерации документов (вес 70%)
+  // Обязательные поля — совпадают с validateUserForMembershipDocuments (вес 70%)
   const requiredFields = [
     { name: "firstName", value: user.firstName },
     { name: "lastName", value: user.lastName },
     { name: "dateOfBirth", value: user.dateOfBirth },
     { name: "phone", value: user.phone },
     { name: "address", value: user.address },
+    { name: "workplace", value: user.workplace },
     { name: "jobTitle", value: user.jobTitle },
-    { name: "profession", value: user.profession },
-    { name: "education", value: user.education },
     { name: "organization", value: user.organizationId || user.organizationName || user.organization?.id },
-    { name: "email", value: user.email }, // Email желателен, но не обязателен для документов
   ];
 
   // Дополнительные поля (вес 30%)
   const optionalFields = [
     { name: "middleName", value: user.middleName },
+    { name: "profession", value: user.profession },
+    { name: "education", value: user.education },
+    { name: "email", value: user.email },
     { name: "emailVerified", value: user.emailVerified },
     { name: "avatarUrl", value: user.avatarUrl },
     { name: "preferredDiscountCity", value: user.preferredDiscountCity },
@@ -116,8 +118,12 @@ export function calculateProfileProgress(user: UserProfile | null): ProfileProgr
   const requiredProgress = Math.round((filledRequired / requiredFields.length) * 100);
   const optionalProgress = Math.round((filledOptional / optionalFields.length) * 100);
 
-  // Общий прогресс: 70% обязательные + 30% дополнительные
-  const totalProgress = Math.round(requiredProgress * 0.7 + optionalProgress * 0.3);
+  // Общий прогресс: 70% обязательные + 30% дополнительные.
+  // Если все обязательные поля заполнены — считаем профиль готовым к документам (100%).
+  const totalProgress =
+    requiredProgress >= 100
+      ? 100
+      : Math.round(requiredProgress * 0.7 + optionalProgress * 0.3);
 
   return {
     total: totalProgress,

@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import NewsCard from "@/components/dashboard/news/NewsCard";
 import NewsCardSkeleton from "@/components/dashboard/news/NewsCardSkeleton";
 import NewsChannels from "@/components/dashboard/news/NewsChannels";
 import UnionMembers from "@/components/dashboard/news/UnionMembers";
 import PPOHeadNewsPage from "./ppo-head/page";
 import { MembershipGate } from "@/components/MembershipGate";
+import { useMembershipAccess } from "@/hooks/useMembershipAccess";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { isChairmanView } from "@/lib/session-user";
 import { alertError } from "@/lib/alert";
@@ -388,8 +390,21 @@ function MemberNewsFeed() {
 
 export default function NewsPage() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const { status } = useMembershipAccess();
   const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
   const showPPOHeadView = !isDemoMember && isChairmanView(session);
+
+  // Исключённый: редирект на главную, доступ к новостям закрыт
+  useEffect(() => {
+    if (status === "excluded") {
+      router.replace("/dashboard");
+    }
+  }, [status, router]);
+
+  if (status === "excluded") {
+    return null;
+  }
   if (showPPOHeadView) return <PPOHeadNewsPage />;
   return <MemberNewsFeed />;
 }

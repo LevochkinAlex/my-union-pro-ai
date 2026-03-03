@@ -20,6 +20,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     let limit = parseInt(searchParams.get("limit") || "20");
 
+    // Исключённый: доступ к Профсети закрыт
+    const userForExcluded = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { membershipStatus: true, unionMembershipStatus: true },
+    });
+    const isExcluded = userForExcluded?.membershipStatus === "EXCLUDED" || userForExcluded?.unionMembershipStatus === "REMOVED";
+    const isReApplying = userForExcluded?.unionMembershipStatus === "REMOVED" &&
+      (userForExcluded?.membershipStatus === "DOCUMENTS_PENDING" || userForExcluded?.membershipStatus === "PROFILE_INCOMPLETE");
+    if (isExcluded && !isReApplying) {
+      return NextResponse.json(
+        { error: "Доступ к Профсети закрыт. Вы исключены из профсоюза." },
+        { status: 403 }
+      );
+    }
+
     // Демо: мок-пользователи Профсети без БД
     if (isDemoUserId(session.user.id)) {
       const { users, total } = getDemoProfsetyUsers({

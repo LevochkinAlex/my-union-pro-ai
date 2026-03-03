@@ -774,7 +774,8 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
         {/* Левая колонка: Лента постов (2/3 ширины на lg+) */}
         <div className="lg:col-span-2 space-y-6 min-w-0">
-          {/* Посты от подписок */}
+          {/* Посты от подписок — исключённым не показываем (предыдущее место работы) */}
+          <MembershipProtectedSection title="Публикации от коллег">
           {postsFromSubscriptions.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
               <div className="flex items-center justify-between mb-4">
@@ -791,6 +792,7 @@ export default async function DashboardPage() {
               <PostsListClient posts={postsFromSubscriptions} />
             </div>
           )}
+          </MembershipProtectedSection>
 
           {/* Свежие новости */}
           <MembershipProtectedSection title="Новости для членов профсоюза">

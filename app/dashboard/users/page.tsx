@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import CreatePost from "@/components/posts/CreatePost";
+import { useMembershipAccess } from "@/hooks/useMembershipAccess";
 import PostFeed from "@/components/posts/PostFeed";
 import SearchForm from "@/components/dashboard/users/SearchForm";
 import UsersList from "@/components/dashboard/users/UsersList";
@@ -30,6 +31,20 @@ interface User {
 
 // Обертка для Suspense и проверки членства
 export default function UsersPage() {
+  const router = useRouter();
+  const { status } = useMembershipAccess();
+
+  // Исключённый: редирект на главную, доступ к Профсети закрыт
+  useEffect(() => {
+    if (status === "excluded") {
+      router.replace("/dashboard");
+    }
+  }, [status, router]);
+
+  if (status === "excluded") {
+    return null;
+  }
+
   return (
     <MembershipGate
       showBlur={true}
