@@ -1083,9 +1083,8 @@ export default function QuestionnaireModal({
                   </label>
                   <DateInput
                     value={formData.dateOfBirth}
-                    onChange={(value) => {
-                      setFormData({ ...formData, dateOfBirth: value });
-                      // Сбрасываем ошибку при изменении
+                    onChange={(e) => {
+                      setFormData({ ...formData, dateOfBirth: e.target.value });
                       setDateOfBirthError(null);
                     }}
                     onBlur={() => {

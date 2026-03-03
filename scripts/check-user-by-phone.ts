@@ -40,7 +40,6 @@ async function checkUser() {
               { content: { contains: "[PROFILE_COMPLETE]" } },
               { content: { contains: "[GENERATE_DOCUMENTS_BUTTON]" } },
               { content: { contains: "Вы успешно заполнили свою анкету" } },
-              { isSystemMessage: true },
             ],
           },
           orderBy: { createdAt: "desc" },
@@ -122,7 +121,7 @@ async function checkUser() {
         if (msg.content.includes("[PROFILE_COMPLETE]")) markers.push("[PROFILE_COMPLETE]");
         if (msg.content.includes("[GENERATE_DOCUMENTS_BUTTON]")) markers.push("[GENERATE_DOCUMENTS_BUTTON]");
         if (msg.content.includes("Вы успешно заполнили")) markers.push("PROFILE_COMPLETED_MSG");
-        console.log(`   ${msg.isSystemMessage ? "🔔" : "💬"} ${msg.createdAt.toISOString()}: ${preview}${markers.length > 0 ? ` [${markers.join(", ")}]` : ""}`);
+        console.log(`   💬 ${msg.createdAt.toISOString()}: ${preview}${markers.length > 0 ? ` [${markers.join(", ")}]` : ""}`);
       });
     }
 

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 interface DateInputProps {
   name?: string;
   value: string;
-  onChange: ((value: string) => void) | ((e: React.ChangeEvent<HTMLInputElement>) => void);
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   placeholder?: string;
   className?: string;
@@ -95,15 +95,18 @@ export default function DateInput({
       return "Некорректная дата";
     }
     
-    const today = new Date();
+    // Сравниваем только числа (год, месяц, день) — без Date и таймзон
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth() + 1;
+    const todayDay = now.getDate();
+    if (yearNum > todayYear) return "Дата рождения не может быть в будущем";
+    if (yearNum === todayYear && monthNum > todayMonth) return "Дата рождения не может быть в будущем";
+    if (yearNum === todayYear && monthNum === todayMonth && dayNum > todayDay) return "Дата рождения не может быть в будущем";
     
-    // Проверка, что дата не в будущем
-    if (birthDate > today) {
-      return "Дата рождения не может быть в будущем";
-    }
-    
-    // Проверка минимального возраста (дата не должна быть слишком далеко в будущем)
-    const ageInYears = (today.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    // Проверка минимального и максимального возраста
+    const todayStart = new Date(todayYear, now.getMonth(), todayDay);
+    const ageInYears = (todayStart.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
     if (ageInYears < minAge) {
       return `Возраст должен быть не менее ${minAge} ${minAge === 1 ? 'года' : 'лет'}`;
     }
@@ -151,19 +154,16 @@ export default function DateInput({
     const finalValue = ageError ? null : (isoDate || formatted);
     
     if (finalValue !== null) {
-      if (onChange.length === 1) {
-        (onChange as (value: string) => void)(finalValue);
-      } else {
-        const syntheticEvent = {
-          ...e,
-          target: {
-            ...e.target,
-            name: name || "",
-            value: finalValue,
-          },
-        } as React.ChangeEvent<HTMLInputElement>;
-        (onChange as (e: React.ChangeEvent<HTMLInputElement>) => void)(syntheticEvent);
-      }
+      // Всегда передаём синтетическое событие с target.name и target.value — родитель (профиль) ожидает e.target
+      const syntheticEvent = {
+        ...e,
+        target: {
+          ...e.target,
+          name: name || "",
+          value: finalValue,
+        },
+      } as React.ChangeEvent<HTMLInputElement>;
+      (onChange as (e: React.ChangeEvent<HTMLInputElement>) => void)(syntheticEvent);
     }
   };
 

@@ -294,17 +294,23 @@ export async function PUT(request: NextRequest) {
 
     let dateOfBirth: Date | null = null;
     if (body.dateOfBirth) {
-      const date = new Date(body.dateOfBirth);
+      const dateStr = String(body.dateOfBirth).trim();
+      const parts = dateStr.split("-");
+      // Парсим YYYY-MM-DD без таймзон (new Date("1992-01-01") даёт UTC полночь и может давать ложные срабатывания)
+      const date = parts.length === 3
+        ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+        : new Date(body.dateOfBirth);
       if (!Number.isNaN(date.getTime())) {
         const year = date.getFullYear();
         const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         if (year < 1900 || year > 2100) {
           return NextResponse.json(
             { error: "Год рождения должен быть в диапазоне 1900–2100" },
             { status: 400 }
           );
         }
-        if (date > now) {
+        if (date > todayStart) {
           return NextResponse.json(
             { error: "Дата рождения не может быть в будущем" },
             { status: 400 }

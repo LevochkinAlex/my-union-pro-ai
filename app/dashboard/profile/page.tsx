@@ -1475,16 +1475,23 @@ export default function ProfilePage() {
                   setDateOfBirthError(null);
                 }}
                 onBlur={(e) => {
-                  // Валидация будет выполнена в DateInput, но мы также проверяем здесь
+                  // Проверку «дата в будущем» делает только DateInput по введённому тексту.
+                  // Здесь только возраст > 100 и сохранение, чтобы не перезаписывать ошибку устаревшим profileData (гонка при быстром blur).
                   if (profileData.dateOfBirth) {
-                    const birthDate = new Date(profileData.dateOfBirth);
-                    const today = new Date();
-                    const ageInYears = (today.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+                    let by = 0, bm = 0, bd = 0;
+                    if (profileData.dateOfBirth.includes("-")) {
+                      const [y, m, d] = profileData.dateOfBirth.split("-").map(Number);
+                      if (y && m && d) { by = y; bm = m; bd = d; }
+                    } else if (profileData.dateOfBirth.includes(".")) {
+                      const p = profileData.dateOfBirth.split(".").map(Number);
+                      if (p.length >= 3) { bd = p[0]; bm = p[1]; by = p[2]; }
+                    }
+                    const now = new Date();
+                    const birthDate = by && bm && bd ? new Date(by, bm - 1, bd) : new Date(profileData.dateOfBirth);
+                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const ageInYears = !Number.isNaN(birthDate.getTime()) ? (todayStart.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25) : 0;
                     
-                    if (birthDate > today) {
-                      setDateOfBirthError("Дата рождения не может быть в будущем");
-                      setMessage({ type: "error", text: "Дата рождения не может быть в будущем" });
-                    } else if (ageInYears > 100) {
+                    if (ageInYears > 100) {
                       setDateOfBirthError("Возраст не может превышать 100 лет");
                       setMessage({ type: "error", text: "Возраст не может превышать 100 лет" });
                     } else {
