@@ -41,6 +41,7 @@ export default function OrgHeadUsersPage() {
     organizationId: "",
     isChairman: false,
   });
+  const [membersReloadKey, setMembersReloadKey] = useState(0);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -77,7 +78,7 @@ export default function OrgHeadUsersPage() {
     };
     load();
     setSelectedIds(new Set());
-  }, [activeTab]);
+  }, [activeTab, membersReloadKey]);
 
   useEffect(() => {
     if (!addUserOpen) return;
@@ -137,6 +138,7 @@ export default function OrgHeadUsersPage() {
         return;
       }
       setAddUserMessage({ type: "success", text: data.message || "Готово" });
+      setMembersReloadKey((k) => k + 1);
       setAddUserForm({
         email: "",
         phone: "",

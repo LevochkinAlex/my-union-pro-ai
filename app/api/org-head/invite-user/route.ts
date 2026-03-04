@@ -137,41 +137,59 @@ export async function POST(request: NextRequest) {
       }
 
       let chairmanUserId: string;
-      if (user) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: updateData as any,
-        });
-        chairmanUserId = user.id;
-      } else {
-        const created = await prisma.user.create({
-          data: {
-            email,
-            phone,
-            firstName,
-            lastName,
-            middleName,
-            jobTitle,
-            organizationId: organizationId,
-            role: "PPO_HEAD",
-            isPPOHead: true,
-            ppoHeadOrganizationId: organizationId,
-            viewMode: "PPO_HEAD",
-            membershipStatus: "APPROVED",
-            resetToken: inviteToken,
-            resetTokenExpires: inviteTokenExpires,
-          },
+      await prisma.$transaction(async (tx) => {
+        // Снимаем предыдущего председателя с этой организации (как в assign-head)
+        const previous = await tx.user.findFirst({
+          where: { ppoHeadOrganizationId: organizationId, id: { not: user?.id ?? "" } },
           select: { id: true },
         });
-        chairmanUserId = created.id;
-      }
+        if (previous) {
+          await tx.user.update({
+            where: { id: previous.id },
+            data: {
+              isPPOHead: false,
+              ppoHeadOrganizationId: null,
+              viewMode: "MEMBER",
+            },
+          });
+        }
 
-      await prisma.organization.update({
-        where: { id: organizationId },
-        data: {
-          chairmanName: chairmanName || null,
-          chairmanJobTitle: jobTitle || null,
-        },
+        if (user) {
+          await tx.user.update({
+            where: { id: user.id },
+            data: updateData as any,
+          });
+          chairmanUserId = user.id;
+        } else {
+          const created = await tx.user.create({
+            data: {
+              email,
+              phone,
+              firstName,
+              lastName,
+              middleName,
+              jobTitle,
+              organizationId: organizationId,
+              role: "PPO_HEAD",
+              isPPOHead: true,
+              ppoHeadOrganizationId: organizationId,
+              viewMode: "PPO_HEAD",
+              membershipStatus: "APPROVED",
+              resetToken: inviteToken,
+              resetTokenExpires: inviteTokenExpires,
+            },
+            select: { id: true },
+          });
+          chairmanUserId = created.id;
+        }
+
+        await tx.organization.update({
+          where: { id: organizationId },
+          data: {
+            chairmanName: chairmanName || null,
+            chairmanJobTitle: jobTitle || null,
+          },
+        });
       });
 
       await createDefaultChannelForOrganization(organizationId, chairmanUserId);

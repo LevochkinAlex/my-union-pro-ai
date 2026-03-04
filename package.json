@@ -1,6 +1,6 @@
 {
   "name": "my-union-pro",
-  "version": "1.10.5",
+  "version": "1.10.6",
   "private": true,
   "scripts": {
     "fix-appeal-messages": "tsx scripts/fix-appeal-messages.ts",
