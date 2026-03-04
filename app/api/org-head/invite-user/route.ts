@@ -136,14 +136,15 @@ export async function POST(request: NextRequest) {
         (updateData as any).role = "PPO_HEAD";
       }
 
+      let chairmanUserId: string;
       if (user) {
         await prisma.user.update({
           where: { id: user.id },
           data: updateData as any,
         });
-        user = { id: user.id, firstName, lastName } as { id: string; firstName: string; lastName: string };
+        chairmanUserId = user.id;
       } else {
-        user = await prisma.user.create({
+        const created = await prisma.user.create({
           data: {
             email,
             phone,
@@ -160,8 +161,9 @@ export async function POST(request: NextRequest) {
             resetToken: inviteToken,
             resetTokenExpires: inviteTokenExpires,
           },
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true },
         });
+        chairmanUserId = created.id;
       }
 
       await prisma.organization.update({
@@ -172,7 +174,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await createDefaultChannelForOrganization(organizationId, user.id);
+      await createDefaultChannelForOrganization(organizationId, chairmanUserId);
 
       await sendEmail({
         to: email,
@@ -184,26 +186,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: "Председатель ППО добавлен. На указанный email отправлено приглашение с инструкцией.",
-        userId: user.id,
+        userId: chairmanUserId,
         isChairman: true,
       });
     }
 
     // ——— Обычный участник: привязка к организации, приглашение заполнить профиль ———
-    let member = await prisma.user.findUnique({
+    const existingMember = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, emailVerified: true, firstName: true, organizationId: true },
+      select: { id: true, emailVerified: true, firstName: true },
     });
 
-    if (member) {
-      if (member.emailVerified) {
+    let memberId: string;
+    if (existingMember) {
+      if (existingMember.emailVerified) {
         return NextResponse.json(
           { error: "Пользователь с таким email уже зарегистрирован" },
           { status: 400 }
         );
       }
       await prisma.user.update({
-        where: { id: member.id },
+        where: { id: existingMember.id },
         data: {
           resetToken: inviteToken,
           resetTokenExpires: inviteTokenExpires,
@@ -214,8 +217,9 @@ export async function POST(request: NextRequest) {
           phone: phone ?? undefined,
         },
       });
+      memberId = existingMember.id;
     } else {
-      member = await prisma.user.create({
+      const created = await prisma.user.create({
         data: {
           email,
           phone,
@@ -228,21 +232,24 @@ export async function POST(request: NextRequest) {
           resetToken: inviteToken,
           resetTokenExpires: inviteTokenExpires,
         },
-        select: { id: true, firstName: true },
+        select: { id: true },
       });
+      memberId = created.id;
     }
+
+    const memberFirstName = existingMember?.firstName ?? firstName;
 
     await sendEmail({
       to: email,
       subject: "Приглашение в МойСоюз",
-      html: getMemberInviteHtml(member.firstName || firstName, organization.name, inviteUrl),
-      text: getMemberInviteText(member.firstName || firstName, organization.name, inviteUrl),
+      html: getMemberInviteHtml(memberFirstName, organization.name, inviteUrl),
+      text: getMemberInviteText(memberFirstName, organization.name, inviteUrl),
     });
 
     return NextResponse.json({
       success: true,
       message: "Приглашение отправлено. Пользователь сможет войти по ссылке и заполнить профиль.",
-      userId: member.id,
+      userId: memberId,
       isChairman: false,
     });
   } catch (e: any) {
