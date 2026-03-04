@@ -288,66 +288,72 @@ export async function getUserActivatedDiscounts(
 
       console.log(`[BestBenefits Activation] Fetching activated discounts for user: ${bestBenefitsUserId} (attempt ${attempt + 1}/${retries + 1})`);
 
-      // ✅ Используем правильный endpoint согласно документации с timeout
-      const response = await fetchWithTimeout(
-        `${ACTIVATION_API_BASE}/received`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        },
-        timeout
-      );
+      // Собираем все страницы (API поддерживает пагинацию)
+      let activatedProducts: any[] = [];
+      let currentPage = 1;
+      let lastPage = 1;
+      let fetchSuccess = true;
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        console.warn(`[BestBenefits Activation] HTTP ${response.status} on attempt ${attempt + 1}:`, errorText);
-        
-        // Если это 5xx ошибка (серверная), пробуем еще раз
-        if (response.status >= 500 && attempt < retries) {
-          console.log(`[BestBenefits Activation] Server error ${response.status}, retrying...`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
-          continue;
-        }
-        
-        // Если это клиентская ошибка (4xx) - не пробуем снова, но НЕ используем fallback
-        // Промокоды должны быть только из BestBenefits API, иначе они могут быть невалидными
-        if (response.status >= 400 && response.status < 500) {
-          console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+      do {
+        const url = `${ACTIVATION_API_BASE}/received?page=${currentPage}&per_page=50`;
+        const response = await fetchWithTimeout(
+          url,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          },
+          timeout
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Unknown error');
+          console.warn(`[BestBenefits Activation] HTTP ${response.status} on attempt ${attempt + 1}, page ${currentPage}:`, errorText);
+          
+          // Если это 5xx ошибка (серверная), пробуем еще раз
+          if (response.status >= 500 && attempt < retries) {
+            console.log(`[BestBenefits Activation] Server error ${response.status}, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+            fetchSuccess = false;
+            break; // выходим из do-while, for retry
+          }
+          
+          // Если это клиентская ошибка (4xx) - не пробуем снова
+          if (response.status >= 400 && response.status < 500) {
+            console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+            return [];
+          }
+          
+          if (attempt < retries) {
+            console.log(`[BestBenefits Activation] Retrying after error on attempt ${attempt + 1}...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            fetchSuccess = false;
+            break; // выходим из do-while, for retry
+          }
+          
+          console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)");
           return [];
         }
-        
-        // Для других ошибок пробуем еще раз
-        if (attempt < retries) {
-          console.log(`[BestBenefits Activation] Retrying after error on attempt ${attempt + 1}...`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-          continue;
+
+        const data = await response.json();
+        if (currentPage === 1) {
+          console.log("[BestBenefits Activation] API Response (page 1):", JSON.stringify(data, null, 2));
         }
         
-        // Если все попытки провалились - возвращаем пустой массив
-        // НЕ используем fallback, чтобы не показывать невалидные промокоды
-        console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)");
-        return [];
-      }
+        lastPage = data?.meta?.last_page ?? 1;
+        const pageData: any[] = data.data && Array.isArray(data.data) ? data.data
+          : Array.isArray(data) ? data
+          : data.products && Array.isArray(data.products) ? data.products
+          : [];
+        
+        activatedProducts = activatedProducts.concat(pageData);
+        console.log(`[BestBenefits Activation] Page ${currentPage}/${lastPage}: got ${pageData.length} items (total: ${activatedProducts.length})`);
+        currentPage++;
+      } while (currentPage <= lastPage);
 
-      const data = await response.json();
-      console.log("[BestBenefits Activation] API Response:", JSON.stringify(data, null, 2));
-      
-      // Проверяем структуру ответа - может быть data.data или просто data
-      let activatedProducts: any[] = [];
-      if (data.data && Array.isArray(data.data)) {
-        activatedProducts = data.data;
-      } else if (Array.isArray(data)) {
-        activatedProducts = data;
-      } else if (data.products && Array.isArray(data.products)) {
-        // Альтернативный формат: { products: [...] }
-        activatedProducts = data.products;
-      } else {
-        console.warn("[BestBenefits Activation] ⚠️ Unexpected API response structure:", Object.keys(data));
-        activatedProducts = [];
-      }
+      if (!fetchSuccess) continue; // retry for loop
       
       // Формат ответа согласно документации:
       // {

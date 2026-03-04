@@ -50,7 +50,7 @@ function askQuestion(query: string): Promise<string> {
   });
 }
 
-async function fixBbUserPassword(email: string, newPassword?: string) {
+async function fixBbUserPassword(email: string, newPassword?: string, requestOnlyMode?: boolean) {
   console.log(`\n🔧 Исправление пароля BestBenefits для: ${email}\n`);
 
   try {
@@ -137,6 +137,7 @@ async function fixBbUserPassword(email: string, newPassword?: string) {
         errorMessage.includes('уже существует') || 
         errorMessage.includes('422') ||
         errorMessage.includes('Ошибка проверки') ||
+        errorMessage.includes('Ошибка валидации') ||
         errorString.includes('уже существует') ||
         errorString.includes('E-Mail адрес уже существует');
       
@@ -144,24 +145,41 @@ async function fixBbUserPassword(email: string, newPassword?: string) {
       if (isUserExists) {
         console.log(`\n🔄 Попытка 2: Сброс пароля через API...\n`);
         
-        // Запрашиваем код сброса
-        console.log(`📧 Запрос кода сброса пароля...`);
-        const codeRequest = await requestPasswordResetCode(email);
+        const codeFromArgs = args[2]?.trim() || "";
+        const hasValidCode = codeFromArgs.length === 6 && /^\d{6}$/.test(codeFromArgs);
 
-        if (codeRequest.status !== "success") {
-          console.error(`❌ Ошибка при запросе кода: ${codeRequest.message}`);
-          console.error(`\n💡 Возможные решения:`);
-          console.error(`   1. Пользователь не существует в BestBenefits - используйте пересоздание`);
-          console.error(`   2. Обратитесь в поддержку BestBenefits`);
-          console.error(`   3. Проверьте, что email правильный\n`);
-          process.exit(1);
+        // Запрашиваем код только если его ещё нет (иначе старый код станет недействительным)
+        if (!hasValidCode) {
+          console.log(`📧 Запрос кода сброса пароля...`);
+          const codeRequest = await requestPasswordResetCode(email);
+
+          if (codeRequest.status !== "success") {
+            console.error(`❌ Ошибка при запросе кода: ${codeRequest.message}`);
+            console.error(`\n💡 Возможные решения:`);
+            console.error(`   1. Пользователь не существует в BestBenefits - используйте пересоздание`);
+            console.error(`   2. Обратитесь в поддержку BestBenefits`);
+            console.error(`   3. Проверьте, что email правильный\n`);
+            process.exit(1);
+          }
+
+          console.log(`✅ Код отправлен на email: ${email}`);
+          console.log(`   ${codeRequest.message}\n`);
+        } else {
+          console.log(`📥 Используется код из аргумента (запрос нового кода пропущен)\n`);
         }
 
-        console.log(`✅ Код отправлен на email: ${email}`);
-        console.log(`   ${codeRequest.message}\n`);
+        if (requestOnlyMode) {
+          console.log(`📋 Следующий шаг: попросите клиентку проверить почту ${email} и прислать 6-значный код.`);
+          console.log(`   Затем выполните (подставьте код вместо КОД):`);
+          console.log(`   pnpm dotenv -e .env.local -- tsx scripts/fix-bb-user-password.ts ${email} "${password}" КОД\n`);
+          return;
+        }
 
-        // Запрашиваем код у пользователя
-        const code = await askQuestion('Введите 6-значный код из письма: ');
+        // Запрашиваем код у пользователя (или берём из аргумента)
+        let code: string = codeFromArgs;
+        if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+          code = await askQuestion('Введите 6-значный код из письма: ');
+        }
 
         if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
           console.error(`❌ Неверный формат кода. Код должен состоять из 6 цифр.`);
@@ -214,14 +232,17 @@ async function fixBbUserPassword(email: string, newPassword?: string) {
 }
 
 // Main
-const email = process.argv[2];
-const password = process.argv[3];
+const args = process.argv.slice(2).filter((a) => a !== "--request-only");
+const email = args[0];
+const password = args[1];
+const requestOnly = process.argv.includes("--request-only");
 
 if (!email) {
   console.error('❌ Укажите email пользователя:');
-  console.error('   pnpm dotenv -e .env.local -- tsx scripts/fix-bb-user-password.ts EMAIL [PASSWORD]');
+  console.error('   pnpm dotenv -e .env.local -- tsx scripts/fix-bb-user-password.ts EMAIL [PASSWORD] [CODE]');
+  console.error('   CODE — 6-значный код из письма (если пользователь уже существует в BB)');
   process.exit(1);
 }
 
-fixBbUserPassword(email, password);
+fixBbUserPassword(email, password, requestOnly);
 

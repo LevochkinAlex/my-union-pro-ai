@@ -1,8 +1,18 @@
 # Система скидок BestBenefits
 
-> Актуальная документация на 21.12.2024
+> Актуальная документация на 04.03.2025
 
 ## Архитектура
+
+### Источник истины
+
+| Данные | Таблица | Синхронизация |
+|--------|---------|---------------|
+| Каталог скидок | `Discount`, `DiscountCategory` | Cron 03:00 МСК |
+| Активированные скидки | `DiscountActivation` | Cron 04:00 МСК + при открытии страницы |
+| Избранное | `DiscountPreference.filters.favorites` | По действию пользователя |
+
+**Важно:** `DiscountActivation` — единственный источник для активированных скидок. `DiscountPreference.filters.claimed` обновляется при синхронизации для обратной совместимости, но API всегда читает из `DiscountActivation`.
 
 ### Локальное хранение скидок
 
@@ -54,18 +64,20 @@ model DiscountFavorite {
 
 ### Автоматическая (Cron)
 
-Скрипт `/opt/my-union-pro/scripts/sync-discounts.mjs` запускается ежедневно в 3:00.
+Настройка: `bash scripts/setup-cron.sh` на VDS.
 
-```bash
-# Crontab на VDS
-0 3 * * * cd /opt/my-union-pro && /usr/bin/node scripts/sync-discounts.mjs >> /var/log/myunion/sync-discounts.log 2>&1
-```
+| Время (МСК) | Задача | Скрипт / API |
+|-------------|--------|--------------|
+| 03:00 | Каталог скидок | `sync-discounts.mjs` |
+| 04:00 | Скидки пользователей | `sync-all-users-discounts.ts` |
 
-### Ручная (через админку)
+Оба задания запускаются автоматически. Скидки пользователей синхронизируются **ежедневно в фоне**, даже если пользователь не заходил в приложение.
 
-Админ-панель: `/admin/discounts` → кнопка "Синхронизировать"
+### Ручная
 
-API endpoint: `POST /api/discounts/sync-all`
+- **Админка:** `/admin/discounts` → "Синхронизировать" (каталог)
+- **API каталог:** `POST /api/discounts/sync-all` или `GET /api/cron/sync-discounts?secret=CRON_SECRET`
+- **API пользователи:** `GET /api/cron/sync-user-discounts?secret=CRON_SECRET`
 
 ### Логика синхронизации ("Комплиментарная")
 
@@ -175,22 +187,24 @@ decryptPassword(encryptedPassword: string): string
 
 ## Скрипты
 
-### Синхронизация скидок
+### Канонические (использовать эти)
+
 ```bash
-# На VDS
-cd /opt/my-union-pro
-node scripts/sync-discounts.mjs
+# 1. Каталог скидок
+pnpm sync:discounts
+
+# 2. Скидки всех пользователей
+pnpm sync:all-users-discounts
 ```
 
-### Ручная регенерация промокодов
+### Один пользователь
 ```bash
-# На VDS - для конкретного пользователя
-node -e "
-require('dotenv').config();
-const { PrismaClient } = require('@prisma/client');
-// ... (см. примеры в истории)
-"
+pnpm tsx scripts/sync-user-discounts-direct.mjs user@example.com
 ```
+
+### Устаревшие (не использовать)
+
+- `sync:promo-codes` — обновляет только `DiscountPreference`, приложение читает из `DiscountActivation`. Используйте `sync:all-users-discounts`.
 
 ## Переменные окружения
 
@@ -219,16 +233,16 @@ CDN_URL=https://cdn.myunion.pro
 
 ## Мониторинг
 
-### Логи синхронизации
+### Логи
 ```bash
-# На VDS
-tail -f /var/log/myunion/sync-discounts.log
+tail -f /var/log/myunion/sync-discounts.log       # каталог
+tail -f /var/log/myunion/sync-user-discounts.log  # пользователи
 ```
 
 ### Логи в БД
-Таблица `SyncLog` хранит историю синхронизаций.
+Таблица `SyncLog` хранит историю синхронизаций каталога.
 
 ---
 
-*Последнее обновление: 21.12.2024*
+*Последнее обновление: 04.03.2025*
 

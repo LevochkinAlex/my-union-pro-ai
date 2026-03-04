@@ -43,6 +43,8 @@
     "reset-user": "dotenv -e .env.local -- tsx scripts/reset-user-data.ts",
     "generate-icons": "node scripts/generate-icons.mjs",
     "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts",
+    "sync:discounts": "dotenv -e .env.local -- node scripts/sync-discounts.mjs",
+    "sync:all-users-discounts": "dotenv -e .env.local -- tsx scripts/sync-all-users-discounts.ts",
     "sync:channel-posts-to-news": "dotenv -e .env.local -- tsx scripts/sync-channel-posts-to-news.ts",
     "fix:news-cover-images": "dotenv -e .env.local -- tsx scripts/fix-news-cover-image-paths.ts",
     "delete:test-news-post": "dotenv -e .env.local -- tsx scripts/delete-test-news-post.ts",

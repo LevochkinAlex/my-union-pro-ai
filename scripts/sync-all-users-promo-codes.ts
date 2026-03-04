@@ -1,4 +1,7 @@
 /**
+ * @deprecated Используйте sync:all-users-discounts (DiscountActivation).
+ * Этот скрипт обновляет только DiscountPreference, приложение читает из DiscountActivation.
+ *
  * Скрипт для массовой синхронизации промокодов всех пользователей с BestBenefits API
  * Восстанавливает промокоды для всех пользователей, у которых есть bestBenefitsUserId
  */
