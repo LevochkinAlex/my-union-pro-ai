@@ -1050,8 +1050,16 @@ export default function ProfilePage() {
           })))
         : "";
       
-      // Преобразуем награды в JSON формат
-      const awardsJSON = awards.length > 0 ? JSON.stringify(awards) : "";
+      // Если пользователь заполнил форму награды, но не нажал «Добавить» — включаем в сохранение
+      let awardsToSave = [...awards];
+      if (isAddingAward && newAward.type && newAward.year && newAward.description.trim()) {
+        const yearNum = parseInt(newAward.year, 10);
+        const currentYear = new Date().getFullYear();
+        if (!isNaN(yearNum) && yearNum >= 1900 && yearNum <= currentYear) {
+          awardsToSave = [...awardsToSave, { ...newAward }];
+        }
+      }
+      const awardsJSON = awardsToSave.length > 0 ? JSON.stringify(awardsToSave) : "";
       
       // Преобразуем обучение в JSON формат
       const trainingJSON = training.length > 0 ? JSON.stringify(training) : "";
