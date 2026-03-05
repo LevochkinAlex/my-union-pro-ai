@@ -317,14 +317,10 @@ export default function DiscountDetailPage() {
           console.log("✅ Found promo code in preferences:", promoCode);
           setActivatedPromoCode(promoCode);
         } else {
-          console.log("⚠️ Claimed item found but no promo code:", claimedItem);
-          // Если промокода нет, но скидка claimed - синхронизируемся с BestBenefits
-          // Но только один раз, чтобы избежать бесконечного цикла
+          console.log("ℹ️ Claimed item without promo code (card-based discount):", claimedItem);
           if (!hasSynced && !isSyncing) {
-            console.log("🔄 Syncing with BestBenefits to get promo code...");
+            console.log("🔄 Syncing with BestBenefits once to check for promo code...");
             syncWithBestBenefits();
-          } else {
-            console.log("⏭️ Sync already attempted, skipping");
           }
         }
       } else {
@@ -356,18 +352,10 @@ export default function DiscountDetailPage() {
       return;
     }
     
-    // Если уже активирована:
-    // - при наличии промокода просто открываем модалку
-    // - при отсутствии промокода запрашиваем новый через активацию
+    // Если уже активирована — показываем модалку (с промокодом или карточку)
     if (isClaimed) {
-      if (hasPromoCode) {
-        console.log("⏩ Already claimed, showing modal with promo code:", discount.promoCode || activatedPromoCode);
-        setShowPromoModal(true);
-        return;
-      }
-
-      console.log("🔄 Claimed without promo code, reactivating to fetch fresh code:", discount.id);
-      await activateDiscount(discount.id);
+      console.log("⏩ Already claimed, showing modal:", { hasPromoCode, promoCode: discount.promoCode || activatedPromoCode });
+      setShowPromoModal(true);
       return;
     }
     
@@ -451,12 +439,10 @@ export default function DiscountDetailPage() {
           ...discount,
           promoCode: finalPromoCode,
         });
-        // Показываем модальное окно только когда есть код/баркод
-        setShowPromoModal(true);
       } else {
-        console.log("⚠️ No promo code available after activation");
-        alert("Не удалось получить промокод от BestBenefits. Попробуйте снова через несколько секунд.");
+        console.log("ℹ️ Discount activated without promo code (card-based discount)");
       }
+      setShowPromoModal(true);
     } catch (error) {
       console.error("❌ Failed to activate:", error);
       setIsClaimed(wasClaimed);
@@ -999,9 +985,9 @@ export default function DiscountDetailPage() {
                     : "bg-rose-600 hover:bg-rose-700"
                 }`}
               >
-                {isClaimed && hasPromoCode ? (
+                {isClaimed ? (
                   <>
-                    <span>Открыть промокод</span>
+                    <span>{hasPromoCode ? "Открыть промокод" : "Показать карточку"}</span>
                     <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
                       <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
@@ -1040,9 +1026,11 @@ export default function DiscountDetailPage() {
               <p className="text-center text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
                 {isClaimed && hasPromoCode
                   ? "Нажмите «Получить новый» для генерации нового промокода"
-                  : discount.options && discount.options.length > 0
-                    ? `Доступно ${discount.options.length} ${discount.options.length === 1 ? 'вариант' : discount.options.length < 5 ? 'варианта' : 'вариантов'} скидки`
-                    : "При нажатии будет сгенерирован промокод"}
+                  : isClaimed && !hasPromoCode
+                    ? "Покажите карточку для получения скидки"
+                    : discount.options && discount.options.length > 0
+                      ? `Доступно ${discount.options.length} ${discount.options.length === 1 ? 'вариант' : discount.options.length < 5 ? 'варианта' : 'вариантов'} скидки`
+                      : "При нажатии будет сгенерирован промокод"}
               </p>
             </div>
           </div>

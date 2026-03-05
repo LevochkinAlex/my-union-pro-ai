@@ -16,6 +16,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [callbackUrl, setCallbackUrl] = useState("/dashboard");
   const [devMagicLink, setDevMagicLink] = useState<string | null>(null);
+  const [tgProcessing, setTgProcessing] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
@@ -25,26 +26,60 @@ function LoginForm() {
     }
   }, [status, session, router, searchParams]);
 
+  // Handle Telegram Login Widget hash fragment (#tgAuthResult=<base64>)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const callback = params.get("callbackUrl");
-      if (callback) setCallbackUrl(decodeURIComponent(callback));
+    if (typeof window === "undefined") return;
 
-      const err = params.get("error");
-      if (err === "link_used_or_expired") {
-        setError("Ссылка для входа уже использована или истекла. Запросите новую.");
-      } else if (err === "invalid_token" || err === "token_expired" || err === "token_used") {
-        setError("Ссылка недействительна или уже использована. Запросите новую.");
-      } else if (err === "missing_params" || err === "invalid_signature") {
-        setError("Ошибка авторизации через Telegram. Попробуйте снова.");
-      } else if (err === "data_outdated") {
-        setError("Сессия Telegram истекла. Попробуйте снова.");
-      } else if (err === "server_error" || err === "server_config") {
-        setError("Ошибка сервера. Попробуйте позже или войдите по Email.");
+    const hash = window.location.hash;
+    if (!hash.startsWith("#tgAuthResult=")) return;
+
+    setTgProcessing(true);
+
+    try {
+      const base64 = hash.slice("#tgAuthResult=".length);
+      const json = atob(base64);
+      const data = JSON.parse(json);
+
+      console.log("[Telegram Login] Parsed tgAuthResult:", { id: data.id, username: data.username });
+
+      const params = new URLSearchParams();
+      for (const [key, val] of Object.entries(data)) {
+        if (val != null) params.set(key, String(val));
       }
+      params.set("source", "widget");
+
+      window.history.replaceState(null, "", window.location.pathname);
+      window.location.href = `/api/auth/telegram/callback?${params.toString()}`;
+    } catch (e) {
+      console.error("[Telegram Login] Failed to parse tgAuthResult:", e);
+      setTgProcessing(false);
+      setError("Ошибка авторизации через Telegram. Попробуйте снова.");
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || tgProcessing) return;
+
+    // Don't show errors if we're processing tgAuthResult
+    if (window.location.hash.startsWith("#tgAuthResult=")) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const callback = params.get("callbackUrl");
+    if (callback) setCallbackUrl(decodeURIComponent(callback));
+
+    const err = params.get("error");
+    if (err === "link_used_or_expired") {
+      setError("Ссылка для входа уже использована или истекла. Запросите новую.");
+    } else if (err === "invalid_token" || err === "token_expired" || err === "token_used") {
+      setError("Ссылка недействительна или уже использована. Запросите новую.");
+    } else if (err === "missing_params" || err === "invalid_signature") {
+      setError("Ошибка авторизации через Telegram. Попробуйте снова.");
+    } else if (err === "data_outdated") {
+      setError("Сессия Telegram истекла. Попробуйте снова.");
+    } else if (err === "server_error" || err === "server_config") {
+      setError("Ошибка сервера. Попробуйте позже или войдите по Email.");
+    }
+  }, [tgProcessing]);
 
   const handleTelegramLogin = () => {
     const origin = window.location.origin;
@@ -95,11 +130,13 @@ function LoginForm() {
     }
   };
 
-  if (status === "loading") {
+  if (status === "loading" || tgProcessing) {
     return (
       <div className="flex flex-col flex-1 w-full items-center justify-center min-h-[50vh]">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
-        <p className="mt-4 text-sm text-muted-foreground">Загрузка...</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {tgProcessing ? "Авторизация через Telegram..." : "Загрузка..."}
+        </p>
       </div>
     );
   }
