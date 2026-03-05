@@ -156,6 +156,24 @@ export default function DiscountDetailPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const promoCardRef = useRef<HTMLDivElement>(null);
 
+  const toReadableError = (value: string) => {
+    const raw = value?.trim();
+    if (!raw) return "Ошибка при получении промокода. Попробуйте еще раз.";
+
+    const decodeUnicode = (s: string) =>
+      s.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+
+    try {
+      const parsed = JSON.parse(raw);
+      const msg = parsed?.details || parsed?.message || parsed?.error;
+      if (typeof msg === "string" && msg.trim()) return decodeUnicode(msg.trim());
+    } catch {
+      // ignore
+    }
+
+    return decodeUnicode(raw);
+  };
+
   useEffect(() => {
     // Сбрасываем флаги при смене скидки
     setHasSynced(false);
@@ -462,7 +480,11 @@ export default function DiscountDetailPage() {
     } catch (error) {
       console.error("❌ Failed to activate:", error);
       setIsClaimed(wasClaimed);
-      alert(error instanceof Error ? error.message : "Ошибка при получении промокода. Попробуйте еще раз.");
+      alert(
+        error instanceof Error
+          ? toReadableError(error.message)
+          : "Ошибка при получении промокода. Попробуйте еще раз."
+      );
     }
   };
 

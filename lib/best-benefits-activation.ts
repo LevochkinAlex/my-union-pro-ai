@@ -35,6 +35,34 @@ interface ActivationResponse {
   };
 }
 
+function decodeUnicodeEscapes(input: string): string {
+  return input.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
+function normalizeBestBenefitsMessage(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // 1) Try to parse JSON payloads and extract a human message.
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed?.message === "string" && parsed.message.trim()) {
+      return decodeUnicodeEscapes(parsed.message.trim());
+    }
+    if (typeof parsed?.error === "string" && parsed.error.trim()) {
+      return decodeUnicodeEscapes(parsed.error.trim());
+    }
+  } catch {
+    // not JSON, continue
+  }
+
+  // 2) Decode escaped unicode from plain string payloads.
+  return decodeUnicodeEscapes(trimmed);
+}
+
 /**
  * Activate/claim a discount for a user in BestBenefits
  * 
@@ -104,11 +132,18 @@ export async function activateBestBenefitsDiscount(
         statusText: response.statusText,
         body: responseText,
       });
-      
+
+      const parsedMessage = normalizeBestBenefitsMessage(responseText);
       return {
         status: "error",
         success: false,
-        message: `Activation failed: ${response.status} - ${responseText}`,
+        message:
+          parsedMessage ||
+          (response.status === 429
+            ? "Слишком много запросов в BestBenefits. Попробуйте через минуту."
+            : response.status === 401
+              ? "Ошибка авторизации в BestBenefits. Попробуйте войти заново."
+              : `Ошибка BestBenefits (${response.status})`),
       };
     }
 
@@ -163,7 +198,7 @@ export async function activateBestBenefitsDiscount(
     return {
       status: "error",
       success: false,
-      message: data.message || "Не удалось получить промокод",
+      message: normalizeBestBenefitsMessage(data.message) || "Не удалось получить промокод",
     };
   } catch (error) {
     console.error("[BestBenefits Activation] Exception:", error);
