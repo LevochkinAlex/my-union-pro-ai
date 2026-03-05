@@ -30,6 +30,7 @@ interface ActivationResponse {
     promoCode?: string;
     code?: string;
     expiresAt?: string;
+    end_date?: string;
   };
 }
 

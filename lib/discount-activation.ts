@@ -11,7 +11,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getUserActivatedDiscounts } from "@/lib/best-benefits-activation";
+import { getUserActivatedDiscounts, activateBestBenefitsDiscount } from "@/lib/best-benefits-activation";
 
 export interface DiscountActivationData {
   discountId: number;
@@ -141,10 +141,12 @@ export async function syncDiscountsWithBestBenefits(
     const now = new Date();
     const bbDiscountIds = new Set(bbActivated.map(d => d.id));
 
+    // Скидки без активного промокода — кандидаты на перевыпуск через POST /api/promo
+    const discountsNeedingReissue: number[] = [];
+
     // Сохраняем каждую активированную скидку в нашу БД
     for (const bbItem of bbActivated) {
       try {
-        // Получаем текущую запись
         const existing = await prisma.discountActivation.findUnique({
           where: {
             userId_discountId: {
@@ -157,40 +159,32 @@ export async function syncDiscountsWithBestBenefits(
         const newPromoCode = bbItem.promoCode?.trim() || null;
         const existingPromoCode = existing?.promoCode?.trim() || null;
         
-        // Проверяем, изменился ли промокод
         const promoCodeChanged = newPromoCode !== existingPromoCode;
         
         if (promoCodeChanged && newPromoCode) {
           console.log(`[discount-activation] 🔄 Promo code changed for discount ${bbItem.id}: "${existingPromoCode}" → "${newPromoCode}"`);
         }
 
-        // Парсим validUntil из BestBenefits (если есть)
         let validUntilDate: Date | null = null;
         if (bbItem.validUntil) {
           try {
             const parsedDate = new Date(bbItem.validUntil);
             if (!isNaN(parsedDate.getTime())) {
-              // Проверяем, не истек ли промокод
-              const now = new Date();
               if (parsedDate.getTime() >= now.getTime()) {
                 validUntilDate = parsedDate;
-                console.log(`[discount-activation] ✅ Promo code valid until ${validUntilDate.toISOString()}`);
               } else {
-                console.log(`[discount-activation] ⚠️ Promo code expired on ${parsedDate.toISOString()}, will be removed`);
-                // Промокод истек - удаляем его
-                await prisma.discountActivation.deleteMany({
-                  where: {
-                    userId,
-                    discountId: bbItem.id,
-                  },
-                });
-                expired++;
-                continue; // Пропускаем эту скидку
+                // Промокод истёк, но скидка всё ещё в BB — нужен перевыпуск
+                discountsNeedingReissue.push(bbItem.id);
               }
             }
           } catch (error) {
             console.warn(`[discount-activation] Failed to parse validUntil for discount ${bbItem.id}:`, error);
           }
+        }
+
+        // Если BB вернул скидку без промокода — тоже нужен перевыпуск
+        if (!newPromoCode && !discountsNeedingReissue.includes(bbItem.id)) {
+          discountsNeedingReissue.push(bbItem.id);
         }
 
         await prisma.discountActivation.upsert({
@@ -210,8 +204,6 @@ export async function syncDiscountsWithBestBenefits(
             lastSyncedAt: new Date(),
           },
           update: {
-            // ВАЖНО: ВСЕГДА обновляем промокод из BB (они могут выдать новый!)
-            // Только если BB вернул валидный промокод
             ...(newPromoCode ? { promoCode: newPromoCode } : {}),
             ...(validUntilDate ? { validUntil: validUntilDate } : {}),
             syncedFromBB: true,
@@ -220,15 +212,72 @@ export async function syncDiscountsWithBestBenefits(
         });
         
         if (existing) {
-          if (promoCodeChanged) {
-            updated++;
-          }
+          if (promoCodeChanged) updated++;
         } else {
           synced++;
         }
       } catch (error: any) {
         errors.push(`Failed to save discount ${bbItem.id}: ${error.message}`);
       }
+    }
+
+    // ---- Автоперевыпуск деактивированных промокодов через POST /api/promo ----
+    if (discountsNeedingReissue.length > 0 && bestBenefitsPassword) {
+      console.log(`[discount-activation] 🔄 Auto-reissuing ${discountsNeedingReissue.length} expired/missing promo codes...`);
+      let reissued = 0;
+
+      for (const discountId of discountsNeedingReissue) {
+        try {
+          const result = await activateBestBenefitsDiscount({
+            userId,
+            bestBenefitsUserId: bestBenefitsUserId,
+            discountId,
+            email: bestBenefitsUserId,
+            password: bestBenefitsPassword,
+          });
+
+          if (result.success && result.promoCode) {
+            let reissueValidUntil: Date | null = null;
+            if (result.data?.end_date) {
+              const d = new Date(result.data.end_date);
+              if (!isNaN(d.getTime()) && d.getTime() >= Date.now()) reissueValidUntil = d;
+            }
+
+            await prisma.discountActivation.upsert({
+              where: { userId_discountId: { userId, discountId } },
+              update: {
+                promoCode: result.promoCode,
+                ...(reissueValidUntil ? { validUntil: reissueValidUntil } : {}),
+                lastSyncedAt: new Date(),
+              },
+              create: {
+                userId,
+                discountId,
+                promoCode: result.promoCode,
+                ...(reissueValidUntil ? { validUntil: reissueValidUntil } : {}),
+                activatedAt: new Date(),
+                syncedFromBB: true,
+                lastSyncedAt: new Date(),
+              },
+            });
+
+            reissued++;
+            updated++;
+            console.log(`[discount-activation] ✅ Reissued discount ${discountId}: ${result.promoCode}`);
+          } else {
+            console.log(`[discount-activation] ⚠️ Could not reissue discount ${discountId}: ${result.message}`);
+          }
+
+          // Rate limiting: BB allows ~1 req/sec
+          await new Promise(r => setTimeout(r, 1200));
+        } catch (error: any) {
+          console.warn(`[discount-activation] Failed to reissue discount ${discountId}:`, error.message);
+          // 429 — прекращаем попытки перевыпуска
+          if (error.message?.includes("429")) break;
+        }
+      }
+
+      console.log(`[discount-activation] ✅ Reissued ${reissued}/${discountsNeedingReissue.length} promo codes`);
     }
 
     // Помечаем скидки, которых больше нет в BB (но НЕ удаляем - вдруг это временный сбой API)
