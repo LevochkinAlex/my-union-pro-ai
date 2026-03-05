@@ -183,7 +183,33 @@ export async function GET(request: NextRequest) {
         where: { telegramChatId: id },
       });
 
-      // 2. Если не найден и есть phone - ищем по номеру телефона
+      // 2. Если не найден, пробуем найти по username (для widget, где phone может быть скрыт)
+      if (!user && username) {
+        user = await prisma.user.findFirst({
+          where: {
+            telegramUsername: {
+              equals: username,
+              mode: "insensitive",
+            },
+          },
+        });
+
+        if (user) {
+          console.log("[Telegram Login] 🔗 Найден существующий аккаунт по username:", user.id);
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              telegramChatId: id,
+              telegramUsername: username || user.telegramUsername,
+              firstName: first_name || user.firstName,
+              lastName: last_name || user.lastName,
+              avatarUrl: photo_url || user.avatarUrl,
+            },
+          });
+        }
+      }
+
+      // 3. Если не найден и есть phone - ищем по номеру телефона
       if (!user && normalizedPhone) {
         // Ищем с учетом разных форматов номера
         const phoneDigits = normalizedPhone.replace(/\D/g, "");

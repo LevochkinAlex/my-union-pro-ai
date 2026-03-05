@@ -26,7 +26,7 @@ function LoginForm() {
     }
   }, [status, session, router, searchParams]);
 
-  // Handle Telegram Login Widget hash fragment (#tgAuthResult=<base64>)
+  // Handle Telegram Login Widget hash fragment (#tgAuthResult=<payload>)
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -36,9 +36,21 @@ function LoginForm() {
     setTgProcessing(true);
 
     try {
-      const base64 = hash.slice("#tgAuthResult=".length);
-      const json = atob(base64);
-      const data = JSON.parse(json);
+      const rawPayload = hash.slice("#tgAuthResult=".length);
+      const decodedPayload = decodeURIComponent(rawPayload);
+
+      let data: Record<string, unknown>;
+      if (decodedPayload.startsWith("{")) {
+        data = JSON.parse(decodedPayload);
+      } else {
+        // Telegram can return base64url or base64 payload depending on flow
+        const normalizedBase64 = decodedPayload
+          .replace(/-/g, "+")
+          .replace(/_/g, "/")
+          .padEnd(Math.ceil(decodedPayload.length / 4) * 4, "=");
+        const json = atob(normalizedBase64);
+        data = JSON.parse(json);
+      }
 
       console.log("[Telegram Login] Parsed tgAuthResult:", { id: data.id, username: data.username });
 
@@ -48,6 +60,7 @@ function LoginForm() {
       }
       params.set("source", "widget");
 
+      // Clean URL before redirect to avoid stale ?error and hash on back nav
       window.history.replaceState(null, "", window.location.pathname);
       window.location.href = `/api/auth/telegram/callback?${params.toString()}`;
     } catch (e) {
@@ -83,7 +96,9 @@ function LoginForm() {
 
   const handleTelegramLogin = () => {
     const origin = window.location.origin;
-    const returnTo = `${origin}/api/auth/telegram/callback?source=widget`;
+    // Return to /login so browser hash is handled client-side first.
+    // Callback endpoint cannot read URL hash fragments.
+    const returnTo = `${origin}/login`;
     const url =
       `https://oauth.telegram.org/auth?bot_id=${TELEGRAM_BOT_ID}` +
       `&origin=${encodeURIComponent(origin)}` +
