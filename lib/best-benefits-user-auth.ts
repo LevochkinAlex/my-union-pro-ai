@@ -16,62 +16,105 @@ const AUTH_URL = "https://bestbenefits.ru/api/auth";
 // Cache user tokens (user email -> {token, expiry})
 const userTokenCache = new Map<string, { token: string; expiry: number }>();
 
+async function resolveBestBenefitsEmailByUserId(userId: string): Promise<string | null> {
+  if (userId.includes("@")) {
+    return userId;
+  }
+
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    const user = await prisma.user.findUnique({
+      where: { bestBenefitsUserId: userId },
+      select: { email: true },
+    });
+
+    if (user?.email) {
+      console.log(`[UserAuth] Resolved BB user ID ${userId} to email ${user.email}`);
+      return user.email;
+    }
+  } catch (error) {
+    console.warn(`[UserAuth] Failed to resolve BB user ID ${userId} to email:`, error);
+  }
+
+  return null;
+}
+
 /**
  * Get personal BestBenefits token for a specific user
  * This ensures discounts are activated under the user's account, not organization account
  */
 export async function getUserBestBenefitsToken(
-  email: string,
+  emailOrUserId: string,
   password: string
 ): Promise<string> {
-  // Check cache first
-  const cached = userTokenCache.get(email);
-  if (cached && cached.expiry > Date.now()) {
-    console.log(`[UserAuth] Using cached token for ${email}`);
-    return cached.token;
+  const resolvedEmail = await resolveBestBenefitsEmailByUserId(emailOrUserId);
+  const loginCandidates = Array.from(new Set([
+    emailOrUserId,
+    resolvedEmail ?? undefined,
+  ].filter(Boolean) as string[]));
+
+  // Check cache first for all possible identifiers.
+  for (const login of loginCandidates) {
+    const cached = userTokenCache.get(login);
+    if (cached && cached.expiry > Date.now()) {
+      console.log(`[UserAuth] Using cached token for ${login}`);
+      return cached.token;
+    }
   }
 
-  try {
-    console.log(`[UserAuth] Authenticating user: ${email}`);
+  let lastError: unknown = null;
+  for (const login of loginCandidates) {
+    try {
+      console.log(`[UserAuth] Authenticating user with login: ${login}`);
 
-    const response = await fetch(AUTH_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
+      const response = await fetch(AUTH_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: login,
+          password,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[UserAuth] Authentication failed for ${email}:`, response.status, errorText);
-      throw new Error(`User authentication failed: ${response.status} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[UserAuth] Authentication failed for ${login}:`, response.status, errorText);
+        lastError = new Error(`User authentication failed: ${response.status} - ${errorText}`);
+        continue;
+      }
+
+      const data: AuthResponse = await response.json();
+
+      if (!data.access_token) {
+        lastError = new Error("No access_token in response");
+        continue;
+      }
+
+      // Cache token (default expiry: 1 hour)
+      const expiresIn = data.expires_in ?? 3600; // 1 hour in seconds
+      const expiry = Date.now() + (expiresIn - 60) * 1000; // Refresh 1 minute before expiry
+
+      // Cache under all candidate keys to avoid re-auth on next calls.
+      for (const candidate of loginCandidates) {
+        userTokenCache.set(candidate, {
+          token: data.access_token,
+          expiry,
+        });
+      }
+
+      console.log(`[UserAuth] ✅ User authenticated: ${login}`);
+      return data.access_token;
+    } catch (error) {
+      lastError = error;
+      console.error(`[UserAuth] Error authenticating user ${login}:`, error);
     }
-
-    const data: AuthResponse = await response.json();
-
-    if (!data.access_token) {
-      throw new Error("No access_token in response");
-    }
-
-    // Cache token (default expiry: 1 hour)
-    const expiresIn = data.expires_in ?? 3600; // 1 hour in seconds
-    const expiry = Date.now() + (expiresIn - 60) * 1000; // Refresh 1 minute before expiry
-
-    userTokenCache.set(email, {
-      token: data.access_token,
-      expiry,
-    });
-
-    console.log(`[UserAuth] ✅ User authenticated: ${email}`);
-    return data.access_token;
-  } catch (error) {
-    console.error(`[UserAuth] Error authenticating user ${email}:`, error);
-    throw error;
   }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Failed to authenticate user in BestBenefits");
 }
 
 /**

@@ -146,6 +146,7 @@ export default function DiscountDetailPage() {
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false); // Модальное окно выбора варианта
   const [activatedPromoCode, setActivatedPromoCode] = useState<string | null>(null);
+  const hasPromoCode = !!(activatedPromoCode || discount?.promoCode);
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null); // ID выбранного варианта
   const [activatingOptionId, setActivatingOptionId] = useState<number | null>(null); // ID варианта в процессе активации
   const [isSyncing, setIsSyncing] = useState(false);
@@ -185,20 +186,11 @@ export default function DiscountDetailPage() {
           
           if (result.promoCode && result.promoCode.trim().length > 0) {
             const freshCode = result.promoCode.trim();
-            
-            // Обновляем только если промокод изменился
-            if (freshCode !== activatedPromoCode) {
-              console.log(`[DiscountDetail] ✅ Updated promo code: "${activatedPromoCode}" → "${freshCode}"`);
-              setActivatedPromoCode(freshCode);
-              
-              // Также обновляем в объекте скидки
-              if (discount) {
-                setDiscount({
-                  ...discount,
-                  promoCode: freshCode,
-                });
-              }
-            }
+            setActivatedPromoCode((prev) => (prev === freshCode ? prev : freshCode));
+            setDiscount((prev) => {
+              if (!prev || prev.promoCode === freshCode) return prev;
+              return { ...prev, promoCode: freshCode };
+            });
           } else if (result.warning) {
             console.warn(`[DiscountDetail] ⚠️ ${result.warning}`);
           }
@@ -218,7 +210,7 @@ export default function DiscountDetailPage() {
       clearTimeout(timeoutId);
       clearInterval(intervalId);
     };
-  }, [isClaimed, discountId, activatedPromoCode, discount]);
+  }, [isClaimed, discountId]);
 
   // Обновляем промокод после загрузки discount
   useEffect(() => {
@@ -364,10 +356,18 @@ export default function DiscountDetailPage() {
       return;
     }
     
-    // Если уже активирована, просто показываем модальное окно
+    // Если уже активирована:
+    // - при наличии промокода просто открываем модалку
+    // - при отсутствии промокода запрашиваем новый через активацию
     if (isClaimed) {
-      console.log("⏩ Already claimed, showing modal with promo code:", discount.promoCode || activatedPromoCode);
-      setShowPromoModal(true);
+      if (hasPromoCode) {
+        console.log("⏩ Already claimed, showing modal with promo code:", discount.promoCode || activatedPromoCode);
+        setShowPromoModal(true);
+        return;
+      }
+
+      console.log("🔄 Claimed without promo code, reactivating to fetch fresh code:", discount.id);
+      await activateDiscount(discount.id);
       return;
     }
     
@@ -413,6 +413,7 @@ export default function DiscountDetailPage() {
     if (!discount) return;
     
     console.log("🔄 Activating discount/option:", idToActivate);
+    const wasClaimed = isClaimed;
     setIsClaimed(true);
     
     try {
@@ -450,17 +451,16 @@ export default function DiscountDetailPage() {
           ...discount,
           promoCode: finalPromoCode,
         });
+        // Показываем модальное окно только когда есть код/баркод
+        setShowPromoModal(true);
       } else {
         console.log("⚠️ No promo code available after activation");
+        alert("Не удалось получить промокод от BestBenefits. Попробуйте снова через несколько секунд.");
       }
-      
-      // Показываем модальное окно с результатом
-      setShowPromoModal(true);
     } catch (error) {
       console.error("❌ Failed to activate:", error);
-      setIsClaimed(false);
-      // Показываем модальное окно даже при ошибке
-      setShowPromoModal(true);
+      setIsClaimed(wasClaimed);
+      alert("Ошибка при получении промокода. Попробуйте еще раз.");
     }
   };
 
@@ -999,7 +999,7 @@ export default function DiscountDetailPage() {
                     : "bg-rose-600 hover:bg-rose-700"
                 }`}
               >
-                {isClaimed ? (
+                {isClaimed && hasPromoCode ? (
                   <>
                     <span>Открыть промокод</span>
                     <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1025,7 +1025,7 @@ export default function DiscountDetailPage() {
               </button>
 
               {/* Кнопка "Получить новый" для уже активированных скидок */}
-              {isClaimed && (
+              {isClaimed && hasPromoCode && (
                 <button
                   onClick={handleGetNewPromoCode}
                   className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-blue-600 bg-transparent px-4 py-3 text-base font-semibold text-blue-600 transition hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:ring-offset-gray-800 sm:px-6 sm:py-4 sm:text-lg"
@@ -1038,7 +1038,7 @@ export default function DiscountDetailPage() {
               )}
 
               <p className="text-center text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-                {isClaimed
+                {isClaimed && hasPromoCode
                   ? "Нажмите «Получить новый» для генерации нового промокода"
                   : discount.options && discount.options.length > 0
                     ? `Доступно ${discount.options.length} ${discount.options.length === 1 ? 'вариант' : discount.options.length < 5 ? 'варианта' : 'вариантов'} скидки`

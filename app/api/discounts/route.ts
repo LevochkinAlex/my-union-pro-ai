@@ -131,12 +131,12 @@ export async function GET(request: NextRequest) {
         try {
           const user = await prisma.user.findUnique({
             where: { id: session.user.id },
-            select: { bestBenefitsUserId: true, bestBenefitsPassword: true }
+            select: { email: true, bestBenefitsUserId: true, bestBenefitsPassword: true }
           });
           
-          if (user?.bestBenefitsPassword && user?.bestBenefitsUserId) {
+          if (user?.bestBenefitsPassword && user?.email) {
             const password = decryptPassword(user.bestBenefitsPassword);
-            const userToken = await getUserBestBenefitsToken(user.bestBenefitsUserId, password);
+            const userToken = await getUserBestBenefitsToken(user.email, password);
             
             const response = await fetch(`https://bestbenefits.ru/api/products/${discount.id}`, {
               headers: {

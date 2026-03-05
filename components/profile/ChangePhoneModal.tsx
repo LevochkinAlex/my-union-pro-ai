@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui/modal";
-import PhoneInput from "@/components/form/PhoneInput";
-import MergeAccountsModal from "./MergeAccountsModal";
+import { useSession } from "next-auth/react";
 
 interface ChangePhoneModalProps {
   isOpen: boolean;
@@ -12,28 +11,9 @@ interface ChangePhoneModalProps {
   onPhoneChanged: (newPhone: string) => void;
 }
 
-type Step = "phone" | "sms" | "merge";
-
-interface AccountData {
-  id: string;
-  phone: string | null;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  middleName: string | null;
-  dateOfBirth: Date | null;
-  address: string | null;
-  jobTitle: string | null;
-  profession: string | null;
-  education: string | null;
-  avatarUrl: string | null;
-  membershipStatus: string | null;
-  unionCardNumber: string | null;
-  organizationName: string | null;
-  createdAt: Date;
-  documentsCount?: number;
-  sessionsCount?: number;
-}
+const TELEGRAM_BOT_USERNAME = "myunionpro_bot";
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLL_TIME_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function ChangePhoneModal({
   isOpen,
@@ -41,356 +21,133 @@ export default function ChangePhoneModal({
   currentPhone,
   onPhoneChanged,
 }: ChangePhoneModalProps) {
-  const [step, setStep] = useState<Step>("phone");
-  const [newPhone, setNewPhone] = useState("");
-  const [smsCode, setSmsCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const { data: session } = useSession();
+  const [step, setStep] = useState<"prompt" | "waiting">("prompt");
   const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState(0);
-  
-  // Данные для слияния
-  const [currentAccount, setCurrentAccount] = useState<AccountData | null>(null);
-  const [existingAccount, setExistingAccount] = useState<AccountData | null>(null);
-  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [deepLink, setDeepLink] = useState("");
 
-  // Сброс при открытии
   useEffect(() => {
-    if (isOpen) {
-      setStep("phone");
-      setNewPhone("");
-      setSmsCode("");
+    if (isOpen && session?.user?.id) {
+      setStep("prompt");
       setError("");
-      setCountdown(0);
+      setDeepLink(
+        `https://t.me/${TELEGRAM_BOT_USERNAME}?start=change_phone_${session.user.id}`
+      );
     }
-  }, [isOpen]);
+  }, [isOpen, session?.user?.id]);
 
-  // Таймер для повторной отправки SMS
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
+  const pollForPhoneChange = useCallback(async () => {
+    if (!session?.user?.id) return;
+    const startedAt = Date.now();
 
-  const handlePhoneChange = (value: string | React.ChangeEvent<HTMLInputElement>) => {
-    if (typeof value === 'string') {
-      setNewPhone(value);
-    } else {
-      setNewPhone(value.target.value);
-    }
-    setError("");
-  };
-
-  // Шаг 1: Проверка номера и отправка SMS
-  const handleCheckPhone = async () => {
-    if (!newPhone || newPhone.length < 16) {
-      setError("Введите корректный номер телефона");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      // Проверяем номер
-      const checkResponse = await fetch("/api/user/check-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: newPhone }),
-      });
-
-      const checkData = await checkResponse.json();
-
-      if (checkData.status === "same") {
-        setError("Этот номер уже привязан к вашему аккаунту");
-        setLoading(false);
+    const poll = async () => {
+      if (Date.now() - startedAt > MAX_POLL_TIME_MS) {
+        setError("Время ожидания истекло. Попробуйте снова.");
+        setStep("prompt");
         return;
       }
 
-      if (checkData.status === "conflict") {
-        // Сохраняем данные для слияния
-        setCurrentAccount(checkData.currentAccount);
-        setExistingAccount(checkData.existingAccount);
+      try {
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const data = await res.json();
+          const newPhone = data.phone || data.user?.phone;
+          if (newPhone && newPhone !== currentPhone) {
+            onPhoneChanged(newPhone);
+            onClose();
+            return;
+          }
+        }
+      } catch {
+        // network error, keep polling
       }
 
-      // Отправляем SMS
-      const smsResponse = await fetch("/api/auth/sms/send-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: newPhone }),
-      });
+      setTimeout(poll, POLL_INTERVAL_MS);
+    };
 
-      if (!smsResponse.ok) {
-        const smsError = await smsResponse.json();
-        throw new Error(smsError.error || "Не удалось отправить SMS");
-      }
+    poll();
+  }, [session?.user?.id, currentPhone, onPhoneChanged, onClose]);
 
-      setStep("sms");
-      setCountdown(60);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Произошла ошибка");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Шаг 2: Проверка SMS кода
-  const handleVerifySms = async () => {
-    if (smsCode.length !== 4) {
-      setError("Введите 4-значный код");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const response = await fetch("/api/auth/sms/verify-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: newPhone, pin: smsCode }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Неверный код");
-      }
-
-      // Код верный - проверяем нужно ли слияние
-      if (existingAccount) {
-        setShowMergeModal(true);
-      } else {
-        // Просто меняем номер
-        await updatePhone();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Неверный код");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Обновление номера (без слияния)
-  const updatePhone = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: newPhone }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Не удалось обновить номер");
-      }
-
-      onPhoneChanged(newPhone);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Повторная отправка SMS
-  const handleResendSms = async () => {
-    if (countdown > 0) return;
-    
-    setLoading(true);
-    try {
-      const response = await fetch("/api/auth/sms/send-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: newPhone }),
-      });
-
-      if (response.ok) {
-        setCountdown(60);
-        setError("");
-      }
-    } catch (err) {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // После успешного слияния
-  const handleMergeComplete = (newPhone: string) => {
-    setShowMergeModal(false);
-    onPhoneChanged(newPhone);
-    onClose();
+  const handleOpenTelegram = () => {
+    setStep("waiting");
+    window.open(deepLink, "_blank");
+    pollForPhoneChange();
   };
 
   return (
-    <>
-      <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
-        <div className="p-6">
-          {/* Header */}
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              {step === "phone" && "Изменить номер телефона"}
-              {step === "sms" && "Подтверждение"}
-            </h2>
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
+      <div className="p-6">
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            Изменить номер телефона
+          </h2>
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              Текущий номер: <strong>{currentPhone || "не указан"}</strong>
+            </p>
           </div>
 
-        {/* Content */}
-        <div className="px-6 py-6">
-          {step === "phone" && (
-            <div className="space-y-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  📱 Текущий номер: <strong>{currentPhone}</strong>
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Новый номер телефона
-                </label>
-                <PhoneInput
-                  value={newPhone}
-                  onChange={handlePhoneChange}
-                  placeholder="+7 (___) ___-__-__"
-                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-
-              {error && (
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              )}
-
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                На новый номер будет отправлен SMS-код для подтверждения. 
-                Если номер уже привязан к другому аккаунту, вы сможете объединить аккаунты.
+          {step === "prompt" && (
+            <>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Для смены номера телефона откройте Telegram и поделитесь новым номером через бот.
               </p>
-            </div>
-          )}
-
-          {step === "sms" && (
-            <div className="space-y-4">
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  ✉️ SMS-код отправлен на <strong>{newPhone}</strong>
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Введите код из SMS
-                </label>
-                <input
-                  type="text"
-                  value={smsCode}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                    setSmsCode(value);
-                    setError("");
-                  }}
-                  placeholder="____"
-                  maxLength={4}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-center text-2xl tracking-[0.5em] font-mono"
-                  autoFocus
-                />
-              </div>
 
               {error && (
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               )}
 
-              <div className="flex items-center justify-between text-sm">
-                <button
-                  onClick={() => setStep("phone")}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  ← Изменить номер
-                </button>
-                <button
-                  onClick={handleResendSms}
-                  disabled={countdown > 0 || loading}
-                  className="text-blue-600 hover:text-blue-800 dark:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {countdown > 0 ? `Отправить снова (${countdown}с)` : "Отправить снова"}
-                </button>
+              <button
+                type="button"
+                onClick={handleOpenTelegram}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#0088cc] hover:bg-[#0077b5] text-white font-medium rounded-xl transition-colors"
+              >
+                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.1.154.234.17.331.015.098.034.321.019.496z"/>
+                </svg>
+                Открыть Telegram
+              </button>
+            </>
+          )}
+
+          {step === "waiting" && (
+            <>
+              <div className="text-center py-4">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-3">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-r-transparent" />
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Ожидаем подтверждение номера в Telegram...
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                  Нажмите кнопку &laquo;Поделиться номером&raquo; в боте
+                </p>
               </div>
 
-              {existingAccount && (
-                <div className="mt-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                  <p className="text-sm text-orange-800 dark:text-orange-200">
-                    ⚠️ Этот номер привязан к другому аккаунту ({existingAccount.firstName} {existingAccount.lastName}).
-                    После подтверждения кода вы сможете объединить аккаунты.
-                  </p>
-                </div>
-              )}
-            </div>
+              <a
+                href={deepLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 underline"
+              >
+                Открыть Telegram снова
+              </a>
+            </>
           )}
         </div>
 
-          {/* Footer */}
-          <div className="mt-6 flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-            >
-              Отмена
-            </button>
-            
-            {step === "phone" && (
-              <button
-                onClick={handleCheckPhone}
-                disabled={loading || !newPhone}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Отправка...
-                  </>
-                ) : (
-                  "Получить код"
-                )}
-              </button>
-            )}
-
-            {step === "sms" && (
-              <button
-                onClick={handleVerifySms}
-                disabled={loading || smsCode.length !== 4}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Проверка...
-                  </>
-                ) : (
-                  "Подтвердить"
-                )}
-              </button>
-            )}
-          </div>
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+          >
+            {step === "waiting" ? "Закрыть" : "Отмена"}
+          </button>
         </div>
-      </Modal>
-
-      {/* Merge Modal */}
-      {showMergeModal && currentAccount && existingAccount && (
-        <MergeAccountsModal
-          isOpen={showMergeModal}
-          onClose={() => setShowMergeModal(false)}
-          currentAccount={currentAccount}
-          existingAccount={existingAccount}
-          newPhone={newPhone}
-          onMergeComplete={handleMergeComplete}
-        />
-      )}
-    </>
+      </div>
+    </Modal>
   );
 }
-

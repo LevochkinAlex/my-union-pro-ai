@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     let userToken: string;
     try {
-      userToken = await getUserBestBenefitsToken(user.bestBenefitsUserId, password);
+      userToken = await getUserBestBenefitsToken(user.email, password);
     } catch (error) {
       console.error("[refresh-promo] Failed to get user token:", error);
       return NextResponse.json({ error: "Ошибка получения токена", promoCode: null }, { status: 200 });

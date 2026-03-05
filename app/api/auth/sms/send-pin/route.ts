@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendPINViaSMS } from "@/lib/exolve-sms";
 import { sendTelegramMessage } from "@/lib/telegram-bot";
 import { sendPINViaMax } from "@/lib/max-messenger";
 import crypto from "crypto";
@@ -184,56 +183,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3) Если мессенджеры не сработали — отправляем SMS
+    // 3) SMS fallback отключён — Exolve деактивирован
     if (!deliverySuccess) {
-      console.log("[2FA Auth] 📨 Отправка PIN-кода через SMS на номер:", normalizedPhone);
-      console.log("[2FA Auth] EXOLVE_API_KEY установлен:", !!process.env.EXOLVE_API_KEY);
-      
-      const smsResult = await sendPINViaSMS(normalizedPhone, pinCode);
-      
-      if (smsResult.success) {
-        console.log("[2FA Auth] ✅ PIN-код успешно отправлен через SMS");
-        deliveryMethod = "sms";
-        deliverySuccess = true;
-      } else {
-        console.error("[2FA Auth] ❌ SMS не сработал:", {
-          error: smsResult.error,
-          details: smsResult.details,
-        });
-        
-        // Более информативное сообщение об ошибке
-        let errorMessage = "Не удалось отправить код";
-        let userFriendlyMessage = "Проверьте правильность номера телефона и попробуйте позже";
-        
-        if (smsResult.error?.includes("не настроен") || smsResult.error?.includes("не установлен")) {
-          errorMessage = "Сервис отправки SMS временно недоступен. Обратитесь в поддержку.";
-          userFriendlyMessage = "Сервис отправки SMS временно недоступен. Пожалуйста, обратитесь в поддержку или попробуйте позже.";
-        } else if (smsResult.error?.toLowerCase().includes("incorrect customer state")) {
-          errorMessage = "Проблема с аккаунтом SMS-сервиса";
-          userFriendlyMessage = "Сервис отправки SMS временно недоступен. Пожалуйста, обратитесь в поддержку: support@myunion.pro";
-        } else if (smsResult.error?.toLowerCase().includes("insufficient funds") || smsResult.error?.toLowerCase().includes("баланс")) {
-          errorMessage = "Недостаточно средств на счете SMS-сервиса";
-          userFriendlyMessage = "Сервис отправки SMS временно недоступен. Пожалуйста, обратитесь в поддержку: support@myunion.pro";
-        } else if (smsResult.error) {
-          errorMessage = `Ошибка отправки SMS: ${smsResult.error}`;
-          // Для других ошибок показываем общее сообщение
-          if (process.env.NODE_ENV === "development") {
-            userFriendlyMessage = `Ошибка: ${smsResult.error}`;
-          }
-        }
-        
-        return NextResponse.json(
-          {
-            error: errorMessage,
-            message: userFriendlyMessage,
-            details: process.env.NODE_ENV === "development" ? {
-              error: smsResult.error,
-              details: smsResult.details,
-            } : undefined,
-          },
-          { status: 500 }
-        );
-      }
+      console.log("[2FA Auth] ❌ Мессенджеры недоступны, SMS отключён");
+      return NextResponse.json(
+        {
+          error: "Не удалось отправить код",
+          message: "Привяжите Telegram для входа или используйте email. SMS-авторизация отключена.",
+        },
+        { status: 503 }
+      );
     }
 
     const messages = {

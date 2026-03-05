@@ -42,10 +42,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Создаем строку для проверки подписи
+    const source = searchParams.get("source");
+    const isWidgetAuth = source === "widget";
+
+    // Создаем строку для проверки подписи (исключаем hash и наш параметр source)
     const dataCheckArray: string[] = [];
     searchParams.forEach((value, key) => {
-      if (key !== "hash") {
+      if (key !== "hash" && key !== "source") {
         dataCheckArray.push(`${key}=${value}`);
       }
     });
@@ -364,23 +367,24 @@ export async function GET(request: NextRequest) {
       baseUrl = `${proto}://${host}`;
     }
 
-    // Отправляем приветственное сообщение в Telegram с правильным baseUrl
+    if (isWidgetAuth) {
+      // Widget flow: прямой redirect с токеном — без сообщений в бот
+      const redirectUrl = new URL(`/auth/telegram/success?token=${loginToken}`, baseUrl);
+      console.log("[Telegram Login] Widget auth → прямой redirect:", redirectUrl.toString());
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // Bot flow (legacy): отправляем сообщение в бот, redirect с check=true
     const { sendNewUserWelcome, sendReturningUserWelcome, sendTelegramMessage } = await import("@/lib/telegram-bot");
     
-    // Если у пользователя нет номера телефона - запрашиваем его
     if (!user.phone) {
-      console.log("[Telegram Login] У пользователя нет номера, запрашиваем");
+      console.log("[Telegram Login] У пользователя нет номера, запрашиваем через бот");
       
       await sendTelegramMessage(
         id,
-        `👋 <b>Добро пожаловать в МойСоюз!</b>
-
-Для завершения регистрации нам нужен ваш номер телефона.
-
-Поделитесь номером телефона, нажав кнопку ниже:`,
+        `👋 <b>Добро пожаловать в МойСоюз!</b>\n\nДля завершения регистрации нам нужен ваш номер телефона.\n\nПоделитесь номером телефона, нажав кнопку ниже:`,
       );
       
-      // Отправляем кнопку для шаринга телефона
       const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
       if (TELEGRAM_BOT_TOKEN) {
         const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -392,14 +396,7 @@ export async function GET(request: NextRequest) {
             text: "Нажмите кнопку, чтобы поделиться номером:",
             parse_mode: "HTML",
             reply_markup: {
-              keyboard: [
-                [
-                  {
-                    text: "📱 Поделиться номером телефона",
-                    request_contact: true,
-                  }
-                ]
-              ],
+              keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
               one_time_keyboard: true,
               resize_keyboard: true,
             },
@@ -407,22 +404,13 @@ export async function GET(request: NextRequest) {
         });
       }
     } else if (isNewUser) {
-      console.log("[Telegram Login] Отправляем приветствие новому пользователю");
       await sendNewUserWelcome(id, loginToken, first_name || undefined, baseUrl);
     } else {
-      console.log("[Telegram Login] Отправляем приветствие существующему пользователю");
       await sendReturningUserWelcome(id, loginToken, first_name || undefined, baseUrl);
     }
     
-    // Редиректим на страницу с инструкцией проверить Telegram
-    // НЕ передаем токен в URL, чтобы избежать двойного использования
-    // Пользователь должен кликнуть на кнопку в боте для входа
     const redirectUrl = new URL(`/auth/telegram/success?check=true`, baseUrl);
-    
-    console.log("[Telegram Login] Редирект на:", redirectUrl.toString());
-    console.log("[Telegram Login] Host:", host, "isLocalhost:", isLocalhost);
-    console.log("[Telegram Login] Токен отправлен в Telegram");
-    
+    console.log("[Telegram Login] Bot flow → redirect:", redirectUrl.toString());
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error("[Telegram Login] Ошибка:", error);

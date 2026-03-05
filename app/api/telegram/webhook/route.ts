@@ -745,6 +745,47 @@ ${loginUrl}
       return NextResponse.json({ ok: true });
     }
 
+    // /start change_phone_USERID — смена телефона из профиля через Telegram contact sharing
+    if (trimmedText.startsWith("/start change_phone_")) {
+      const targetUserId = trimmedText.replace("/start change_phone_", "").trim();
+      console.log("[Telegram Webhook] Запрос смены телефона для userId:", targetUserId);
+
+      const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+
+      if (!targetUser) {
+        await sendTelegramMessage(chatId, "Пользователь не найден. Попробуйте снова через сайт.");
+        return NextResponse.json({ ok: true });
+      }
+
+      // Привязываем chatId к пользователю, если ещё не привязан
+      if (!targetUser.telegramChatId || targetUser.telegramChatId !== chatId) {
+        await prisma.user.update({
+          where: { id: targetUserId },
+          data: { telegramChatId: chatId, telegramUsername: from?.username || targetUser.telegramUsername || null },
+        });
+      }
+
+      const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+      if (TELEGRAM_BOT_TOKEN) {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `📱 <b>Обновление номера телефона</b>\n\nНажмите кнопку ниже, чтобы поделиться актуальным номером:`,
+            parse_mode: "HTML",
+            reply_markup: {
+              keyboard: [[{ text: "📱 Поделиться номером телефона", request_contact: true }]],
+              one_time_keyboard: true,
+              resize_keyboard: true,
+            },
+          }),
+        });
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
     // Команда /start login - авторизация через кнопку в боте
     // ВАЖНО: обрабатываем до общего /start, иначе "/start login" попадет в ветку isStartCommand.
     if (trimmedText === "/start login" || trimmedText === "/login") {
