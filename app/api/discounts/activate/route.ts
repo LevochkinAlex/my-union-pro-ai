@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
     // Attempt to activate on BestBenefits (if user is synced)
     let bestBenefitsActivated = false;
     let promoCode: string | null = null;
+    let cardBased = false;
+    let activationMessage: string | null = null;
 
     if (user.bestBenefitsUserId) {
       console.log(`[activate-discount] Attempting BestBenefits activation:`, {
@@ -91,6 +93,8 @@ export async function POST(request: NextRequest) {
 
       bestBenefitsActivated = activationResult.success === true;
       promoCode = activationResult.promoCode || null;
+      cardBased = activationResult.cardBased === true;
+      activationMessage = activationResult.message || null;
 
       console.log(`[activate-discount] Activation result:`, {
         success: activationResult.success,
@@ -117,6 +121,19 @@ export async function POST(request: NextRequest) {
         promoCode = existingPromoCode;
         console.log(`[activate-discount] Using existing promo code from DB:`, promoCode);
       }
+    }
+
+    // Если BB-активация явно не удалась и кода нет — это ошибка, а не "карточка"
+    if (user.bestBenefitsUserId && !bestBenefitsActivated && !promoCode) {
+      return NextResponse.json(
+        {
+          error: "Не удалось получить промокод от BestBenefits",
+          details: activationMessage || "BestBenefits не выдал промокод. Попробуйте позже.",
+          bestBenefitsActivated: false,
+          promoCode: null,
+        },
+        { status: 502 }
+      );
     }
 
     // Получаем информацию о скидке для validUntil
@@ -194,7 +211,9 @@ export async function POST(request: NextRequest) {
       activatedOptionId: discountId !== discountIdForDb ? discountId : null, // ID активированного варианта
       bestBenefitsActivated,
       promoCode: promoCode,
+      cardBased,
       validUntil: validUntil,
+      activationMessage,
       message: bestBenefitsActivated
         ? "Скидка активирована в BestBenefits"
         : "Скидка сохранена локально",

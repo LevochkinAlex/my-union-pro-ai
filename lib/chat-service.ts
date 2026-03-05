@@ -488,15 +488,19 @@ export async function getUserChats(
     }
   }
   
+  // Удаляем дубликаты приватных чатов с одним и тем же собеседником.
+  // В базе могли остаться исторические дубли из-за гонок создания.
+  const dedupedChats = dedupePrivateChatsByPeer(formattedChats);
+
   // Сохраняем в кэш (TTL: 30 секунд)
   try {
-    await cacheSet(cacheKey, formattedChats, 30);
+    await cacheSet(cacheKey, dedupedChats, 30);
   } catch (error) {
     // Игнорируем ошибки кэша
     console.warn('[chat-service] Cache write error:', error);
   }
   
-  return formattedChats;
+  return dedupedChats;
 }
 
 /**
@@ -580,22 +584,109 @@ export async function getOrCreatePrivateChat(
     ? [userId1, userId2] 
     : [userId2, userId1];
 
-  // Ищем существующий чат
-  let chat = await prisma.chat.findFirst({
+  // Ищем существующий чат (строго: только эти 2 активных участника).
+  const existingChat = await findExactPrivateChat(prisma, firstUserId, secondUserId);
+  if (existingChat) {
+    return { chat: existingChat, isNew: false };
+  }
+
+  // Создаем новый чат с использованием ChatParticipant
+  try {
+    console.log(`[chat-service] Creating new PRIVATE chat between ${firstUserId} and ${secondUserId}`);
+    
+    // Проверяем, что оба пользователя существуют
+    const [user1, user2] = await Promise.all([
+      prisma.user.findUnique({ where: { id: firstUserId }, select: { id: true } }),
+      prisma.user.findUnique({ where: { id: secondUserId }, select: { id: true } }),
+    ]);
+    
+    if (!user1 || !user2) {
+      throw new Error(`One or both users not found: ${firstUserId}, ${secondUserId}`);
+    }
+    
+    // Блокируем пару пользователей на время транзакции,
+    // чтобы параллельные запросы не создали 2-3 одинаковых чата.
+    const lockKey = `private-chat:${firstUserId}:${secondUserId}`;
+    const txResult = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
+      // Повторная проверка после захвата блокировки (double-check).
+      const found = await findExactPrivateChat(tx, firstUserId, secondUserId);
+      if (found) {
+        return { chat: found, isNew: false as const };
+      }
+
+      const created = await tx.chat.create({
+        data: {
+          type: "PRIVATE",
+          participants: {
+            create: [
+              { userId: firstUserId, role: "member", invitedById: firstUserId },
+              { userId: secondUserId, role: "member", invitedById: firstUserId },
+            ],
+          },
+        },
+        include: {
+          participants: {
+            where: { leftAt: null },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          },
+        },
+      });
+      return { chat: created, isNew: true as const };
+    });
+    const { chat, isNew } = txResult;
+    console.log(`[chat-service] Using private chat ${chat.id}, isNew=${isNew}`);
+    
+    // Инвалидируем кэш для обоих пользователей
+    await Promise.all([
+      invalidateUserChatsCache(firstUserId),
+      invalidateUserChatsCache(secondUserId),
+    ]).catch(err => console.warn('[chat-service] Cache invalidation error:', err));
+
+    return { chat, isNew };
+  } catch (error: any) {
+    console.error('[chat-service] Error creating chat:', {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack?.substring(0, 500),
+    });
+    throw error;
+  }
+
+  // unreachable, но нужен для полноты типов
+  throw new Error("Failed to create or get private chat");
+}
+
+function isExactPrivatePair(chat: any, firstUserId: string, secondUserId: string): boolean {
+  const active = (chat.participants || []).filter((p: any) => p.leftAt == null);
+  if (active.length !== 2) return false;
+  const ids = new Set(active.map((p: any) => p.userId));
+  return ids.has(firstUserId) && ids.has(secondUserId);
+}
+
+async function findExactPrivateChat(
+  client: Prisma.TransactionClient | typeof prisma,
+  firstUserId: string,
+  secondUserId: string
+): Promise<any | null> {
+  const candidates = await client.chat.findMany({
     where: {
       type: "PRIVATE",
-      // Оба пользователя - участники
       AND: [
-        {
-          participants: {
-            some: { userId: firstUserId, leftAt: null },
-          },
-        },
-        {
-          participants: {
-            some: { userId: secondUserId, leftAt: null },
-          },
-        },
+        { participants: { some: { userId: firstUserId, leftAt: null } } },
+        { participants: { some: { userId: secondUserId, leftAt: null } } },
       ],
     },
     include: {
@@ -613,73 +704,50 @@ export async function getOrCreatePrivateChat(
           },
         },
       },
+      lastMessage: {
+        select: { id: true, createdAt: true },
+      },
     },
+    orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
+    take: 20,
   });
 
-  if (chat) {
-    return { chat, isNew: false };
-  }
+  return candidates.find((c) => isExactPrivatePair(c, firstUserId, secondUserId)) ?? null;
+}
 
-  // Создаем новый чат с использованием ChatParticipant
-  try {
-    console.log(`[chat-service] Creating new PRIVATE chat between ${firstUserId} and ${secondUserId}`);
-    
-    // Проверяем, что оба пользователя существуют
-    const [user1, user2] = await Promise.all([
-      prisma.user.findUnique({ where: { id: firstUserId }, select: { id: true } }),
-      prisma.user.findUnique({ where: { id: secondUserId }, select: { id: true } }),
-    ]);
-    
-    if (!user1 || !user2) {
-      throw new Error(`One or both users not found: ${firstUserId}, ${secondUserId}`);
+function dedupePrivateChatsByPeer(chats: ChatInfo[]): ChatInfo[] {
+  const byPeer = new Map<string, ChatInfo>();
+  const passthrough: ChatInfo[] = [];
+
+  for (const chat of chats) {
+    if (chat.type !== "PRIVATE") {
+      passthrough.push(chat);
+      continue;
     }
-    
-    chat = await prisma.chat.create({
-      data: {
-        type: "PRIVATE",
-        // Создаем участников через ChatParticipant
-        participants: {
-          create: [
-            { userId: firstUserId, role: "member", invitedById: firstUserId },
-            { userId: secondUserId, role: "member", invitedById: firstUserId },
-          ],
-        },
-      },
-      include: {
-        participants: {
-          where: { leftAt: null },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-      },
-    });
-    console.log(`[chat-service] Successfully created chat ${chat.id}`);
-    
-    // Инвалидируем кэш для обоих пользователей
-    await Promise.all([
-      invalidateUserChatsCache(firstUserId),
-      invalidateUserChatsCache(secondUserId),
-    ]).catch(err => console.warn('[chat-service] Cache invalidation error:', err));
-  } catch (error: any) {
-    console.error('[chat-service] Error creating chat:', {
-      message: error?.message,
-      code: error?.code,
-      meta: error?.meta,
-      stack: error?.stack?.substring(0, 500),
-    });
-    throw error;
+
+    const peerId = chat.otherUser?.id;
+    // Если peer не определен, не рискуем сливать записи.
+    if (!peerId) {
+      passthrough.push(chat);
+      continue;
+    }
+
+    const prev = byPeer.get(peerId);
+    if (!prev) {
+      byPeer.set(peerId, chat);
+      continue;
+    }
+
+    const prevTs = prev.lastMessageAt ? new Date(prev.lastMessageAt).getTime() : new Date(prev.createdAt).getTime();
+    const currTs = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : new Date(chat.createdAt).getTime();
+    if (currTs > prevTs) {
+      byPeer.set(peerId, chat);
+    }
   }
 
-  return { chat, isNew: true };
+  return [...passthrough, ...Array.from(byPeer.values())].sort(
+    (a, b) => new Date(b.lastMessageAt ?? b.createdAt).getTime() - new Date(a.lastMessageAt ?? a.createdAt).getTime()
+  );
 }
 
 /**

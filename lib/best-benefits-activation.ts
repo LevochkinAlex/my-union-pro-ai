@@ -23,6 +23,7 @@ interface ActivationResponse {
   message?: string;
   success?: boolean;
   promoCode?: string;
+  cardBased?: boolean;
   data?: {
     activated: boolean;
     activatedAt?: string;
@@ -135,26 +136,35 @@ export async function activateBestBenefitsDiscount(
     //     "end_date": "2024-11-19T10:00:00Z"
     //   }
     // }
-    const promoCode = data.data?.code || null;
+    const rawCode = data.data?.code || data.data?.promo_code || data.data?.promoCode || null;
+    const promoCode =
+      typeof rawCode === "string" &&
+      rawCode.trim().length > 0 &&
+      rawCode !== "Промокод деактивирован" &&
+      rawCode.toLowerCase() !== "deactivated"
+        ? rawCode.trim()
+        : null;
     
     console.log("[BestBenefits Activation] Extracted promo code:", promoCode);
     
-    if (data.status === "success" && promoCode) {
+    if (data.status === "success") {
+      // Некоторые предложения в BB активируются без буквенно-цифрового кода (по карточке/купону)
       return {
         status: "success",
         success: true,
-        promoCode: promoCode,
-        message: data.message || "Промокод получен",
+        promoCode,
+        cardBased: !promoCode,
+        message: data.message || (promoCode ? "Промокод получен" : "Скидка активирована"),
         data: data.data,
       };
-    } else {
-      // Ошибка активации (400 - лимит купонов, коды закончились и т.д.)
-      return {
-        status: "error",
-        success: false,
-        message: data.message || "Не удалось получить промокод",
-      };
     }
+
+    // Ошибка активации (400 - лимит купонов, коды закончились и т.д.)
+    return {
+      status: "error",
+      success: false,
+      message: data.message || "Не удалось получить промокод",
+    };
   } catch (error) {
     console.error("[BestBenefits Activation] Exception:", error);
     if (error instanceof Error) {
@@ -579,6 +589,8 @@ export async function getUserActivatedDiscounts(
 export async function safeActivateDiscount(params: ActivateDiscountParams): Promise<{
   success: boolean;
   promoCode?: string | null;
+  cardBased?: boolean;
+  message?: string;
 }> {
   try {
     console.log("[BestBenefits Activation] Starting activation for discount:", params.discountId);
@@ -601,6 +613,8 @@ export async function safeActivateDiscount(params: ActivateDiscountParams): Prom
       return {
         success: true,
         promoCode: result.promoCode || null,
+        cardBased: result.cardBased === true,
+        message: result.message,
       };
     }
     
@@ -615,6 +629,8 @@ export async function safeActivateDiscount(params: ActivateDiscountParams): Prom
     return {
       success: false,
       promoCode: result.promoCode || null, // Может быть null если ошибка
+      cardBased: false,
+      message: result.message,
     };
   } catch (error) {
     console.error("[BestBenefits Activation] ❌ Exception during activation:", error);
@@ -628,6 +644,8 @@ export async function safeActivateDiscount(params: ActivateDiscountParams): Prom
     return {
       success: false,
       promoCode: null,
+      cardBased: false,
+      message: error instanceof Error ? error.message : "Activation exception",
     };
   }
 }

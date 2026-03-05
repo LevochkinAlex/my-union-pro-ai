@@ -352,10 +352,18 @@ export default function DiscountDetailPage() {
       return;
     }
     
-    // Если уже активирована — показываем модалку (с промокодом или карточку)
+    // Если уже активирована:
+    // - с промокодом: открываем сразу
+    // - без промокода: пробуем перевыпустить/получить код заново
     if (isClaimed) {
-      console.log("⏩ Already claimed, showing modal:", { hasPromoCode, promoCode: discount.promoCode || activatedPromoCode });
-      setShowPromoModal(true);
+      if (hasPromoCode) {
+        console.log("⏩ Already claimed, showing modal with promo code");
+        setShowPromoModal(true);
+        return;
+      }
+
+      console.log("🔄 Already claimed without promo code, trying to re-activate");
+      await activateDiscount(discount.id);
       return;
     }
     
@@ -420,6 +428,11 @@ export default function DiscountDetailPage() {
       const result = await response.json();
       console.log("🎯 ACTIVATION API RESPONSE:", result);
 
+      if (!response.ok || result?.error) {
+        const reason = result?.details || result?.error || "Не удалось получить промокод от BestBenefits";
+        throw new Error(reason);
+      }
+
       if (result.demoBlocked) {
         setIsClaimed(false);
         alert(result.message ?? "В демо-режиме активация скидок недоступна. Войдите в аккаунт для активации.");
@@ -439,14 +452,17 @@ export default function DiscountDetailPage() {
           ...discount,
           promoCode: finalPromoCode,
         });
-      } else {
+        setShowPromoModal(true);
+      } else if (result.cardBased === true || result.bestBenefitsActivated === true) {
         console.log("ℹ️ Discount activated without promo code (card-based discount)");
+        setShowPromoModal(true);
+      } else {
+        throw new Error(result.activationMessage || "BestBenefits не выдал промокод");
       }
-      setShowPromoModal(true);
     } catch (error) {
       console.error("❌ Failed to activate:", error);
       setIsClaimed(wasClaimed);
-      alert("Ошибка при получении промокода. Попробуйте еще раз.");
+      alert(error instanceof Error ? error.message : "Ошибка при получении промокода. Попробуйте еще раз.");
     }
   };
 
