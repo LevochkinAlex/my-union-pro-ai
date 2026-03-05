@@ -9,8 +9,8 @@ import { getUserBestBenefitsToken } from "@/lib/best-benefits-user-auth";
  * Получить СВЕЖИЙ промокод для активированной скидки.
  *
  * Логика:
- * 1. POST /api/promo — перевыпуск промокода в BestBenefits (основной путь).
- * 2. Если /promo не вернул код — GET /api/received для поиска активного кода.
+ * 1. GET /api/received — ищем уже выданный активный код (без расхода лимита).
+ * 2. Опционально POST /api/promo (только при forceReissue=true).
  * 3. Если ничего нет — возвращаем кэш из БД.
  */
 export async function POST(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { discountId } = body;
+    const { discountId, forceReissue } = body;
 
     if (!discountId) {
       return NextResponse.json({ error: "discountId обязателен" }, { status: 400 });
@@ -62,82 +62,83 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ошибка получения токена", promoCode: null }, { status: 200 });
     }
 
-    console.log(`[refresh-promo] Requesting fresh promo code for discount ${discountId} via POST /api/promo...`);
+    console.log(
+      `[refresh-promo] Refreshing promo for discount ${discountId}, forceReissue=${forceReissue === true}`
+    );
 
-    // ---- Шаг 1: POST /api/promo — перевыпуск промокода ----
+    // ---- Шаг 1: GET /api/received (без перевыпуска) ----
     let freshPromoCode: string | null = null;
     let validUntilDate: Date | null = null;
 
     try {
-      const promoResponse = await fetch("https://bestbenefits.ru/api/promo", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${userToken}`,
-        },
-        body: JSON.stringify({ id: discountIdNum }),
+      const receivedRes = await fetch("https://bestbenefits.ru/api/received?per_page=100", {
+        headers: { Accept: "application/json", Authorization: `Bearer ${userToken}` },
         signal: AbortSignal.timeout(15000),
       });
 
-      const promoText = await promoResponse.text();
-      console.log(`[refresh-promo] POST /api/promo status=${promoResponse.status} body=${promoText}`);
+      if (receivedRes.ok) {
+        const receivedData = await receivedRes.json();
+        const products: any[] = receivedData.data || [];
+        const bbDiscount = products.find((d: any) => d.id === discountIdNum);
 
-      if (promoResponse.ok) {
-        try {
-          const promoData = JSON.parse(promoText);
-          const code = promoData.data?.code;
-          const endDate = promoData.data?.end_date;
-
-          if (code && typeof code === "string" && code !== "Промокод деактивирован") {
-            freshPromoCode = code.trim();
+        if (bbDiscount?.codes && Array.isArray(bbDiscount.codes)) {
+          const now = Date.now();
+          for (const c of bbDiscount.codes) {
+            const code = c?.code;
+            if (!code || code === "Промокод деактивирован") continue;
+            const endDate = c?.end_date;
             if (endDate) {
               const d = new Date(endDate);
-              if (!isNaN(d.getTime()) && d.getTime() >= Date.now()) validUntilDate = d;
+              if (!isNaN(d.getTime()) && d.getTime() < now) continue;
+              validUntilDate = d;
             }
-            console.log(`[refresh-promo] ✅ Got new code from /promo: ${freshPromoCode}`);
+            freshPromoCode = code.trim();
+            console.log(`[refresh-promo] ✅ Found valid code in /received: ${freshPromoCode}`);
+            break;
           }
-        } catch (e) {
-          console.warn("[refresh-promo] Failed to parse /promo response:", e);
         }
       }
     } catch (error) {
-      console.warn("[refresh-promo] POST /api/promo failed:", error);
+      console.warn("[refresh-promo] GET /api/received failed:", error);
     }
 
-    // ---- Шаг 2: Fallback — GET /api/received ----
-    if (!freshPromoCode) {
-      console.log("[refresh-promo] Falling back to GET /api/received...");
+    // ---- Шаг 2: POST /api/promo (только по явному запросу) ----
+    if (!freshPromoCode && forceReissue === true) {
       try {
-        const receivedRes = await fetch("https://bestbenefits.ru/api/received?per_page=100", {
-          headers: { Accept: "application/json", Authorization: `Bearer ${userToken}` },
+        const promoResponse = await fetch("https://bestbenefits.ru/api/promo", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${userToken}`,
+          },
+          body: JSON.stringify({ id: discountIdNum }),
           signal: AbortSignal.timeout(15000),
         });
 
-        if (receivedRes.ok) {
-          const receivedData = await receivedRes.json();
-          const products: any[] = receivedData.data || [];
-          const bbDiscount = products.find((d: any) => d.id === discountIdNum);
+        const promoText = await promoResponse.text();
+        console.log(`[refresh-promo] POST /api/promo status=${promoResponse.status} body=${promoText}`);
 
-          if (bbDiscount?.codes && Array.isArray(bbDiscount.codes)) {
-            const now = Date.now();
-            for (const c of bbDiscount.codes) {
-              const code = c?.code;
-              if (!code || code === "Промокод деактивирован") continue;
-              const endDate = c?.end_date;
+        if (promoResponse.ok) {
+          try {
+            const promoData = JSON.parse(promoText);
+            const code = promoData.data?.code;
+            const endDate = promoData.data?.end_date;
+
+            if (code && typeof code === "string" && code !== "Промокод деактивирован") {
+              freshPromoCode = code.trim();
               if (endDate) {
                 const d = new Date(endDate);
-                if (!isNaN(d.getTime()) && d.getTime() < now) continue;
-                validUntilDate = d;
+                if (!isNaN(d.getTime()) && d.getTime() >= Date.now()) validUntilDate = d;
               }
-              freshPromoCode = code.trim();
-              console.log(`[refresh-promo] ✅ Found valid code in /received: ${freshPromoCode}`);
-              break;
+              console.log(`[refresh-promo] ✅ Got new code from /promo: ${freshPromoCode}`);
             }
+          } catch (e) {
+            console.warn("[refresh-promo] Failed to parse /promo response:", e);
           }
         }
       } catch (error) {
-        console.warn("[refresh-promo] GET /api/received failed:", error);
+        console.warn("[refresh-promo] POST /api/promo failed:", error);
       }
     }
 
