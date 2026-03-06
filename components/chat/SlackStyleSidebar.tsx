@@ -145,7 +145,10 @@ interface UserSearchResult {
 
 function getChatDisplayName(chat: Chat, currentUserId: string | null): string {
   if (chat.type === "GROUP" || chat.type === "CHANNEL") {
-    return chat.name || (chat.type === "CHANNEL" ? "Канал" : "Групповой чат");
+    // Для канала приоритет: displayName из API (название ППО), затем name
+    const fromApi = (chat as any).displayName ?? (chat.otherUser as any)?.lastName;
+    const name = fromApi || chat.name || (chat.type === "CHANNEL" ? "Канал" : "Групповой чат");
+    return name === "Основной" ? (fromApi || "Канал организации") : name;
   }
   if (chat.otherUser) {
     const parts = [

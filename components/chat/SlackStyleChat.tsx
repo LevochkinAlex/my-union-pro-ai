@@ -104,7 +104,10 @@ function getChatDisplayInfo(chat: Chat, currentUserId: string | null) {
     displayName = "ИИ-Ассистент";
     subtitle = "Всегда онлайн";
   } else if (isGroup) {
-    displayName = chat.name || "Групповой чат";
+    // Для канала приоритет: название ППО из API (otherUser.lastName / displayName), затем chat.name
+    const fromApi = (chat as any).displayName ?? (chat.otherUser as any)?.lastName;
+    const rawName = fromApi || chat.name || "Групповой чат";
+    displayName = rawName === "Основной" ? (isChannel ? (fromApi || "Канал организации") : "Групповой чат") : rawName;
     avatarUrl = chat.iconUrl || null;
     const participantsCount = chat.participantsCount || chat._count?.participants || 0;
     

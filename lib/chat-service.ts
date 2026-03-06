@@ -456,6 +456,23 @@ export async function getUserChats(
     );
   }
 
+  // Для каналов с названием "Основной" подгружаем название ППО по organizationId (если в ответе нет organization.name)
+  const orgIdsToResolve = new Set<string>();
+  for (const chat of chats) {
+    if (chat?.type === "CHANNEL" && chat.name === "Основной" && (chat.newsChannel as any)?.organizationId) {
+      const orgName = (chat.newsChannel as any)?.organization?.name;
+      if (!orgName) orgIdsToResolve.add((chat.newsChannel as any).organizationId);
+    }
+  }
+  let orgNamesByOrgId = new Map<string, string>();
+  if (orgIdsToResolve.size > 0) {
+    const orgs = await prisma.organization.findMany({
+      where: { id: { in: Array.from(orgIdsToResolve) } },
+      select: { id: true, name: true },
+    });
+    orgs.forEach((o) => orgNamesByOrgId.set(o.id, o.name));
+  }
+
   // Форматируем чаты и фильтруем чаты с удаленными обращениями
   const formattedChats: ChatInfo[] = [];
   for (const chat of chats) {
@@ -476,7 +493,7 @@ export async function getUserChats(
       }
       // Для остальных чатов (личные, каналы, группы без обращений) - продолжаем нормально
       
-      const formatted = formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0);
+      const formatted = formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0, orgNamesByOrgId);
       if (formatted) {
         formattedChats.push(formatted);
       } else {
@@ -1182,11 +1199,13 @@ async function getUnreadCountsForChats(
 
 /**
  * Форматирует данные чата для API ответа
+ * @param orgNamesByOrgId — подгруженные названия организаций (ППО) для каналов с именем "Основной"
  */
 export function formatChatInfo(
   chat: any,
   currentUserId: string,
-  unreadCount: number
+  unreadCount: number,
+  orgNamesByOrgId?: Map<string, string>
 ): ChatInfo | null {
   if (!chat || !chat.id) {
     console.error('[chat-service] formatChatInfo: invalid chat object', chat);
@@ -1214,12 +1233,16 @@ export function formatChatInfo(
   let otherUser: OtherUserInfo;
 
   if (isChannel) {
-    // Название канала = организация (ППО), чтобы в списке было видно, какому ППО канал принадлежит; региональный — по имени канала
-    displayName =
+    // Название канала = название ППО (организации). Для каналов "Основной" подставляем имя организации
+    const orgId = (chat.newsChannel as any)?.organizationId;
+    const resolvedOrgName = orgId && orgNamesByOrgId?.get(orgId);
+    const rawName =
+      resolvedOrgName ||
       (chat.newsChannel as any)?.organization?.name ||
       chat.newsChannel?.name ||
       chat.name ||
       "Канал";
+    displayName = rawName === "Основной" ? (resolvedOrgName || (chat.newsChannel as any)?.organization?.name || "Канал организации") : rawName;
     displayAvatar = chat.newsChannel?.iconUrl || chat.iconUrl || null;
     otherUser = {
       id: chat.id,
