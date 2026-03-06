@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  getMembershipStatusBadgeClass,
+  getMembershipStatusLabel,
+  getUserRoleLabel,
+} from "@/lib/status-labels";
 
 type Member = {
   id: string;
@@ -21,6 +26,12 @@ type Member = {
 type OrgItem = { id: string; name: string; type: string };
 
 const PAGE_SIZE = 20;
+const ORG_TYPE_LABELS: Record<string, string> = {
+  PRIMARY: "ППО",
+  LOCAL: "МПО",
+  REGIONAL: "РПО",
+  FEDERAL: "ФПО",
+};
 
 export default function OrgHeadUsersPage() {
   const [activeTab, setActiveTab] = useState<"all" | "validation" | "active">("all");
@@ -223,7 +234,7 @@ export default function OrgHeadUsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Пользователи</h1>
           <p className="mt-1 text-gray-500 dark:text-gray-400">
@@ -394,27 +405,37 @@ export default function OrgHeadUsersPage() {
                           />
                         </td>
                       )}
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                        {[m.lastName, m.firstName, m.middleName].filter(Boolean).join(" ") || "—"}
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            {(m.lastName?.[0] || m.firstName?.[0] || m.email?.[0] || "?").toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                              {[m.lastName, m.firstName, m.middleName].filter(Boolean).join(" ") || "—"}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {getUserRoleLabel(m.role, m.isPPOHead)}
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                        <div>{m.email || "—"}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{m.phone || ""}</div>
+                      <td className="px-4 py-3 align-top text-sm text-gray-600 dark:text-gray-300">
+                        <div className="break-all">{m.email || "—"}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{m.phone || "—"}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                        {m.organization?.name || "—"}
+                      <td className="px-4 py-3 align-top text-sm text-gray-600 dark:text-gray-300">
+                        <div>{m.organization?.name || "—"}</div>
+                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {m.organization?.type ? ORG_TYPE_LABELS[m.organization.type] || m.organization.type : ""}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                        <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
-                          {m.membershipStatus}
+                      <td className="px-4 py-3 align-top text-sm text-gray-600 dark:text-gray-300">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getMembershipStatusBadgeClass(m.unionMembershipStatus === "ACCEPTED" ? "ACCEPTED" : m.unionMembershipStatus === "REMOVED" ? "REMOVED" : m.membershipStatus)}`}>
+                          {getMembershipStatusLabel(m.unionMembershipStatus === "ACCEPTED" ? "ACCEPTED" : m.unionMembershipStatus === "REMOVED" ? "REMOVED" : m.membershipStatus)}
                         </span>
-                        {m.isPPOHead && (
-                          <span className="ml-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                            Председатель ППО
-                          </span>
-                        )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                      <td className="px-4 py-3 align-top text-sm text-gray-600 dark:text-gray-300">
                         {new Date(m.createdAt).toLocaleDateString("ru-RU")}
                       </td>
                       <td className="px-4 py-3 text-sm">

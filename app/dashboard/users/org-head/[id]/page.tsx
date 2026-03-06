@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  getMembershipStatusBadgeClass,
+  getMembershipStatusLabel,
+  getUserRoleLabel,
+} from "@/lib/status-labels";
 
 type Member = {
   id: string;
@@ -208,15 +213,15 @@ export default function OrgHeadUserDetailPage({ params }: { params: Promise<{ id
                 <div>
                   <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Статус членства</dt>
                   <dd className="mt-1">
-                    <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
-                      {member.membershipStatus}
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getMembershipStatusBadgeClass(member.unionMembershipStatus === "ACCEPTED" ? "ACCEPTED" : member.unionMembershipStatus === "REMOVED" ? "REMOVED" : member.membershipStatus)}`}>
+                      {getMembershipStatusLabel(member.unionMembershipStatus === "ACCEPTED" ? "ACCEPTED" : member.unionMembershipStatus === "REMOVED" ? "REMOVED" : member.membershipStatus)}
                     </span>
                   </dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Роль</dt>
                   <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                    {member.isPPOHead ? "Председатель ППО" : member.role}
+                    {getUserRoleLabel(member.role, member.isPPOHead)}
                   </dd>
                 </div>
                 <div>
