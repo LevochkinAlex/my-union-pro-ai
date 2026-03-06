@@ -83,6 +83,7 @@ export default function StaffManagementPage() {
   const [rolesForOrg, setRolesForOrg] = useState<StaffRole[]>([]);
   const [loadingRolesForOrg, setLoadingRolesForOrg] = useState(false);
   const [loadingStaffForOrg, setLoadingStaffForOrg] = useState(false);
+  const showRolesTab = regionMode;
 
   // Модалки
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -438,6 +439,7 @@ export default function StaffManagementPage() {
                 </span>
               </span>
             </button>
+            {showRolesTab && (
             <button
               onClick={() => setActiveTab("roles")}
               className={`flex-1 sm:flex-none px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
@@ -456,6 +458,7 @@ export default function StaffManagementPage() {
                 </span>
               </span>
             </button>
+            )}
           </div>
         </div>
 
