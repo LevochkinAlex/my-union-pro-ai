@@ -28,10 +28,28 @@ export default function DiscountCard({
   const [copied, setCopied] = useState(false);
   const [imageError, setImageError] = useState(false);
   
-  // Определяем города для отображения
+  // Определяем города для отображения в карточке
   const displayCities = selectedCityId
-    ? discount.cities.filter(city => city.id === selectedCityId)
+    ? discount.cities.filter((city) => city.id === selectedCityId)
     : discount.cities;
+
+  const citiesLabel = (() => {
+    if (displayCities.length > 0) {
+      return displayCities.length <= 3
+        ? displayCities.map((city) => city.name).join(", ")
+        : `${displayCities.slice(0, 3).map((city) => city.name).join(", ")} и ещё ${displayCities.length - 3}`;
+    }
+
+    // Глобальная скидка без привязки к конкретному городу
+    if (discount.cities.length === 0) {
+      return "Все города";
+    }
+
+    // Fallback: показываем доступные города скидки, если локальный фильтр дал пусто
+    return discount.cities.length <= 3
+      ? discount.cities.map((city) => city.name).join(", ")
+      : `${discount.cities.slice(0, 3).map((city) => city.name).join(", ")} и ещё ${discount.cities.length - 3}`;
+  })();
 
   const handleCopyPromo = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click when copying promo
@@ -163,12 +181,7 @@ export default function DiscountCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.105 0 2-.672 2-1.5S13.105 8 12 8s-2 .672-2 1.5.895 1.5 2 1.5z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22s7-4.35 7-11.5S16.418 2 12 2 5 5.35 5 10.5 12 22 12 22z" />
             </svg>
-            <span className="truncate flex-1">
-              {displayCities.length <= 3 
-                ? displayCities.map((city) => city.name).join(", ")
-                : `${displayCities.slice(0, 3).map((city) => city.name).join(", ")} и ещё ${displayCities.length - 3}`
-              }
-            </span>
+            <span className="truncate flex-1">{citiesLabel}</span>
             {discount.distanceKm && (
               <span className="text-xs text-gray-400 dark:text-gray-500 flex-none">~{discount.distanceKm} км</span>
             )}

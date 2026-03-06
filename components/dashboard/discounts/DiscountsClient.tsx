@@ -882,19 +882,6 @@ export default function DiscountsClient({
           </div>
         </div>
 
-        {/* City active badge (shown only when city is selected) */}
-        {filters.cityId != null && (() => {
-          const selectedCity = (data.cities || []).find((c) => c.id === filters.cityId);
-          const displayName = selectedCity?.name ?? preferredCityName ?? `ID ${filters.cityId}`;
-          return (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              </svg>
-              {displayName}
-            </div>
-          );
-        })()}
       </div>
 
       {/* Error */}
