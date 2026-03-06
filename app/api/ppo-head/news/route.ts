@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { isDemoUserId } from "@/lib/demo";
 import { getDemoNews } from "@/lib/demo";
 import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
@@ -38,23 +38,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ news });
     }
 
-    const chairman = await getOrgHead(session.user.id);
+    const userRecord = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isRPOHead: true, rpoHeadOrganizationId: true },
+    });
+    const isRPOHead = !!userRecord?.isRPOHead;
 
-    if (!chairman) {
-      return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
-        { status: 403 }
-      );
+    let organizationId: string | null = null;
+    let userLevel: "RPO" | "PPO" | "STAFF" = "STAFF";
+
+    if (isRPOHead) {
+      userLevel = "RPO";
+      organizationId = userRecord?.rpoHeadOrganizationId || null;
+    } else {
+      const perm = await checkUserPermissions(session.user.id, "news_view");
+      if (!perm.hasAccess || !perm.organizationId) {
+        return NextResponse.json(
+          { error: "Доступ запрещен или организация не назначена" },
+          { status: 403 }
+        );
+      }
+      organizationId = perm.organizationId;
+      if (perm.isChairman) userLevel = "PPO";
     }
 
     const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
 
     let channelIds: string[];
-    if (chairman.level === "RPO") {
+    if (userLevel === "RPO") {
       channelIds = [regionalChannel.id];
     } else {
       const channels = await prisma.newsChannel.findMany({
-        where: { organizationId: chairman.organizationId },
+        where: { organizationId: organizationId! },
         select: { id: true },
       });
       channelIds = [regionalChannel.id, ...channels.map((ch) => ch.id)];
@@ -228,13 +243,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getOrgHead(session.user.id);
+    const postUserRecord = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isRPOHead: true, rpoHeadOrganizationId: true },
+    });
+    const postIsRPOHead = !!postUserRecord?.isRPOHead;
 
-    if (!chairman) {
-      return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
-        { status: 403 }
-      );
+    let postOrganizationId: string | null = null;
+
+    if (postIsRPOHead) {
+      postOrganizationId = postUserRecord?.rpoHeadOrganizationId || null;
+    } else {
+      const perm = await checkUserPermissions(session.user.id, "news_create");
+      if (!perm.hasAccess || !perm.organizationId) {
+        return NextResponse.json(
+          { error: "Доступ запрещен или организация не назначена" },
+          { status: 403 }
+        );
+      }
+      postOrganizationId = perm.organizationId;
     }
 
     const { title, content, coverImage, channelId, isPublished, polls } = await request.json();
@@ -246,7 +273,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем, что канал принадлежит организации Председателя
     const channel = await prisma.newsChannel.findUnique({
       where: { id: channelId },
       select: { id: true, organizationId: true, name: true },
@@ -257,23 +283,22 @@ export async function POST(request: NextRequest) {
 
     const isRegionalChannel = channel.organizationId === null && channel.name === "Региональные новости";
     if (isRegionalChannel) {
-      if (chairman.level !== "RPO") {
+      if (!postIsRPOHead) {
         return NextResponse.json(
           { error: "Публикация в региональный канал доступна только РПО" },
           { status: 403 }
         );
       }
-    } else if (channel.organizationId !== chairman.organizationId) {
+    } else if (channel.organizationId !== postOrganizationId) {
       return NextResponse.json(
         { error: "Канал не найден или не принадлежит вашей организации" },
         { status: 403 }
       );
     }
 
-    // Создаем новость
     const newsPost = await prisma.newsPost.create({
       data: {
-        authorId: chairman.id,
+        authorId: session.user.id,
         channelId,
         title: title.trim(),
         content: content.trim(),
@@ -335,7 +360,7 @@ export async function POST(request: NextRequest) {
         const message = await prisma.chatMessage.create({
           data: {
             chatId: channelChat.id,
-            senderId: chairman.id,
+            senderId: session.user.id,
             content: messageContent,
             messageType: "channel_post",
           },
@@ -356,7 +381,7 @@ export async function POST(request: NextRequest) {
           const { normalizeUserAvatar } = await import("@/lib/api-helpers");
           
           const sender = await prisma.user.findUnique({
-            where: { id: chairman.id },
+            where: { id: session.user.id },
             select: {
               id: true,
               firstName: true,
@@ -370,7 +395,7 @@ export async function POST(request: NextRequest) {
             await emitNewMessage(channelChat.id, {
               id: message.id,
               chatId: channelChat.id,
-              senderId: chairman.id,
+              senderId: session.user.id,
               sender: {
                 id: normalizedSender.id,
                 firstName: normalizedSender.firstName,

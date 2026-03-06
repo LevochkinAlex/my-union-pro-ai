@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { sendPushNotification } from "@/lib/push-notifications";
 
 /**
@@ -17,10 +17,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -45,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Фильтруем participantIds - убираем ID председателя (он добавится как админ) и дубликаты
     const filteredParticipantIds = [...new Set(participantIds)].filter(
-      (id: string) => id !== chairman.id
+      (id: string) => id !== session.user.id
     );
 
     // Группа должна иметь хотя бы одного участника помимо председателя
@@ -60,7 +58,7 @@ export async function POST(request: NextRequest) {
     const members = await prisma.user.findMany({
       where: {
         id: { in: filteredParticipantIds },
-        organizationId: chairman.organizationId!,
+        organizationId: perm.organizationId!,
       },
       select: { id: true },
     });
@@ -73,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Получаем всех участников
-    const allParticipantIds = [chairman.id, ...filteredParticipantIds];
+    const allParticipantIds = [session.user.id, ...filteredParticipantIds];
     const users = await prisma.user.findMany({
       where: { id: { in: allParticipantIds } },
       select: { id: true }
@@ -87,20 +85,18 @@ export async function POST(request: NextRequest) {
         description: description?.trim() || null,
         iconUrl: iconUrl || null,
         isPublic: Boolean(isPublic),
-        createdById: chairman.id,
+        createdById: session.user.id,
         participants: {
           create: [
-            // Добавляем создателя как админа
             {
-              userId: chairman.id,
+              userId: session.user.id,
               role: "admin",
               invitedById: null,
             },
-            // Добавляем остальных участников (без создателя - он уже добавлен как админ)
             ...filteredParticipantIds.map((userId: string) => ({
               userId,
               role: "member",
-              invitedById: chairman.id,
+              invitedById: session.user.id,
             })),
           ],
         },
@@ -135,7 +131,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Отправляем push-уведомления добавленным участникам
-    const chairmanName = [chairman.lastName, chairman.firstName].filter(Boolean).join(" ") || "Председатель";
+    const chairmanName = [session.user.lastName, session.user.firstName].filter(Boolean).join(" ") || "Председатель";
     
     // Создаем уведомления в БД и отправляем push для каждого участника (кроме создателя)
     await Promise.all(

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/cache-invalidation";
 
@@ -21,10 +21,8 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -78,9 +76,9 @@ export async function POST(
 
     // Проверяем, что Председатель является создателем или админом группы
     // Если createdById не указан (старые чаты), разрешаем если пользователь - админ группы
-    const isAdmin = chat.createdById === chairman.id || 
-      (chat.createdById === null && chat.participants.some(p => p.userId === chairman.id && p.role === "admin")) ||
-      chat.participants.some(p => p.userId === chairman.id && p.role === "admin");
+    const isAdmin = chat.createdById === session.user.id || 
+      (chat.createdById === null && chat.participants.some(p => p.userId === session.user.id && p.role === "admin")) ||
+      chat.participants.some(p => p.userId === session.user.id && p.role === "admin");
 
     if (!isAdmin) {
       // Для обращений (тикетов) разрешаем председателю добавлять участников
@@ -95,13 +93,12 @@ export async function POST(
         );
       }
       // Если это обращение и председатель еще не админ, делаем его админом
-      const chairmanParticipant = chat.participants.find(p => p.userId === chairman.id);
+      const chairmanParticipant = chat.participants.find(p => p.userId === session.user.id);
       if (!chairmanParticipant || chairmanParticipant.role !== "admin") {
-        // Обновляем роль председателя на админа
         await prisma.chatParticipant.updateMany({
           where: {
             chatId,
-            userId: chairman.id,
+            userId: session.user.id,
           },
           data: {
             role: "admin",
@@ -114,7 +111,7 @@ export async function POST(
     const members = await prisma.user.findMany({
       where: {
         id: { in: participantIds },
-        organizationId: chairman.organizationId!,
+        organizationId: perm.organizationId!,
       },
       select: { id: true },
     });
@@ -179,7 +176,7 @@ export async function POST(
         data: {
           leftAt: null,
           role: "member",
-          invitedById: chairman.id,
+          invitedById: session.user.id,
           joinedAt: new Date(),
         },
       });
@@ -192,9 +189,9 @@ export async function POST(
           chatId,
           userId,
           role: "member",
-          invitedById: chairman.id,
+          invitedById: session.user.id,
         })),
-        skipDuplicates: true, // Пропускаем дубликаты на случай гонки условий
+        skipDuplicates: true,
       });
     }
 
@@ -228,12 +225,12 @@ export async function POST(
       await prisma.ticketActionLog.create({
         data: {
           ticketId: ticketForLog.id,
-          userId: chairman.id,
+          userId: session.user.id,
           actionType: 'participant_added',
           description: `Добавлены участники: ${memberNames}`,
           metadata: {
             addedUserIds: newParticipantIds,
-            addedBy: chairman.id,
+            addedBy: session.user.id,
           },
         },
       });
@@ -245,7 +242,7 @@ export async function POST(
       newParticipantIds.map((userId: string) => invalidateUserChatsCache(userId))
     );
     // Также инвалидируем кеш для председателя
-    await invalidateUserChatsCache(chairman.id);
+    await invalidateUserChatsCache(session.user.id);
 
     // Отправляем уведомления приглашённым участникам
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
@@ -281,7 +278,7 @@ export async function POST(
           title: notificationTitle,
           body: `Вы добавлены в "${chatName}"`,
           url: notificationUrl,
-          senderName: `${chairman.firstName || ""} ${chairman.lastName || ""}`.trim() || "Председатель",
+          senderName: `${session.user.firstName || ""} ${session.user.lastName || ""}`.trim() || "Председатель",
         });
       } catch (notifyError) {
         console.error(`[invite] Failed to notify user ${member.id}:`, notifyError);

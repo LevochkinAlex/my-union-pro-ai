@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead, getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { syncChannelWithChat } from "@/lib/channel-sync";
 import { isDemoUserId } from "@/lib/demo";
 import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
@@ -36,17 +36,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const chairman = await getOrgHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "news_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
       );
     }
 
-    // РПО: только один канал — «Региональные новости», без возможности создавать каналы
-    if (chairman.level === "RPO") {
+    const rpoUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isRPOHead: true },
+    });
+    const isRPO = rpoUser?.isRPOHead === true;
+
+    if (isRPO) {
       const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
       const count = await prisma.newsPost.count({
         where: { channelId: regionalChannel.id, isPublished: true },
@@ -66,7 +70,7 @@ export async function GET(request: NextRequest) {
     // ППО/МПО: каналы своей организации + региональный канал (для просмотра; публиковать в региональный может только РПО)
     let channels = await prisma.newsChannel.findMany({
       where: {
-        organizationId: chairman.organizationId,
+        organizationId: perm.organizationId,
       },
       include: {
         _count: {
@@ -88,14 +92,14 @@ export async function GET(request: NextRequest) {
     // Синхронизируем каналы без Chat с чатами
     for (const channel of channels) {
       if (!channel.chat) {
-        await syncChannelWithChat(channel.id, chairman.organizationId);
+        await syncChannelWithChat(channel.id, perm.organizationId!);
       }
     }
 
     // Перезагружаем каналы после синхронизации
     channels = await prisma.newsChannel.findMany({
       where: {
-        organizationId: chairman.organizationId,
+        organizationId: perm.organizationId,
       },
       include: {
         chat: {
@@ -117,7 +121,7 @@ export async function GET(request: NextRequest) {
     // Если каналов нет, создаем основной канал по умолчанию
     if (channels.length === 0) {
       const organization = await prisma.organization.findUnique({
-        where: { id: chairman.organizationId },
+        where: { id: perm.organizationId! },
         select: { name: true },
       });
 
@@ -126,8 +130,8 @@ export async function GET(request: NextRequest) {
         data: {
           name: orgName,
           description: `Канал новостей ${orgName}`,
-          organizationId: chairman.organizationId,
-          createdById: chairman.id,
+          organizationId: perm.organizationId,
+          createdById: session.user.id,
           isMain: true,
         },
         include: {
@@ -197,16 +201,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getOrgHead(session.user.id);
-
-    if (!chairman) {
+    const permCreate = await checkUserPermissions(session.user.id, "news_create");
+    if (!permCreate.hasAccess || !permCreate.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
       );
     }
 
-    if (chairman.level === "RPO") {
+    const rpoCheck = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isRPOHead: true },
+    });
+    if (rpoCheck?.isRPOHead === true) {
       return NextResponse.json(
         { error: "Для регионального кабинета РПО доступен только один канал «Региональные новости». Создание каналов отключено." },
         { status: 403 }
@@ -227,8 +234,8 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         description: description?.trim() || null,
         iconUrl: iconUrl || null,
-        organizationId: chairman.organizationId,
-        createdById: chairman.id,
+        organizationId: permCreate.organizationId!,
+        createdById: session.user.id,
       },
       include: {
         _count: {
@@ -240,7 +247,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Синхронизируем с чатом: создаем Chat для канала
-    await syncChannelWithChat(channel.id, chairman.organizationId);
+    await syncChannelWithChat(channel.id, permCreate.organizationId!);
 
     return NextResponse.json({ channel }, { status: 201 });
   } catch (error: any) {

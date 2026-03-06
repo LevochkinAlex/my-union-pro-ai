@@ -20,22 +20,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const { checkUserPermissions } = await import("@/lib/staff-permissions");
+    const userFlags = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        isMPOHead: true,
-        isRPOHead: true,
-      },
+      select: { isRPOHead: true },
     });
+    const isRPOHead = !!userFlags?.isRPOHead;
 
-    const isOrgHead = user?.isPPOHead || user?.isMPOHead || user?.isRPOHead;
-    if (!isOrgHead) {
-      return NextResponse.json(
-        { error: "Только председатели (ППО/МПО/РПО) могут загружать изображения для новостей" },
-        { status: 403 }
-      );
+    if (!isRPOHead) {
+      const perm = await checkUserPermissions(session.user.id, "news_create");
+      if (!perm.hasAccess) {
+        return NextResponse.json(
+          { error: "Нет прав на загрузку изображений для новостей" },
+          { status: 403 }
+        );
+      }
     }
 
     const formData = await request.formData();

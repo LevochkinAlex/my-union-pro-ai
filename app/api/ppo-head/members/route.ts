@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * GET /api/ppo-head/members
- * Получить список членов профсоюза для Председателя
+ * Получить список членов профсоюза для Председателя или сотрудника с правом members_view
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,12 +16,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "members_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
+        { error: "Нет доступа к списку членов профсоюза" },
         { status: 403 }
       );
     }
@@ -33,7 +31,7 @@ export async function GET(request: NextRequest) {
     const skip = Math.max(0, parseInt(searchParams.get("skip") || "0", 10));
 
     const where: any = {
-      organizationId: chairman.organizationId,
+      organizationId: perm.organizationId,
     };
 
     if (status === "pending") {

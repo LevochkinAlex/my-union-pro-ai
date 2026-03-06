@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DocumentType, DocumentCategory, DocumentStatus, Prisma } from "@prisma/client";
-import { getPPOHead } from "@/lib/ppo-head-utils";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
@@ -29,23 +28,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем доступ (председатель или сотрудник с правами)
-    const chairman = await getPPOHead(session.user.id);
-    let organizationId: string | null = null;
-
-    if (chairman) {
-      organizationId = chairman.organizationId;
-    } else {
-      const permissions = await checkUserPermissions(session.user.id, "documents_view");
-      if (!permissions.hasAccess) {
-        return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-      }
-      organizationId = permissions.organizationId;
+    const perm = await checkUserPermissions(session.user.id, "documents_view");
+    if (!perm.hasAccess || !perm.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "documents_view",
+          denyReason: perm.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
-
-    if (!organizationId) {
-      return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
-    }
+    const organizationId = perm.organizationId;
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category") as DocumentCategory | null;
@@ -212,23 +206,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем доступ
-    const chairman = await getPPOHead(session.user.id);
-    let organizationId: string | null = null;
-
-    if (chairman) {
-      organizationId = chairman.organizationId;
-    } else {
-      const permissions = await checkUserPermissions(session.user.id, "documents_create");
-      if (!permissions.hasAccess) {
-        return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-      }
-      organizationId = permissions.organizationId;
+    const perm = await checkUserPermissions(session.user.id, "documents_create");
+    if (!perm.hasAccess || !perm.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "documents_create",
+          denyReason: perm.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
-
-    if (!organizationId) {
-      return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
-    }
+    const organizationId = perm.organizationId;
 
     const body = await request.json();
     const {

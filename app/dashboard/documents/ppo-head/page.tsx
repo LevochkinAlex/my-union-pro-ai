@@ -183,25 +183,40 @@ export default function PPOHeadDocumentsPage() {
 
   const loadTemplates = async (type: DocumentType) => {
     try {
-      const response = await fetch(`/api/ppo-head/document-templates?type=${type}`);
-      if (response.ok) {
-        const data = await response.json();
-        const filteredTemplates = data.templates || [];
-        setTemplates(filteredTemplates);
-        
-        // Автоматически выбираем шаблон по умолчанию, если есть
-        const defaultTemplate = filteredTemplates.find((t: DocumentTemplate & { isDefault?: boolean }) => t.isDefault);
-        if (defaultTemplate) {
-          setSelectedTemplate(defaultTemplate);
-          setFormData(prev => ({ ...prev, templateId: defaultTemplate.id }));
-        } else if (filteredTemplates.length === 1) {
-          // Если шаблон один, выбираем его автоматически
-          setSelectedTemplate(filteredTemplates[0]);
-          setFormData(prev => ({ ...prev, templateId: filteredTemplates[0].id }));
-        }
+      let response = await fetch(`/api/ppo-head/document-templates?type=${type}`);
+      if (response.status === 403) {
+        // В режиме РПО шаблоны заседаний берём из org-head API
+        response = await fetch(`/api/org-head/document-templates?type=${type}`);
+      }
+      if (!response.ok) {
+        setTemplates([]);
+        setSelectedTemplate(null);
+        setFormData((prev) => ({ ...prev, templateId: "" }));
+        return;
+      }
+
+      const data = await response.json();
+      const filteredTemplates = data.templates || [];
+      setTemplates(filteredTemplates);
+      
+      // Автоматически выбираем шаблон по умолчанию, если есть
+      const defaultTemplate = filteredTemplates.find((t: DocumentTemplate & { isDefault?: boolean }) => t.isDefault);
+      if (defaultTemplate) {
+        setSelectedTemplate(defaultTemplate);
+        setFormData(prev => ({ ...prev, templateId: defaultTemplate.id }));
+      } else if (filteredTemplates.length === 1) {
+        // Если шаблон один, выбираем его автоматически
+        setSelectedTemplate(filteredTemplates[0]);
+        setFormData(prev => ({ ...prev, templateId: filteredTemplates[0].id }));
+      } else {
+        setSelectedTemplate(null);
+        setFormData((prev) => ({ ...prev, templateId: "" }));
       }
     } catch (error) {
       console.error("Ошибка загрузки шаблонов:", error);
+      setTemplates([]);
+      setSelectedTemplate(null);
+      setFormData((prev) => ({ ...prev, templateId: "" }));
     }
   };
 

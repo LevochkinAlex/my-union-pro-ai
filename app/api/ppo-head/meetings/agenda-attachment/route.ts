@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import path from "path";
 
@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    if (!chairman?.organizationId) {
+    const perm = await checkUserPermissions(session.user.id, "documents_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещён или организация не назначена" },
         { status: 403 }

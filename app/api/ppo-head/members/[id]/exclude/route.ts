@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * POST /api/ppo-head/members/[id]/exclude
@@ -19,12 +19,10 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "members_manage");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
+        { error: "Нет прав на исключение членов профсоюза" },
         { status: 403 }
       );
     }
@@ -51,8 +49,7 @@ export async function POST(
       );
     }
 
-    // Проверяем, что член принадлежит организации председателя
-    if (member.organizationId !== chairman.organizationId) {
+    if (member.organizationId !== perm.organizationId) {
       return NextResponse.json(
         { error: "Этот пользователь не принадлежит вашей организации" },
         { status: 403 }
@@ -93,7 +90,7 @@ export async function POST(
       },
     });
 
-    console.log(`[ppo-head/members] Member excluded: ${memberId} by ${chairman.id}`);
+    console.log(`[ppo-head/members] Member excluded: ${memberId} by ${session.user.id}`);
 
     return NextResponse.json({
       success: true,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { getUserChats, ChatFilter, formatChatInfo } from "@/lib/chat-service";
 import { prisma } from "@/lib/prisma";
 
@@ -17,10 +17,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -49,11 +47,11 @@ export async function GET(request: NextRequest) {
     // а не только те, где он участник
     let chats;
     
-    if (filter?.hasTicket === true && chairman.organizationId) {
+    if (filter?.hasTicket === true && perm.organizationId) {
       // Получаем все обращения организации председателя
       const organizationTickets = await prisma.ticket.findMany({
         where: {
-          organizationId: chairman.organizationId,
+          organizationId: perm.organizationId!,
           chatId: { not: null },
         },
         select: { chatId: true },
@@ -98,14 +96,14 @@ export async function GET(request: NextRequest) {
         
         // Форматируем как ChatInfo (без проверки непрочитанных для упрощения)
         chats = appealChats.map((chat) => {
-          return formatChatInfo(chat, chairman.id, 0);
+          return formatChatInfo(chat, session.user.id, 0);
         });
       } else {
         chats = [];
       }
     } else {
       // Для обычных чатов используем стандартный метод
-      chats = await getUserChats(chairman.id, filter);
+      chats = await getUserChats(session.user.id, filter);
     }
 
     // Форматируем для совместимости с фронтендом

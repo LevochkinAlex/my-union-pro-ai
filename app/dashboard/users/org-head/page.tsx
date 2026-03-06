@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Member = {
   id: string;
@@ -9,6 +10,8 @@ type Member = {
   middleName: string | null;
   email: string | null;
   phone: string | null;
+  role?: string;
+  isPPOHead?: boolean;
   membershipStatus: string;
   unionMembershipStatus?: string | null;
   createdAt: string;
@@ -17,14 +20,20 @@ type Member = {
 
 type OrgItem = { id: string; name: string; type: string };
 
+const PAGE_SIZE = 20;
+
 export default function OrgHeadUsersPage() {
-  const [activeTab, setActiveTab] = useState<"validation" | "active">("validation");
+  const [activeTab, setActiveTab] = useState<"all" | "validation" | "active">("all");
   const [members, setMembers] = useState<Member[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [search, setSearch] = useState("");
 
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [organizations, setOrganizations] = useState<OrgItem[]>([]);
@@ -43,42 +52,45 @@ export default function OrgHeadUsersPage() {
   });
   const [membersReloadKey, setMembersReloadKey] = useState(0);
 
-  const filteredMembers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) => {
-      const fio = [m.lastName, m.firstName, m.middleName].filter(Boolean).join(" ").toLowerCase();
-      return (
-        fio.includes(q) ||
-        (m.email || "").toLowerCase().includes(q) ||
-        (m.phone || "").toLowerCase().includes(q) ||
-        (m.organization?.name || "").toLowerCase().includes(q)
-      );
-    });
-  }, [members, search]);
+  const loadMembers = useCallback(async (tab: "all" | "validation" | "active", pageNum: number, q: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const status = tab === "all" ? "all" : tab === "validation" ? "pending" : "approved";
+      const params = new URLSearchParams();
+      params.set("status", status);
+      params.set("page", String(pageNum));
+      params.set("limit", String(PAGE_SIZE));
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetch(`/api/org-head/members?${params.toString()}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Ошибка загрузки");
+      }
+      const data = await res.json();
+      setMembers(data.members || []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+      setPage(data.page ?? pageNum);
+    } catch (e: any) {
+      setError(e?.message || "Ошибка загрузки");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const status = activeTab === "validation" ? "pending" : "approved";
-        const res = await fetch(`/api/org-head/members?status=${status}&limit=100`);
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Ошибка загрузки");
-        }
-        const data = await res.json();
-        setMembers(data.members || []);
-      } catch (e: any) {
-        setError(e?.message || "Ошибка загрузки");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    loadMembers(activeTab, page, searchQuery);
     setSelectedIds(new Set());
-  }, [activeTab, membersReloadKey]);
+  }, [activeTab, page, searchQuery, membersReloadKey, loadMembers]);
+
+  const filteredMembers = useMemo(() => members, [members]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchQuery(searchInput.trim());
+    setPage(1);
+  };
 
   useEffect(() => {
     if (!addUserOpen) return;
@@ -185,8 +197,8 @@ export default function OrgHeadUsersPage() {
       for (const id of ids) {
         await fetch(`/api/org-head/members/${id}/approve`, { method: "POST" });
       }
-      setMembers((prev) => prev.filter((m) => !selectedIds.has(m.id)));
       setSelectedIds(new Set());
+      loadMembers(activeTab, page, searchQuery);
     } finally {
       setIsSubmitting(false);
     }
@@ -202,8 +214,8 @@ export default function OrgHeadUsersPage() {
       for (const id of ids) {
         await fetch(`/api/org-head/members/${id}/exclude`, { method: "POST" });
       }
-      setMembers((prev) => prev.filter((m) => !selectedIds.has(m.id)));
       setSelectedIds(new Set());
+      loadMembers(activeTab, page, searchQuery);
     } finally {
       setIsSubmitting(false);
     }
@@ -230,7 +242,17 @@ export default function OrgHeadUsersPage() {
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="-mb-px flex gap-6">
           <button
-            onClick={() => setActiveTab("validation")}
+            onClick={() => { setActiveTab("all"); setPage(1); }}
+            className={`border-b-2 py-3 text-sm font-medium ${
+              activeTab === "all"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+            }`}
+          >
+            Все
+          </button>
+          <button
+            onClick={() => { setActiveTab("validation"); setPage(1); }}
             className={`border-b-2 py-3 text-sm font-medium ${
               activeTab === "validation"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
@@ -240,7 +262,7 @@ export default function OrgHeadUsersPage() {
             Валидация
           </button>
           <button
-            onClick={() => setActiveTab("active")}
+            onClick={() => { setActiveTab("active"); setPage(1); }}
             className={`border-b-2 py-3 text-sm font-medium ${
               activeTab === "active"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
@@ -252,18 +274,34 @@ export default function OrgHeadUsersPage() {
         </nav>
       </div>
 
-      <div className="rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800">
-        <input
-          aria-label="Поиск пользователей"
-          title="Поиск пользователей"
-          placeholder="Поиск по ФИО, email, телефону, организации"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-        />
-      </div>
+      <form onSubmit={handleSearchSubmit} className="rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            aria-label="Поиск пользователей"
+            placeholder="Поиск по ФИО, email, телефону, организации"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="min-w-[200px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-300 dark:bg-gray-600 dark:text-white dark:hover:bg-gray-500"
+          >
+            Найти
+          </button>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => { setSearchInput(""); setSearchQuery(""); setPage(1); }}
+              className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            >
+              Сбросить
+            </button>
+          )}
+        </div>
+      </form>
 
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && activeTab !== "all" && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
@@ -304,15 +342,17 @@ export default function OrgHeadUsersPage() {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-4 py-3">
-                    <input
-                      aria-label="Выбрать всех"
-                      type="checkbox"
-                      checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.length}
-                      onChange={selectAll}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
-                    />
-                  </th>
+                  {activeTab !== "all" && (
+                    <th className="px-4 py-3">
+                      <input
+                        aria-label="Выбрать всех"
+                        type="checkbox"
+                        checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.length}
+                        onChange={selectAll}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
                     ФИО
                   </th>
@@ -323,29 +363,37 @@ export default function OrgHeadUsersPage() {
                     Организация
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
+                    Статус / Роль
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
                     Дата
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
+                    Действия
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
                 {filteredMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={activeTab !== "all" ? 7 : 6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                       Нет данных
                     </td>
                   </tr>
                 ) : (
                   filteredMembers.map((m) => (
                     <tr key={m.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                      <td className="px-4 py-3">
-                        <input
-                          aria-label={`Выбрать ${[m.lastName, m.firstName].filter(Boolean).join(" ") || "пользователя"}`}
-                          type="checkbox"
-                          checked={selectedIds.has(m.id)}
-                          onChange={() => toggleSelect(m.id)}
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600"
-                        />
-                      </td>
+                      {activeTab !== "all" && (
+                        <td className="px-4 py-3">
+                          <input
+                            aria-label={`Выбрать ${[m.lastName, m.firstName].filter(Boolean).join(" ") || "пользователя"}`}
+                            type="checkbox"
+                            checked={selectedIds.has(m.id)}
+                            onChange={() => toggleSelect(m.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                         {[m.lastName, m.firstName, m.middleName].filter(Boolean).join(" ") || "—"}
                       </td>
@@ -357,13 +405,60 @@ export default function OrgHeadUsersPage() {
                         {m.organization?.name || "—"}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                        <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
+                          {m.membershipStatus}
+                        </span>
+                        {m.isPPOHead && (
+                          <span className="ml-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            Председатель ППО
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
                         {new Date(m.createdAt).toLocaleDateString("ru-RU")}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <Link
+                          href={`/dashboard/users/org-head/${m.id}`}
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          Просмотр
+                        </Link>
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-white p-3 shadow-sm dark:bg-gray-800">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} из {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => loadMembers(activeTab, Math.max(1, page - 1), searchQuery)}
+              disabled={page <= 1}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              Назад
+            </button>
+            <span className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+              Страница {page} из {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => loadMembers(activeTab, Math.min(totalPages, page + 1), searchQuery)}
+              disabled={page >= totalPages}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              Вперёд
+            </button>
           </div>
         </div>
       )}

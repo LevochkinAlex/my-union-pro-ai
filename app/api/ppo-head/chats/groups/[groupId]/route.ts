@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * PATCH /api/ppo-head/chats/groups/[groupId]
@@ -17,6 +17,11 @@ export async function PATCH(
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
+      return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
     const resolvedParams = await Promise.resolve(params);

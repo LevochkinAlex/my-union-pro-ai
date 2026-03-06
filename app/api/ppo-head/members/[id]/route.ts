@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isMemberOfOrganization } from "@/lib/ppo-head-utils";
 
 /**
  * GET /api/ppo-head/members/[id]
@@ -22,12 +23,10 @@ export async function GET(
     const resolvedParams = await Promise.resolve(params);
     const memberId = resolvedParams.id;
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "members_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
+        { error: "Нет доступа к данным членов профсоюза" },
         { status: 403 }
       );
     }
@@ -35,7 +34,7 @@ export async function GET(
     const member = await prisma.user.findFirst({
       where: {
         id: memberId,
-        organizationId: chairman.organizationId,
+        organizationId: perm.organizationId,
       },
       select: {
         id: true,
@@ -143,10 +142,10 @@ export async function PATCH(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    if (!chairman || !chairman.organizationId) {
+    const perm = await checkUserPermissions(session.user.id, "members_edit");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
+        { error: "Нет прав на редактирование данных членов профсоюза" },
         { status: 403 }
       );
     }
@@ -154,7 +153,7 @@ export async function PATCH(
     const resolvedParams = await Promise.resolve(params);
     const memberId = resolvedParams.id;
 
-    const belongs = await isMemberOfOrganization(memberId, chairman.organizationId);
+    const belongs = await isMemberOfOrganization(memberId, perm.organizationId);
     if (!belongs) {
       return NextResponse.json(
         { error: "Член профсоюза не принадлежит вашей организации" },

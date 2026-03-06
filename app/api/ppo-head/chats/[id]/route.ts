@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * GET /api/ppo-head/chats/[id]
@@ -19,8 +19,8 @@ export async function GET(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
@@ -73,8 +73,8 @@ export async function PUT(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
@@ -90,13 +90,13 @@ export async function PUT(
         type: true, 
         createdById: true,
         participants: {
-          where: { userId: chairman.id },
+          where: { userId: session.user.id },
           select: { role: true }
         }
       },
     });
 
-    console.log("[ppo-head/chats] PUT - chatId:", chatId, "chat:", chat, "chairmanId:", chairman.id);
+    console.log("[ppo-head/chats] PUT - chatId:", chatId, "chat:", chat, "userId:", session.user.id);
 
     if (!chat) {
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
@@ -110,7 +110,7 @@ export async function PUT(
     // 1. Создатель группы
     // 2. Старые группы без createdById
     // 3. Председатель - участник группы (admin или member)
-    const isCreator = chat.createdById === chairman.id;
+    const isCreator = chat.createdById === session.user.id;
     const isLegacyGroup = !chat.createdById;
     const isParticipant = chat.participants.length > 0;
     const isAdmin = chat.participants.some(p => p.role === "admin");
@@ -153,10 +153,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -173,7 +171,7 @@ export async function DELETE(
         type: true,
         createdById: true,
         participants: {
-          where: { userId: chairman.id },
+          where: { userId: session.user.id },
           select: { role: true }
         }
       },
@@ -197,7 +195,7 @@ export async function DELETE(
     // 1. Создатель группы
     // 2. Старые группы без createdById
     // 3. Председатель является админом группы
-    const isCreator = chat.createdById === chairman.id;
+    const isCreator = chat.createdById === session.user.id;
     const isLegacyGroup = !chat.createdById;
     const isAdmin = chat.participants.some(p => p.role === "admin");
     

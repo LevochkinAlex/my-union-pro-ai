@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * GET /api/ppo-head/meetings/agendas
@@ -17,17 +17,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-
-    if (!orgHead) {
+    const perm = await checkUserPermissions(session.user.id, "documents_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 
-    // Получаем заседания с повесткой, но без протокола
-    // Или заседания в статусах SCHEDULED, IN_PROGRESS, COMPLETED
     const meetings = await prisma.meeting.findMany({
       where: {
-        organizationId: orgHead.organizationId,
+        organizationId: perm.organizationId,
         agendaDocumentId: { not: null },
         OR: [
           { protocolDocumentId: null },

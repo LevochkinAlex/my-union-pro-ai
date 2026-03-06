@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { MeetingStatus, DocumentStatus } from "@prisma/client";
 
 // Допустимые переходы статусов заседания
@@ -48,9 +48,8 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-
-    if (!orgHead) {
+    const perm = await checkUserPermissions(session.user.id, "documents_edit");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 
@@ -78,7 +77,7 @@ export async function POST(
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
     }
 
-    if (meeting.organizationId !== orgHead.organizationId) {
+    if (meeting.organizationId !== perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
     }
 

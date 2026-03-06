@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isRpoRoleTemplatesEnabled } from "@/lib/feature-flags";
+import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
 
 // GET - получить роль по ID
 export async function GET(
@@ -23,23 +26,15 @@ export async function GET(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
+    const access = await checkUserPermissions(session.user.id, "staff_view");
+    if (!access.hasAccess || !access.organizationId) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 
     const role = await prisma.staffRole.findFirst({
       where: {
         id,
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
       },
       include: {
         staff: {
@@ -64,7 +59,12 @@ export async function GET(
       return NextResponse.json({ error: "Роль не найдена" }, { status: 404 });
     }
 
-    return NextResponse.json({ role });
+    return NextResponse.json({
+      role: {
+        ...role,
+        permissions: normalizeStaffPermissions(role.permissions),
+      },
+    });
   } catch (error) {
     console.error("[API] Error fetching role:", error);
     return NextResponse.json(
@@ -87,18 +87,25 @@ export async function PATCH(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
+    if (isRpoRoleTemplatesEnabled()) {
       return NextResponse.json(
-        { error: "Только Председатель может редактировать роли" },
+        {
+          error:
+            "Редактирование ролей в ППО отключено. Используйте кабинет РПО для управления шаблонами.",
+          denyReason: "RPO_ROLE_TEMPLATES_ENABLED",
+        },
+        { status: 403 }
+      );
+    }
+
+    const access = await checkUserPermissions(session.user.id, "staff_manage");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Недостаточно прав для редактирования роли",
+          requiredPermission: "staff_manage",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
         { status: 403 }
       );
     }
@@ -107,7 +114,7 @@ export async function PATCH(
     const existingRole = await prisma.staffRole.findFirst({
       where: {
         id,
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
       },
     });
 
@@ -123,7 +130,7 @@ export async function PATCH(
       const duplicate = await prisma.staffRole.findUnique({
         where: {
           organizationId_name: {
-            organizationId: user.ppoHeadOrganizationId,
+            organizationId: access.organizationId,
             name,
           },
         },
@@ -142,7 +149,9 @@ export async function PATCH(
       data: {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
-        ...(permissions !== undefined && { permissions }),
+        ...(permissions !== undefined && {
+          permissions: normalizeStaffPermissions(permissions),
+        }),
         ...(isActive !== undefined && { isActive }),
       },
     });
@@ -170,18 +179,25 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
+    if (isRpoRoleTemplatesEnabled()) {
       return NextResponse.json(
-        { error: "Только Председатель может удалять роли" },
+        {
+          error:
+            "Удаление ролей в ППО отключено. Управление ролями выполняется в кабинете РПО.",
+          denyReason: "RPO_ROLE_TEMPLATES_ENABLED",
+        },
+        { status: 403 }
+      );
+    }
+
+    const access = await checkUserPermissions(session.user.id, "staff_manage");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Недостаточно прав для удаления роли",
+          requiredPermission: "staff_manage",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
         { status: 403 }
       );
     }
@@ -189,7 +205,7 @@ export async function DELETE(
     const existingRole = await prisma.staffRole.findFirst({
       where: {
         id,
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
       },
       include: {
         _count: {

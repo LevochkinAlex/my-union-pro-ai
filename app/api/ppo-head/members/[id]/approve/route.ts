@@ -4,7 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendUserNotification } from "@/lib/notifications";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
-import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isMemberOfOrganization } from "@/lib/ppo-head-utils";
 import { subscribeUserToOrganizationChannel } from "@/lib/channel-utils";
 
 /**
@@ -22,15 +23,18 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman || !chairman.organization) {
+    const perm = await checkUserPermissions(session.user.id, "members_manage");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
+        { error: "Нет прав на управление членами профсоюза" },
         { status: 403 }
       );
     }
+
+    const orgName = await prisma.organization.findUnique({
+      where: { id: perm.organizationId },
+      select: { name: true },
+    });
 
     const { id } = await params;
 
@@ -68,14 +72,13 @@ export async function POST(
     }
 
     // Проверяем, что член принадлежит той же организации
-    if (!(await isMemberOfOrganization(member.id, chairman.organizationId))) {
+    if (!(await isMemberOfOrganization(member.id, perm.organizationId))) {
       return NextResponse.json(
         { error: "Член профсоюза не принадлежит вашей организации" },
         { status: 403 }
       );
     }
 
-    // Обновляем статус и полностью активируем кабинет (в т.ч. после повторной валидации исключённого, сменившего ППО)
     const updatedMember = await prisma.user.update({
       where: { id },
       data: {
@@ -88,16 +91,13 @@ export async function POST(
       },
     });
 
-    // Создаем или находим чат с членом профсоюза
-    const chat = await getOrCreatePrivateChat(chairman.id, member.id);
+    const chat = await getOrCreatePrivateChat(session.user.id, member.id);
 
-    // Подписываем нового члена на канал организации
     if (member.organizationId) {
       await subscribeUserToOrganizationChannel(member.id, member.organizationId);
     }
 
-    // Создаем сообщение с поздравлением
-    const congratulationMessage = `Поздравляем! Ваша заявка на вступление в профсоюз "${chairman.organization?.name || "организацию"}" одобрена. Добро пожаловать в наш профсоюз!`;
+    const congratulationMessage = `Поздравляем! Ваша заявка на вступление в профсоюз "${orgName?.name || "организацию"}" одобрена. Добро пожаловать в наш профсоюз!`;
 
     // Отправляем уведомление
     await sendUserNotification({

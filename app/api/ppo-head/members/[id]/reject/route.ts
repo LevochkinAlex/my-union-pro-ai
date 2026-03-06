@@ -4,7 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendUserNotification } from "@/lib/notifications";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
-import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isMemberOfOrganization } from "@/lib/ppo-head-utils";
 
 /**
  * POST /api/ppo-head/members/[id]/reject
@@ -21,12 +22,10 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman || !chairman.organization) {
+    const perm = await checkUserPermissions(session.user.id, "members_manage");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
+        { error: "Нет прав на управление членами профсоюза" },
         { status: 403 }
       );
     }
@@ -63,14 +62,13 @@ export async function POST(
     }
 
     // Проверяем, что член принадлежит той же организации
-    if (!(await isMemberOfOrganization(member.id, chairman.organizationId))) {
+    if (!(await isMemberOfOrganization(member.id, perm.organizationId))) {
       return NextResponse.json(
         { error: "Член профсоюза не принадлежит вашей организации" },
         { status: 403 }
       );
     }
 
-    // Обновляем статус (главное действие — не должно зависеть от чата/уведомлений)
     const updatedMember = await prisma.user.update({
       where: { id },
       data: {
@@ -78,10 +76,9 @@ export async function POST(
       },
     });
 
-    // Чат и уведомление — выполняем отдельно, чтобы ошибки не отменяли отклонение заявки
     const reasonTrimmed = reason.trim();
     try {
-      await getOrCreatePrivateChat(chairman.id, member.id);
+      await getOrCreatePrivateChat(session.user.id, member.id);
     } catch (chatErr: any) {
       console.warn("[ppo-head/members] Reject: getOrCreatePrivateChat failed (reject still applied):", chatErr?.message);
     }

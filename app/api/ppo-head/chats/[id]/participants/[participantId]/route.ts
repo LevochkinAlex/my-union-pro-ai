@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * DELETE /api/ppo-head/chats/[id]/participants/[participantId]
@@ -19,15 +19,14 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
     const resolvedParams = await Promise.resolve(params);
     const { id: chatId, participantId } = resolvedParams;
 
-    // Проверяем, что чат существует и председатель его создатель
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: { type: true, createdById: true },
@@ -37,12 +36,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Группа не найдена" }, { status: 404 });
     }
 
-    if (chat.createdById !== chairman.id) {
+    if (chat.createdById !== session.user.id) {
       return NextResponse.json({ error: "Только создатель может удалять участников" }, { status: 403 });
     }
 
-    // Не даём удалить самого создателя
-    if (participantId === chairman.id) {
+    if (participantId === session.user.id) {
       return NextResponse.json({ error: "Нельзя удалить создателя группы" }, { status: 400 });
     }
 
@@ -76,8 +74,8 @@ export async function PUT(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
@@ -85,9 +83,8 @@ export async function PUT(
     const { id: chatId, participantId } = resolvedParams;
 
     const body = await request.json();
-    const { role } = body; // "admin" или "member"
+    const { role } = body;
 
-    // Проверяем, что чат существует и председатель его создатель
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: { type: true, createdById: true },
@@ -97,7 +94,7 @@ export async function PUT(
       return NextResponse.json({ error: "Группа не найдена" }, { status: 404 });
     }
 
-    if (chat.createdById !== chairman.id) {
+    if (chat.createdById !== session.user.id) {
       return NextResponse.json({ error: "Только создатель может назначать админов" }, { status: 403 });
     }
 

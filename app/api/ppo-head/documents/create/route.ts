@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { DocumentType } from "@prisma/client";
 import { generateDocumentFromTemplate, extractUserVariables, renderTemplate, generatePDFFromHTML } from "@/lib/document-templates/renderer";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * POST /api/ppo-head/documents/create
@@ -19,10 +19,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman || !chairman.organization) {
+    const perm = await checkUserPermissions(session.user.id, "documents_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -72,7 +70,7 @@ export async function POST(request: NextRequest) {
       const participants = await prisma.user.findMany({
         where: {
           id: { in: votingParticipants },
-          organizationId: chairman.organizationId,
+          organizationId: perm.organizationId!,
         },
         select: {
           firstName: true,
@@ -94,7 +92,7 @@ export async function POST(request: NextRequest) {
       const present = await prisma.user.findMany({
         where: {
           id: { in: presentMembers },
-          organizationId: chairman.organizationId,
+          organizationId: perm.organizationId!,
         },
         select: {
           firstName: true,
@@ -114,7 +112,7 @@ export async function POST(request: NextRequest) {
       const absent = await prisma.user.findMany({
         where: {
           id: { in: absentMembers },
-          organizationId: chairman.organizationId,
+          organizationId: perm.organizationId!,
         },
         select: {
           firstName: true,
@@ -154,19 +152,18 @@ export async function POST(request: NextRequest) {
       .join("\n");
 
     // Получаем полный объект председателя для извлечения переменных
-    const fullChairman = await prisma.user.findUnique({
-      where: { id: chairman.id },
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
     });
 
-    if (!fullChairman) {
+    if (!currentUser) {
       return NextResponse.json(
-        { error: "Председатель не найден" },
+        { error: "Пользователь не найден" },
         { status: 404 }
       );
     }
 
-    // Извлекаем базовые переменные из председателя
-    const baseVariables = await extractUserVariables(fullChairman);
+    const baseVariables = await extractUserVariables(currentUser);
 
     // Добавляем специфичные переменные для документов профкома
     const variables = {
@@ -244,8 +241,8 @@ export async function POST(request: NextRequest) {
         filePath,
         fileName,
         fileSize: pdfBuffer.length,
-        userId: chairman.id,
-        organizationId: chairman.organizationId,
+        userId: session.user.id,
+        organizationId: perm.organizationId!,
         templateId: template.id,
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
       },

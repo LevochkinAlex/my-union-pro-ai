@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { TicketStatus } from "@prisma/client";
-import { getPPOHead } from "@/lib/ppo-head-utils";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { sendUserNotification } from "@/lib/notifications";
 
@@ -61,15 +60,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Обращение не найдено" }, { status: 404 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    const perm = await checkUserPermissions(session.user.id);
-    const isChairman = chairman && ticket.organizationId === chairman.organizationId;
-    const isStaffWithAppeals =
-      perm.isStaff && perm.permissions?.appeals_view && perm.organizationId === ticket.organizationId;
-
-    if (!isChairman && !isStaffWithAppeals) {
+    const perm = await checkUserPermissions(session.user.id, "appeals_manage");
+    if (!perm.hasAccess || perm.organizationId !== ticket.organizationId) {
       return NextResponse.json(
-        { error: "Только председатель или сотрудник с правом обращений может менять статус" },
+        {
+          error: "Только председатель или сотрудник с правом управления обращениями может менять статус",
+          requiredPermission: "appeals_manage",
+          denyReason: perm.denyReason || "MISSING_PERMISSION",
+        },
         { status: 403 }
       );
     }

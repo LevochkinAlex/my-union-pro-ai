@@ -17,18 +17,17 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status"); // pending | approved
+    const status = searchParams.get("status"); // pending | approved | all
     const q = searchParams.get("q")?.trim() || "";
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
-    const skip = Math.max(0, parseInt(searchParams.get("skip") || "0", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const skip = (page - 1) * limit;
 
     const where: any = {
       organizationId: { in: scope.organizationIds },
     };
 
     if (status === "pending") {
-      // Только те, кто ещё не принят на учёт: не одобренные и не принятые на уровне союза.
-      // Исключаем APPROVED и unionMembershipStatus === "ACCEPTED", чтобы уже валидированные не попадали в список.
       where.membershipStatus = {
         in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
       };
@@ -36,6 +35,7 @@ export async function GET(request: NextRequest) {
     } else if (status === "approved") {
       where.membershipStatus = "APPROVED";
     }
+    // status === "all" или пусто — все пользователи в scope
 
     if (q.length >= 1) {
       where.OR = [
@@ -62,6 +62,8 @@ export async function GET(request: NextRequest) {
           avatarUrl: true,
           membershipStatus: true,
           unionMembershipStatus: true,
+          role: true,
+          isPPOHead: true,
           createdAt: true,
           organizationId: true,
           organization: {
@@ -92,7 +94,16 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where }),
     ]);
 
-    return NextResponse.json({ members, total, scopeLevel: scope.level });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    return NextResponse.json({
+      members,
+      total,
+      page,
+      limit,
+      totalPages,
+      scopeLevel: scope.level,
+    });
   } catch (error: any) {
     console.error("[org-head/members] GET error:", error);
     return NextResponse.json(

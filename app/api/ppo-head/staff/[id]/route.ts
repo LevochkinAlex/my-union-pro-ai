@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 // GET - получить сотрудника
 export async function GET(
@@ -23,23 +24,22 @@ export async function GET(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+    const access = await checkUserPermissions(session.user.id, "staff_view");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "staff_view",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
 
     const staff = await prisma.organizationStaff.findFirst({
       where: {
         id,
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
       },
       include: {
         user: {
@@ -88,18 +88,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
+    const access = await checkUserPermissions(session.user.id, "staff_manage");
+    if (!access.hasAccess || !access.organizationId) {
       return NextResponse.json(
-        { error: "Только Председатель может редактировать сотрудников" },
+        {
+          error: "Недостаточно прав для редактирования сотрудника",
+          requiredPermission: "staff_manage",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
         { status: 403 }
       );
     }
@@ -107,7 +103,7 @@ export async function PATCH(
     const existingStaff = await prisma.organizationStaff.findFirst({
       where: {
         id,
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
       },
     });
 
@@ -126,7 +122,7 @@ export async function PATCH(
       const role = await prisma.staffRole.findFirst({
         where: {
           id: roleId,
-          organizationId: user.ppoHeadOrganizationId,
+          organizationId: access.organizationId,
           isActive: true,
         },
       });
@@ -184,18 +180,14 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
+    const access = await checkUserPermissions(session.user.id, "staff_manage");
+    if (!access.hasAccess || !access.organizationId) {
       return NextResponse.json(
-        { error: "Только Председатель может удалять сотрудников" },
+        {
+          error: "Недостаточно прав для удаления сотрудника",
+          requiredPermission: "staff_manage",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
         { status: 403 }
       );
     }
@@ -203,7 +195,7 @@ export async function DELETE(
     const existingStaff = await prisma.organizationStaff.findFirst({
       where: {
         id,
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
       },
     });
 

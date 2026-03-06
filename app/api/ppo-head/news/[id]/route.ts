@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 function canAccessChannel(
-  chairman: { level: string; organizationId: string },
+  ctx: { isRPOHead: boolean; organizationId: string | null },
   channel: { organizationId: string | null; name: string } | null
 ): boolean {
   if (!channel) return false;
   const isRegional = channel.organizationId === null && channel.name === "Региональные новости";
-  if (isRegional && chairman.level === "RPO") return true;
-  return channel.organizationId === chairman.organizationId;
+  if (isRegional && ctx.isRPOHead) return true;
+  return channel.organizationId === ctx.organizationId;
 }
 
 /**
@@ -29,15 +29,27 @@ export async function PUT(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getOrgHead(session.user.id);
+    const userFlags = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isRPOHead: true, rpoHeadOrganizationId: true },
+    });
+    const isRPOHead = !!userFlags?.isRPOHead;
 
-    if (!chairman || !chairman.organizationId) {
-      return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
-        { status: 403 }
-      );
+    let organizationId: string | null = null;
+    if (isRPOHead) {
+      organizationId = userFlags?.rpoHeadOrganizationId || null;
+    } else {
+      const perm = await checkUserPermissions(session.user.id, "news_create");
+      if (!perm.hasAccess || !perm.organizationId) {
+        return NextResponse.json(
+          { error: "Доступ запрещен или организация не назначена" },
+          { status: 403 }
+        );
+      }
+      organizationId = perm.organizationId;
     }
 
+    const ctx = { isRPOHead, organizationId };
     const { id } = await params;
     const body = await request.json();
     const { title, content, coverImage, channelId, isPublished } = body;
@@ -51,7 +63,7 @@ export async function PUT(
       return NextResponse.json({ error: "Новость не найдена" }, { status: 404 });
     }
 
-    if (!canAccessChannel(chairman, existingNews.channel)) {
+    if (!canAccessChannel(ctx, existingNews.channel)) {
       return NextResponse.json(
         { error: "Нет прав на редактирование этой новости" },
         { status: 403 }
@@ -63,7 +75,7 @@ export async function PUT(
         where: { id: channelId },
         select: { organizationId: true, name: true },
       });
-      if (!newChannel || !canAccessChannel(chairman, newChannel)) {
+      if (!newChannel || !canAccessChannel(ctx, newChannel)) {
         return NextResponse.json(
           { error: "Указанный канал не найден или недоступен" },
           { status: 400 }
@@ -136,15 +148,27 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getOrgHead(session.user.id);
+    const delUserFlags = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isRPOHead: true, rpoHeadOrganizationId: true },
+    });
+    const delIsRPOHead = !!delUserFlags?.isRPOHead;
 
-    if (!chairman || !chairman.organizationId) {
-      return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
-        { status: 403 }
-      );
+    let delOrganizationId: string | null = null;
+    if (delIsRPOHead) {
+      delOrganizationId = delUserFlags?.rpoHeadOrganizationId || null;
+    } else {
+      const perm = await checkUserPermissions(session.user.id, "news_manage");
+      if (!perm.hasAccess || !perm.organizationId) {
+        return NextResponse.json(
+          { error: "Доступ запрещен или организация не назначена" },
+          { status: 403 }
+        );
+      }
+      delOrganizationId = perm.organizationId;
     }
 
+    const delCtx = { isRPOHead: delIsRPOHead, organizationId: delOrganizationId };
     const { id } = await params;
 
     const existingNews = await prisma.newsPost.findUnique({
@@ -156,7 +180,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Новость не найдена" }, { status: 404 });
     }
 
-    if (!canAccessChannel(chairman, existingNews.channel)) {
+    if (!canAccessChannel(delCtx, existingNews.channel)) {
       return NextResponse.json(
         { error: "Нет прав на удаление этой новости" },
         { status: 403 }

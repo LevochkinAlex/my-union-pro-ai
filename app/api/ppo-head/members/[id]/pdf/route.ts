@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma as db } from "@/lib/prisma";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import PDFDocument from "pdfkit";
 import path from "path";
 import fs from "fs";
 
-// Маппинги для перевода статусов
 const MEMBERSHIP_STATUS_MAP: Record<string, string> = {
   PENDING: "Ожидает",
   PENDING_VERIFICATION: "Ожидает проверки",
@@ -43,19 +43,25 @@ export async function GET(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем роль
     const currentUser = await db.user.findUnique({
       where: { id: session.user.id },
       select: { role: true, organizationId: true },
     });
 
-    if (!currentUser || (currentUser.role !== "PPO_HEAD" && currentUser.role !== "SUPER_ADMIN")) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+    let organizationId: string | null = null;
+
+    if (currentUser?.role === "SUPER_ADMIN") {
+      organizationId = null; // super admin can access any member
+    } else {
+      const perm = await checkUserPermissions(session.user.id, "members_view");
+      if (!perm.hasAccess || !perm.organizationId) {
+        return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+      }
+      organizationId = perm.organizationId;
     }
 
     const { id } = await params;
 
-    // Получаем данные члена
     const member = await db.user.findUnique({
       where: { id },
       include: {
@@ -76,8 +82,7 @@ export async function GET(
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    // Проверяем принадлежность к организации (для PPO_HEAD)
-    if (currentUser.role === "PPO_HEAD" && member.organizationId !== currentUser.organizationId) {
+    if (organizationId && member.organizationId !== organizationId) {
       return NextResponse.json({ error: "Нет доступа к данному пользователю" }, { status: 403 });
     }
 

@@ -18,11 +18,12 @@ interface StaffMember {
     phone: string | null;
     avatarUrl: string | null;
   };
-  role: {
+  role?: {
     id: string;
     name: string;
     permissions: Record<string, boolean>;
   };
+  organization?: { id: string; name: string; type?: string };
 }
 
 interface StaffRole {
@@ -64,14 +65,24 @@ const PERMISSION_LABELS: Record<string, string> = {
   staff_manage: "Управление сотрудниками",
 };
 
+type OrgItem = { id: string; name: string; type?: string };
+
 export default function StaffManagementPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"staff" | "roles">("staff");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [roles, setRoles] = useState<StaffRole[]>([]);
+  const [rolesReadOnly, setRolesReadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [regionMode, setRegionMode] = useState(false);
+  const [organizations, setOrganizations] = useState<OrgItem[]>([]);
+  /** В режиме РПО: выбранная организация — показываем только её сотрудников */
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
+  const [rolesForOrg, setRolesForOrg] = useState<StaffRole[]>([]);
+  const [loadingRolesForOrg, setLoadingRolesForOrg] = useState(false);
+  const [loadingStaffForOrg, setLoadingStaffForOrg] = useState(false);
 
   // Модалки
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -79,36 +90,51 @@ export default function StaffManagementPage() {
   const [selectedRole, setSelectedRole] = useState<StaffRole | null>(null);
   const [showEditStaffModal, setShowEditStaffModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [editStaffRoles, setEditStaffRoles] = useState<StaffRole[]>([]);
+  const [loadingEditStaffRoles, setLoadingEditStaffRoles] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
   // Форма добавления сотрудника
   const [addStaffForm, setAddStaffForm] = useState({
     email: "",
     roleId: "",
+    organizationId: "",
   });
   const [addStaffResult, setAddStaffResult] = useState<{
     message?: string;
     isExistingUser?: boolean;
   } | null>(null);
 
-  // Загрузка данных
+  // Загрузка данных: сначала PPO, при 403 — RPO (регион)
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [staffRes, rolesRes] = await Promise.all([
-        fetch("/api/ppo-head/staff"),
-        fetch("/api/ppo-head/roles"),
-      ]);
+      setError(null);
 
-      if (!staffRes.ok || !rolesRes.ok) {
-        throw new Error("Ошибка загрузки данных");
+      const staffRes = await fetch("/api/ppo-head/staff");
+      if (staffRes.ok) {
+        const rolesRes = await fetch("/api/ppo-head/roles");
+        if (!rolesRes.ok) throw new Error("Ошибка загрузки ролей");
+        const staffData = await staffRes.json();
+        const rolesData = await rolesRes.json();
+        setStaff(staffData.staff || []);
+        setRoles(rolesData.roles || []);
+        setRolesReadOnly(rolesData.readOnly === true);
+        setRegionMode(false);
+      } else {
+        setStaff([]);
+        setRoles([]);
+        setRolesReadOnly(true);
+        setRegionMode(true);
+        setSelectedOrganizationId(null);
+        const orgsRes = await fetch("/api/org-head/organizations?limit=500");
+        if (!orgsRes.ok) {
+          const data = await orgsRes.json().catch(() => ({}));
+          throw new Error(data.error || "Нет доступа к списку организаций");
+        }
+        const orgsData = await orgsRes.json();
+        setOrganizations(orgsData.organizations || []);
       }
-
-      const staffData = await staffRes.json();
-      const rolesData = await rolesRes.json();
-
-      setStaff(staffData.staff || []);
-      setRoles(rolesData.roles || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     } finally {
@@ -122,66 +148,124 @@ export default function StaffManagementPage() {
     }
   }, [status, fetchData]);
 
-  // Добавление сотрудника
+  // В режиме РПО: загружаем сотрудников только выбранной организации
+  const loadStaffForSelectedOrg = useCallback(async () => {
+    if (!regionMode || !selectedOrganizationId) {
+      setStaff([]);
+      return;
+    }
+    setLoadingStaffForOrg(true);
+    try {
+      const res = await fetch(`/api/org-head/staff?organizationId=${encodeURIComponent(selectedOrganizationId)}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Ошибка загрузки сотрудников");
+      }
+      const data = await res.json();
+      setStaff(data.staff || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка загрузки");
+      setStaff([]);
+    } finally {
+      setLoadingStaffForOrg(false);
+    }
+  }, [regionMode, selectedOrganizationId]);
+
+  useEffect(() => {
+    if (!regionMode) return;
+    if (!selectedOrganizationId) {
+      setStaff([]);
+      return;
+    }
+    loadStaffForSelectedOrg();
+  }, [regionMode, selectedOrganizationId, loadStaffForSelectedOrg]);
+
+  const refreshStaff = useCallback(() => {
+    if (regionMode && selectedOrganizationId) loadStaffForSelectedOrg();
+    else fetchData();
+  }, [regionMode, selectedOrganizationId, loadStaffForSelectedOrg, fetchData]);
+
+  const orgIdForRoles = regionMode && showAddStaffModal ? (addStaffForm.organizationId || selectedOrganizationId) : null;
+  useEffect(() => {
+    if (!orgIdForRoles) {
+      setRolesForOrg([]);
+      return;
+    }
+    setLoadingRolesForOrg(true);
+    fetch(`/api/org-head/organizations/${orgIdForRoles}/roles`)
+      .then((r) => r.json())
+      .then((data) => setRolesForOrg(data.roles || []))
+      .catch(() => setRolesForOrg([]))
+      .finally(() => setLoadingRolesForOrg(false));
+  }, [orgIdForRoles]);
+
+  // В режиме РПО при открытии редактирования сотрудника подгружаем роли его организации
+  useEffect(() => {
+    if (!regionMode || !editingStaff?.organization?.id) {
+      setEditStaffRoles([]);
+      return;
+    }
+    setLoadingEditStaffRoles(true);
+    fetch(`/api/org-head/organizations/${editingStaff.organization.id}/roles`)
+      .then((r) => r.json())
+      .then((data) => setEditStaffRoles(data.roles || []))
+      .catch(() => setEditStaffRoles([]))
+      .finally(() => setLoadingEditStaffRoles(false));
+  }, [regionMode, editingStaff?.id, editingStaff?.organization?.id]);
+
+  const addStaffApi = regionMode ? "/api/org-head/staff" : "/api/ppo-head/staff";
+  const staffIdApi = (id: string) => (regionMode ? `/api/org-head/staff/${id}` : `/api/ppo-head/staff/${id}`);
+
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/ppo-head/staff", {
+      const body = regionMode
+        ? { email: addStaffForm.email.trim(), roleId: addStaffForm.roleId, organizationId: selectedOrganizationId }
+        : { email: addStaffForm.email.trim(), roleId: addStaffForm.roleId };
+      if (regionMode && !selectedOrganizationId) {
+        setError("Выберите организацию");
+        return;
+      }
+      const res = await fetch(addStaffApi, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(addStaffForm),
+        body: JSON.stringify(body),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Ошибка добавления");
-      }
-
-      setAddStaffResult({
-        message: data.message,
-        isExistingUser: data.isExistingUser,
-      });
-
-      fetchData();
+      if (!res.ok) throw new Error(data.error || "Ошибка добавления");
+      setAddStaffResult({ message: data.message, isExistingUser: data.isExistingUser });
+      setAddStaffForm((f) => ({ ...f, email: "", roleId: "", organizationId: regionMode ? selectedOrganizationId ?? "" : "" }));
+      refreshStaff();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     }
   };
 
-  // Изменение статуса сотрудника
   const handleChangeStaffStatus = async (
     staffId: string,
     newStatus: "ACTIVE" | "INACTIVE"
   ) => {
     try {
-      const res = await fetch(`/api/ppo-head/staff/${staffId}`, {
+      const res = await fetch(staffIdApi(staffId), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-
-      if (!res.ok) {
-        throw new Error("Ошибка изменения статуса");
-      }
-
-      fetchData();
+      if (!res.ok) throw new Error("Ошибка изменения статуса");
+      refreshStaff();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     }
   };
 
-  // Повторная отправка приглашения (только для PENDING)
   const handleResendInvite = async (staffId: string) => {
     try {
       setResendingId(staffId);
-      const res = await fetch(`/api/ppo-head/staff/${staffId}/resend-invite`, {
-        method: "POST",
-      });
+      const res = await fetch(`${staffIdApi(staffId)}/resend-invite`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка отправки");
       setError(null);
-      fetchData();
+      refreshStaff();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось отправить приглашение");
     } finally {
@@ -195,10 +279,9 @@ export default function StaffManagementPage() {
     setShowEditStaffModal(true);
   };
 
-  // Сохранение изменений сотрудника (роль)
   const handleSaveStaff = async (staffId: string, roleId: string) => {
     try {
-      const res = await fetch(`/api/ppo-head/staff/${staffId}`, {
+      const res = await fetch(staffIdApi(staffId), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roleId }),
@@ -210,26 +293,18 @@ export default function StaffManagementPage() {
       setShowEditStaffModal(false);
       setEditingStaff(null);
       setError(null);
-      fetchData();
+      refreshStaff();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка сохранения");
     }
   };
 
-  // Удаление сотрудника
   const handleDeleteStaff = async (staffId: string) => {
     if (!confirm("Удалить сотрудника?")) return;
-
     try {
-      const res = await fetch(`/api/ppo-head/staff/${staffId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error("Ошибка удаления");
-      }
-
-      fetchData();
+      const res = await fetch(staffIdApi(staffId), { method: "DELETE" });
+      if (!res.ok) throw new Error("Ошибка удаления");
+      refreshStaff();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     }
@@ -250,11 +325,13 @@ export default function StaffManagementPage() {
 
       setShowEditRoleModal(false);
       setSelectedRole(null);
-      fetchData();
+      refreshStaff();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     }
   };
+
+  const selectedOrg = selectedOrganizationId ? organizations.find((o) => o.id === selectedOrganizationId) : null;
 
   if (status === "loading" || loading) {
     return (
@@ -314,10 +391,12 @@ export default function StaffManagementPage() {
         {activeTab === "staff" && (
           <button
             onClick={() => {
+              if (regionMode) setAddStaffForm((f) => ({ ...f, organizationId: selectedOrganizationId ?? "", roleId: "" }));
               setShowAddStaffModal(true);
               setAddStaffResult(null);
             }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+            disabled={regionMode && !selectedOrganizationId}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -383,8 +462,45 @@ export default function StaffManagementPage() {
         {/* Контент таба "Сотрудники" */}
         {activeTab === "staff" && (
           <div className="p-4 sm:p-6">
+            {regionMode && (
+              <div className="mb-6">
+                <label htmlFor="staff-org-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Организация (ППО)
+                </label>
+                <select
+                  id="staff-org-select"
+                  value={selectedOrganizationId ?? ""}
+                  onChange={(e) => setSelectedOrganizationId(e.target.value || null)}
+                  className="w-full max-w-md px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Выберите организацию</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
+                  Сотрудники отображаются только для выбранной организации. Роли создаёт только РПО в разделе «Роли и должности».
+                </p>
+              </div>
+            )}
+
+            {regionMode && !selectedOrganizationId && (
+              <div className="text-center py-12 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400">
+                <p className="font-medium">Выберите организацию</p>
+                <p className="text-sm mt-1">Чтобы увидеть и управлять сотрудниками, выберите организацию (ППО) в списке выше.</p>
+              </div>
+            )}
+
+            {regionMode && selectedOrganizationId && loadingStaffForOrg && (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            )}
+
+            {!regionMode || (selectedOrganizationId && !loadingStaffForOrg) ? (
+            <>
             {/* Список сотрудников */}
-            {staff.length === 0 ? (
+            {staff.length === 0 && (regionMode ? selectedOrganizationId : true) ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                   <svg
@@ -464,7 +580,7 @@ export default function StaffManagementPage() {
                         </td>
                         <td className="py-4 pr-4">
                           <span className="text-gray-700 dark:text-gray-300">
-                            {member.role.name}
+                            {member.role?.name ?? "—"}
                           </span>
                         </td>
                         <td className="py-4 pr-4">
@@ -539,14 +655,35 @@ export default function StaffManagementPage() {
                 </table>
               </div>
             )}
+            </>
+            ) : null}
           </div>
         )}
 
         {/* Контент таба "Роли" */}
         {activeTab === "roles" && (
           <div className="p-4 sm:p-6">
-            <div className="grid gap-4">
-              {roles.map((role) => (
+            {regionMode ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-6 text-center dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+                <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                  Роли и права настраиваются в разделе «Роли и должности» и действуют для всех ППО региона.
+                </p>
+                <a
+                  href="/dashboard/roles"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  Перейти в «Роли и должности»
+                </a>
+              </div>
+            ) : (
+              <>
+                {rolesReadOnly && (
+                  <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+                    Редактирование ролей перенесено в кабинет РПО. Здесь доступно только назначение сотрудников на уже опубликованные роли.
+                  </div>
+                )}
+                <div className="grid gap-4">
+                  {roles.map((role) => (
                 <div
                   key={role.id}
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-600"
@@ -590,22 +727,26 @@ export default function StaffManagementPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setSelectedRole(role);
-                      setShowEditRoleModal(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Настроить права
-                  </button>
+                  {!rolesReadOnly && (
+                    <button
+                      onClick={() => {
+                        setSelectedRole(role);
+                        setShowEditRoleModal(true);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Настроить права
+                    </button>
+                  )}
                 </div>
               ))}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -642,7 +783,7 @@ export default function StaffManagementPage() {
                 <button
                   onClick={() => {
                     setShowAddStaffModal(false);
-                    setAddStaffForm({ email: "", roleId: "" });
+                    setAddStaffForm({ email: "", roleId: "", organizationId: "" });
                     setAddStaffResult(null);
                   }}
                   className="w-full py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -653,6 +794,12 @@ export default function StaffManagementPage() {
             ) : (
               <form onSubmit={handleAddStaff}>
                 <div className="space-y-4">
+                  {regionMode && selectedOrg && (
+                    <div className="rounded-lg bg-gray-50 dark:bg-gray-700/50 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                      <span className="font-medium">Организация:</span> {selectedOrg.name}
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Email сотрудника
@@ -680,15 +827,21 @@ export default function StaffManagementPage() {
                         setAddStaffForm({ ...addStaffForm, roleId: e.target.value })
                       }
                       required
-                      className="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      disabled={regionMode && loadingRolesForOrg}
+                      className="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                     >
-                      <option value="">Выберите роль</option>
-                      {roles.map((role) => (
+                      <option value="">
+                        {regionMode && loadingRolesForOrg ? "Загрузка ролей..." : "Выберите роль"}
+                      </option>
+                      {(regionMode ? rolesForOrg : roles).map((role) => (
                         <option key={role.id} value={role.id}>
                           {role.name}
                         </option>
                       ))}
                     </select>
+                    {regionMode && loadingRolesForOrg && (
+                      <p className="text-xs text-gray-500 mt-1">Загрузка ролей...</p>
+                    )}
                   </div>
                 </div>
 
@@ -729,10 +882,12 @@ export default function StaffManagementPage() {
       {showEditStaffModal && editingStaff && (
         <EditStaffModal
           member={editingStaff}
-          roles={roles}
+          roles={regionMode ? editStaffRoles : roles}
+          loadingRoles={regionMode && loadingEditStaffRoles}
           onClose={() => {
             setShowEditStaffModal(false);
             setEditingStaff(null);
+            setEditStaffRoles([]);
           }}
           onSave={handleSaveStaff}
         />
@@ -745,19 +900,26 @@ export default function StaffManagementPage() {
 function EditStaffModal({
   member,
   roles,
+  loadingRoles = false,
   onClose,
   onSave,
 }: {
   member: StaffMember;
   roles: StaffRole[];
+  loadingRoles?: boolean;
   onClose: () => void;
   onSave: (staffId: string, roleId: string) => void;
 }) {
-  const [roleId, setRoleId] = useState(member.role.id);
+  const [roleId, setRoleId] = useState(member.role?.id ?? "");
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    setRoleId(member.role?.id ?? "");
+  }, [member.id, member.role?.id]);
+
   const handleSave = async () => {
-    if (roleId === member.role.id) {
+    const currentRoleId = member.role?.id ?? "";
+    if (roleId === currentRoleId || !roleId) {
       onClose();
       return;
     }
@@ -782,18 +944,23 @@ function EditStaffModal({
           <label htmlFor="edit-member-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Роль (должность)
           </label>
-          <select
-            id="edit-member-role"
-            value={roleId}
-            onChange={(e) => setRoleId(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            {roles.map((role) => (
-              <option key={role.id} value={role.id}>
-                {role.name}
-              </option>
-            ))}
-          </select>
+          {loadingRoles ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Загрузка ролей...</p>
+          ) : (
+            <select
+              id="edit-member-role"
+              value={roleId}
+              onChange={(e) => setRoleId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Выберите роль</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="flex gap-3 mt-6">
           <button
@@ -805,7 +972,7 @@ function EditStaffModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || loadingRoles || !roleId}
             className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:opacity-50"
           >
             {saving ? "Сохранение..." : "Сохранить"}

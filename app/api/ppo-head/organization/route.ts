@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * GET /api/ppo-head/organization
@@ -15,13 +15,13 @@ export async function GET() {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-    if (!orgHead?.organizationId) {
+    const perm = await checkUserPermissions(session.user.id, "settings_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 
     const organization = await prisma.organization.findUnique({
-      where: { id: orgHead.organizationId },
+      where: { id: perm.organizationId },
       select: { id: true, name: true, totalEmployees: true },
     });
 
@@ -50,8 +50,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-    if (!orgHead?.organizationId) {
+    const perm = await checkUserPermissions(session.user.id, "settings_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 
@@ -64,7 +64,7 @@ export async function PATCH(request: NextRequest) {
         : Math.max(0, parseInt(String(totalEmployees), 10) || 0);
 
     await prisma.organization.update({
-      where: { id: orgHead.organizationId },
+      where: { id: perm.organizationId },
       data: { totalEmployees: value },
     });
 

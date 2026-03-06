@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DEMO_USER_ID } from "@/lib/demo-constants";
 import { getDemoPPOHeadTickets } from "@/lib/demo";
 
@@ -28,17 +28,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, tickets });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "appeals_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
       );
     }
     
-    console.log("[ppo-head/appeals] Request params:", { status, userId, chairmanId: chairman.organizationId });
+    console.log("[ppo-head/appeals] Request params:", { status, userId, organizationId: perm.organizationId });
 
     // Получаем чаты председателя, чтобы показывать обращения из этих чатов
     const chairmanChats = await prisma.chat.findMany({
@@ -63,8 +61,8 @@ export async function GET(request: NextRequest) {
     const orConditions: any[] = [];
     
     // Обращения из организации председателя
-    if (chairman?.organizationId) {
-      orConditions.push({ organizationId: chairman.organizationId });
+    if (perm.organizationId) {
+      orConditions.push({ organizationId: perm.organizationId });
     }
     
     // Обращения из чатов председателя (для старых обращений)
@@ -96,7 +94,7 @@ export async function GET(request: NextRequest) {
       console.log("[ppo-head/appeals] Member check:", { 
         memberId: userId, 
         memberOrgId: member?.organizationId, 
-        chairmanOrgId: chairman.organizationId,
+        chairmanOrgId: perm.organizationId,
         isMember: !!member,
       });
       

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/cache-invalidation";
 
@@ -21,10 +21,8 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -72,9 +70,9 @@ export async function POST(
 
     // Проверяем права: создатель или админ
     const isAdmin =
-      chat.createdById === chairman.id ||
+      chat.createdById === session.user.id ||
       chat.participants.some(
-        (p) => p.userId === chairman.id && p.role === "admin"
+        (p) => p.userId === session.user.id && p.role === "admin"
       );
 
     if (!isAdmin) {
@@ -85,7 +83,7 @@ export async function POST(
     }
 
     // Нельзя удалить самого себя
-    if (participantId === chairman.id) {
+    if (participantId === session.user.id) {
       return NextResponse.json(
         { error: "Вы не можете удалить себя из группы" },
         { status: 400 }
@@ -139,12 +137,12 @@ export async function POST(
       await prisma.ticketActionLog.create({
         data: {
           ticketId: ticket.id,
-          userId: chairman.id,
+          userId: session.user.id,
           actionType: "participant_removed",
           description: `Участник ${participantName} удалён из группы`,
           metadata: {
             removedUserId: participantId,
-            removedBy: chairman.id,
+            removedBy: session.user.id,
           },
         },
       });
@@ -153,7 +151,7 @@ export async function POST(
     // Инвалидируем кеш
     await invalidateChatCache(chatId);
     await invalidateUserChatsCache(participantId);
-    await invalidateUserChatsCache(chairman.id);
+    await invalidateUserChatsCache(session.user.id);
 
     // Уведомляем удалённого участника
     const chatName = ticket?.publicId
@@ -167,7 +165,7 @@ export async function POST(
       body: `Вы были удалены из "${chatName}"`,
       url: "/dashboard/chat",
       senderName:
-        `${chairman.firstName || ""} ${chairman.lastName || ""}`.trim() ||
+        `${session.user.firstName || ""} ${session.user.lastName || ""}`.trim() ||
         "Председатель",
     });
 

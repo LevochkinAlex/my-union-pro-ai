@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * DELETE /api/ppo-head/appeals/[id]
@@ -19,10 +19,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "appeals_manage");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -44,7 +42,7 @@ export async function DELETE(
       );
     }
 
-    if (ticket.organizationId !== chairman.organizationId) {
+    if (ticket.organizationId !== perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен" },
         { status: 403 }
@@ -55,7 +53,7 @@ export async function DELETE(
     await prisma.ticketActionLog.create({
       data: {
         ticketId,
-        userId: chairman.id,
+        userId: session.user.id,
         actionType: "deleted",
         description: "Обращение удалено Председателем",
       },

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 
 // Типы действий workflow
@@ -69,46 +68,21 @@ export async function POST(
 
     const { id: documentId } = await params;
 
-    // Проверяем доступ (председатель или сотрудник с правами)
-    const chairman = await getPPOHead(session.user.id);
-    let organizationId: string | null = null;
-    let userPermissions: string[] = [];
-
-    if (chairman) {
-      organizationId = chairman.organizationId;
-      // Председатель имеет все права
-      userPermissions = [
-        "documents_view", "documents_create", "documents_edit",
-        "documents_approve", "documents_sign"
-      ];
-    } else {
-      // Проверяем права сотрудника
-      const permissions = await checkUserPermissions(session.user.id, "documents_view");
-      if (!permissions.hasAccess) {
-        return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-      }
-      organizationId = permissions.organizationId;
-      
-      // Собираем все права сотрудника
-      const staffPosition = await prisma.organizationStaff.findFirst({
-        where: {
-          userId: session.user.id,
-          status: "ACTIVE",
+    const perm = await checkUserPermissions(session.user.id, "documents_edit");
+    if (!perm.hasAccess || !perm.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "documents_edit",
+          denyReason: perm.denyReason || "MISSING_PERMISSION",
         },
-        include: { role: true },
-      });
-      
-      if (staffPosition?.role?.permissions) {
-        const perms = staffPosition.role.permissions as Record<string, boolean>;
-        userPermissions = Object.entries(perms)
-          .filter(([, value]) => value)
-          .map(([key]) => key);
-      }
+        { status: 403 }
+      );
     }
-
-    if (!organizationId) {
-      return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
-    }
+    const organizationId = perm.organizationId;
+    const userPermissions = Object.entries(perm.permissions)
+      .filter(([, value]) => value === true)
+      .map(([key]) => key);
 
     // Получаем документ
     const document = await prisma.document.findUnique({
@@ -331,19 +305,11 @@ export async function GET(
 
     const { id: documentId } = await params;
 
-    // Проверяем доступ
-    const chairman = await getPPOHead(session.user.id);
-    let organizationId: string | null = null;
-
-    if (chairman) {
-      organizationId = chairman.organizationId;
-    } else {
-      const permissions = await checkUserPermissions(session.user.id, "documents_view");
-      if (!permissions.hasAccess) {
-        return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-      }
-      organizationId = permissions.organizationId;
+    const permView = await checkUserPermissions(session.user.id, "documents_view");
+    if (!permView.hasAccess || !permView.organizationId) {
+      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
+    const organizationId = permView.organizationId;
 
     // Получаем документ с историей
     const document = await prisma.document.findUnique({

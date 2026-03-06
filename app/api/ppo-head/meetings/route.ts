@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { MeetingType, MeetingStatus, MeetingFormat } from "@prisma/client";
 
 /**
@@ -35,9 +35,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-    const organizationId = orgHead?.organizationId ?? null;
-    const isOrgHead = !!orgHead;
+    const perm = await checkUserPermissions(session.user.id, "documents_view");
+    const organizationId = perm.hasAccess ? perm.organizationId : null;
+    const isOrgHead = perm.isChairman;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") as MeetingStatus | null;
@@ -126,10 +126,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-
-    if (!orgHead) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+    const perm = await checkUserPermissions(session.user.id, "documents_create");
+    if (!perm.hasAccess || !perm.organizationId) {
+      return NextResponse.json({ error: "Нет прав на создание заседаний" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -157,7 +156,7 @@ export async function POST(request: NextRequest) {
     const year = new Date(scheduledDate).getFullYear();
     const meetingsInYear = await prisma.meeting.count({
       where: {
-        organizationId: orgHead.organizationId,
+        organizationId: perm.organizationId!,
         scheduledDate: {
           gte: new Date(year, 0, 1),
           lt: new Date(year + 1, 0, 1),
@@ -209,7 +208,7 @@ export async function POST(request: NextRequest) {
     // Создание заседания с участниками и пунктами повестки
     const meeting = await prisma.meeting.create({
       data: {
-        organizationId: orgHead.organizationId,
+        organizationId: perm.organizationId!,
         type: type as MeetingType,
         status: MeetingStatus.DRAFT,
         format: format as MeetingFormat,

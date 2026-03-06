@@ -4,54 +4,12 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import type { StaffPermissionsMap } from "@/lib/staff-permission-matrix";
 
 const prisma = new PrismaClient();
 
 // Типы прав доступа
-export interface StaffPermissions {
-  // Документы (Входящие / Исходящие: заседания, повестки, протоколы)
-  documents_view: boolean;   // Просмотр документов (входящие, исходящие)
-  documents_create: boolean; // Создание заседаний, повесток, протоколов
-  documents_edit: boolean;   // Редактирование черновиков документов
-  documents_approve: boolean; // Согласование повесток и протоколов (одобрить/отклонить)
-  documents_sign: boolean;   // Подписание протоколов (председатель/секретарь)
-
-  // Скидки
-  discounts_view: boolean; // Просмотр скидок
-  discounts_manage: boolean; // Управление скидками (активация и т.д.)
-
-  // Члены профсоюза
-  members_view: boolean; // Просмотр карточек членов
-  members_edit: boolean; // Редактирование карточек (награды, обучение)
-  members_manage: boolean; // Управление членами (принятие, исключение)
-
-  // Обращения
-  appeals_view: boolean; // Просмотр обращений
-  appeals_respond: boolean; // Ответы на обращения
-  appeals_manage: boolean; // Полное управление обращениями
-
-  // Чаты
-  chats_view: boolean; // Просмотр чатов
-  chats_participate: boolean; // Участие в чатах
-  chats_create: boolean; // Создание групповых чатов
-
-  // Новости
-  news_view: boolean; // Просмотр новостей
-  news_create: boolean; // Создание новостей
-  news_manage: boolean; // Управление всеми новостями
-
-  // Отчеты
-  reports_view: boolean; // Просмотр отчетов
-  reports_create: boolean; // Создание отчетов
-
-  // Настройки организации
-  settings_view: boolean; // Просмотр настроек
-  settings_manage: boolean; // Управление настройками
-
-  // Сотрудники (только для Председателя, не для ролей)
-  staff_view: boolean; // Просмотр сотрудников
-  staff_manage: boolean; // Управление сотрудниками и ролями
-}
+export type StaffPermissions = StaffPermissionsMap;
 
 // Предустановленные роли
 const DEFAULT_ROLES: Array<{
@@ -66,18 +24,18 @@ const DEFAULT_ROLES: Array<{
     isElectedBody: true,
     isManagement: true,
     description:
-      "Полный доступ ко всем функциям кроме управления сотрудниками и ролями",
+      "Полный доступ ко всем функциям, замещает председателя",
     permissions: {
       documents_view: true,
       documents_create: true,
       documents_edit: true,
       documents_approve: true,
-      documents_sign: false,
+      documents_sign: true,
       discounts_view: true,
       discounts_manage: true,
       members_view: true,
       members_edit: true,
-      members_manage: false, // Не может принимать/исключать членов
+      members_manage: true,
       appeals_view: true,
       appeals_respond: true,
       appeals_manage: true,
@@ -90,9 +48,9 @@ const DEFAULT_ROLES: Array<{
       reports_view: true,
       reports_create: true,
       settings_view: true,
-      settings_manage: false,
+      settings_manage: true,
       staff_view: true,
-      staff_manage: false,
+      staff_manage: true,
     },
   },
   {

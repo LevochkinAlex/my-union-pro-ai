@@ -11,6 +11,8 @@ import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
 import { sendUserNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email";
+import { checkUserPermissions } from "@/lib/staff-permissions";
+import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
 
 // Генерация токена приглашения
 function generateInviteToken(): string {
@@ -26,39 +28,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    let organizationId: string | null = null;
-
-    if (user?.isPPOHead && user.ppoHeadOrganizationId) {
-      organizationId = user.ppoHeadOrganizationId;
-    } else {
-      // Проверяем права сотрудника
-      const staffPosition = await prisma.organizationStaff.findFirst({
-        where: {
-          userId: session.user.id,
-          status: "ACTIVE",
-        },
-        include: { role: true },
-      });
-
-      if (staffPosition) {
-        const permissions = staffPosition.role.permissions as any;
-        if (permissions?.staff_view) {
-          organizationId = staffPosition.organizationId;
-        }
-      }
-    }
+    const access = await checkUserPermissions(session.user.id, "staff_view");
+    const organizationId = access.hasAccess ? access.organizationId : null;
 
     if (!organizationId) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "staff_view",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
 
     const { searchParams } = new URL(request.url);
@@ -94,7 +75,15 @@ export async function GET(request: NextRequest) {
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
 
-    return NextResponse.json({ staff });
+    return NextResponse.json({
+      staff: staff.map((item) => ({
+        ...item,
+        role: {
+          ...item.role,
+          permissions: normalizeStaffPermissions(item.role.permissions),
+        },
+      })),
+    });
   } catch (error) {
     console.error("[API] Error fetching staff:", error);
     return NextResponse.json(
@@ -113,18 +102,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-      },
-    });
-
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
+    const access = await checkUserPermissions(session.user.id, "staff_manage");
+    if (!access.hasAccess || !access.organizationId) {
       return NextResponse.json(
-        { error: "Только Председатель может добавлять сотрудников" },
+        {
+          error: "Недостаточно прав для добавления сотрудников",
+          requiredPermission: "staff_manage",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
         { status: 403 }
       );
     }
@@ -143,7 +128,7 @@ export async function POST(request: NextRequest) {
     const role = await prisma.staffRole.findFirst({
       where: {
         id: roleId,
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
         isActive: true,
       },
     });
@@ -157,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     // Получаем информацию об организации
     const organization = await prisma.organization.findUnique({
-      where: { id: user.ppoHeadOrganizationId },
+      where: { id: access.organizationId },
       select: { name: true },
     });
 
@@ -181,7 +166,7 @@ export async function POST(request: NextRequest) {
         where: {
           userId_organizationId: {
             userId,
-            organizationId: user.ppoHeadOrganizationId,
+            organizationId: access.organizationId,
           },
         },
       });
@@ -197,7 +182,7 @@ export async function POST(request: NextRequest) {
       const staff = await prisma.organizationStaff.create({
         data: {
           userId,
-          organizationId: user.ppoHeadOrganizationId,
+          organizationId: access.organizationId,
           roleId,
           status: "ACTIVE", // Сразу активный, т.к. пользователь уже в системе
         },
@@ -254,7 +239,7 @@ export async function POST(request: NextRequest) {
           where: {
             userId_organizationId: {
               userId: existingUser.id,
-              organizationId: user.ppoHeadOrganizationId,
+              organizationId: access.organizationId,
             },
           },
         });
@@ -269,7 +254,7 @@ export async function POST(request: NextRequest) {
         const staff = await prisma.organizationStaff.create({
           data: {
             userId: existingUser.id,
-            organizationId: user.ppoHeadOrganizationId,
+            organizationId: access.organizationId,
             roleId,
             status: "ACTIVE",
           },
@@ -328,7 +313,7 @@ export async function POST(request: NextRequest) {
       const staff = await prisma.organizationStaff.create({
         data: {
           userId: newUser.id,
-          organizationId: user.ppoHeadOrganizationId,
+          organizationId: access.organizationId,
           roleId,
           status: "PENDING",
           inviteToken,
@@ -352,13 +337,13 @@ export async function POST(request: NextRequest) {
       // Сохраняем приглашение для истории
       await prisma.staffInvitation.create({
         data: {
-          organizationId: user.ppoHeadOrganizationId,
+          organizationId: access.organizationId,
           email,
           roleId,
           token: inviteToken,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           status: "pending",
-          invitedByUserId: user.id,
+          invitedByUserId: session.user.id,
         },
       });
 

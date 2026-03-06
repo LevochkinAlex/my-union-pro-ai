@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 export interface ElectedBodyMember {
   id: string;
@@ -27,15 +27,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const chairman = await getPPOHead(session.user.id);
-    if (!chairman?.organizationId) {
+    const perm = await checkUserPermissions(session.user.id, "staff_view");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещён или организация не назначена" },
         { status: 403 }
       );
     }
 
-    const organizationId = chairman.organizationId;
+    const organizationId = perm.organizationId;
     const members: ElectedBodyMember[] = [];
 
     // 1) Председатель ППО — пользователь, у которого ppoHeadOrganizationId = organizationId

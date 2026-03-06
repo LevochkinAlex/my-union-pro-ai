@@ -27,7 +27,14 @@ export async function GET(
     const permissions = await checkUserPermissions(session.user.id, "reports_view");
     
     if (!permissions.hasAccess) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "reports_view",
+          denyReason: permissions.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
 
     const report = await prisma.report.findUnique({
@@ -143,7 +150,14 @@ export async function PATCH(
     const permissions = await checkUserPermissions(session.user.id, "reports_create");
     
     if (!permissions.hasAccess) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "reports_create",
+          denyReason: permissions.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
 
     const report = await prisma.report.findUnique({
@@ -211,7 +225,14 @@ export async function DELETE(
     const permissions = await checkUserPermissions(session.user.id, "reports_create");
     
     if (!permissions.hasAccess) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "reports_create",
+          denyReason: permissions.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
 
     const report = await prisma.report.findUnique({

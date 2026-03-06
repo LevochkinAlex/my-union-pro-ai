@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentStatus } from "@prisma/client";
 import { assignAgendaToParticipantsAndNotify } from "@/lib/meeting-agenda-notify";
 import { ensureMeetingGroupChat, postMeetingChatSystemMessage } from "@/lib/meeting-chat";
@@ -24,15 +24,13 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-
-    if (!orgHead) {
+    const perm = await checkUserPermissions(session.user.id, "documents_approve");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 
     const { id: meetingId, documentId } = await params;
 
-    // Проверяем, что заседание принадлежит организации председателя
     const meeting = await prisma.meeting.findUnique({
       where: { id: meetingId },
       include: {
@@ -50,7 +48,7 @@ export async function POST(
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
     }
 
-    if (meeting.organizationId !== orgHead.organizationId) {
+    if (meeting.organizationId !== perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
     }
 
@@ -150,7 +148,11 @@ export async function POST(
     });
 
     const isAgenda = !!document.meetingAsAgenda;
-    const chairmanName = [orgHead.lastName, orgHead.firstName].filter(Boolean).join(" ") || "Председатель";
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { lastName: true, firstName: true },
+    });
+    const chairmanName = [currentUser?.lastName, currentUser?.firstName].filter(Boolean).join(" ") || "Председатель";
     const docLabel = isAgenda ? "Повестка дня" : "Протокол";
     const inboxUrl = "/dashboard/documents?tab=incoming";
 

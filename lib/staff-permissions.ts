@@ -1,36 +1,11 @@
-/**
- * Утилиты для проверки прав доступа сотрудников
- */
-
 import { prisma } from "@/lib/prisma";
+import {
+  getAllStaffPermissions,
+  normalizeStaffPermissions,
+  type StaffPermission,
+} from "@/lib/staff-permission-matrix";
 
-// Типы прав доступа
-export type Permission =
-  | "documents_view"
-  | "documents_create"
-  | "documents_edit"
-  | "documents_approve"  // Согласование документов
-  | "documents_sign"     // Подписание документов
-  | "discounts_view"
-  | "discounts_manage"
-  | "members_view"
-  | "members_edit"
-  | "members_manage"
-  | "appeals_view"
-  | "appeals_respond"
-  | "appeals_manage"
-  | "chats_view"
-  | "chats_participate"
-  | "chats_create"
-  | "news_view"
-  | "news_create"
-  | "news_manage"
-  | "reports_view"
-  | "reports_create"
-  | "settings_view"
-  | "settings_manage"
-  | "staff_view"
-  | "staff_manage";
+export type Permission = StaffPermission;
 
 // Результат проверки прав
 export interface PermissionCheckResult {
@@ -40,6 +15,13 @@ export interface PermissionCheckResult {
   organizationId: string | null;
   permissions: Record<string, boolean>;
   roleName: string | null;
+  denyReason?: string;
+  requiredPermission?: Permission;
+  source: "chairman" | "staff" | "none";
+}
+
+function isPermissionResolverV2Enabled(): boolean {
+  return process.env.PERMISSION_RESOLVER_V2_ENABLED !== "false";
 }
 
 /**
@@ -49,7 +31,16 @@ export async function checkUserPermissions(
   userId: string,
   requiredPermission?: Permission
 ): Promise<PermissionCheckResult> {
-  // Получаем данные пользователя
+  if (!isPermissionResolverV2Enabled()) {
+    return checkUserPermissionsLegacy(userId, requiredPermission);
+  }
+  return checkUserPermissionsV2(userId, requiredPermission);
+}
+
+async function checkUserPermissionsV2(
+  userId: string,
+  requiredPermission?: Permission
+): Promise<PermissionCheckResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -68,25 +59,28 @@ export async function checkUserPermissions(
       organizationId: null,
       permissions: {},
       roleName: null,
+      denyReason: "USER_NOT_FOUND",
+      requiredPermission,
+      source: "none",
     };
   }
 
-  // Председатель имеет все права
   if (user.isPPOHead && user.ppoHeadOrganizationId) {
-    // Если viewMode = PPO_HEAD, считаем что он действует как Председатель
     if (user.viewMode === "PPO_HEAD") {
+      const permissions = getAllStaffPermissions();
       return {
         hasAccess: true,
         isChairman: true,
         isStaff: false,
         organizationId: user.ppoHeadOrganizationId,
-        permissions: getAllPermissions(),
+        permissions,
         roleName: "Председатель",
+        requiredPermission,
+        source: "chairman",
       };
     }
   }
 
-  // Проверяем, является ли пользователь сотрудником
   const staffPosition = await prisma.organizationStaff.findFirst({
     where: {
       userId,
@@ -105,12 +99,14 @@ export async function checkUserPermissions(
       organizationId: null,
       permissions: {},
       roleName: null,
+      denyReason: "NO_ACTIVE_STAFF_POSITION",
+      requiredPermission,
+      source: "none",
     };
   }
 
-  const permissions = (staffPosition.role.permissions as Record<string, boolean>) || {};
+  const permissions = normalizeStaffPermissions(staffPosition.role.permissions);
 
-  // Если требуется конкретное право, проверяем его
   const hasAccess = requiredPermission
     ? permissions[requiredPermission] === true
     : true;
@@ -122,39 +118,90 @@ export async function checkUserPermissions(
     organizationId: staffPosition.organizationId,
     permissions,
     roleName: staffPosition.role.name,
+    denyReason: hasAccess ? undefined : "MISSING_PERMISSION",
+    requiredPermission,
+    source: "staff",
   };
 }
 
-/**
- * Получить все права (для Председателя)
- */
-function getAllPermissions(): Record<string, boolean> {
+async function checkUserPermissionsLegacy(
+  userId: string,
+  requiredPermission?: Permission
+): Promise<PermissionCheckResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      isPPOHead: true,
+      ppoHeadOrganizationId: true,
+      viewMode: true,
+    },
+  });
+
+  if (!user) {
+    return {
+      hasAccess: false,
+      isChairman: false,
+      isStaff: false,
+      organizationId: null,
+      permissions: {},
+      roleName: null,
+      denyReason: "USER_NOT_FOUND",
+      requiredPermission,
+      source: "none",
+    };
+  }
+
+  if (user.isPPOHead && user.ppoHeadOrganizationId && user.viewMode === "PPO_HEAD") {
+    return {
+      hasAccess: true,
+      isChairman: true,
+      isStaff: false,
+      organizationId: user.ppoHeadOrganizationId,
+      permissions: getAllStaffPermissions(),
+      roleName: "Председатель",
+      requiredPermission,
+      source: "chairman",
+    };
+  }
+
+  const staffPosition = await prisma.organizationStaff.findFirst({
+    where: {
+      userId,
+      status: "ACTIVE",
+    },
+    include: {
+      role: true,
+    },
+  });
+
+  if (!staffPosition) {
+    return {
+      hasAccess: false,
+      isChairman: false,
+      isStaff: false,
+      organizationId: null,
+      permissions: {},
+      roleName: null,
+      denyReason: "NO_ACTIVE_STAFF_POSITION",
+      requiredPermission,
+      source: "none",
+    };
+  }
+
+  const rolePermissions = (staffPosition.role.permissions as Record<string, boolean>) || {};
+  const hasAccess = requiredPermission ? rolePermissions[requiredPermission] === true : true;
+
   return {
-    documents_view: true,
-    documents_create: true,
-    documents_edit: true,
-    documents_approve: true,
-    documents_sign: true,
-    discounts_view: true,
-    discounts_manage: true,
-    members_view: true,
-    members_edit: true,
-    members_manage: true,
-    appeals_view: true,
-    appeals_respond: true,
-    appeals_manage: true,
-    chats_view: true,
-    chats_participate: true,
-    chats_create: true,
-    news_view: true,
-    news_create: true,
-    news_manage: true,
-    reports_view: true,
-    reports_create: true,
-    settings_view: true,
-    settings_manage: true,
-    staff_view: true,
-    staff_manage: true,
+    hasAccess,
+    isChairman: false,
+    isStaff: true,
+    organizationId: staffPosition.organizationId,
+    permissions: rolePermissions,
+    roleName: staffPosition.role.name,
+    denyReason: hasAccess ? undefined : "MISSING_PERMISSION",
+    requiredPermission,
+    source: "staff",
   };
 }
 
@@ -186,18 +233,37 @@ export async function getUserOrganizationId(
 export async function requirePermission(
   userId: string,
   permission: Permission
-): Promise<{ error: string; status: number } | null> {
+): Promise<{
+  error: string;
+  status: number;
+  requiredPermission: Permission;
+  denyReason: string;
+} | null> {
   const result = await checkUserPermissions(userId, permission);
 
   if (!result.hasAccess) {
-    if (!result.isChairman && !result.isStaff) {
-      return { error: "Нет доступа к ресурсам организации", status: 403 };
+    if (!result.isChairman && !result.isStaff && result.denyReason) {
+      return {
+        error: "Нет доступа к ресурсам организации",
+        status: 403,
+        requiredPermission: permission,
+        denyReason: result.denyReason,
+      };
     }
     return {
       error: `Недостаточно прав. Требуется: ${permission}`,
       status: 403,
+      requiredPermission: permission,
+      denyReason: result.denyReason || "MISSING_PERMISSION",
     };
   }
 
   return null;
+}
+
+export async function getEffectivePermissions(
+  userId: string,
+  requiredPermission?: Permission
+): Promise<PermissionCheckResult> {
+  return checkUserPermissions(userId, requiredPermission);
 }

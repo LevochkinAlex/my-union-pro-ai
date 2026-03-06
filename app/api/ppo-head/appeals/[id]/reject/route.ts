@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/push-notifications";
 import { sendEmail } from "@/lib/email";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * POST /api/ppo-head/appeals/[id]/reject
@@ -21,10 +21,8 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
-
-    if (!chairman) {
+    const perm = await checkUserPermissions(session.user.id, "appeals_manage");
+    if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен или организация не назначена" },
         { status: 403 }
@@ -59,7 +57,7 @@ export async function POST(
       );
     }
 
-    if (ticket.organizationId !== chairman.organizationId) {
+    if (ticket.organizationId !== perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещен" },
         { status: 403 }
@@ -106,7 +104,7 @@ export async function POST(
     await prisma.ticketActionLog.create({
       data: {
         ticketId: ticket.id,
-        userId: chairman.id,
+        userId: session.user.id,
         actionType: "rejected",
         description: `Обращение отклонено. Причина: ${reason.trim()}`,
         oldValue: ticket.status,

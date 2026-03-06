@@ -9,6 +9,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createDefaultRolesForOrganization } from "@/prisma/seed-staff-roles";
+import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isRpoRoleTemplatesEnabled } from "@/lib/feature-flags";
+import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
 
 // GET - получить список ролей организации
 export async function GET(request: NextRequest) {
@@ -38,28 +41,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Проверяем права: только Председатель или сотрудник с правами
+    // Проверяем права: Председатель или сотрудник с правом staff_view
     let organizationId: string | null = null;
 
     if (user.isPPOHead && user.ppoHeadOrganizationId) {
       organizationId = user.ppoHeadOrganizationId;
     } else {
-      // Проверяем, является ли пользователь сотрудником с правами staff_view
-      const staffPosition = await prisma.organizationStaff.findFirst({
-        where: {
-          userId: user.id,
-          status: "ACTIVE",
-        },
-        include: {
-          role: true,
-        },
-      });
-
-      if (staffPosition) {
-        const permissions = staffPosition.role.permissions as any;
-        if (permissions?.staff_view) {
-          organizationId = staffPosition.organizationId;
-        }
+      const permissions = await checkUserPermissions(user.id, "staff_view");
+      if (permissions.hasAccess) {
+        organizationId = permissions.organizationId;
       }
     }
 
@@ -92,8 +82,10 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
+      readOnly: isRpoRoleTemplatesEnabled(),
       roles: roles.map((r) => ({
         ...r,
+        permissions: normalizeStaffPermissions(r.permissions),
         staffCount: r._count.staff,
       })),
     });
@@ -124,9 +116,25 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!user?.isPPOHead || !user.ppoHeadOrganizationId) {
+    if (isRpoRoleTemplatesEnabled()) {
       return NextResponse.json(
-        { error: "Только Председатель может создавать роли" },
+        {
+          error:
+            "Создание ролей перенесено в кабинет РПО. В ППО доступно только назначение существующих ролей.",
+          denyReason: "RPO_ROLE_TEMPLATES_ENABLED",
+        },
+        { status: 403 }
+      );
+    }
+
+    const access = await checkUserPermissions(session.user.id, "staff_manage");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Недостаточно прав для создания роли",
+          requiredPermission: "staff_manage",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
         { status: 403 }
       );
     }
@@ -145,7 +153,7 @@ export async function POST(request: NextRequest) {
     const existingRole = await prisma.staffRole.findUnique({
       where: {
         organizationId_name: {
-          organizationId: user.ppoHeadOrganizationId,
+          organizationId: access.organizationId,
           name,
         },
       },
@@ -160,10 +168,10 @@ export async function POST(request: NextRequest) {
 
     const role = await prisma.staffRole.create({
       data: {
-        organizationId: user.ppoHeadOrganizationId,
+        organizationId: access.organizationId,
         name,
         description,
-        permissions,
+        permissions: normalizeStaffPermissions(permissions),
         isSystem: false,
         isActive: true,
       },
