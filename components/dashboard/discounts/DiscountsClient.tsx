@@ -764,19 +764,82 @@ export default function DiscountsClient({
   }, [hasMore, isLoadingMore, isLoading, loadMore, allDiscounts.length]);
 
   return (
-    <div className="space-y-6">
-      {/* Tabs */}
-      <Tabs
-        view={filters.view}
-        onChange={handleTabChange}
-        favorites={favorites.length}
-        claimed={claimed.length}
-      />
+    <div className="space-y-4">
+      {/* Toolbar: tabs + search + city + actions — all in one compact strip */}
+      <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-4">
+        {/* Row 1: Tabs + actions (right) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Tabs
+            view={filters.view}
+            onChange={handleTabChange}
+            favorites={favorites.length}
+            claimed={claimed.length}
+          />
 
-      {/* Filters */}
-      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
-        {/* Row 1: Search + City (side by side on desktop) */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+          <div className="ml-auto flex items-center gap-2">
+            {geoSupport && (
+              <button
+                onClick={handleUseGeolocation}
+                disabled={isGettingLocation || isLoading}
+                title="Найти рядом"
+                className={clsx(
+                  "inline-flex items-center justify-center rounded-lg border p-2 text-sm transition",
+                  isGettingLocation || isLoading
+                    ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-blue-400"
+                )}
+              >
+                {isGettingLocation ? (
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+              </button>
+            )}
+
+            <label
+              title="Уведомления о новых скидках"
+              className={clsx(
+                "inline-flex cursor-pointer items-center justify-center rounded-lg border p-2 transition",
+                pushEnabled
+                  ? "border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={pushEnabled}
+                onChange={handleTogglePush}
+                aria-label="Уведомления о новых скидках"
+                className="sr-only"
+              />
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </label>
+
+            {hasActiveFilters && (
+              <button
+                onClick={handleResetFilters}
+                title="Сбросить фильтры"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-500 transition hover:bg-gray-50 hover:text-red-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-red-400"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Search + City (inline) */}
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <input
               type="text"
@@ -784,22 +847,18 @@ export default function DiscountsClient({
               value={searchInput}
               onChange={(e) => {
                 const value = e.target.value;
-                setSearchInput(value); // Обновляем локальное состояние немедленно
-                
-                // Отменяем предыдущий таймер
+                setSearchInput(value);
                 if (searchTimeoutRef.current) {
                   clearTimeout(searchTimeoutRef.current);
                 }
-                
-                // Устанавливаем новый таймер для debounce (500ms)
                 searchTimeoutRef.current = setTimeout(() => {
                   updateFilters({ search: value, page: 1 });
                 }, 500);
               }}
-              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 pl-10 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             />
             <svg
-              className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -808,21 +867,7 @@ export default function DiscountsClient({
             </svg>
           </div>
 
-          <div className="md:w-72 lg:w-80">
-            {filters.cityId != null && (() => {
-              const selectedCity = (data.cities || []).find((c) => c.id === filters.cityId);
-              const displayName = selectedCity?.name ?? preferredCityName ?? `ID ${filters.cityId}`;
-              return (
-                <div className="mb-2 flex items-center gap-2 rounded-lg border-2 border-blue-200 bg-blue-50/80 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/40">
-                  <svg className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  </svg>
-                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    Показаны скидки по городу: <span className="font-semibold">{displayName}</span>
-                  </span>
-                </div>
-              );
-            })()}
+          <div className="sm:w-52">
             <CityFilter
               cities={data.cities || []}
               value={filters.cityId}
@@ -834,69 +879,22 @@ export default function DiscountsClient({
                 })
               }
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Город из профиля подставляется автоматически. Изменить: здесь или в разделе «Профиль».
-            </p>
           </div>
         </div>
 
-        {/* Categories removed - simplified UI */}
-
-        {/* Row 3: Actions */}
-        <div className="flex flex-wrap items-center gap-3">
-          {geoSupport && (
-            <button
-              onClick={handleUseGeolocation}
-              disabled={isGettingLocation || isLoading}
-              className={clsx(
-                "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition",
-                isGettingLocation || isLoading
-                  ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
-                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-              )}
-            >
-              {isGettingLocation ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Определение...
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Найти рядом
-                </>
-              )}
-            </button>
-          )}
-
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-            <input
-              type="checkbox"
-              checked={pushEnabled}
-              onChange={handleTogglePush}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-600"
-            />
-            Уведомления
-          </label>
-
-          {hasActiveFilters && (
-            <button
-              onClick={handleResetFilters}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        {/* City active badge (shown only when city is selected) */}
+        {filters.cityId != null && (() => {
+          const selectedCity = (data.cities || []).find((c) => c.id === filters.cityId);
+          const displayName = selectedCity?.name ?? preferredCityName ?? `ID ${filters.cityId}`;
+          return (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               </svg>
-              Сбросить
-            </button>
-          )}
-        </div>
+              {displayName}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Error */}
@@ -907,14 +905,12 @@ export default function DiscountsClient({
       )}
 
       {/* Results */}
-      <div className="space-y-4">
-        {/* Info Bar */}
+      <div>
+        {/* Info Bar — compact inline */}
         {allDiscounts.length > 0 && (
-          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-            <p>
-              Показано <span className="font-semibold text-gray-900 dark:text-white">{allDiscounts.length}</span> {hasMore && 'из доступных'}
-            </p>
-          </div>
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            Показано <span className="font-semibold text-gray-700 dark:text-gray-200">{allDiscounts.length}</span>{hasMore ? ' из доступных' : ''}
+          </p>
         )}
 
         {/* Grid */}
@@ -967,27 +963,27 @@ function Tabs({
 }) {
   const tabs: { id: ViewMode; label: string; count?: number }[] = [
     { id: "all", label: "Все" },
-    { id: "claimed", label: "Полученные", count: claimed },
+    { id: "claimed", label: "Мои", count: claimed },
     { id: "favorites", label: "Избранное", count: favorites },
   ];
 
   return (
-    <div className="flex gap-2 overflow-x-auto">
+    <div className="flex gap-1">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onChange(tab.id)}
           className={clsx(
-            "inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition",
+            "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition",
             view === tab.id
               ? "bg-blue-600 text-white shadow-sm"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           )}
         >
           {tab.label}
           {typeof tab.count === "number" && tab.count > 0 && (
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs dark:bg-black/20">
+            <span className="rounded-full bg-white/20 px-1.5 py-px text-[10px] leading-tight dark:bg-black/20">
               {tab.count}
             </span>
           )}
