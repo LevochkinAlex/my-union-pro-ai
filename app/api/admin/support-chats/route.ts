@@ -63,8 +63,21 @@ export async function GET() {
     orderBy: { lastMessageAt: "desc" },
   });
 
+  // Показываем только те диалоги, где пользователь написал хотя бы одно сообщение.
+  // Это исключает автосозданные/пустые чаты и чаты только с сообщениями от поддержки.
+  const userInitiatedRows = await prisma.chatMessage.findMany({
+    where: {
+      chatId: { in: chatIds },
+      senderId: { not: supportUserId },
+    },
+    select: { chatId: true },
+    distinct: ["chatId"],
+  });
+  const userInitiatedChatIds = new Set(userInitiatedRows.map((r) => r.chatId));
+
   const list = chats
     .map((chat) => {
+      if (!userInitiatedChatIds.has(chat.id)) return null;
       const clientParticipant = chat.participants.find((p) => p.userId !== supportUserId);
       const user = clientParticipant?.user ?? null;
       if (!user) return null;

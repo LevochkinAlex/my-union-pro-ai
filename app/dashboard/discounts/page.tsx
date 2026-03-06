@@ -113,15 +113,20 @@ export default async function DiscountsPage() {
     }
   }
 
-  // Если в профиле есть preferredDiscountCity, принудительно используем его
-  // (даже если в preference уже был сохранен другой город)
-  const finalCityId = autoCityId ?? (preference?.filters as any)?.cityId ?? null;
+  // Приоритет: явный выбор пользователя в фильтрах (включая null = "Все города"),
+  // затем fallback к городу из профиля/адреса.
+  const savedFilters = (preference?.filters as any) ?? {};
+  const hasSavedCityPreference = Object.prototype.hasOwnProperty.call(savedFilters, "cityId");
+  const savedCityId: number | null | undefined = hasSavedCityPreference
+    ? (savedFilters.cityId ?? null)
+    : undefined;
+  const finalCityId = savedCityId !== undefined ? savedCityId : autoCityId;
   
   const preferencePayload: DiscountPreferenceResponse = {
     pushEnabled: preference?.pushEnabled ?? false,
     filters: {
       ...(preference?.filters as DiscountPreferenceResponse["filters"]),
-      // Приоритет: город из профиля (preferredDiscountCity)
+      // Приоритет: сохранённый выбор пользователя, затем fallback из профиля
       cityId: finalCityId,
     },
     geolocation: (preference?.geolocation as DiscountPreferenceResponse["geolocation"]) ?? null,

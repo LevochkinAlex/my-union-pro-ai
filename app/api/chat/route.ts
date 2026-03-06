@@ -185,25 +185,28 @@ function formatAIChat(aiChat: any, userId: string) {
   };
 }
 
-const SUPPORT_WELCOME_MESSAGE = `Здравствуйте! Я техподдержка МойСоюз.
-
-Опишите ваш вопрос или проблему, и мы постараемся помочь в ближайшее время.
-
-Часы работы: Пн–Пт, 9:00–18:00 МСК
-Срочные вопросы: support@myunion.pro`;
-
 /**
- * Получает или создаёт чат с техподдержкой и возвращает чат с lastMessage для списка.
- * При создании пустого чата добавляет приветственное сообщение от поддержки.
+ * Возвращает существующий чат с техподдержкой (без автосоздания).
+ * ВАЖНО: чат должен появляться только после первого сообщения пользователя.
  */
-async function getOrCreateSupportChat(userId: string) {
+async function getExistingSupportChat(userId: string) {
   const supportUserId = await getSupportUserId();
   if (!supportUserId) return null;
-  const { chat } = await getOrCreatePrivateChat(userId, supportUserId);
-  if (!chat?.id) return null;
 
-  const withCount = await prisma.chat.findUnique({
-    where: { id: chat.id },
+  const existingChat = await prisma.chat.findFirst({
+    where: {
+      type: "PRIVATE",
+      participants: {
+        some: { userId, leftAt: null },
+      },
+      AND: [
+        {
+          participants: {
+            some: { userId: supportUserId, leftAt: null },
+          },
+        },
+      ],
+    },
     include: {
       participants: {
         where: { leftAt: null },
@@ -223,49 +226,8 @@ async function getOrCreateSupportChat(userId: string) {
       _count: { select: { participants: true, messages: true } },
     },
   });
-  if (!withCount) return null;
 
-  const msgCount = withCount._count?.messages ?? 0;
-  if (msgCount === 0) {
-    const welcome = await prisma.chatMessage.create({
-      data: {
-        chatId: chat.id,
-        senderId: supportUserId,
-        content: SUPPORT_WELCOME_MESSAGE,
-        messageType: "text",
-      },
-    });
-    await prisma.chat.update({
-      where: { id: chat.id },
-      data: {
-        lastMessageId: welcome.id,
-        lastMessageAt: welcome.createdAt,
-      },
-    });
-    return await prisma.chat.findUnique({
-      where: { id: chat.id },
-      include: {
-        participants: {
-          where: { leftAt: null },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-        lastMessage: { select: { content: true, createdAt: true, messageType: true } },
-        _count: { select: { participants: true, messages: true } },
-      },
-    });
-  }
-
-  return withCount;
+  return existingChat;
 }
 
 /**
@@ -589,7 +551,7 @@ export async function GET(request: NextRequest) {
         console.error("[chat] Error loading AI chat:", aiError);
       }
       try {
-        const supportChat = await getOrCreateSupportChat(userId);
+        const supportChat = await getExistingSupportChat(userId);
         if (supportChat) head.push(formatSupportChat(supportChat, userId));
       } catch (supportError) {
         console.error("[chat] Error loading support chat:", supportError);
