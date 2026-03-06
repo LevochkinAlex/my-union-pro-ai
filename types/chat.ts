@@ -46,6 +46,10 @@ export interface Chat {
   };
   /** Чат заседания — участников можно добавлять только через повестку/протокол в разделе «Документы» */
   meetingId?: string | null;
+  /** Организация канала (null = региональный). Для РПО: canPost только у регионального канала */
+  newsChannelOrganizationId?: string | null;
+  /** Для каналов у РПО: true только у «Региональные новости», остальные — только просмотр */
+  canPost?: boolean;
   // Ticket-related fields (for appeal chats)
   ticketId?: string | null;
   ticketPublicId?: string | null;

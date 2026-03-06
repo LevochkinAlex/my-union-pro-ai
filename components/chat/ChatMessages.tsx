@@ -53,6 +53,7 @@ interface ChatMessagesProps {
 
 export default function ChatMessages({ messages, currentUserId, typingUsers, onForward }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
   const [contextMenu, setContextMenu] = useState<{ message: Message; x: number; y: number } | null>(null);
 
@@ -72,6 +73,13 @@ export default function ChatMessages({ messages, currentUserId, typingUsers, onF
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const el = contextMenuRef.current;
+    el.style.left = `${contextMenu.x}px`;
+    el.style.top = `${contextMenu.y}px`;
   }, [contextMenu]);
 
   const getSenderName = (sender: Message['sender']) => {
@@ -254,11 +262,8 @@ export default function ChatMessages({ messages, currentUserId, typingUsers, onF
         {/* Context menu */}
         {contextMenu && (
           <div
+            ref={contextMenuRef}
             className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[150px]"
-            style={{
-              left: `${contextMenu.x}px`,
-              top: `${contextMenu.y}px`,
-            }}
           >
             {onForward && (
               <button
@@ -283,8 +288,8 @@ export default function ChatMessages({ messages, currentUserId, typingUsers, onF
               <CardBody className="p-3">
                 <div className="flex gap-1">
                   <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                  <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+                  <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                  <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce [animation-delay:0.4s]" />
                 </div>
               </CardBody>
             </Card>

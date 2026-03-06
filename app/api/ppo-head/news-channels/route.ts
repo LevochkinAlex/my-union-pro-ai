@@ -6,6 +6,7 @@ import { checkUserPermissions } from "@/lib/staff-permissions";
 import { syncChannelWithChat } from "@/lib/channel-sync";
 import { isDemoUserId } from "@/lib/demo";
 import { getOrCreateRegionalNewsChannel } from "@/lib/regional-news";
+import { getOrgHeadScope } from "@/lib/org-head-permissions";
 
 /**
  * GET /api/ppo-head/news-channels
@@ -36,41 +37,81 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const perm = await checkUserPermissions(session.user.id, "news_view");
-    if (!perm.hasAccess || !perm.organizationId) {
-      return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
-        { status: 403 }
-      );
-    }
-
     const rpoUser = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { isRPOHead: true },
+      select: { isRPOHead: true, rpoHeadOrganizationId: true },
     });
-    const isRPO = rpoUser?.isRPOHead === true;
+    const isRPO = rpoUser?.isRPOHead === true && !!rpoUser?.rpoHeadOrganizationId;
+
+    let perm: { hasAccess: boolean; organizationId: string | null } | null = null;
+    if (!isRPO) {
+      perm = await checkUserPermissions(session.user.id, "news_view");
+      if (!perm.hasAccess || !perm.organizationId) {
+        return NextResponse.json(
+          { error: "Доступ запрещен или организация не назначена" },
+          { status: 403 }
+        );
+      }
+    }
 
     if (isRPO) {
       const regionalChannel = await getOrCreateRegionalNewsChannel(session.user.id);
       const count = await prisma.newsPost.count({
         where: { channelId: regionalChannel.id, isPublished: true },
       });
-      return NextResponse.json({
-        channels: [
-          {
-            ...regionalChannel,
-            _count: { newsPosts: count },
-            chat: null,
-            canPublish: true,
+      const channelsList: Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        iconUrl: string | null;
+        isMain?: boolean;
+        organizationId: string | null;
+        _count: { newsPosts: number };
+        chat: { id: string } | null;
+        canPublish: boolean;
+      }> = [
+        {
+          ...regionalChannel,
+          _count: { newsPosts: count },
+          chat: null,
+          canPublish: true,
+        },
+      ];
+      // РПО видит каналы всех подчинённых организаций как наблюдатель (без права публикации)
+      const scope = await getOrgHeadScope(session.user.id);
+      if (scope && scope.organizationIds.length > 1) {
+        const childOrgIds = scope.organizationIds.filter((id) => id !== scope.organizationId);
+        const subordinateChannels = await prisma.newsChannel.findMany({
+          where: { organizationId: { in: childOrgIds } },
+          include: {
+            _count: { select: { newsPosts: true } },
+            chat: { select: { id: true } },
+            organization: { select: { name: true } },
           },
-        ],
-      });
+          orderBy: [{ createdAt: "asc" }],
+        });
+        for (const ch of subordinateChannels) {
+          channelsList.push({
+            id: ch.id,
+            name: ch.name,
+            description: ch.description,
+            iconUrl: ch.iconUrl,
+            isMain: ch.isMain ?? undefined,
+            organizationId: ch.organizationId,
+            _count: ch._count,
+            chat: ch.chat,
+            canPublish: false,
+          });
+        }
+      }
+      return NextResponse.json({ channels: channelsList });
     }
 
     // ППО/МПО: каналы своей организации + региональный канал (для просмотра; публиковать в региональный может только РПО)
+    const orgId = perm!.organizationId!;
     let channels = await prisma.newsChannel.findMany({
       where: {
-        organizationId: perm.organizationId,
+        organizationId: orgId,
       },
       include: {
         _count: {
@@ -92,14 +133,14 @@ export async function GET(request: NextRequest) {
     // Синхронизируем каналы без Chat с чатами
     for (const channel of channels) {
       if (!channel.chat) {
-        await syncChannelWithChat(channel.id, perm.organizationId!);
+        await syncChannelWithChat(channel.id, orgId);
       }
     }
 
     // Перезагружаем каналы после синхронизации
     channels = await prisma.newsChannel.findMany({
       where: {
-        organizationId: perm.organizationId,
+        organizationId: orgId,
       },
       include: {
         chat: {
@@ -121,7 +162,7 @@ export async function GET(request: NextRequest) {
     // Если каналов нет, создаем основной канал по умолчанию
     if (channels.length === 0) {
       const organization = await prisma.organization.findUnique({
-        where: { id: perm.organizationId! },
+        where: { id: orgId },
         select: { name: true },
       });
 
@@ -130,7 +171,7 @@ export async function GET(request: NextRequest) {
         data: {
           name: orgName,
           description: `Канал новостей ${orgName}`,
-          organizationId: perm.organizationId,
+          organizationId: orgId,
           createdById: session.user.id,
           isMain: true,
         },

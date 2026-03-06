@@ -149,3 +149,49 @@ export async function syncAllOrganizationChannels(organizationId: string): Promi
     console.error(`[channel-sync] Error syncing all channels for organization ${organizationId}:`, error);
   }
 }
+
+/**
+ * Для РПО: синхронизирует каналы своей организации и всех подчинённых,
+ * добавляет РПО в участники чатов каналов подчинённых организаций (наблюдение).
+ */
+export async function syncRpoHeadChannels(
+  rpoUserId: string,
+  rpoOrgId: string
+): Promise<void> {
+  const { getOrgHeadScope } = await import("@/lib/org-head-permissions");
+  const scope = await getOrgHeadScope(rpoUserId);
+  if (!scope || scope.organizationIds.length === 0) return;
+
+  for (const orgId of scope.organizationIds) {
+    await syncAllOrganizationChannels(orgId).catch((err) =>
+      console.warn(`[channel-sync] sync org ${orgId} for RPO:`, err)
+    );
+  }
+
+  const childIds = scope.organizationIds.slice(1);
+  if (childIds.length === 0) return;
+
+  const childChannelChats = await prisma.chat.findMany({
+    where: {
+      type: "CHANNEL",
+      newsChannel: { organizationId: { in: childIds } },
+    },
+    select: { id: true },
+  });
+
+  for (const chat of childChannelChats) {
+    const existing = await prisma.chatParticipant.findUnique({
+      where: {
+        chatId_userId: { chatId: chat.id, userId: rpoUserId },
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      await prisma.chatParticipant.create({
+        data: { chatId: chat.id, userId: rpoUserId, role: "member" },
+      }).catch((err) =>
+        console.warn(`[channel-sync] Add RPO to chat ${chat.id}:`, err)
+      );
+    }
+  }
+}

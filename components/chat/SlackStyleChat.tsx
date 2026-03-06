@@ -1209,8 +1209,14 @@ export default function SlackStyleChat({
                     }}
                   />
 
-                  {/* Для каналов: только админ может создавать посты, остальные только в тредах */}
-                  {selectedChat.type === 'CHANNEL' && !selectedChat.participants?.some(
+                  {/* РПО: каналы подчинённых организаций — только просмотр, без публикации */}
+                  {selectedChat.type === 'CHANNEL' && selectedChat.canPost === false ? (
+                    <div className="px-4 py-3 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                        Только просмотр. Публикация в этот канал недоступна.
+                      </p>
+                    </div>
+                  ) : selectedChat.type === 'CHANNEL' && !selectedChat.participants?.some(
                     p => p.userId === currentUserId && p.role === 'admin'
                   ) && !activeThread ? (
                     <div className="px-4 py-3 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
@@ -1220,9 +1226,8 @@ export default function SlackStyleChat({
                     </div>
                   ) : selectedChat.type === 'CHANNEL' && selectedChat.participants?.some(
                     p => p.userId === currentUserId && p.role === 'admin'
-                  ) && isChairman && !activeThread && !activeChannelThread ? (
-                    // Для админов канала в режиме председателя показываем кнопку создания поста
-                    // В режиме участника (MEMBER) кнопка скрыта
+                  ) && isChairman && selectedChat.canPost !== false && !activeThread && !activeChannelThread ? (
+                    // Для админов канала в режиме председателя показываем кнопку создания поста (у РПО — только для «Региональные новости»)
                     <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
                       <button
                         onClick={() => setShowChannelPostModal(true)}

@@ -419,6 +419,9 @@ export default function PPOHeadNewsPage() {
     }
   };
 
+  const selectedChannel = channels.find((c) => c.id === selectedChannelId);
+  const selectedChannelCanPublish = selectedChannel ? selectedChannel.canPublish !== false : false;
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -442,18 +445,22 @@ export default function PPOHeadNewsPage() {
             Новости
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Управление новостями вашей организации
+            {selectedChannelCanPublish
+              ? "Управление новостями вашей организации"
+              : "Просмотр новостей канала (публикация недоступна)"}
           </p>
         </div>
-        <button
-          onClick={() => setIsCreating(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-        >
-          + Создать новость
-        </button>
+        {selectedChannelCanPublish && (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            + Создать новость
+          </button>
+        )}
       </div>
 
-      {isCreating && (
+      {isCreating && selectedChannelCanPublish && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="mb-4 text-xl font-semibold">
             {editingNewsId ? "Редактирование новости" : "Создание новости"}
@@ -743,7 +750,7 @@ export default function PPOHeadNewsPage() {
                             <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
                               {channel.name}
                             </h3>
-                            {(channel.name === "Основной" || channel.isMain) && (
+                            {!isRPOHead && (channel.name === "Основной" || channel.isMain) && (
                               <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                                 По умолчанию
                               </span>

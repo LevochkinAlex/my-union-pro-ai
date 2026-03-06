@@ -14,6 +14,7 @@ import { getSupportUserId } from "@/lib/support-user";
 import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
 import { withCache, getCacheKey } from "@/lib/cache";
+import { REGIONAL_NEWS_CHANNEL_NAME } from "@/lib/regional-news";
 import * as Sentry from "@sentry/nextjs";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getDemoMemberChats, getDemoChairmanChats } from "@/lib/demo";
@@ -383,12 +384,16 @@ export async function GET(request: NextRequest) {
       if (user && (user.isPPOHead || user.isMPOHead || user.isRPOHead)) {
         const organizationId = user.ppoHeadOrganizationId || user.mpoHeadOrganizationId || user.rpoHeadOrganizationId;
         if (organizationId) {
-          // Импортируем функцию синхронизации динамически, чтобы избежать проблем с зависимостями
-          const { syncAllOrganizationChannels } = await import("@/lib/channel-sync");
-          // Синхронизируем каналы в фоне (не блокируем ответ)
-          syncAllOrganizationChannels(organizationId).catch((error) => {
-            console.warn("[chat] Background channel sync error:", error);
-          });
+          const { syncAllOrganizationChannels, syncRpoHeadChannels } = await import("@/lib/channel-sync");
+          if (user.isRPOHead && user.rpoHeadOrganizationId) {
+            syncRpoHeadChannels(userId, user.rpoHeadOrganizationId).catch((error) => {
+              console.warn("[chat] RPO channel sync error:", error);
+            });
+          } else {
+            syncAllOrganizationChannels(organizationId).catch((error) => {
+              console.warn("[chat] Background channel sync error:", error);
+            });
+          }
         }
       }
     } catch (syncError) {
@@ -510,6 +515,14 @@ export async function GET(request: NextRequest) {
     // - Свои обращения (где userId === session.user.id)
     // - Каналы (CHANNEL) - только для просмотра и комментирования
     if (isMemberMode) {
+      const isRPOUser = user?.isRPOHead === true && user?.rpoHeadOrganizationId != null;
+      let rpoScopeOrgIds: string[] | null = null;
+      if (isRPOUser) {
+        const { getOrgHeadScope } = await import("@/lib/org-head-permissions");
+        const scope = await getOrgHeadScope(userId);
+        rpoScopeOrgIds = scope?.organizationIds ?? null;
+      }
+
       // Получаем ID своих обращений
       const userTickets = await prisma.ticket.findMany({
         where: { userId },
@@ -525,17 +538,40 @@ export async function GET(request: NextRequest) {
         if (chat.ticketId && userTicketChatIds.includes(chat.id)) return true;
         if (chat.type === "CHANNEL") {
           const channelOrgId = chat.newsChannelOrganizationId ?? null;
-          if (channelOrgId === null) return true;
+          const channelName = String(chat.displayName || chat.name || "");
+          // Для channels без organizationId показываем только глобальный региональный канал.
+          if (channelOrgId === null) {
+            return channelName === REGIONAL_NEWS_CHANNEL_NAME;
+          }
+          // РПО (даже в MEMBER режиме): показываем только каналы подчинённых организаций,
+          // исключая собственную региональную организацию (её канал дублирует глобальный региональный).
+          if (isRPOUser && rpoScopeOrgIds && rpoScopeOrgIds.length > 0) {
+            const childOrgIds = rpoScopeOrgIds.filter((id) => id !== user.rpoHeadOrganizationId);
+            return childOrgIds.includes(channelOrgId);
+          }
           return currentOrgId != null && channelOrgId === currentOrgId;
         }
         if (chat.type === "GROUP" && chat.meetingId) return true;
         return false;
       });
     } else if (currentOrgId != null) {
+      const isRPO = user?.viewMode === "RPO_HEAD" && user?.rpoHeadOrganizationId != null;
+      let scopeOrgIds: string[] | null = null;
+      if (isRPO) {
+        const { getOrgHeadScope } = await import("@/lib/org-head-permissions");
+        const scope = await getOrgHeadScope(userId);
+        scopeOrgIds = scope?.organizationIds ?? null;
+      }
       filteredChats = filteredChats.filter((chat: any) => {
         if (!chat || chat.type !== "CHANNEL") return true;
         const channelOrgId = chat.newsChannelOrganizationId ?? null;
-        if (channelOrgId === null) return true;
+        const channelName = String(chat.displayName || chat.name || "");
+        // Для channels без organizationId показываем только глобальный региональный канал.
+        if (channelOrgId === null) return channelName === REGIONAL_NEWS_CHANNEL_NAME;
+        if (isRPO && scopeOrgIds && scopeOrgIds.length > 0) {
+          const childOrgIds = scopeOrgIds.filter((id) => id !== user.rpoHeadOrganizationId);
+          return childOrgIds.includes(channelOrgId);
+        }
         return channelOrgId === currentOrgId;
       });
     }
@@ -567,6 +603,14 @@ export async function GET(request: NextRequest) {
       seenOneAiChat = true;
       return true;
     });
+
+    // РПО: только канал «Региональные новости» (orgId === null) — для публикации, остальные каналы — только просмотр
+    if (user?.isRPOHead && user?.rpoHeadOrganizationId) {
+      finalChats = finalChats.map((c: any) => ({
+        ...c,
+        canPost: c.type === "CHANNEL" ? c.newsChannelOrganizationId === null : undefined,
+      }));
+    }
 
     return NextResponse.json({ chats: finalChats || [] });
   } catch (error: any) {

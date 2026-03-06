@@ -16,11 +16,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Получаем организацию пользователя
+    // Получаем организацию и роль пользователя (РПО — только региональный канал)
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
         organizationId: true,
+        isRPOHead: true,
+        viewMode: true,
         organization: {
           select: {
             id: true,
@@ -44,6 +46,28 @@ export async function GET(request: NextRequest) {
           },
         ],
         organization: null,
+      });
+    }
+
+    // РПО: показываем только региональный канал, без каналов ППО/организаций
+    const isRPO = user.viewMode === "RPO_HEAD" || user.isRPOHead === true;
+    if (isRPO) {
+      const regional = await getOrCreateRegionalNewsChannel(session.user.id);
+      const memberCount = await prisma.user.count({
+        where: { organizationId: user.organizationId },
+      });
+      return NextResponse.json({
+        channels: [
+          {
+            id: regional.id,
+            name: regional.name,
+            description: regional.description || "Глобальный канал региональных новостей",
+            subscriberCount: memberCount,
+            isMain: false,
+            organizationId: null,
+          },
+        ],
+        organization: user.organization,
       });
     }
 
