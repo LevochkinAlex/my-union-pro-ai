@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Reply, MoreVertical, Edit, Trash2, Smile } from 'lucide-react';
+import { Reply, MoreVertical, Edit, Trash2, Smile, Paperclip } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -107,8 +107,6 @@ export default function MessageItem({
     setIsEditing(false);
   };
 
-  const commonReactions = ['👍', '❤️', '😂', '🎉', '👏', '🔥'];
-
   return (
     <div className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 px-4 py-2 relative">
       <div className="flex items-start gap-3">
@@ -168,6 +166,8 @@ export default function MessageItem({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
                 rows={3}
                 autoFocus
+                aria-label="Редактировать текст сообщения"
+                placeholder="Текст сообщения"
               />
               <div className="flex gap-2">
                 <button
@@ -222,10 +222,16 @@ export default function MessageItem({
                         rel="noopener noreferrer"
                         className="text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        📎 {name}
+                        <span className="inline-flex items-center gap-1">
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {name}
+                        </span>
                       </a>
                     ) : (
-                      <div className="text-gray-500">📎 {name}</div>
+                      <div className="inline-flex items-center gap-1 text-gray-500">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        {name}
+                      </div>
                     )}
                   </div>
                 );
@@ -292,10 +298,13 @@ export default function MessageItem({
             </button>
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowMenu(!showMenu)}
                 className="p-1 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+                title="Меню сообщения"
+                aria-label="Меню сообщения"
               >
-                <MoreVertical className="w-4 h-4" />
+                <MoreVertical className="w-4 h-4" aria-hidden />
               </button>
               {showMenu && (
                 <div className="absolute left-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 min-w-[150px]">

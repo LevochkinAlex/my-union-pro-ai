@@ -7,6 +7,7 @@ import Link from "next/link";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { useMembershipAccess } from "@/hooks/useMembershipAccess";
+import { Card, PageHeader, EmptyState, StatusBadge, Spinner, Tabs } from "@/components/ui";
 
 interface Document {
   id: string;
@@ -414,90 +415,72 @@ export default function DocumentsPage() {
     }, 2000);
   };
 
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      DRAFT: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
-      GENERATED: "bg-blue-200 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      PENDING_REVIEW: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
-      PENDING_APPROVAL: "bg-amber-200 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-      PENDING_SIGNATURE: "bg-orange-200 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-      SIGNED: "bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300",
-      REGISTERED: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
-      SENT: "bg-indigo-200 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
-      RECEIVED: "bg-cyan-200 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
-      COMPLETED: "bg-emerald-200 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300",
-      PENDING: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-      APPROVED: "bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300",
-      REJECTED: "bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300",
-      ARCHIVED: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
-    };
+  const statusColorMap: Record<string, "green" | "yellow" | "red" | "blue" | "gray" | "purple" | "orange"> = {
+    DRAFT: "gray",
+    GENERATED: "blue",
+    PENDING_REVIEW: "yellow",
+    PENDING_APPROVAL: "orange",
+    PENDING_SIGNATURE: "orange",
+    SIGNED: "green",
+    REGISTERED: "gray",
+    SENT: "blue",
+    RECEIVED: "blue",
+    COMPLETED: "green",
+    PENDING: "yellow",
+    APPROVED: "green",
+    REJECTED: "red",
+    ARCHIVED: "gray",
+  };
 
-    const labels: Record<string, string> = {
-      DRAFT: "Черновик",
-      GENERATED: "Сформировано",
-      PENDING_REVIEW: "На рассмотрении",
-      PENDING_APPROVAL: "На согласовании",
-      PENDING_SIGNATURE: "На подписи",
-      SIGNED: "Подписан",
-      REGISTERED: "Зарегистрирован",
-      SENT: "Отправлен",
-      RECEIVED: "Получен",
-      COMPLETED: "Исполнен",
-      PENDING: "На проверке",
-      APPROVED: "Одобрен",
-      REJECTED: "Отклонён",
-      ARCHIVED: "В архиве",
-    };
+  const statusLabelMap: Record<string, string> = {
+    DRAFT: "Черновик",
+    GENERATED: "Сформировано",
+    PENDING_REVIEW: "На рассмотрении",
+    PENDING_APPROVAL: "На согласовании",
+    PENDING_SIGNATURE: "На подписи",
+    SIGNED: "Подписан",
+    REGISTERED: "Зарегистрирован",
+    SENT: "Отправлен",
+    RECEIVED: "Получен",
+    COMPLETED: "Исполнен",
+    PENDING: "На проверке",
+    APPROVED: "Одобрен",
+    REJECTED: "Отклонён",
+    ARCHIVED: "В архиве",
+  };
 
-    return (
-      <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          styles[status] ?? styles.DRAFT
-        }`}
-      >
-        {labels[status] ?? status}
-      </span>
-    );
+  const getStatusBadge = (status: string) => (
+    <StatusBadge color={statusColorMap[status] ?? "gray"} dot>
+      {statusLabelMap[status] ?? status}
+    </StatusBadge>
+  );
+
+  const verificationColorMap: Record<string, "green" | "yellow" | "red" | "orange"> = {
+    VERIFYING: "yellow",
+    VERIFIED: "green",
+    FAILED: "red",
+    NEEDS_REVIEW: "orange",
+  };
+
+  const verificationLabelMap: Record<string, string> = {
+    VERIFYING: "Проверяется...",
+    VERIFIED: "✓ Проверено",
+    FAILED: "✗ Не прошло проверку",
+    NEEDS_REVIEW: "Требует проверки",
   };
 
   const getVerificationBadge = (doc: Document) => {
     if (!doc.verificationStatus) return null;
-    
-    const styles = {
-      VERIFYING: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
-      VERIFIED: "bg-emerald-200 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-      FAILED: "bg-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-      NEEDS_REVIEW: "bg-orange-200 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-    };
-
-    const labels = {
-      VERIFYING: "Проверяется...",
-      VERIFIED: "✓ Проверено",
-      FAILED: "✗ Не прошло проверку",
-      NEEDS_REVIEW: "Требует проверки",
-    };
-
-    const icons = {
-      VERIFYING: (
-        <svg className="h-3 w-3 animate-spin mr-1" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      ),
-      VERIFIED: null,
-      FAILED: null,
-      NEEDS_REVIEW: null,
-    };
+    const vstatus = doc.verificationStatus as string;
 
     return (
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-          styles[doc.verificationStatus as keyof typeof styles] || ""
-        }`}
-        title={doc.verificationMessage || undefined}
-      >
-        {icons[doc.verificationStatus as keyof typeof icons]}
-        {labels[doc.verificationStatus as keyof typeof labels] || doc.verificationStatus}
+      <span title={doc.verificationMessage || undefined}>
+        <StatusBadge color={verificationColorMap[vstatus] ?? "gray"}>
+          {vstatus === "VERIFYING" && (
+            <Spinner size="sm" className="h-3 w-3 border-yellow-700 border-t-transparent dark:border-yellow-300 dark:border-t-transparent" />
+          )}
+          {verificationLabelMap[vstatus] || vstatus}
+        </StatusBadge>
       </span>
     );
   };
@@ -533,11 +516,9 @@ export default function DocumentsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Загрузка документов...</p>
-        </div>
+      <div className="flex h-full flex-col items-center justify-center gap-4">
+        <Spinner />
+        <p className="text-gray-600 dark:text-gray-400">Загрузка документов...</p>
       </div>
     );
   }
@@ -546,14 +527,12 @@ export default function DocumentsPage() {
   // Не одобренным и обычным членам показываем заявления на этой странице.
   if (isElectedBody && isApproved && activeTab === "outgoing") {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Переход к заседаниям...</p>
-          <Link href="/dashboard/documents/meetings" className="mt-4 inline-block text-blue-600 dark:text-blue-400 hover:underline">
-            Открыть заседания
-          </Link>
-        </div>
+      <div className="flex h-full flex-col items-center justify-center gap-4">
+        <Spinner />
+        <p className="text-gray-600 dark:text-gray-400">Переход к заседаниям...</p>
+        <Link href="/dashboard/documents/meetings" className="mt-2 inline-block text-blue-600 dark:text-blue-400 hover:underline">
+          Открыть заседания
+        </Link>
       </div>
     );
   }
@@ -568,71 +547,43 @@ export default function DocumentsPage() {
 
   return (
     <div className="w-full max-w-full space-y-6 md:space-y-8 pb-8 md:pb-12">
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Документы</h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
-          {activeTab === "incoming"
+      <PageHeader
+        title="Документы"
+        description={
+          activeTab === "incoming"
             ? (isElectedBody
                 ? "Входящие: устав, повестки и протоколы на согласование, прочие документы"
                 : "Входящие: устав и документы, назначенные вам")
-            : "Исходящие: ваши заявления (вступление, перечисление взносов)"}
-        </p>
-      </div>
+            : "Исходящие: ваши заявления (вступление, перечисление взносов)"
+        }
+      />
 
-      {/* Вкладки */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => {
-              setActiveTab("incoming");
-              router.replace("/dashboard/documents?tab=incoming");
-            }}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
-              activeTab === "incoming"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Входящие
-            {incomingDocuments.length > 0 && (
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {incomingDocuments.length}
-              </span>
-            )}
-          </button>
-          {isElectedBody && isApproved ? (
-            <Link
-              href="/dashboard/documents/meetings"
-              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
-                activeTab === "outgoing"
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
-            >
-              Исходящие
-            </Link>
-          ) : (
-            <button
-              onClick={() => {
-                setActiveTab("outgoing");
-                router.replace("/dashboard/documents?tab=outgoing");
-              }}
-              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
-                activeTab === "outgoing"
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
-            >
-              Исходящие
-              {outgoingDocuments.length > 0 && (
-                <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                  {outgoingDocuments.length}
-                </span>
-              )}
-            </button>
-          )}
-        </nav>
-      </div>
+      <Tabs
+        tabs={[
+          {
+            id: "incoming",
+            label: "Входящие",
+            count: incomingDocuments.length > 0 ? incomingDocuments.length : undefined,
+          },
+          {
+            id: "outgoing",
+            label: "Исходящие",
+            count:
+              (!isElectedBody || !isApproved) && outgoingDocuments.length > 0
+                ? outgoingDocuments.length
+                : undefined,
+          },
+        ]}
+        activeTab={activeTab}
+        onChange={(tabId) => {
+          if (tabId === "outgoing" && isElectedBody && isApproved) {
+            router.push("/dashboard/documents/meetings");
+            return;
+          }
+          setActiveTab(tabId as "incoming" | "outgoing");
+          router.replace(`/dashboard/documents?tab=${tabId}`);
+        }}
+      />
 
       {/* Фильтры входящих: Все | Повестки | Протоколы | Постановления | Выписки | Другие */}
       {activeTab === "incoming" && (
@@ -673,97 +624,99 @@ export default function DocumentsPage() {
 
       {/* Баннер об изменении профиля */}
       {profileChanged && (
-        <div className="mb-6 rounded-lg border-2 border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-900/20">
-          <div className="p-4 md:p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-semibold text-orange-900 dark:text-orange-200 md:text-lg">
-                  Вы изменили данные профиля
-                </h3>
-                  <p className="mt-2 text-sm text-orange-800 dark:text-orange-300">
-                  Обнаружены изменения в ваших личных данных (ФИО, дата рождения, адрес, должность и т.д.), которые влияют на содержимое документов. 
-                  Рекомендуем переформировать документы, чтобы они соответствовали актуальным данным.
-                </p>
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <button
-                    onClick={handleRegenerateDocuments}
-                    disabled={isRegenerating}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isRegenerating ? (
-                      <>
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                        Переформирование...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Переформировать документы
-                      </>
-                    )}
-                  </button>
-                  <a
-                    href="/dashboard/profile"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-orange-300 bg-white dark:bg-gray-800 dark:border-orange-700 px-4 py-2.5 text-sm font-medium text-orange-900 dark:text-orange-200 transition-colors hover:bg-orange-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    Проверить профиль
-                  </a>
-                </div>
+        <Card className="border-2 border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-900/20">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <svg className="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-base font-semibold text-orange-900 dark:text-orange-200 md:text-lg">
+                Вы изменили данные профиля
+              </h3>
+                <p className="mt-2 text-sm text-orange-800 dark:text-orange-300">
+                Обнаружены изменения в ваших личных данных (ФИО, дата рождения, адрес, должность и т.д.), которые влияют на содержимое документов. 
+                Рекомендуем переформировать документы, чтобы они соответствовали актуальным данным.
+              </p>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  onClick={handleRegenerateDocuments}
+                  disabled={isRegenerating}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRegenerating ? (
+                    <>
+                      <Spinner size="sm" className="h-4 w-4 border-white border-t-transparent dark:border-white dark:border-t-transparent" />
+                      Переформирование...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Переформировать документы
+                    </>
+                  )}
+                </button>
+                <a
+                  href="/dashboard/profile"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-orange-300 bg-white dark:bg-gray-800 dark:border-orange-700 px-4 py-2.5 text-sm font-medium text-orange-900 dark:text-orange-200 transition-colors hover:bg-orange-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Проверить профиль
+                </a>
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {currentDocuments.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800 md:p-12">
-          <svg
-            className="mx-auto h-10 w-10 text-gray-400 md:h-12 md:w-12"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
-          <h3 className="mt-4 text-base font-medium text-gray-900 dark:text-white md:text-lg">
-            {activeTab === "incoming"
+        <EmptyState
+          icon={
+            <svg
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+          }
+          title={
+            activeTab === "incoming"
               ? incomingFilter !== "all"
                 ? "Нет документов в этой категории"
                 : "Нет входящих документов"
-              : "Документов пока нет"}
-          </h3>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
-            {activeTab === "incoming"
+              : "Документов пока нет"
+          }
+          description={
+            activeTab === "incoming"
               ? incomingFilter !== "all"
                 ? "Попробуйте другую категорию или «Все документы»"
                 : "Здесь будут отображаться документы, назначенные вам для ознакомления"
-              : "Заполните профиль через AI чат, чтобы система сформировала ваши заявления"}
-          </p>
-          {activeTab === "incoming" && incomingFilter !== "all" && (
-            <button
-              type="button"
-              onClick={() => setIncomingFilter("all")}
-              className="mt-4 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            >
-              Показать все документы
-            </button>
-          )}
-        </div>
+              : "Заполните профиль через AI чат, чтобы система сформировала ваши заявления"
+          }
+          action={
+            activeTab === "incoming" && incomingFilter !== "all" ? (
+              <button
+                type="button"
+                onClick={() => setIncomingFilter("all")}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Показать все документы
+              </button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid gap-4 w-full max-w-full">
           {currentDocuments.map((doc) => {
@@ -771,12 +724,13 @@ export default function DocumentsPage() {
             const hasUploadedSigned = Boolean(doc.signedFilePath);
             const hasFileToDownload = Boolean(doc.filePath || doc.signedFilePath);
             return (
-            <div
+            <Card
               key={doc.id}
-              className={`w-full max-w-full rounded-lg border p-3 shadow-sm transition-shadow hover:shadow-md overflow-hidden sm:p-4 md:p-6 ${
+              hoverable
+              className={`w-full max-w-full overflow-hidden ${
                 isOutgoing && hasUploadedSigned
                   ? "border-green-300 bg-green-50/50 dark:border-green-700 dark:bg-green-900/20 ring-1 ring-green-200 dark:ring-green-800"
-                  : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                  : ""
               }`}
             >
               <div className="flex flex-col gap-3 sm:gap-4">
@@ -788,14 +742,10 @@ export default function DocumentsPage() {
                       {doc.title}
                     </h3>
                     {isOutgoing && hasUploadedSigned && (
-                      <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300 ring-1 ring-green-300 dark:ring-green-700">
-                        Заявление загружено
-                      </span>
+                      <StatusBadge color="green">Заявление загружено</StatusBadge>
                     )}
                     {activeTab === "incoming" && doc.meetingId && doc.originalDocumentId && doc.originalDocumentStatus === "PENDING_APPROVAL" && (!doc.approvalStatus || doc.approvalStatus.status === "PENDING") && (
-                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-300 dark:ring-amber-700">
-                        Требуется согласование
-                      </span>
+                      <StatusBadge color="orange">Требуется согласование</StatusBadge>
                     )}
                     {getStatusBadge(doc.status)}
                     {getVerificationBadge(doc)}
@@ -1011,7 +961,7 @@ export default function DocumentsPage() {
                     >
                       {regeneratingDocId === doc.id ? (
                         <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                          <Spinner size="sm" className="h-4 w-4 border-gray-400 border-t-transparent dark:border-gray-400 dark:border-t-transparent" />
                           <span>Формирование...</span>
                         </>
                       ) : (
@@ -1041,7 +991,7 @@ export default function DocumentsPage() {
                     <div className="relative w-full sm:w-auto">
                       {uploadProgress[doc.id] !== undefined ? (
                         <div className="flex items-center justify-center gap-2 rounded-lg border-2 border-purple-600 bg-purple-50 dark:bg-purple-900/20 px-3 py-2 sm:px-4">
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                          <Spinner size="sm" className="h-4 w-4 border-purple-600 border-t-transparent dark:border-purple-400 dark:border-t-transparent" />
                           <span className="text-sm text-purple-700 dark:text-purple-300">
                             {uploadProgress[doc.id]}%
                           </span>
@@ -1100,7 +1050,7 @@ export default function DocumentsPage() {
                   )}
                 </div>
               </div>
-            </div>
+            </Card>
           );
           })}
         </div>
@@ -1138,7 +1088,7 @@ export default function DocumentsPage() {
               )}
               {!previewLoadError && !previewBlobUrl && (
                 <div className="flex flex-col items-center gap-2 p-8">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                  <Spinner />
                   <span className="text-sm text-gray-500 dark:text-gray-400">Загрузка документа…</span>
                 </div>
               )}
@@ -1173,4 +1123,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-

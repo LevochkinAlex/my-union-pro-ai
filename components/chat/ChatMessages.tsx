@@ -11,7 +11,7 @@ import {
   Chip,
   ScrollShadow,
 } from '@heroui/react';
-import { Check, CheckCheck, Forward, MoreVertical } from 'lucide-react';
+import { Check, CheckCheck, Forward, MoreVertical, Paperclip } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -170,7 +170,10 @@ export default function ChatMessages({ messages, currentUserId, typingUsers, onF
                                     isOwn ? 'text-primary-foreground' : 'text-primary'
                                   }`}
                                 >
-                                  📎 {attName}
+                                  <span className="inline-flex items-center gap-1">
+                                    <Paperclip className="h-3.5 w-3.5" />
+                                    {attName}
+                                  </span>
                                 </a>
                               )}
                             </div>

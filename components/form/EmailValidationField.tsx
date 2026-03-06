@@ -120,12 +120,12 @@ export default function EmailValidationField({
         Email <span className="text-red-500">*</span>
         {mode === "verified" && (
           <span className="ml-2 text-xs text-green-600 dark:text-green-400">
-            ✓ Подтвержден
+            Подтвержден
           </span>
         )}
         {mode === "pin-sent" && (
           <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">
-            ⚠ Ожидает подтверждения
+            Ожидает подтверждения
           </span>
         )}
       </label>
@@ -156,10 +156,10 @@ export default function EmailValidationField({
           {mode === "verified" && (
             <>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                💡 Email подтвержден и используется для доступа к скидкам от партнёров. Изменение невозможно.
+                Email подтвержден и используется для доступа к скидкам от партнёров. Изменение невозможно.
               </p>
               <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                ✓ Email {email} подтвержден
+                Email {email} подтвержден
               </p>
             </>
           )}

@@ -1,6 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import {
+  Eye,
+  Flame,
+  Frown,
+  Hand,
+  Heart,
+  Laugh,
+  PartyPopper,
+  ThumbsUp,
+} from "lucide-react";
 
 interface EmojiPickerProps {
   onEmojiSelect: (emoji: string) => void;
@@ -10,13 +20,16 @@ interface EmojiPickerProps {
   onOpenChange?: (isOpen: boolean) => void; // Callback при изменении состояния
 }
 
-const EMOJI_CATEGORIES = {
-  recent: ["❤️", "👍", "😊", "😂", "😍", "🙏", "🔥", "💯"],
-  smileys: ["😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "😉", "😊", "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙", "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔"],
-  gestures: ["👋", "🤚", "🖐", "✋", "🖖", "👌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏"],
-  hearts: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟"],
-  objects: ["🔥", "💯", "⭐", "🌟", "✨", "💫", "💥", "💢", "💤", "💨", "🎉", "🎊", "🎈", "🎁", "🏆", "🥇", "🥈", "🥉"],
-};
+const REACTION_OPTIONS = [
+  { value: "\u{1F44D}", label: "Нравится", icon: ThumbsUp },
+  { value: "\u{2764}\u{FE0F}", label: "Любовь", icon: Heart },
+  { value: "\u{1F602}", label: "Смешно", icon: Laugh },
+  { value: "\u{1F62E}", label: "Удивление", icon: Eye },
+  { value: "\u{1F622}", label: "Грусть", icon: Frown },
+  { value: "\u{1F389}", label: "Праздник", icon: PartyPopper },
+  { value: "\u{1F44F}", label: "Поддержка", icon: Hand },
+  { value: "\u{1F525}", label: "Огонь", icon: Flame },
+] as const;
 
 export default function EmojiPicker({ 
   onEmojiSelect, 
@@ -27,13 +40,12 @@ export default function EmojiPicker({
 }: EmojiPickerProps) {
   // Получаем сохраненный эмодзи из localStorage
   const getSavedEmoji = (): string => {
-    if (typeof window === "undefined") return "❤️";
+    if (typeof window === "undefined") return REACTION_OPTIONS[0].value;
     const saved = localStorage.getItem("lastSelectedEmoji");
-    return saved || defaultEmoji || "❤️";
+    return saved || defaultEmoji || REACTION_OPTIONS[0].value;
   };
 
   const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<keyof typeof EMOJI_CATEGORIES>("recent");
   const pickerRef = useRef<HTMLDivElement>(null);
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isHoveringRef = useRef(false);
@@ -98,12 +110,9 @@ export default function EmojiPicker({
     setIsOpen(false);
   };
 
-  // Добавляем кнопку быстрого выбора последнего эмодзи в категорию recent
   useEffect(() => {
-    const savedEmoji = getSavedEmoji();
-    if (savedEmoji && !EMOJI_CATEGORIES.recent.includes(savedEmoji)) {
-      EMOJI_CATEGORIES.recent = [savedEmoji, ...EMOJI_CATEGORIES.recent.filter(e => e !== savedEmoji)].slice(0, 8);
-    }
+    // touch saved reaction once to keep compatibility
+    getSavedEmoji();
   }, []);
 
   return (
@@ -133,36 +142,26 @@ export default function EmojiPicker({
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          {/* Категории */}
-          <div className="flex gap-1 mb-2 border-b border-gray-200 dark:border-gray-700 pb-2">
-            {Object.keys(EMOJI_CATEGORIES).map((category) => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setActiveCategory(category as keyof typeof EMOJI_CATEGORIES)}
-                className={`px-2 py-1 text-xs rounded transition-colors ${
-                  activeCategory === category
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                    : "hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                {category === "recent" ? "⭐" : category === "smileys" ? "😀" : category === "gestures" ? "👋" : category === "hearts" ? "❤️" : "🔥"}
-              </button>
-            ))}
+          <div className="mb-2 border-b border-gray-200 pb-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Выберите реакцию
           </div>
 
-          {/* Эмодзи */}
-          <div className="flex-1 overflow-y-auto grid grid-cols-8 gap-1">
-            {EMOJI_CATEGORIES[activeCategory].map((emoji, index) => (
+          <div className="grid flex-1 grid-cols-4 gap-2 overflow-y-auto">
+            {REACTION_OPTIONS.map((reaction) => {
+              const Icon = reaction.icon;
+              return (
               <button
-                key={`${activeCategory}-${index}`}
+                key={reaction.value}
                 type="button"
-                onClick={() => handleEmojiClick(emoji)}
-                className="p-2 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                onClick={() => handleEmojiClick(reaction.value)}
+                className="flex flex-col items-center justify-center gap-1 rounded border border-gray-200 p-2 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:hover:bg-gray-700"
+                title={reaction.label}
               >
-                {emoji}
+                <Icon className="h-4 w-4" />
+                <span className="text-[10px] text-gray-600 dark:text-gray-300">{reaction.label}</span>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

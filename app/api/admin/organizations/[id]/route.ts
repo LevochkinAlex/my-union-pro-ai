@@ -64,19 +64,26 @@ export async function GET(
       return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
     }
 
-    // Председатель — пользователь с ppoHeadOrganizationId = эта организация (для подстановки email/телефона в форме)
-    const chairmanUser = await prisma.user.findFirst({
-      where: { ppoHeadOrganizationId: id },
-      select: {
-        id: true,
-        email: true,
-        phone: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        jobTitle: true,
-      },
-    });
+    const chairmanWhereByType: Partial<Record<OrganizationType, Record<string, string>>> = {
+      PRIMARY: { ppoHeadOrganizationId: id },
+      LOCAL: { mpoHeadOrganizationId: id },
+      REGIONAL: { rpoHeadOrganizationId: id },
+    };
+
+    const chairmanUser = chairmanWhereByType[organization.type]
+      ? await prisma.user.findFirst({
+          where: chairmanWhereByType[organization.type],
+          select: {
+            id: true,
+            email: true,
+            phone: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            jobTitle: true,
+          },
+        })
+      : null;
 
     return NextResponse.json({
       organization,

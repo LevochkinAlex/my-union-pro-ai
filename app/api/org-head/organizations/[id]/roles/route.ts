@@ -4,10 +4,12 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
+import { createDefaultRolesForOrganization } from "@/prisma/seed-staff-roles";
 
 /**
  * GET /api/org-head/organizations/[id]/roles
- * Список ролей организации (для РПО: выбор роли при назначении сотрудника в ППО)
+ * Список ролей организации (для РПО: выбор роли при назначении сотрудника в ППО/МПО/РПО)
+ * При первом обращении создаёт предустановленные роли, если их ещё нет.
  */
 export async function GET(
   request: NextRequest,
@@ -24,6 +26,9 @@ export async function GET(
     if (!scope || !scope.organizationIds.includes(organizationId)) {
       return NextResponse.json({ error: "Нет доступа к организации" }, { status: 403 });
     }
+
+    // Создаём предустановленные роли при первом обращении (как в ppo-head/roles)
+    await createDefaultRolesForOrganization(organizationId);
 
     const roles = await prisma.staffRole.findMany({
       where: { organizationId, isActive: true },

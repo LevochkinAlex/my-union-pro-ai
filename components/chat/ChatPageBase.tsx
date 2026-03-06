@@ -329,11 +329,11 @@ export function ChatPageBase({
       const success = await forwardMessage(forwardingMessage.id, targetChat.otherUser.id);
 
       if (success) {
-        console.log("[ChatPageBase] ✅ Message forwarded successfully");
+        console.log("[ChatPageBase] Message forwarded successfully");
         showToast("Сообщение переслано", "success");
         setForwardingMessage(null);
       } else {
-        console.error("[ChatPageBase] ❌ Failed to forward message");
+        console.error("[ChatPageBase] Failed to forward message");
         showToast("Ошибка пересылки", "error");
       }
     },

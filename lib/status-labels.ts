@@ -72,6 +72,9 @@ export const ORG_TYPE_LABELS: Record<string, string> = {
 };
 
 export const EMPLOYMENT_STATUS_LABELS: Record<string, string> = {
+  WORK: "Работает",
+  STUDY: "Учится",
+  RETIREMENT: "На пенсии",
   EMPLOYED: "Трудоустроен",
   UNEMPLOYED: "Не работает",
   STUDENT: "Студент",
@@ -118,7 +121,9 @@ export function getDocumentStatusInfo(doc: { status: string; signedFilePath?: st
 }
 
 export function getEffectiveMemberStatus(membershipStatus: string, unionMembershipStatus?: string | null): string {
-  if (unionMembershipStatus === "ACCEPTED") return "ACCEPTED";
+  // Исключённые/отклонённые — всегда показываем их статус, не «Принят на учет»
+  if (membershipStatus === "EXCLUDED" || membershipStatus === "REJECTED") return membershipStatus;
   if (unionMembershipStatus === "REMOVED") return "REMOVED";
+  if (unionMembershipStatus === "ACCEPTED") return "ACCEPTED";
   return membershipStatus;
 }

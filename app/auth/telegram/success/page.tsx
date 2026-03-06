@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, useSession, getSession } from "next-auth/react";
+import { Lightbulb } from "lucide-react";
 
 /**
  * Страница успешной авторизации через Telegram
@@ -91,7 +92,7 @@ function TelegramSuccessContent() {
             </div>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-            Проверьте Telegram! 📱
+            Проверьте Telegram
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             {error 
@@ -107,7 +108,11 @@ function TelegramSuccessContent() {
           )}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
             <p className="text-sm text-blue-700 dark:text-blue-400">
-              <b>💡 Что делать дальше:</b><br/>
+              <b className="inline-flex items-center gap-1">
+                <Lightbulb className="h-4 w-4" />
+                Что делать дальше:
+              </b>
+              <br/>
               1. Откройте Telegram<br/>
               2. Найдите сообщение от бота @myunionpro_bot<br/>
               3. Нажмите на кнопку "Войти в личный кабинет"

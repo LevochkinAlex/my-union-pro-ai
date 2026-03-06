@@ -51,7 +51,13 @@ interface ExistingUser {
   role: string;
   membershipStatus: string;
   isPPOHead: boolean;
+  isMPOHead: boolean;
+  isRPOHead: boolean;
+  isHead: boolean;
   currentPPOOrganization: { id: string; name: string } | null;
+  currentMPOOrganization: { id: string; name: string } | null;
+  currentRPOOrganization: { id: string; name: string } | null;
+  currentHeadOrganization: { id: string; name: string } | null;
   memberOrganization: { id: string; name: string } | null;
 }
 
@@ -216,9 +222,9 @@ export default function OrganizationsPage() {
   // Функция подтверждения использования существующего пользователя
   const confirmExistingUser = () => {
     if (!existingUser) return;
-    if (isExistingUserPPOHeadInAnotherOrg) {
+    if (isExistingUserHeadInAnotherOrg) {
       alertError(
-        `Пользователь уже назначен председателем в организации «${existingUser.currentPPOOrganization?.name}». Для этой организации создайте нового пользователя или снимите текущее назначение.`
+        `Пользователь уже назначен председателем в организации «${existingUser.currentHeadOrganization?.name}». Для этой организации создайте нового пользователя или снимите текущее назначение.`
       );
       return;
     }
@@ -248,20 +254,20 @@ export default function OrganizationsPage() {
     }));
   };
 
-  const isExistingUserPPOHeadInAnotherOrg =
-    !!existingUser?.isPPOHead &&
-    !!existingUser.currentPPOOrganization?.id &&
-    existingUser.currentPPOOrganization.id !== selectedOrg?.id;
+  const isExistingUserHeadInAnotherOrg =
+    !!existingUser?.isHead &&
+    !!existingUser.currentHeadOrganization?.id &&
+    existingUser.currentHeadOrganization.id !== selectedOrg?.id;
 
   useEffect(() => {
-    if (isExistingUserPPOHeadInAnotherOrg && userConfirmed) {
+    if (isExistingUserHeadInAnotherOrg && userConfirmed) {
       setUserConfirmed(false);
       setFormData((prev) => ({
         ...prev,
         existingUserId: "",
       }));
     }
-  }, [isExistingUserPPOHeadInAnotherOrg, userConfirmed]);
+  }, [isExistingUserHeadInAnotherOrg, userConfirmed]);
 
   const loadOrganizations = async () => {
     try {
@@ -1242,16 +1248,16 @@ export default function OrganizationsPage() {
                           </p>
                           <p className="text-xs text-yellow-600 dark:text-yellow-400">
                             Роль: {existingUser.role === "MEMBER" ? "Член профсоюза" : existingUser.role}
-                            {existingUser.isPPOHead && existingUser.currentPPOOrganization && (
+                            {existingUser.isHead && existingUser.currentHeadOrganization && (
                               <span className="ml-1">
-                                (уже председатель: {existingUser.currentPPOOrganization.name})
+                                (уже председатель: {existingUser.currentHeadOrganization.name})
                               </span>
                             )}
                           </p>
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
-                        {isExistingUserPPOHeadInAnotherOrg
+                        {isExistingUserHeadInAnotherOrg
                           ? "Этот пользователь уже назначен председателем в другой организации. Использовать его для текущей организации нельзя."
                           : "Если вы подтвердите, этому пользователю будут предоставлены права председателя ППО. Он сможет переключаться между режимами «Член профсоюза» и «Председатель ППО»."}
                       </p>
@@ -1259,14 +1265,14 @@ export default function OrganizationsPage() {
                         <button
                           type="button"
                           onClick={confirmExistingUser}
-                          disabled={isExistingUserPPOHeadInAnotherOrg}
+                          disabled={isExistingUserHeadInAnotherOrg}
                           className={`rounded px-3 py-1.5 text-xs font-medium text-white ${
-                            isExistingUserPPOHeadInAnotherOrg
+                            isExistingUserHeadInAnotherOrg
                               ? "cursor-not-allowed bg-gray-400"
                               : "bg-yellow-600 hover:bg-yellow-700"
                           }`}
                         >
-                          {isExistingUserPPOHeadInAnotherOrg
+                          {isExistingUserHeadInAnotherOrg
                             ? "Нельзя использовать (уже председатель)"
                             : "Подтвердить и использовать данные"}
                         </button>
@@ -1284,7 +1290,7 @@ export default function OrganizationsPage() {
               )}
 
               {/* Показываем инфо что пользователь подтверждён */}
-              {userConfirmed && existingUser && !isExistingUserPPOHeadInAnotherOrg && (
+              {userConfirmed && existingUser && !isExistingUserHeadInAnotherOrg && (
                 <div className="mt-4 rounded-lg border border-green-300 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">

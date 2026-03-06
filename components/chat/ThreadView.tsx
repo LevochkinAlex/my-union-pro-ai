@@ -267,7 +267,7 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300">
                   {isChannelPostRoot(rootMessage) && (
-                    <span className="inline-block text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">📢 Пост в канале</span>
+                    <span className="mb-1 inline-block text-xs font-medium text-blue-600 dark:text-blue-400">Пост в канале</span>
                   )}
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {getRootMessageDisplayContent(rootMessage)}

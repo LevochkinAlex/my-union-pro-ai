@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { Card, PageHeader, EmptyState, Spinner, Tabs } from "@/components/ui";
+import type { Tab } from "@/components/ui";
 
 interface Notification {
   id: string;
@@ -16,6 +17,17 @@ interface Notification {
 }
 
 const DOC_APPROVAL_TYPES = ["meeting_agenda_review", "meeting_document_approval"];
+
+const bellIcon = (
+  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+    />
+  </svg>
+);
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -216,32 +228,26 @@ export default function NotificationsPage() {
     }
   };
 
+  const filterTabs: Tab[] = [
+    { id: "unread", label: "Непрочитанные", count: unreadCount > 0 ? unreadCount : undefined },
+    { id: "all", label: "Все уведомления" },
+  ];
+
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Загрузка уведомлений...</p>
-        </div>
-      </div>
-    );
+    return <Spinner fullPage />;
   }
 
   return (
     <div className="space-y-6 sm:space-y-8">
-        {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-              Уведомления
-            </h1>
-          <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
-            {unreadCount > 0
-              ? `${unreadCount} непрочитанных уведомлений`
-              : "Все уведомления прочитаны"}
-              </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+      <PageHeader
+        title="Уведомления"
+        description={
+          unreadCount > 0
+            ? `${unreadCount} непрочитанных уведомлений`
+            : "Все уведомления прочитаны"
+        }
+        actions={
+          <>
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
@@ -263,149 +269,112 @@ export default function NotificationsPage() {
               </svg>
               <span>{clearing ? "Очистка…" : "Очистить уведомления"}</span>
             </button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
-      {/* Tabs: сначала Непрочитанные, затем Все уведомления */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
-          <button
-            onClick={() => setFilter("unread")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm flex items-center gap-2 ${
-              filter === "unread"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Непрочитанные
-            {unreadCount > 0 && (
-              <span className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded-full">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setFilter("all")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
-              filter === "all"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Все уведомления
-          </button>
-        </nav>
-        </div>
+      <Tabs
+        tabs={filterTabs}
+        activeTab={filter}
+        onChange={(tabId) => setFilter(tabId as "all" | "unread")}
+      />
 
-        {/* Notifications List */}
       {notifications.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800 md:p-12">
-            <svg
-            className="mx-auto h-10 w-10 text-gray-400 md:h-12 md:w-12"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              />
-            </svg>
-          <h3 className="mt-4 text-base font-medium text-gray-900 dark:text-white md:text-lg">
-            {filter === "unread" ? "Нет непрочитанных уведомлений" : "Уведомлений пока нет"}
-          </h3>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
-            {filter === "unread"
+        <EmptyState
+          icon={bellIcon}
+          title={filter === "unread" ? "Нет непрочитанных уведомлений" : "Уведомлений пока нет"}
+          description={
+            filter === "unread"
               ? "Все уведомления прочитаны"
-              : "Здесь будут появляться уведомления о новых событиях"}
-            </p>
-          </div>
-        ) : (
+              : "Здесь будут появляться уведомления о новых событиях"
+          }
+        />
+      ) : (
         <div className="grid gap-3 sm:gap-4">
-            {notifications.map((notification) => (
-              <div
-                key={notification.id}
-                onClick={() => handleNotificationClick(notification)}
-              className={`rounded-lg border p-4 sm:p-5 cursor-pointer transition-all hover:shadow-md ${
-                  notification.readAt
-                  ? "bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+          {notifications.map((notification) => (
+            <Card
+              key={notification.id}
+              hoverable
+              padding="sm"
+              className={
+                notification.readAt
+                  ? ""
                   : "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
-                }`}
-              >
+              }
+              onClick={() => handleNotificationClick(notification)}
+            >
               <div className="flex items-start gap-3 sm:gap-4">
-                  <div
+                <div
                   className={`flex-shrink-0 p-2 rounded-lg ${
-                      notification.readAt
+                    notification.readAt
                       ? "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
                       : "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
-                    }`}
-                  >
-                    {getNotificationIcon(notification.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3
+                  }`}
+                >
+                  {getNotificationIcon(notification.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
                       className={`text-sm sm:text-base font-medium ${
-                          notification.readAt
-                            ? "text-gray-700 dark:text-gray-300"
-                            : "text-gray-900 dark:text-white font-semibold"
-                        }`}
-                      >
-                        {notification.title}
-                      </h3>
-                      {!notification.readAt && (
+                        notification.readAt
+                          ? "text-gray-700 dark:text-gray-300"
+                          : "text-gray-900 dark:text-white font-semibold"
+                      }`}
+                    >
+                      {notification.title}
+                    </h3>
+                    {!notification.readAt && (
                       <div className="flex-shrink-0 w-2.5 h-2.5 bg-blue-600 rounded-full mt-1.5" />
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                      {notification.body}
-                    </p>
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                      {formatDate(notification.createdAt)}
-                    </p>
-                    {DOC_APPROVAL_TYPES.includes(notification.type) &&
-                      (notification.metadata as { meetingId?: string; documentId?: string })?.meetingId &&
-                      (notification.metadata as { meetingId?: string; documentId?: string })?.documentId && (
-                      <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (notification.url) {
-                              if (!notification.readAt) markAsRead(notification.id);
-                              router.push(notification.url);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                        >
-                          Посмотреть
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDocApprove(e, notification, "approve")}
-                          disabled={approvalSubmitting === notification.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
-                        >
-                          {approvalSubmitting === notification.id ? "…" : "Согласовать"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDocApprove(e, notification, "reject")}
-                          disabled={approvalSubmitting === notification.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300 disabled:opacity-50"
-                        >
-                          Отклонить
-                        </button>
-                      </div>
                     )}
                   </div>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                    {notification.body}
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                    {formatDate(notification.createdAt)}
+                  </p>
+                  {DOC_APPROVAL_TYPES.includes(notification.type) &&
+                    (notification.metadata as { meetingId?: string; documentId?: string })?.meetingId &&
+                    (notification.metadata as { meetingId?: string; documentId?: string })?.documentId && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (notification.url) {
+                            if (!notification.readAt) markAsRead(notification.id);
+                            router.push(notification.url);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        Посмотреть
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDocApprove(e, notification, "approve")}
+                        disabled={approvalSubmitting === notification.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {approvalSubmitting === notification.id ? "…" : "Согласовать"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDocApprove(e, notification, "reject")}
+                        disabled={approvalSubmitting === notification.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300 disabled:opacity-50"
+                      >
+                        Отклонить
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

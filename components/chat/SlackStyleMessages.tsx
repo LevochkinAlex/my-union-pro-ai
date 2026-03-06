@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo, type ReactNode } from "react";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -25,6 +25,12 @@ import {
   Smile,
   Image as ImageIcon,
   Heart,
+  ThumbsUp,
+  Laugh,
+  PartyPopper,
+  Hand,
+  Flame,
+  Frown,
   MessageCircle,
   Eye,
   EyeOff,
@@ -363,7 +369,20 @@ function ContextMenu({
     }
   }, [adjustedX, adjustedY]);
 
-  const quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🎉", "👏", "🔥"];
+  const quickReactions: Array<{
+    value: string;
+    label: string;
+    icon: ReactNode;
+  }> = [
+    { value: "\u{1F44D}", label: "Нравится", icon: <ThumbsUp className="h-4 w-4" /> },
+    { value: "\u{2764}\u{FE0F}", label: "Любовь", icon: <Heart className="h-4 w-4" /> },
+    { value: "\u{1F602}", label: "Смешно", icon: <Laugh className="h-4 w-4" /> },
+    { value: "\u{1F62E}", label: "Удивление", icon: <Eye className="h-4 w-4" /> },
+    { value: "\u{1F622}", label: "Грусть", icon: <Frown className="h-4 w-4" /> },
+    { value: "\u{1F389}", label: "Праздник", icon: <PartyPopper className="h-4 w-4" /> },
+    { value: "\u{1F44F}", label: "Поддержка", icon: <Hand className="h-4 w-4" /> },
+    { value: "\u{1F525}", label: "Огонь", icon: <Flame className="h-4 w-4" /> },
+  ];
 
   return (
     <div
@@ -373,16 +392,17 @@ function ContextMenu({
       {/* Quick reactions */}
       <div className="px-2 pb-2 border-b border-gray-100 dark:border-gray-700">
         <div className="flex items-center gap-1">
-          {quickReactions.map((emoji) => (
+          {quickReactions.map((reaction) => (
             <button
-              key={emoji}
+              key={reaction.value}
               onClick={() => {
-                onReaction?.(emoji);
+                onReaction?.(reaction.value);
                 onClose();
               }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-lg transition-transform hover:scale-110"
+              title={reaction.label}
+              className="rounded-lg p-1.5 transition-transform hover:scale-110 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
-              {emoji}
+              {reaction.icon}
             </button>
           ))}
           <div className="relative">
@@ -1548,7 +1568,7 @@ const MessageBubble = memo(function MessageBubble({
               />
             ) : (
               <div className={`text-sm ${isOwn ? 'text-white/90' : 'text-gray-700 dark:text-gray-200'}`}>
-                📢 Пост в канале
+                Пост в канале
               </div>
             )
           ) : (

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { validateAndParseInitData } from "@/lib/max-webapp-auth";
+import { translitLatinToCyrillic } from "@/lib/translit-latin-to-cyrillic";
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,16 +38,18 @@ export async function POST(request: NextRequest) {
       where: { maxUserId: maxUserIdStr },
     });
 
+    const maxFirstName = maxUser.first_name ? translitLatinToCyrillic(maxUser.first_name) : null;
+    const maxLastName = maxUser.last_name ? translitLatinToCyrillic(maxUser.last_name) : null;
+
     if (!user) {
-      // Создаём нового пользователя по MAX. MAX Bridge: first_name = имя, last_name = фамилия — без перестановки
       try {
         user = await prisma.user.create({
           data: {
             maxUserId: maxUserIdStr,
-            maxChatId: maxUserIdStr, // для личного чата chat_id обычно совпадает с user_id
+            maxChatId: maxUserIdStr,
             maxUsername: maxUser.username ?? null,
-            firstName: maxUser.first_name ?? null, // имя (given name)
-            lastName: maxUser.last_name ?? null,  // фамилия (surname)
+            firstName: maxFirstName,
+            lastName: maxLastName,
             role: "PENDING_MEMBER",
             membershipStatus: "PROFILE_INCOMPLETE",
           },
@@ -55,20 +58,19 @@ export async function POST(request: NextRequest) {
       } catch (e: unknown) {
         const prismaError = e as { code?: string };
         if (prismaError?.code === "P2002") {
-          user = await prisma.user.findUnique({
-            where: { maxUserId: maxUserIdStr },
-          });
+          user = await prisma.user.findUnique({ where: { maxUserId: maxUserIdStr } });
         }
         if (!user) throw e;
       }
     } else {
-      // Обновляем профиль из MAX при повторном входе (first_name → firstName, last_name → lastName)
+      const hasFirstName = user.firstName != null && user.firstName.trim() !== "";
+      const hasLastName = user.lastName != null && user.lastName.trim() !== "";
       await prisma.user.update({
         where: { id: user.id },
         data: {
           maxUsername: maxUser.username ?? user.maxUsername,
-          firstName: maxUser.first_name ?? user.firstName,
-          lastName: maxUser.last_name ?? user.lastName,
+          ...(hasFirstName ? {} : maxFirstName ? { firstName: maxFirstName } : {}),
+          ...(hasLastName ? {} : maxLastName ? { lastName: maxLastName } : {}),
         },
       });
     }

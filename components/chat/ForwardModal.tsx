@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Chat, Message } from "@/types/chat";
 import { getUserName, getFileUrl, isDeletedUser } from "@/lib/chat-utils";
-import { UserMinus } from "lucide-react";
+import { Paperclip, UserMinus } from "lucide-react";
 
 interface ForwardModalProps {
   message: Message;
@@ -60,7 +60,12 @@ export default function ForwardModal({
         {/* Превью сообщения */}
         <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-            {message.content || "📎 Вложение"}
+            {message.content || (
+              <span className="inline-flex items-center gap-1">
+                <Paperclip className="h-3.5 w-3.5" />
+                Вложение
+              </span>
+            )}
           </p>
         </div>
 

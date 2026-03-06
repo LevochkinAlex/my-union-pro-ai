@@ -104,15 +104,15 @@ export default function OrgHeadDashboard() {
   return (
     <div className="space-y-6">
       {/* Заголовок */}
-      <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
+      <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 text-white shadow-lg">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-blue-100">{levelLabel}</p>
-            <h1 className="mt-1 text-2xl font-bold">{stats.organization?.name}</h1>
+            <h1 className="mt-1 text-xl font-bold sm:text-2xl truncate">{stats.organization?.name}</h1>
           </div>
-          <div className="rounded-lg bg-white/20 px-4 py-2">
-            <p className="text-sm font-medium">Текущий период</p>
-            <p className="text-xl font-bold">{formatPeriod(stats.stats.currentPeriod)}</p>
+          <div className="flex items-center gap-3 rounded-lg bg-white/20 px-4 py-2 self-start sm:self-auto shrink-0">
+            <p className="text-sm font-medium whitespace-nowrap">Текущий период</p>
+            <p className="text-lg font-bold sm:text-xl whitespace-nowrap">{formatPeriod(stats.stats.currentPeriod)}</p>
           </div>
         </div>
       </div>
@@ -297,7 +297,7 @@ export default function OrgHeadDashboard() {
       {/* Быстрые действия */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <QuickAction
-          href="/dashboard/reports"
+          href="/dashboard/reports/org-head"
           icon={<BarChart3 className="h-8 w-8" />}
           title="Отчёты"
           description="Просмотр и утверждение"

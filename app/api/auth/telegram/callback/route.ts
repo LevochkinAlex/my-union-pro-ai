@@ -6,47 +6,55 @@ import { authOptions } from "@/lib/auth";
 import { translitLatinToCyrillic } from "@/lib/translit-latin-to-cyrillic";
 
 /**
- * Telegram Login Widget Callback
- * 
- * Обрабатывает данные от Telegram Login Widget и создает/авторизует пользователя
+ * Returns true if the string has at least one Cyrillic letter.
+ * Used to avoid overwriting a real Cyrillic name with a Telegram nickname.
  */
+function hasCyrillic(s: string | null | undefined): boolean {
+  return !!s && /[а-яёА-ЯЁ]/.test(s);
+}
+
+/**
+ * Safely pick a name for a user field.
+ * - If the user already has a Cyrillic name, keep it (don't replace with a Telegram nickname).
+ * - If the user has no name at all, use the OAuth-provided name (transliterated).
+ */
+function pickName(existing: string | null | undefined, oauthValue: string | null | undefined): string | undefined {
+  const existingTrimmed = existing?.trim();
+  if (existingTrimmed) return undefined; // keep existing, don't change
+  if (!oauthValue) return undefined;
+  return translitLatinToCyrillic(oauthValue);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     
     console.log("[Telegram Login] Получен callback:", Object.fromEntries(searchParams));
     
-    // Получаем данные от Telegram
     const id = searchParams.get("id");
     const first_name = searchParams.get("first_name");
     const last_name = searchParams.get("last_name");
     const username = searchParams.get("username");
-    const phone = searchParams.get("phone"); // Опционально, если пользователь разрешил
+    const phone = searchParams.get("phone");
     const photo_url = searchParams.get("photo_url");
     const auth_date = searchParams.get("auth_date");
     const hash = searchParams.get("hash");
 
-    // Проверяем обязательные параметры
     if (!id || !auth_date || !hash) {
       console.error("[Telegram Login] Отсутствуют обязательные параметры");
-      return NextResponse.redirect(
-        new URL("/login?error=missing_params", request.url)
-      );
+      return NextResponse.redirect(new URL("/login?error=missing_params", request.url));
     }
 
-    // Проверяем подпись от Telegram
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) {
       console.error("[Telegram Login] TELEGRAM_BOT_TOKEN не установлен");
-      return NextResponse.redirect(
-        new URL("/login?error=server_config", request.url)
-      );
+      return NextResponse.redirect(new URL("/login?error=server_config", request.url));
     }
 
     const source = searchParams.get("source");
     const isWidgetAuth = source === "widget";
 
-    // Создаем строку для проверки подписи (исключаем hash и наш параметр source)
+    // Verify Telegram signature
     const dataCheckArray: string[] = [];
     searchParams.forEach((value, key) => {
       if (key !== "hash" && key !== "source") {
@@ -56,48 +64,27 @@ export async function GET(request: NextRequest) {
     dataCheckArray.sort();
     const dataCheckString = dataCheckArray.join("\n");
     
-    // Вычисляем HMAC
     const secretKey = crypto.createHash("sha256").update(token).digest();
-    const hmac = crypto
-      .createHmac("sha256", secretKey)
-      .update(dataCheckString)
-      .digest("hex");
+    const hmac = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
     
-    // Проверяем подпись
     if (hmac !== hash) {
-      console.error("[Telegram Login] Неверная подпись", {
-        expected: hmac,
-        received: hash,
-      });
-      return NextResponse.redirect(
-        new URL("/login?error=invalid_signature", request.url)
-      );
+      console.error("[Telegram Login] Неверная подпись");
+      return NextResponse.redirect(new URL("/login?error=invalid_signature", request.url));
     }
 
-    // Проверяем свежесть данных (не старше 1 дня)
     const authTimestamp = parseInt(auth_date);
     const now = Math.floor(Date.now() / 1000);
     if (now - authTimestamp > 86400) {
-      console.error("[Telegram Login] Данные устарели", {
-        authDate: new Date(authTimestamp * 1000),
-        now: new Date(now * 1000),
-      });
-      return NextResponse.redirect(
-        new URL("/login?error=data_outdated", request.url)
-      );
+      console.error("[Telegram Login] Данные устарели");
+      return NextResponse.redirect(new URL("/login?error=data_outdated", request.url));
     }
 
     console.log("[Telegram Login] Подпись проверена успешно");
 
-    // Нормализуем номер телефона, если он был передан
-    const normalizePhone = (phone: string): string => {
-      let cleaned = phone.replace(/[\s\-\(\)]/g, "");
-      if (cleaned.startsWith("8")) {
-        cleaned = "+7" + cleaned.slice(1);
-      }
-      if (cleaned.startsWith("7") && !cleaned.startsWith("+")) {
-        cleaned = "+" + cleaned;
-      }
+    const normalizePhone = (p: string): string => {
+      let cleaned = p.replace(/[\s\-\(\)]/g, "");
+      if (cleaned.startsWith("8")) cleaned = "+7" + cleaned.slice(1);
+      if (cleaned.startsWith("7") && !cleaned.startsWith("+")) cleaned = "+" + cleaned;
       return cleaned;
     };
 
@@ -110,110 +97,78 @@ export async function GET(request: NextRequest) {
       firstName: first_name,
     });
 
-    // Проверяем, есть ли текущая сессия (пользователь уже залогинен)
     const session = await getServerSession(authOptions);
     
     let user;
     let isNewUser = false;
 
     if (session?.user?.id) {
-      // Пользователь уже залогинен - привязываем Telegram к его аккаунту
-      console.log("[Telegram Login] 🔗 Пользователь уже залогинен, привязываем Telegram к аккаунту:", session.user.id);
+      // Привязка Telegram к залогиненному аккаунту
+      console.log("[Telegram Login] 🔗 Привязываем Telegram к аккаунту:", session.user.id);
       
-      // Проверяем, не привязан ли этот Telegram уже к другому аккаунту
-      const existingTgUser = await prisma.user.findUnique({
-        where: { telegramChatId: id },
-      });
+      const existingTgUser = await prisma.user.findUnique({ where: { telegramChatId: id } });
       
       if (existingTgUser && existingTgUser.id !== session.user.id) {
-        console.log("[Telegram Login] ⚠️ Этот Telegram уже привязан к другому аккаунту:", existingTgUser.id);
-        // Объединяем аккаунты: переносим данные из Telegram-аккаунта в текущий
-        
-        // Переносим документы
-        await prisma.document.updateMany({
-          where: { userId: existingTgUser.id },
-          data: { userId: session.user.id },
-        });
-        
-        // Удалено: перенос чат-сессий - больше не используется
-        
-        // Переносим историю членства
-        await prisma.membershipHistory.updateMany({
-          where: { userId: existingTgUser.id },
-          data: { userId: session.user.id },
-        });
-        
-        // Удалено: перенос обращений - функция обращений больше не используется
-        
-        // Удаляем связанные записи
+        console.log("[Telegram Login] ⚠️ Telegram привязан к другому аккаунту, объединяем:", existingTgUser.id);
+        await prisma.document.updateMany({ where: { userId: existingTgUser.id }, data: { userId: session.user.id } });
+        await prisma.membershipHistory.updateMany({ where: { userId: existingTgUser.id }, data: { userId: session.user.id } });
         await prisma.sMSPinCode.deleteMany({ where: { userId: existingTgUser.id } });
         await prisma.loginToken.deleteMany({ where: { userId: existingTgUser.id } });
         await prisma.emailPinCode.deleteMany({ where: { userId: existingTgUser.id } });
         await prisma.pushSubscription.deleteMany({ where: { userId: existingTgUser.id } });
         await prisma.phoneHistory.deleteMany({ where: { userId: existingTgUser.id } });
-        
-        // Удаляем дубликат
         await prisma.user.delete({ where: { id: existingTgUser.id } });
-        
-        console.log("[Telegram Login] ✅ Аккаунты объединены, дубликат удалён");
+        console.log("[Telegram Login] ✅ Аккаунты объединены");
       }
       
-      // Получаем актуальные данные пользователя
-      const currentUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-      });
+      const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
       
+      const newFirstName = pickName(currentUser?.firstName, first_name);
+      const newLastName = pickName(currentUser?.lastName, last_name);
+
       user = await prisma.user.update({
         where: { id: session.user.id },
         data: {
           telegramChatId: id,
           telegramUsername: username || currentUser?.telegramUsername || undefined,
-          firstName: currentUser?.firstName || (first_name ? translitLatinToCyrillic(first_name) : undefined),
-          lastName: currentUser?.lastName || (last_name ? translitLatinToCyrillic(last_name) : undefined),
+          ...(newFirstName !== undefined ? { firstName: newFirstName } : {}),
+          ...(newLastName !== undefined ? { lastName: newLastName } : {}),
           avatarUrl: currentUser?.avatarUrl || photo_url || undefined,
         },
       });
       
       console.log("[Telegram Login] ✅ Telegram привязан к существующему аккаунту");
     } else {
-      // Пользователь не залогинен - ищем или создаем
-      
-      // 1. Сначала по telegramChatId
-      user = await prisma.user.findUnique({
-        where: { telegramChatId: id },
-      });
+      // Поиск или создание
 
-      // 2. Если не найден, пробуем найти по username (для widget, где phone может быть скрыт)
+      // 1. По telegramChatId
+      user = await prisma.user.findUnique({ where: { telegramChatId: id } });
+
+      // 2. По username
       if (!user && username) {
         user = await prisma.user.findFirst({
-          where: {
-            telegramUsername: {
-              equals: username,
-              mode: "insensitive",
-            },
-          },
+          where: { telegramUsername: { equals: username, mode: "insensitive" } },
         });
-
         if (user) {
-          console.log("[Telegram Login] 🔗 Найден существующий аккаунт по username:", user.id);
+          console.log("[Telegram Login] 🔗 Найден по username:", user.id);
+          const fn = pickName(user.firstName, first_name);
+          const ln = pickName(user.lastName, last_name);
           user = await prisma.user.update({
             where: { id: user.id },
             data: {
               telegramChatId: id,
               telegramUsername: username || user.telegramUsername,
-              firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || user.firstName,
-              lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || user.lastName,
+              ...(fn !== undefined ? { firstName: fn } : {}),
+              ...(ln !== undefined ? { lastName: ln } : {}),
               avatarUrl: photo_url || user.avatarUrl,
             },
           });
         }
       }
 
-      // 3. Если не найден и есть phone - ищем по номеру телефона
+      // 3. По телефону
       if (!user && normalizedPhone) {
-        // Ищем с учетом разных форматов номера
         const phoneDigits = normalizedPhone.replace(/\D/g, "");
-        
         user = await prisma.user.findFirst({
           where: {
             OR: [
@@ -225,100 +180,75 @@ export async function GET(request: NextRequest) {
         });
 
         if (user) {
-          console.log("[Telegram Login] 🔗 Найден существующий аккаунт по номеру телефона. Синхронизируем с Telegram:", user.id);
-          
-          // Проверяем, не привязан ли этот Telegram уже к другому аккаунту
-          const existingTgUser = await prisma.user.findUnique({
-            where: { telegramChatId: id },
-          });
-          
+          console.log("[Telegram Login] 🔗 Найден по телефону:", user.id);
+
+          const existingTgUser = await prisma.user.findUnique({ where: { telegramChatId: id } });
           if (existingTgUser && existingTgUser.id !== user.id) {
-            console.log("[Telegram Login] ⚠️ Этот Telegram уже привязан к другому аккаунту. Объединяем аккаунты:", existingTgUser.id);
-            
-            // Объединяем аккаунты: переносим данные из Telegram-аккаунта в аккаунт с телефоном
-            await prisma.document.updateMany({
-              where: { userId: existingTgUser.id },
-              data: { userId: user.id },
-            });
-            // Удалено: перенос чат-сессий и сообщений - больше не используется
-            // Удалено: перенос обращений - функция обращений больше не используется
-            await prisma.membershipHistory.updateMany({
-              where: { userId: existingTgUser.id },
-              data: { userId: user.id },
-            });
+            console.log("[Telegram Login] ⚠️ Объединяем аккаунты:", existingTgUser.id);
+            await prisma.document.updateMany({ where: { userId: existingTgUser.id }, data: { userId: user.id } });
+            await prisma.membershipHistory.updateMany({ where: { userId: existingTgUser.id }, data: { userId: user.id } });
             await prisma.sMSPinCode.deleteMany({ where: { userId: existingTgUser.id } });
             await prisma.loginToken.deleteMany({ where: { userId: existingTgUser.id } });
             await prisma.emailPinCode.deleteMany({ where: { userId: existingTgUser.id } });
             await prisma.pushSubscription.deleteMany({ where: { userId: existingTgUser.id } });
             await prisma.phoneHistory.deleteMany({ where: { userId: existingTgUser.id } });
             await prisma.user.delete({ where: { id: existingTgUser.id } });
-            
-            console.log("[Telegram Login] ✅ Аккаунты объединены, дубликат удалён");
+            console.log("[Telegram Login] ✅ Аккаунты объединены");
           }
-          
-          // Обновляем пользователя, устанавливаем authPhone если его еще нет
-          const updateData: any = {
+
+          const fn = pickName(user.firstName, first_name);
+          const ln = pickName(user.lastName, last_name);
+          const updateData: Record<string, unknown> = {
             telegramChatId: id,
             telegramUsername: username || user.telegramUsername,
-            firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || user.firstName,
-            lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || user.lastName,
+            ...(fn !== undefined ? { firstName: fn } : {}),
+            ...(ln !== undefined ? { lastName: ln } : {}),
             phone: normalizedPhone,
           };
-          
-          // Если authPhone еще не установлен, устанавливаем его (телефон первой авторизации)
           if (!user.authPhone && normalizedPhone) {
             updateData.authPhone = normalizedPhone;
-            console.log("[Telegram Login] Устанавливаем authPhone (первая авторизация через Telegram):", normalizedPhone);
           }
-          
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: updateData,
-          });
-          
-          console.log("[Telegram Login] ✅ Аккаунт синхронизирован: SMS ↔ Telegram");
+
+          user = await prisma.user.update({ where: { id: user.id }, data: updateData });
+          console.log("[Telegram Login] ✅ Синхронизирован: SMS ↔ Telegram");
         }
       }
 
       isNewUser = !user;
 
       if (user && !isNewUser) {
-        // Обновляем данные существующего пользователя
         console.log("[Telegram Login] Пользователь найден:", user.id);
-        
+        const fn = pickName(user.firstName, first_name);
+        const ln = pickName(user.lastName, last_name);
         user = await prisma.user.update({
           where: { id: user.id },
           data: {
             telegramUsername: username || user.telegramUsername,
-            firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || user.firstName,
-            lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || user.lastName,
+            ...(fn !== undefined ? { firstName: fn } : {}),
+            ...(ln !== undefined ? { lastName: ln } : {}),
             phone: normalizedPhone || user.phone,
           },
         });
       } else if (isNewUser) {
-        // Создаем нового пользователя
         console.log("[Telegram Login] Создаем нового пользователя");
         
-        // Проверяем, не существует ли уже пользователь с этим telegramChatId (на случай, если остался после удаления)
-        const existingTgUser = await prisma.user.findUnique({
-          where: { telegramChatId: id },
-        });
+        const existingTgUser = await prisma.user.findUnique({ where: { telegramChatId: id } });
         
         if (existingTgUser) {
-          console.log("[Telegram Login] ⚠️ Найден пользователь с этим Telegram ID, используем его:", existingTgUser.id);
-          // Обновляем существующего пользователя вместо создания нового
+          console.log("[Telegram Login] ⚠️ Найден по Telegram ID, используем его:", existingTgUser.id);
+          const fn = pickName(existingTgUser.firstName, first_name);
+          const ln = pickName(existingTgUser.lastName, last_name);
           user = await prisma.user.update({
             where: { id: existingTgUser.id },
             data: {
               telegramUsername: username || existingTgUser.telegramUsername,
-              firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || existingTgUser.firstName,
-              lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || existingTgUser.lastName,
+              ...(fn !== undefined ? { firstName: fn } : {}),
+              ...(ln !== undefined ? { lastName: ln } : {}),
               phone: normalizedPhone || existingTgUser.phone,
             },
           });
           isNewUser = false;
         } else {
-          // Создаем нового пользователя
           try {
             user = await prisma.user.create({
               data: {
@@ -327,29 +257,22 @@ export async function GET(request: NextRequest) {
                 firstName: first_name ? translitLatinToCyrillic(first_name) : null,
                 lastName: last_name ? translitLatinToCyrillic(last_name) : null,
                 phone: normalizedPhone,
-                authPhone: normalizedPhone, // Устанавливаем authPhone при первой авторизации через Telegram
+                authPhone: normalizedPhone,
                 role: "PENDING_MEMBER",
                 membershipStatus: "PROFILE_INCOMPLETE",
               },
             });
-            
             console.log("[Telegram Login] Новый пользователь создан:", user.id);
-          } catch (createError: any) {
-            // Если ошибка из-за уникального constraint (telegramChatId или phone), пробуем найти существующего
-            if (createError?.code === 'P2002') {
-              console.log("[Telegram Login] ⚠️ Ошибка уникальности при создании, ищем существующего пользователя");
-              
-              // Пробуем найти по telegramChatId
-              const foundUser = await prisma.user.findUnique({
-                where: { telegramChatId: id },
-              });
-              
+          } catch (createError: unknown) {
+            const prismaErr = createError as { code?: string };
+            if (prismaErr?.code === "P2002") {
+              console.log("[Telegram Login] ⚠️ Ошибка уникальности, ищем существующего");
+              const foundUser = await prisma.user.findUnique({ where: { telegramChatId: id } });
               if (foundUser) {
                 user = foundUser;
                 isNewUser = false;
-                console.log("[Telegram Login] ✅ Найден существующий пользователь:", user.id);
               } else {
-                throw createError; // Если не нашли, пробрасываем ошибку дальше
+                throw createError;
               }
             } else {
               throw createError;
@@ -359,22 +282,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Создаем временный токен для автоматической авторизации
+    // Временный токен для автоматической авторизации
     const loginToken = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await prisma.loginToken.create({
-      data: {
-        token: loginToken,
-        userId: user.id,
-        expiresAt,
-      },
+      data: { token: loginToken, userId: user.id, expiresAt },
     });
 
-    console.log("[Telegram Login] Токен создан");
-
-    // Определяем правильный базовый URL СНАЧАЛА
-    // Для localhost всегда используем http, для продакшена - из env или из заголовков
     const host = request.headers.get("host") || "localhost:3000";
     const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
     
@@ -384,28 +299,20 @@ export async function GET(request: NextRequest) {
     } else if (process.env.NEXT_PUBLIC_APP_URL) {
       baseUrl = process.env.NEXT_PUBLIC_APP_URL;
     } else if (isLocalhost) {
-      // Для localhost всегда http
       baseUrl = `http://${host}`;
     } else {
-      // Для продакшена определяем по заголовкам
-      const proto = request.headers.get("x-forwarded-proto") || 
-                    (request.url.startsWith("https") ? "https" : "http");
+      const proto = request.headers.get("x-forwarded-proto") || (request.url.startsWith("https") ? "https" : "http");
       baseUrl = `${proto}://${host}`;
     }
 
     if (isWidgetAuth) {
-      // Widget flow: прямой redirect с токеном — без сообщений в бот
       const redirectUrl = new URL(`/auth/telegram/success?token=${loginToken}`, baseUrl);
-      console.log("[Telegram Login] Widget auth → прямой redirect:", redirectUrl.toString());
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Bot flow (legacy): отправляем сообщение в бот, redirect с check=true
     const { sendNewUserWelcome, sendReturningUserWelcome, sendTelegramMessage } = await import("@/lib/telegram-bot");
     
     if (!user.phone) {
-      console.log("[Telegram Login] У пользователя нет номера, запрашиваем через бот");
-      
       await sendTelegramMessage(
         id,
         `👋 <b>Добро пожаловать в МойСоюз!</b>\n\nДля завершения регистрации нам нужен ваш номер телефона.\n\nПоделитесь номером телефона, нажав кнопку ниже:`,
@@ -413,8 +320,7 @@ export async function GET(request: NextRequest) {
       
       const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
       if (TELEGRAM_BOT_TOKEN) {
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        await fetch(url, {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -436,13 +342,9 @@ export async function GET(request: NextRequest) {
     }
     
     const redirectUrl = new URL(`/auth/telegram/success?check=true`, baseUrl);
-    console.log("[Telegram Login] Bot flow → redirect:", redirectUrl.toString());
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error("[Telegram Login] Ошибка:", error);
-    return NextResponse.redirect(
-      new URL("/login?error=server_error", request.url)
-    );
+    return NextResponse.redirect(new URL("/login?error=server_error", request.url));
   }
 }
-

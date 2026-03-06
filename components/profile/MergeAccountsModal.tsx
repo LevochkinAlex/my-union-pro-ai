@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatPhoneDisplay } from "@/lib/utils/phone";
+import { AlertTriangle, FileText, MessageCircle } from "lucide-react";
 
 interface AccountData {
   id: string;
@@ -128,7 +129,7 @@ export default function MergeAccountsModal({
         {/* Info Banner */}
         <div className="mx-6 mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <span className="text-2xl">⚠️</span>
+            <AlertTriangle className="h-6 w-6 text-amber-500" />
             <div>
               <p className="font-medium text-amber-800 dark:text-amber-200">
                 Важная информация
@@ -158,7 +159,7 @@ export default function MergeAccountsModal({
               {/* Selection Badge */}
               {primaryChoice === "current" && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-green-500 text-white text-sm font-bold rounded-full shadow">
-                  ✓ ГЛАВНЫЙ
+                  ГЛАВНЫЙ
                 </div>
               )}
 
@@ -209,7 +210,7 @@ export default function MergeAccountsModal({
                       : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >
-                  {primaryChoice === "current" ? "✓ Выбран как главный" : "Выбрать как главный"}
+                  {primaryChoice === "current" ? "Выбран как главный" : "Выбрать как главный"}
                 </button>
               </div>
             </div>
@@ -226,7 +227,7 @@ export default function MergeAccountsModal({
               {/* Selection Badge */}
               {primaryChoice === "existing" && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-green-500 text-white text-sm font-bold rounded-full shadow">
-                  ✓ ГЛАВНЫЙ
+                  ГЛАВНЫЙ
                 </div>
               )}
 
@@ -269,8 +270,15 @@ export default function MergeAccountsModal({
                   {(existingAccount.documentsCount || existingAccount.sessionsCount) && (
                     <div className="pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        📄 {existingAccount.documentsCount || 0} документов • 
-                        💬 {existingAccount.sessionsCount || 0} чатов
+                        <span className="inline-flex items-center gap-1">
+                          <FileText className="h-3.5 w-3.5" />
+                          {existingAccount.documentsCount || 0} документов
+                        </span>
+                        <span className="mx-1">•</span>
+                        <span className="inline-flex items-center gap-1">
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          {existingAccount.sessionsCount || 0} чатов
+                        </span>
                       </p>
                     </div>
                   )}
@@ -287,7 +295,7 @@ export default function MergeAccountsModal({
                       : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >
-                  {primaryChoice === "existing" ? "✓ Выбран как главный" : "Выбрать как главный"}
+                  {primaryChoice === "existing" ? "Выбран как главный" : "Выбрать как главный"}
                 </button>
               </div>
             </div>

@@ -28,6 +28,8 @@ type UserDetailsFormProps = {
     updatedAt: string;
   };
   currentUserId?: string;
+  /** После удаления редирект сюда (по умолчанию /admin/users) */
+  redirectPathAfterDelete?: string;
 };
 
 const ROLE_OPTIONS = [
@@ -54,6 +56,7 @@ type StatusOption = (typeof STATUS_OPTIONS)[number];
 export default function UserDetailsForm({
   user,
   currentUserId,
+  redirectPathAfterDelete = "/admin/users",
 }: UserDetailsFormProps) {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -193,7 +196,7 @@ export default function UserDetailsForm({
         throw new Error(error?.error ?? "Не удалось удалить пользователя");
       }
 
-      router.push("/admin/users");
+      router.push(redirectPathAfterDelete);
       router.refresh();
     } catch (error) {
       console.error("[admin/users] delete error", error);

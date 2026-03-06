@@ -3,20 +3,31 @@
 import { useState, useRef, useEffect } from "react";
 import type { DiscountCategory } from "@/types/discounts";
 import clsx from "clsx";
+import {
+  Baby,
+  BookOpen,
+  Briefcase,
+  Film,
+  Globe,
+  Package,
+  ShoppingCart,
+  UtensilsCrossed,
+  type LucideIcon,
+} from "lucide-react";
 
-// Иконки для категорий (можно расширить)
-const categoryIcons: Record<string, string> = {
-  "Онлайн покупки": "🛒",
-  "Рестораны и доставка": "🍽️",
-  "Кино и театр": "🎬",
-  "Экскурсии и квесты": "🏛️",
-  "Активити": "⚽",
-  "Шоу": "🎭",
-  "Профессиональные навыки": "💼",
-  "Языковые курсы": "🌍",
-  "Обучение детей": "👶",
-  "Дети": "🧒",
-  "Обучение. Дети": "📚",
+// Иконки для категорий (без emoji)
+const categoryIcons: Record<string, LucideIcon> = {
+  "Онлайн покупки": ShoppingCart,
+  "Рестораны и доставка": UtensilsCrossed,
+  "Кино и театр": Film,
+  "Экскурсии и квесты": Globe,
+  "Активити": Package,
+  "Шоу": Film,
+  "Профессиональные навыки": Briefcase,
+  "Языковые курсы": Globe,
+  "Обучение детей": Baby,
+  "Дети": Baby,
+  "Обучение. Дети": BookOpen,
 };
 
 interface CategoryFilterProps {
@@ -187,7 +198,7 @@ export default function CategoryFilter({
               <div className="space-y-1">
                 {categories.map((category) => {
                   const isSelected = selectedIds.includes(category.id);
-                  const icon = categoryIcons[category.name] || "📦";
+                  const Icon = categoryIcons[category.name] || Package;
 
                   return (
                     <label
@@ -205,7 +216,7 @@ export default function CategoryFilter({
                         onChange={() => handleToggle(category.id)}
                         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-600"
                       />
-                      <span className="text-lg">{icon}</span>
+                      <Icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                       <span
                         className={clsx(
                           "flex-1 text-sm",

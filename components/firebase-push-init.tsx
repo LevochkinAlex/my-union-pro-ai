@@ -44,7 +44,7 @@ export default function FirebasePushInit() {
           const permission = Notification.permission;
           if (process.env.NODE_ENV === 'development') console.log("[Firebase] Notification permission:", permission);
           if (permission === "granted") {
-            if (process.env.NODE_ENV === 'development') console.log("[Firebase] ✅ Notifications allowed");
+            if (process.env.NODE_ENV === 'development') console.log("[Firebase] Notifications allowed");
             setTimeout(() => {
               syncPushSubscription().catch((error: any) => {
                 const errorMessage = error?.message || String(error);

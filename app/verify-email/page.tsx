@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 function VerifyEmailContent() {
   const router = useRouter();
@@ -63,7 +64,9 @@ function VerifyEmailContent() {
 
         {status === "success" && (
           <div className="text-center">
-            <div className="mb-4 text-6xl">✅</div>
+            <div className="mb-4 flex justify-center">
+              <CheckCircle2 className="h-14 w-14 text-green-600" />
+            </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
               Email подтвержден!
             </h1>
@@ -86,7 +89,9 @@ function VerifyEmailContent() {
 
         {status === "error" && (
           <div className="text-center">
-            <div className="mb-4 text-6xl">❌</div>
+            <div className="mb-4 flex justify-center">
+              <XCircle className="h-14 w-14 text-red-600" />
+            </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
               Ошибка верификации
             </h1>

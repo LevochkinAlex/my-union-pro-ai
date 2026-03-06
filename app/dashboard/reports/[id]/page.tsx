@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 
 interface ReportField {
@@ -85,7 +86,13 @@ const STATUS_COLORS: Record<Report["status"], string> = {
 export default function ReportDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { data: session } = useSession();
   const reportId = params.id as string;
+
+  const viewMode = (session?.user as { viewMode?: string })?.viewMode ?? "MEMBER";
+  const isOrgHead = viewMode === "RPO_HEAD" || viewMode === "MPO_HEAD";
+  const reportsListHref = isOrgHead ? "/dashboard/reports/org-head" : "/dashboard/reports";
+  const reportApiBase = isOrgHead ? "/api/org-head/reports" : "/api/ppo-head/reports";
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,7 +109,7 @@ export default function ReportDetailPage() {
   const fetchReport = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/ppo-head/reports/${reportId}`);
+      const response = await fetch(`${reportApiBase}/${reportId}`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch report");
@@ -110,8 +117,8 @@ export default function ReportDetailPage() {
 
       const data = await response.json();
       setReport(data.report);
-      setCanEdit(data.canEdit);
-      setCanApprove(data.canApprove);
+      setCanEdit(data.canEdit ?? false);
+      setCanApprove(data.canApprove ?? false);
       setFormData(data.report.data || {});
       
       // Устанавливаем первую секцию активной
@@ -123,7 +130,7 @@ export default function ReportDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [reportId]);
+  }, [reportId, reportApiBase]);
 
   useEffect(() => {
     fetchReport();
@@ -154,11 +161,11 @@ export default function ReportDetailPage() {
   };
 
   const saveReport = async () => {
-    if (!canEdit || saving) return;
+    if (!canEdit || saving || isOrgHead) return;
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/ppo-head/reports/${reportId}`, {
+      const response = await fetch(`${reportApiBase}/${reportId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: formData }),
@@ -175,11 +182,11 @@ export default function ReportDetailPage() {
   };
 
   const handleSubmit = async () => {
+    if (isOrgHead) return; // Руководитель МПО/РПО не отправляет отчёты
     if (!confirm("Отправить отчёт на согласование?")) return;
 
     setSubmitting(true);
     try {
-      // Сначала сохраняем
       await saveReport();
 
       const response = await fetch(`/api/ppo-head/reports/${reportId}/status`, {
@@ -213,16 +220,23 @@ export default function ReportDetailPage() {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/ppo-head/reports/${reportId}/status`, {
+      const url = isOrgHead
+        ? `/api/org-head/reports/${reportId}/approve`
+        : `/api/ppo-head/reports/${reportId}/status`;
+      const body = isOrgHead
+        ? { action: "approve" }
+        : { action: "approve" };
+
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve" }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        alert(data.message);
+        alert(data.message ?? "Отчёт согласован");
         fetchReport();
       } else {
         alert(data.error || "Ошибка");
@@ -242,10 +256,17 @@ export default function ReportDetailPage() {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/ppo-head/reports/${reportId}/status`, {
+      const url = isOrgHead
+        ? `/api/org-head/reports/${reportId}/approve`
+        : `/api/ppo-head/reports/${reportId}/status`;
+      const body = isOrgHead
+        ? { action: "reject", comment: rejectReason }
+        : { action: "reject", comment: rejectReason };
+
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject", comment: rejectReason }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -253,7 +274,7 @@ export default function ReportDetailPage() {
       if (response.ok) {
         setShowRejectModal(false);
         setRejectReason("");
-        alert(data.message);
+        alert(data.message ?? "Отчёт возвращён на доработку");
         fetchReport();
       } else {
         alert(data.error || "Ошибка");
@@ -365,7 +386,7 @@ export default function ReportDetailPage() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Отчёт не найден</p>
-        <Link href="/dashboard/reports" className="text-blue-600 hover:underline mt-2 inline-block">
+        <Link href={reportsListHref} className="text-blue-600 hover:underline mt-2 inline-block">
           Вернуться к списку
         </Link>
       </div>
@@ -379,7 +400,7 @@ export default function ReportDetailPage() {
       {/* Хлебные крошки и заголовок */}
       <div>
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
-          <Link href="/dashboard/reports" className="hover:text-blue-600">
+          <Link href={reportsListHref} className="hover:text-blue-600">
             Отчётность
           </Link>
           <span>/</span>
@@ -489,7 +510,7 @@ export default function ReportDetailPage() {
           {/* Кнопки действий */}
           <div className="mt-6 flex items-center justify-between">
             <Link
-              href="/dashboard/reports"
+              href={reportsListHref}
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             >
               ← Вернуться к списку
@@ -498,7 +519,7 @@ export default function ReportDetailPage() {
             <div className="flex items-center gap-3">
               {/* Кнопка экспорта в PDF */}
               <a
-                href={`/api/ppo-head/reports/${reportId}/export?format=pdf`}
+                href={`${reportApiBase}/${reportId}/export?format=pdf`}
                 download
                 className="flex items-center gap-2 px-4 py-2 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               >
@@ -510,7 +531,7 @@ export default function ReportDetailPage() {
               
               {/* Кнопка экспорта в Excel */}
               <a
-                href={`/api/ppo-head/reports/${reportId}/export?format=xlsx`}
+                href={`${reportApiBase}/${reportId}/export?format=xlsx`}
                 download
                 className="flex items-center gap-2 px-4 py-2 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-600 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
               >

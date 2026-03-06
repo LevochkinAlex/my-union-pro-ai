@@ -4,9 +4,18 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileText, Trophy, AlertTriangle } from "lucide-react";
+import { FileText, Trophy, AlertTriangle, Users, Star as StarIcon } from "lucide-react";
 import { alertSuccess, alertError } from "@/lib/alert";
+import { getEffectiveMemberStatus, getMembershipStatusLabel } from "@/lib/status-labels";
 import { Modal } from "@/components/ui/modal";
+import {
+  Card,
+  PageHeader,
+  EmptyState,
+  StatusBadge,
+  Spinner,
+  Tabs,
+} from "@/components/ui";
 
 interface Document {
   id: string;
@@ -92,24 +101,31 @@ const DOCUMENT_STATUS_MAP: Record<string, string> = {
   FAILED: "Не прошёл проверку",
 };
 
-// Функция для получения информативного статуса документа
 const getDocumentStatusInfo = (doc: Document) => {
   const hasFile = !!doc.filePath;
   const hasSigned = !!doc.signedFilePath;
   
   if (hasSigned) {
-    return { text: "✓ Подписан пользователем", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" };
+    return { text: "Подписан пользователем" };
   }
   if (hasFile && doc.status === "GENERATED") {
-    return { text: "⏳ Ожидает подписи пользователя", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" };
+    return { text: "Ожидает подписи пользователя" };
   }
   if (doc.status === "APPROVED") {
-    return { text: "✓ Одобрен", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" };
+    return { text: "Одобрен" };
   }
   if (doc.status === "REJECTED") {
-    return { text: "✕ Отклонён", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" };
+    return { text: "Отклонён" };
   }
-  return { text: DOCUMENT_STATUS_MAP[doc.status] || doc.status, color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200" };
+  return { text: DOCUMENT_STATUS_MAP[doc.status] || doc.status };
+};
+
+const getDocStatusColor = (doc: Document): "green" | "yellow" | "red" | "gray" => {
+  if (doc.signedFilePath) return "green";
+  if (doc.filePath && doc.status === "GENERATED") return "yellow";
+  if (doc.status === "APPROVED") return "green";
+  if (doc.status === "REJECTED") return "red";
+  return "gray";
 };
 
 // Маппинг статусов членства
@@ -122,6 +138,13 @@ const MEMBERSHIP_STATUS_MAP: Record<string, string> = {
   REJECTED: "Отклонён",
   SUSPENDED: "Приостановлен",
   EXCLUDED: "Исключён",
+};
+
+const getMembershipStatusColor = (status: string): "green" | "yellow" | "red" | "gray" => {
+  if (status === "APPROVED" || status === "ACCEPTED") return "green";
+  if (status === "DOCUMENTS_PENDING") return "yellow";
+  if (status === "EXCLUDED" || status === "REJECTED" || status === "REMOVED") return "red";
+  return "gray";
 };
 
 // Маппинг статуса в профсоюзе
@@ -151,6 +174,59 @@ const EMPLOYMENT_STATUS_MAP: Record<string, string> = {
   WORK: "Работает",
   STUDY: "Учится",
   RETIREMENT: "На пенсии",
+};
+
+const APPEAL_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Ожидание",
+  IN_PROGRESS: "В работе",
+  RESOLVED: "Решено",
+  REJECTED: "Отклонено",
+  CLOSED: "Закрыто",
+};
+
+const getAppealStatusColor = (status: string): "green" | "yellow" | "red" | "blue" | "gray" => {
+  switch (status) {
+    case "PENDING": return "yellow";
+    case "IN_PROGRESS": return "blue";
+    case "RESOLVED": return "green";
+    case "REJECTED": return "red";
+    case "CLOSED": return "gray";
+    default: return "gray";
+  }
+};
+
+const APPEAL_TYPE_LABELS: Record<string, string> = {
+  LEGAL: "Юридическое",
+  ACCOUNTING: "Бухгалтерское",
+  TECHNICAL: "Техническое",
+  HR: "Кадровое",
+  OTHER: "Прочее",
+};
+
+const APPEAL_PRIORITY_LABELS: Record<string, string> = {
+  LOW: "Низкая",
+  MEDIUM: "Средняя",
+  HIGH: "Высокая",
+  URGENT: "Срочная",
+};
+
+const getAppealPriorityColor = (priority: string): "gray" | "blue" | "orange" | "red" => {
+  switch (priority) {
+    case "LOW": return "gray";
+    case "MEDIUM": return "blue";
+    case "HIGH": return "orange";
+    case "URGENT": return "red";
+    default: return "gray";
+  }
+};
+
+const getAwardTypeColor = (type: string): "yellow" | "blue" | "purple" | "green" => {
+  switch (type) {
+    case "государственная": return "yellow";
+    case "ведомственная": return "blue";
+    case "профсоюзная": return "purple";
+    default: return "green";
+  }
 };
 
 export default function MembersPage() {
@@ -337,7 +413,6 @@ export default function MembersPage() {
       const data = await response.json();
       setMemberDetails(data.member);
       
-      // Загружаем обращения пользователя заранее
       loadMemberAppeals(memberId);
     } catch (err) {
       console.error("Error loading member details:", err);
@@ -348,17 +423,14 @@ export default function MembersPage() {
     }
   };
 
-  // Загружаем обращения при открытии карточки или переключении на таб "appeals"
   useEffect(() => {
     if (memberDetails && !loadingAppeals) {
-      // Загружаем обращения сразу при открытии карточки, чтобы счетчик в табе был актуальным
       if (appeals.length === 0) {
         loadMemberAppeals(memberDetails.id);
       }
     }
   }, [memberDetails?.id]);
   
-  // Перезагружаем обращения при переключении на таб "appeals" (на случай, если они не загрузились)
   useEffect(() => {
     if (detailTab === "appeals" && memberDetails && appeals.length === 0 && !loadingAppeals) {
       loadMemberAppeals(memberDetails.id);
@@ -370,7 +442,6 @@ export default function MembersPage() {
       setLoadingAppeals(true);
       console.log(`[loadMemberAppeals] Loading appeals for user ${memberId}`);
       
-      // Загружаем обращения через API председателя с фильтром по userId
       const url = `/api/ppo-head/appeals?userId=${encodeURIComponent(memberId)}`;
       console.log(`[loadMemberAppeals] Request URL:`, url);
       
@@ -445,7 +516,6 @@ export default function MembersPage() {
     }
   };
 
-  // Генерация PDF анкеты члена профсоюза через серверный API
   const handleDownloadPdf = async () => {
     if (!memberDetails) return;
     
@@ -458,7 +528,6 @@ export default function MembersPage() {
         throw new Error(error.error || "Ошибка при генерации PDF");
       }
       
-      // Получаем blob и скачиваем
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -478,7 +547,6 @@ export default function MembersPage() {
     }
   };
 
-  // Сортировка членов
   const sortedMembers = [...members].sort((a, b) => {
     let comparison = 0;
     switch (sortField) {
@@ -498,7 +566,6 @@ export default function MembersPage() {
     return sortDirection === "asc" ? comparison : -comparison;
   });
 
-  // Выбор всех/снятие выбора
   const handleSelectAll = () => {
     if (selectedIds.size === members.length) {
       setSelectedIds(new Set());
@@ -507,7 +574,6 @@ export default function MembersPage() {
     }
   };
 
-  // Выбор одного члена
   const handleSelectOne = (id: string) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) {
@@ -518,7 +584,6 @@ export default function MembersPage() {
     setSelectedIds(newSet);
   };
 
-  // Bulk одобрение
   const handleBulkApprove = () => {
     if (selectedIds.size === 0) return;
     openApproveModal(Array.from(selectedIds));
@@ -554,7 +619,6 @@ export default function MembersPage() {
     }
   };
 
-  // Bulk исключение (для активных членов)
   const handleBulkExclude = async () => {
     if (selectedIds.size === 0) return;
     
@@ -592,7 +656,6 @@ export default function MembersPage() {
     }
   };
 
-  // Исключение одного члена
   const handleExclude = async (memberId: string) => {
     const confirmed = window.confirm("Вы уверены, что хотите исключить этого члена профсоюза?");
     if (!confirmed) return;
@@ -614,7 +677,6 @@ export default function MembersPage() {
     }
   };
 
-  // Сортировка при клике на заголовок
   const handleSort = (field: "name" | "date" | "email") => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -624,85 +686,42 @@ export default function MembersPage() {
     }
   };
 
-  // Сброс выбранных при переключении табов
   useEffect(() => {
     setSelectedIds(new Set());
   }, [activeTab]);
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
-        </div>
-      </div>
-    );
+    return <Spinner fullPage />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Члены профсоюза
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Управление заявками на вступление и активными членами
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Члены профсоюза"
+        description="Управление заявками на вступление и активными членами"
+      />
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab("validation")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
-              activeTab === "validation"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Валидация
-            {activeTab === "validation" && members.length > 0 && (
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {members.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("active")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
-              activeTab === "active"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Активные
-            {activeTab === "active" && members.length > 0 && (
-              <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900 dark:text-green-200">
-                {members.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("excluded")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
-              activeTab === "excluded"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Исключённые
-            {activeTab === "excluded" && members.length > 0 && (
-              <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-600 dark:text-gray-200">
-                {members.length}
-              </span>
-            )}
-          </button>
-        </nav>
-      </div>
+      <Tabs
+        tabs={[
+          {
+            id: "validation",
+            label: "Валидация",
+            count: activeTab === "validation" && members.length > 0 ? members.length : undefined,
+          },
+          {
+            id: "active",
+            label: "Активные",
+            count: activeTab === "active" && members.length > 0 ? members.length : undefined,
+          },
+          {
+            id: "excluded",
+            label: "Исключённые",
+            count: activeTab === "excluded" && members.length > 0 ? members.length : undefined,
+          },
+        ]}
+        activeTab={activeTab}
+        onChange={(id) => setActiveTab(id as "validation" | "active" | "excluded")}
+      />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
@@ -710,7 +729,6 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && (
         <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 flex items-center justify-between">
           <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -755,37 +773,25 @@ export default function MembersPage() {
       )}
 
       {members.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-            {activeTab === "validation"
+        <EmptyState
+          icon={<Users className="h-6 w-6" />}
+          title={
+            activeTab === "validation"
               ? "Нет заявок на проверку"
               : activeTab === "excluded"
                 ? "Нет исключённых членов"
-                : "Нет активных членов"}
-          </h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            {activeTab === "validation"
+                : "Нет активных членов"
+          }
+          description={
+            activeTab === "validation"
               ? "Все заявки обработаны"
               : activeTab === "excluded"
                 ? "Исключённые члены появятся здесь после исключения из активных"
-                : "В вашей организации пока нет активных членов"}
-          </p>
-        </div>
+                : "В вашей организации пока нет активных членов"
+          }
+        />
       ) : (
-        <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+        <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/50">
@@ -886,13 +892,11 @@ export default function MembersPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               title={DOCUMENT_TYPE_MAP[doc.type] || doc.type}
-                              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs ${
-                                doc.status === "SIGNED" 
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300"
-                                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
-                              }`}
                             >
-                              <><FileText className="inline h-3.5 w-3.5 align-middle mr-0.5" /> {doc.type === "MEMBERSHIP_APPLICATION" ? "Вступл." : doc.type === "CONTRIBUTION_APPLICATION" ? "Взносы" : "Док."}</>
+                              <StatusBadge color={doc.status === "SIGNED" ? "green" : "blue"}>
+                                <FileText className="inline h-3.5 w-3.5" />
+                                {doc.type === "MEMBERSHIP_APPLICATION" ? "Вступл." : doc.type === "CONTRIBUTION_APPLICATION" ? "Взносы" : "Док."}
+                              </StatusBadge>
                             </a>
                           ))}
                         </div>
@@ -950,7 +954,7 @@ export default function MembersPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Модалка одобрения — выбор даты вступления */}
@@ -1005,7 +1009,7 @@ export default function MembersPage() {
         </div>
       </Modal>
 
-      {/* Модалка редактирования даты вступления (председатель / член профкома) */}
+      {/* Модалка редактирования даты вступления */}
       <Modal
         isOpen={showEditJoinedDateModal && !!memberDetails}
         onClose={() => setShowEditJoinedDateModal(false)}
@@ -1122,8 +1126,8 @@ export default function MembersPage() {
             onClick={() => {
               setShowDetailModal(false);
               setMemberDetails(null);
-              setAppeals([]); // Очищаем обращения при закрытии
-              setDetailTab("profile"); // Сбрасываем таб
+              setAppeals([]);
+              setDetailTab("profile");
             }}
           />
           
@@ -1143,10 +1147,7 @@ export default function MembersPage() {
                     >
                       {isGeneratingPdf ? (
                         <>
-                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
+                          <Spinner size="sm" className="h-4 w-4" />
                           Генерация...
                         </>
                       ) : (
@@ -1165,8 +1166,8 @@ export default function MembersPage() {
                     onClick={() => {
                       setShowDetailModal(false);
                       setMemberDetails(null);
-                      setAppeals([]); // Очищаем обращения при закрытии
-                      setDetailTab("profile"); // Сбрасываем таб
+                      setAppeals([]);
+                      setDetailTab("profile");
                     }}
                     className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   >
@@ -1181,10 +1182,7 @@ export default function MembersPage() {
               <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
                 {loadingDetails ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                      <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-                      <p className="text-gray-600 dark:text-gray-400">Загрузка данных...</p>
-                    </div>
+                    <Spinner />
                   </div>
                 ) : memberDetails ? (
                   <div className="p-6">
@@ -1206,26 +1204,17 @@ export default function MembersPage() {
                         <p className="text-gray-600 dark:text-gray-400">{memberDetails.email}</p>
                         <p className="text-gray-600 dark:text-gray-400">{memberDetails.phone}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            memberDetails.membershipStatus === "APPROVED"
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              : memberDetails.membershipStatus === "DOCUMENTS_PENDING"
-                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                              : memberDetails.membershipStatus === "EXCLUDED" || memberDetails.membershipStatus === "REJECTED"
-                              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                              : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-                          }`}>
-                            {MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus}
-                          </span>
+                          <StatusBadge color={getMembershipStatusColor(getEffectiveMemberStatus(memberDetails.membershipStatus, memberDetails.unionMembershipStatus))}>
+                            {getMembershipStatusLabel(getEffectiveMemberStatus(memberDetails.membershipStatus, memberDetails.unionMembershipStatus))}
+                          </StatusBadge>
                           {memberDetails.unionCardNumber && (
-                            <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                            <StatusBadge color="purple">
                               № {memberDetails.unionCardNumber}
-                            </span>
+                            </StatusBadge>
                           )}
                         </div>
                       </div>
                       
-                      {/* Quick Actions */}
                       {memberDetails.membershipStatus !== "APPROVED" && (
                         <div className="flex flex-col gap-2">
                           <button
@@ -1251,33 +1240,22 @@ export default function MembersPage() {
                       )}
                     </div>
 
-                    {/* Tabs */}
-                    <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-                      <nav className="-mb-px flex space-x-4 overflow-x-auto">
-                        {[
-                          { key: "profile", label: "Профиль" },
-                          { key: "work", label: "Работа" },
-                          { key: "family", label: "Семья" },
-                          { key: "education", label: "Образование" },
-                          { key: "awards", label: "Награды" },
-                          { key: "membership", label: "Членство" },
-                          { key: "documents", label: `Документы (${memberDetails.documents?.length || 0})` },
-                          { key: "appeals", label: `Обращения (${appeals.length})` },
-                        ].map((tab) => (
-                          <button
-                            key={tab.key}
-                            onClick={() => setDetailTab(tab.key as DetailTab)}
-                            className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
-                              detailTab === tab.key
-                                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400"
-                            }`}
-                          >
-                            {tab.label}
-                          </button>
-                        ))}
-                      </nav>
-                    </div>
+                    {/* Detail Tabs */}
+                    <Tabs
+                      tabs={[
+                        { id: "profile", label: "Профиль" },
+                        { id: "work", label: "Работа" },
+                        { id: "family", label: "Семья" },
+                        { id: "education", label: "Образование" },
+                        { id: "awards", label: "Награды" },
+                        { id: "membership", label: "Членство" },
+                        { id: "documents", label: "Документы", count: memberDetails.documents?.length ?? 0 },
+                        { id: "appeals", label: "Обращения", count: appeals.length },
+                      ]}
+                      activeTab={detailTab}
+                      onChange={(id) => setDetailTab(id as DetailTab)}
+                      className="mb-6"
+                    />
 
                     {/* Tab Content */}
                     {detailTab === "profile" && (
@@ -1338,10 +1316,10 @@ export default function MembersPage() {
                               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Профессии</h4>
                               <div className="space-y-2">
                                 {professions.map((p: any, i: number) => (
-                                  <div key={i} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                  <Card key={i} padding="sm">
                                     <p className="font-medium text-gray-900 dark:text-white">{p.name}</p>
                                     {p.experience && <p className="text-sm text-gray-600 dark:text-gray-400">Опыт: {p.experience}</p>}
-                                  </div>
+                                  </Card>
                                 ))}
                               </div>
                             </div>
@@ -1365,12 +1343,12 @@ export default function MembersPage() {
                               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Дети</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {children.map((child: any, i: number) => (
-                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                  <Card key={i} padding="sm">
                                     <p className="font-medium text-gray-900 dark:text-white">{child.name}</p>
                                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                                      {child.gender === "М" ? "👦" : "👧"} {child.birthDate ? new Date(child.birthDate).toLocaleDateString("ru-RU") : ""}
+                                      {child.gender} {child.birthDate ? new Date(child.birthDate).toLocaleDateString("ru-RU") : ""}
                                     </p>
-                                  </div>
+                                  </Card>
                                 ))}
                               </div>
                             </div>
@@ -1390,12 +1368,12 @@ export default function MembersPage() {
                               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Учебные заведения</h4>
                               <div className="space-y-3">
                                 {educations.map((edu: any, i: number) => (
-                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                  <Card key={i} padding="sm">
                                     <p className="font-medium text-gray-900 dark:text-white">{edu.institution}</p>
                                     <p className="text-sm text-gray-600 dark:text-gray-400">
                                       {edu.level} • {edu.specialty} • {edu.year}
                                     </p>
-                                  </div>
+                                  </Card>
                                 ))}
                               </div>
                             </div>
@@ -1409,12 +1387,12 @@ export default function MembersPage() {
                               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Повышение квалификации</h4>
                               <div className="space-y-3">
                                 {trainings.map((t: any, i: number) => (
-                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                  <Card key={i} padding="sm">
                                     <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
                                     <p className="text-sm text-gray-600 dark:text-gray-400">
                                       {t.year} {t.description && `• ${t.description}`}
                                     </p>
-                                  </div>
+                                  </Card>
                                 ))}
                               </div>
                             </div>
@@ -1436,25 +1414,20 @@ export default function MembersPage() {
                           return awards && awards.length > 0 ? (
                             <div className="space-y-3">
                               {awards.map((a: any, i: number) => (
-                                <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                <Card key={i} padding="sm">
                                   <div className="flex items-center gap-2 mb-2">
                                     <Trophy className="h-6 w-6 shrink-0 text-amber-500" />
-                                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                                      a.type === "государственная" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
-                                      a.type === "ведомственная" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
-                                      a.type === "профсоюзная" ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" :
-                                      "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                    }`}>
+                                    <StatusBadge color={getAwardTypeColor(a.type)}>
                                       {a.type || "Награда"}
-                                    </span>
+                                    </StatusBadge>
                                     {a.year && <span className="text-sm text-gray-500 dark:text-gray-400">{a.year} г.</span>}
                                   </div>
                                   <p className="text-gray-900 dark:text-white">{a.description}</p>
-                                </div>
+                                </Card>
                               ))}
                             </div>
                           ) : (
-                            <p className="text-gray-500 dark:text-gray-400 text-center py-8">Наград нет</p>
+                            <EmptyState title="Наград нет" />
                           );
                         })()}
                       </div>
@@ -1482,7 +1455,7 @@ export default function MembersPage() {
                               )}
                             </div>
                           </div>
-                          {memberDetails.unionMembershipStatus && <InfoField label="Статус в профсоюзе" value={UNION_MEMBERSHIP_STATUS_MAP[memberDetails.unionMembershipStatus] || memberDetails.unionMembershipStatus} />}
+                          <InfoField label="Статус в профсоюзе" value={getMembershipStatusLabel(getEffectiveMemberStatus(memberDetails.membershipStatus, memberDetails.unionMembershipStatus))} />
                           {memberDetails.organization?.name && <InfoField label="Организация" value={memberDetails.organization.name} />}
                           {memberDetails.bestBenefitsUserId && <InfoField label="Best Benefits ID" value={memberDetails.bestBenefitsUserId} />}
                           {memberDetails.bestBenefitsStatus && <InfoField label="Best Benefits статус" value={BEST_BENEFITS_STATUS_MAP[memberDetails.bestBenefitsStatus] || memberDetails.bestBenefitsStatus} />}
@@ -1494,28 +1467,27 @@ export default function MembersPage() {
                     {detailTab === "documents" && (
                       <div className="space-y-4">
                         {!memberDetails.documents || memberDetails.documents.length === 0 ? (
-                          <p className="text-gray-500 dark:text-gray-400 text-center py-8">Документов нет</p>
+                          <EmptyState title="Документов нет" />
                         ) : (
                           memberDetails.documents.map((doc) => {
                             const statusInfo = getDocumentStatusInfo(doc);
                             return (
-                              <div key={doc.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                              <Card key={doc.id} padding="sm">
                                 <div className="flex items-start justify-between gap-4">
                                   <div className="flex-1 min-w-0">
                                     <h4 className="font-medium text-gray-900 dark:text-white">{doc.title}</h4>
                                     <div className="mt-2 flex flex-wrap gap-2">
-                                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                      <StatusBadge color="blue">
                                         {DOCUMENT_TYPE_MAP[doc.type] || doc.type}
-                                      </span>
-                                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusInfo.color}`}>
+                                      </StatusBadge>
+                                      <StatusBadge color={getDocStatusColor(doc)}>
                                         {statusInfo.text}
-                                      </span>
+                                      </StatusBadge>
                                     </div>
                                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                                       Создан: {new Date(doc.createdAt).toLocaleString("ru-RU")}
                                     </p>
                                     
-                                    {/* Дополнительная информация о статусе */}
                                     {!doc.signedFilePath && doc.filePath && (
                                       <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
                                         <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Документ сформирован, но пользователь ещё не загрузил подписанную версию</span>
@@ -1559,7 +1531,7 @@ export default function MembersPage() {
                                     )}
                                   </div>
                                 </div>
-                              </div>
+                              </Card>
                             );
                           })
                         )}
@@ -1570,54 +1542,12 @@ export default function MembersPage() {
                       <div className="space-y-3">
                         {loadingAppeals ? (
                           <div className="flex items-center justify-center py-8">
-                            <div className="text-center">
-                              <div className="mb-4 inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">Загрузка обращений...</p>
-                            </div>
+                            <Spinner size="sm" />
                           </div>
                         ) : appeals.length === 0 ? (
-                          <p className="text-gray-500 dark:text-gray-400 text-center py-8">Обращений нет</p>
+                          <EmptyState title="Обращений нет" />
                         ) : (
                           appeals.map((appeal) => {
-                            const statusColors: Record<string, string> = {
-                              PENDING: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-                              IN_PROGRESS: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-                              RESOLVED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-                              REJECTED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-                              CLOSED: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
-                            };
-                            
-                            const statusLabels: Record<string, string> = {
-                              PENDING: "Ожидание",
-                              IN_PROGRESS: "В работе",
-                              RESOLVED: "Решено",
-                              REJECTED: "Отклонено",
-                              CLOSED: "Закрыто",
-                            };
-
-                            const typeLabels: Record<string, string> = {
-                              LEGAL: "Юридическое",
-                              ACCOUNTING: "Бухгалтерское",
-                              TECHNICAL: "Техническое",
-                              HR: "Кадровое",
-                              OTHER: "Прочее",
-                            };
-
-                            const priorityColors: Record<string, string> = {
-                              LOW: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
-                              MEDIUM: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-                              HIGH: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-                              URGENT: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-                            };
-
-                            const priorityLabels: Record<string, string> = {
-                              LOW: "Низкая",
-                              MEDIUM: "Средняя",
-                              HIGH: "Высокая",
-                              URGENT: "Срочная",
-                            };
-
-                            // Извлекаем текст из HTML для предпросмотра
                             const getTextFromHtml = (html: string) => {
                               if (!html) return "";
                               const div = document.createElement("div");
@@ -1626,7 +1556,7 @@ export default function MembersPage() {
                             };
 
                             return (
-                              <div key={appeal.id} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 hover:shadow-md transition-shadow">
+                              <Card key={appeal.id} padding="sm" className="transition-shadow hover:shadow-md">
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center flex-wrap gap-2 mb-2">
@@ -1636,18 +1566,18 @@ export default function MembersPage() {
                                       >
                                         #{appeal.publicId}
                                       </Link>
-                                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusColors[appeal.status] || "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}>
-                                        {statusLabels[appeal.status] || appeal.status}
-                                      </span>
+                                      <StatusBadge color={getAppealStatusColor(appeal.status)}>
+                                        {APPEAL_STATUS_LABELS[appeal.status] || appeal.status}
+                                      </StatusBadge>
                                       {appeal.type && (
-                                        <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
-                                          {typeLabels[appeal.type] || appeal.type}
-                                        </span>
+                                        <StatusBadge color="gray">
+                                          {APPEAL_TYPE_LABELS[appeal.type] || appeal.type}
+                                        </StatusBadge>
                                       )}
                                       {appeal.priority && (
-                                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityColors[appeal.priority] || "bg-gray-100 text-gray-800"}`}>
-                                          {priorityLabels[appeal.priority] || appeal.priority}
-                                        </span>
+                                        <StatusBadge color={getAppealPriorityColor(appeal.priority)}>
+                                          {APPEAL_PRIORITY_LABELS[appeal.priority] || appeal.priority}
+                                        </StatusBadge>
                                       )}
                                     </div>
                                     <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
@@ -1673,14 +1603,18 @@ export default function MembersPage() {
                                       </span>
                                       {appeal.helpfulRating && (
                                         <span className="flex items-center gap-1">
-                                          <span className="text-yellow-500">{"⭐".repeat(appeal.helpfulRating)}</span>
+                                          <span className="inline-flex items-center gap-0.5 text-yellow-500">
+                                            {Array.from({ length: appeal.helpfulRating }).map((_, index) => (
+                                              <StarIcon key={index} className="h-3.5 w-3.5 fill-yellow-500" />
+                                            ))}
+                                          </span>
                                           <span className="font-medium text-gray-700 dark:text-gray-300">{appeal.helpfulRating}/5</span>
                                         </span>
                                       )}
                                     </div>
                                     {appeal.helpfulRatingComment && (
                                       <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-xs text-gray-600 dark:text-gray-400 italic border-l-2 border-yellow-400">
-                                        "{appeal.helpfulRatingComment}"
+                                        &ldquo;{appeal.helpfulRatingComment}&rdquo;
                                       </div>
                                     )}
                                     {appeal.rejectionReason && (
@@ -1715,7 +1649,11 @@ export default function MembersPage() {
                                   {appeal.helpfulRating && (
                                     <div className="shrink-0">
                                       <div className="flex flex-col items-center gap-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-2">
-                                        <div className="text-xl leading-none">{"⭐".repeat(appeal.helpfulRating)}</div>
+                                        <div className="inline-flex items-center gap-0.5 leading-none text-yellow-500">
+                                          {Array.from({ length: appeal.helpfulRating }).map((_, index) => (
+                                            <StarIcon key={index} className="h-4 w-4 fill-yellow-500" />
+                                          ))}
+                                        </div>
                                         <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                                           {appeal.helpfulRating}/5
                                         </div>
@@ -1723,7 +1661,7 @@ export default function MembersPage() {
                                     </div>
                                   )}
                                 </div>
-                              </div>
+                              </Card>
                             );
                           })
                         )}
@@ -1740,9 +1678,7 @@ export default function MembersPage() {
   );
 }
 
-// Helper component for info fields - не показывает поле если значение пустое
 function InfoField({ label, value, className = "", showEmpty = false }: { label: string; value: string | null | undefined; className?: string; showEmpty?: boolean }) {
-  // Если значение пустое и не нужно показывать пустые поля - возвращаем null
   if (!value && !showEmpty) {
     return null;
   }
@@ -1756,4 +1692,3 @@ function InfoField({ label, value, className = "", showEmpty = false }: { label:
     </div>
   );
 }
-

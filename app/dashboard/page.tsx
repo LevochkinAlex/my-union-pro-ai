@@ -13,6 +13,7 @@ import OrgHeadDashboard from "@/components/dashboard/OrgHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 import { hasBothApplicationsSubmitted } from "@/lib/documents-status";
 import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
+import { Card, CardHeader, CardTitle, PageHeader, EmptyState } from "@/components/ui";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID, DEMO_NEWS_ORG_NAME } from "@/lib/demo-constants";
 import {
   getDemoStats,
@@ -31,17 +32,17 @@ export default async function DashboardPage() {
 
     // ИСПРАВЛЕНО: Добавлено детальное логирование
     if (!session?.user?.id) {
-      console.log("[dashboard/page] ⚠️ No session or user ID, redirecting to /login");
+      console.log("[dashboard/page] No session or user ID, redirecting to /login");
       redirect("/login");
     }
 
     const userId = session.user.id;
     if (!userId || typeof userId !== "string") {
-      console.log("[dashboard/page] ⚠️ Invalid userId type:", typeof userId, "- redirecting to /login");
+      console.log("[dashboard/page] Invalid userId type:", typeof userId, "- redirecting to /login");
       redirect("/login");
     }
     
-    console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
+    console.log("[dashboard/page] Rendering dashboard for user:", userId);
 
     // Демо-режим: не обращаемся к БД, подставляем данные председателя
     const isDemo = userId === DEMO_USER_ID;
@@ -376,14 +377,10 @@ export default async function DashboardPage() {
 
     return (
       <div className="space-y-8 min-w-0 w-full">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {greeting}, {userName}!
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Ваш личный кабинет члена Профсоюза
-          </p>
-        </div>
+        <PageHeader
+          title={`${greeting}, ${userName}!`}
+          description="Ваш личный кабинет члена Профсоюза"
+        />
 
         {currentUser && (
           <MembershipBanner
@@ -398,60 +395,52 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
           <div className="lg:col-span-2 space-y-6 min-w-0">
             <MembershipProtectedSection title="Новости для членов профсоюза">
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-                <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
-                  <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">
-                    Свежие новости
-                  </h2>
+              <Card className="min-w-0">
+                <CardHeader className="mb-4">
+                  <CardTitle as="h2">Свежие новости</CardTitle>
                   <Link
                     href="/dashboard/news"
                     className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
                   >
                     Все новости
                   </Link>
-                </div>
+                </CardHeader>
                 {recentNews.length > 0 ? (
                   <NewsList news={recentNews} />
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
-                    Пока нет новостей
-                  </p>
+                  <EmptyState title="Пока нет новостей" className="border-0 bg-transparent dark:bg-transparent py-4" />
                 )}
-              </div>
+              </Card>
             </MembershipProtectedSection>
 
             <MembershipProtectedSection title="Скидки для членов профсоюза">
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-                <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
-                  <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">
-                    Скидки и привилегии
-                  </h2>
+              <Card className="min-w-0">
+                <CardHeader className="mb-4">
+                  <CardTitle as="h2">Скидки и привилегии</CardTitle>
                   <Link
                     href="/dashboard/discounts"
                     className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
                   >
                     Все скидки
                   </Link>
-                </div>
+                </CardHeader>
                 <DiscountsPreview />
-              </div>
+              </Card>
             </MembershipProtectedSection>
           </div>
 
           <div className="space-y-6 min-w-0">
             <MembershipProtectedSection title="Коллеги для членов профсоюза">
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-                <div className="flex items-center justify-between gap-4 w-full">
-                  <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">
-                    Новые коллеги
-                  </h2>
+              <Card className="min-w-0">
+                <CardHeader>
+                  <CardTitle as="h2">Новые коллеги</CardTitle>
                   <Link
                     href="/dashboard/users"
                     className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
                   >
                     Все коллеги
                   </Link>
-                </div>
+                </CardHeader>
                 <div className="mt-4 space-y-3">
                   {newUsers.map((user) => (
                     <UserCard
@@ -460,13 +449,13 @@ export default async function DashboardPage() {
                     />
                   ))}
                 </div>
-              </div>
+              </Card>
             </MembershipProtectedSection>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-              <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Быстрые действия
-              </h2>
+            <Card className="min-w-0">
+              <CardHeader className="mb-4">
+                <CardTitle as="h2">Быстрые действия</CardTitle>
+              </CardHeader>
               <div className="space-y-2">
                 <Link
                   href="/dashboard/documents"
@@ -496,7 +485,7 @@ export default async function DashboardPage() {
                   <span className="text-sm text-gray-700 dark:text-gray-300">Скидки и привилегии</span>
                 </Link>
               </div>
-            </div>
+            </Card>
           </div>
         </div>
       </div>
@@ -746,17 +735,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8 min-w-0 w-full">
-      {/* Заголовок */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          {greeting}, {userName}!
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Ваш личный кабинет члена Профсоюза
-        </p>
-      </div>
+      <PageHeader
+        title={`${greeting}, ${userName}!`}
+        description="Ваш личный кабинет члена Профсоюза"
+      />
 
-      {/* Баннер членства */}
       {currentUser && (
         <MembershipBanner
           profileProgress={profileProgress}
@@ -767,90 +750,72 @@ export default async function DashboardPage() {
         />
       )}
 
-      {/* Основной контент */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
-        {/* Левая колонка: Лента постов (2/3 ширины на lg+) */}
         <div className="lg:col-span-2 space-y-6 min-w-0">
-          {/* Посты от подписок — исключённым не показываем (предыдущее место работы) */}
           <MembershipProtectedSection title="Публикации от коллег">
           {postsFromSubscriptions.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                  Публикации от коллег
-                </h2>
+            <Card className="min-w-0">
+              <CardHeader className="mb-4">
+                <CardTitle as="h2">Публикации от коллег</CardTitle>
                 <Link
                   href="/dashboard/users"
                   className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   Все подписки
                 </Link>
-              </div>
+              </CardHeader>
               <PostsListClient posts={postsFromSubscriptions} />
-            </div>
+            </Card>
           )}
           </MembershipProtectedSection>
 
-          {/* Свежие новости */}
           <MembershipProtectedSection title="Новости для членов профсоюза">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-            <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
-              <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                Свежие новости
-              </h2>
+          <Card className="min-w-0">
+            <CardHeader className="mb-4">
+              <CardTitle as="h2">Свежие новости</CardTitle>
               <Link
                 href="/dashboard/news"
                 className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
               >
                 Все новости
               </Link>
-            </div>
+            </CardHeader>
             {recentNews.length > 0 ? (
               <NewsList news={recentNews} />
             ) : (
-              <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
-                Пока нет новостей в вашей организации
-              </p>
+              <EmptyState title="Пока нет новостей в вашей организации" className="border-0 bg-transparent dark:bg-transparent py-4" />
             )}
-          </div>
+          </Card>
           </MembershipProtectedSection>
 
-          {/* Скидки */}
           <MembershipProtectedSection title="Скидки для членов профсоюза">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-            <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
-              <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                Скидки и привилегии
-              </h2>
+          <Card className="min-w-0">
+            <CardHeader className="mb-4">
+              <CardTitle as="h2">Скидки и привилегии</CardTitle>
               <Link
                 href="/dashboard/discounts"
                 className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
               >
                 Все скидки
               </Link>
-            </div>
+            </CardHeader>
             <DiscountsPreview />
-          </div>
+          </Card>
           </MembershipProtectedSection>
         </div>
 
-        {/* Правая колонка: Сайдбар (1/3 ширины на lg+) */}
         <div className="space-y-6 min-w-0">
-
-          {/* Новые участники */}
           <MembershipProtectedSection title="Коллеги для членов профсоюза">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-            <div className="flex items-center justify-between gap-4 w-full">
-              <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                Новые коллеги
-              </h2>
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle as="h2">Новые коллеги</CardTitle>
               <Link
                 href="/dashboard/users"
                 className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
               >
                 Все коллеги
               </Link>
-            </div>
+            </CardHeader>
             {newUsers.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {newUsers.map((user) => (
@@ -858,18 +823,15 @@ export default async function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4 mt-4">
-                Пока нет новых коллег в вашей организации
-              </p>
+              <EmptyState title="Пока нет новых коллег в вашей организации" className="border-0 bg-transparent dark:bg-transparent py-4 mt-4" />
             )}
-          </div>
+          </Card>
           </MembershipProtectedSection>
 
-          {/* Быстрые действия */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white mb-4 md:justify-start gap-4 w-full md:w-auto">
-              Быстрые действия
-            </h2>
+          <Card className="min-w-0">
+            <CardHeader className="mb-4">
+              <CardTitle as="h2">Быстрые действия</CardTitle>
+            </CardHeader>
             <div className="space-y-2">
               <Link
                 href="/dashboard/documents"
@@ -935,7 +897,7 @@ export default async function DashboardPage() {
                 </span>
               </Link>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>

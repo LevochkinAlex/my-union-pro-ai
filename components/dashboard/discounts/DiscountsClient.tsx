@@ -9,6 +9,8 @@ import type {
 } from "@/types/discounts";
 import { requestPushPermission, syncPushSubscription } from "@/lib/firebase-push-notifications";
 import { useAutoSyncDiscounts } from "@/hooks/useAutoSyncDiscounts";
+import { Card, Tabs, Spinner, EmptyState } from "@/components/ui";
+import type { Tab } from "@/components/ui";
 import clsx from "clsx";
 
 interface DiscountsClientProps {
@@ -122,7 +124,7 @@ export default function DiscountsClient({
     autoSyncOnMount: true,
     syncOnFocus: true,
     onSyncComplete: async (result) => {
-      console.log("[DiscountsClient] ✅ Auto-sync completed:", result);
+      console.log("[DiscountsClient] Auto-sync completed:", result);
       
       // Обновляем список claimed после успешной синхронизации
       try {
@@ -139,7 +141,7 @@ export default function DiscountsClient({
       }
     },
     onSyncError: (error) => {
-      console.warn("[DiscountsClient] ❌ Auto-sync error:", error);
+      console.warn("[DiscountsClient] Auto-sync error:", error);
     },
   });
 
@@ -250,7 +252,7 @@ export default function DiscountsClient({
         
         // Если поиск вернул результаты, но discounts пустой - логируем проблему
         if (nextFilters.search && payload.meta.total > 0 && payload.discounts.length === 0) {
-          console.error("[DiscountsClient] ❌ Проблема: API вернул total > 0, но discounts пустой!", {
+          console.error("[DiscountsClient] Проблема: API вернул total > 0, но discounts пустой!", {
             total: payload.meta.total,
             discounts: payload.discounts,
             meta: payload.meta
@@ -569,7 +571,7 @@ export default function DiscountsClient({
     try {
       console.log("[DiscountsClient] 🗺️ Requesting geolocation...");
       const position = await getCurrentPosition();
-      console.log("[DiscountsClient] ✅ Geolocation received:", {
+      console.log("[DiscountsClient] Geolocation received:", {
         lat: position.coords.latitude,
         lng: position.coords.longitude,
         accuracy: position.coords.accuracy
@@ -607,7 +609,7 @@ export default function DiscountsClient({
         errorMessage = error.message;
       }
       
-      console.error("[DiscountsClient] ❌ Geolocation error:", {
+      console.error("[DiscountsClient] Geolocation error:", {
         code: error.code,
         message: error.message,
         error: error
@@ -763,17 +765,23 @@ export default function DiscountsClient({
     };
   }, [hasMore, isLoadingMore, isLoading, loadMore, allDiscounts.length]);
 
+  const discountTabs: Tab[] = useMemo(() => [
+    { id: "all", label: "Все" },
+    { id: "claimed", label: "Мои", count: claimed.length },
+    { id: "favorites", label: "Избранное", count: favorites.length },
+  ], [claimed.length, favorites.length]);
+
   return (
     <div className="space-y-4">
       {/* Toolbar: tabs + search + city + actions — all in one compact strip */}
-      <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-4">
+      <Card padding="sm" className="sm:p-4">
         {/* Row 1: Tabs + actions (right) */}
         <div className="flex flex-wrap items-center gap-2">
           <Tabs
-            view={filters.view}
-            onChange={handleTabChange}
-            favorites={favorites.length}
-            claimed={claimed.length}
+            tabs={discountTabs}
+            activeTab={filters.view}
+            onChange={(id) => handleTabChange(id as ViewMode)}
+            className="border-0"
           />
 
           <div className="ml-auto flex items-center gap-2">
@@ -882,7 +890,7 @@ export default function DiscountsClient({
           </div>
         </div>
 
-      </div>
+      </Card>
 
       {/* Error */}
       {error && (
@@ -902,9 +910,7 @@ export default function DiscountsClient({
 
         {/* Grid */}
         {isLoading && allDiscounts.length === 0 ? (
-          <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
-            Загрузка...
-          </div>
+          <Spinner size="lg" fullPage />
         ) : (
           <>
             <DiscountGrid
@@ -917,65 +923,22 @@ export default function DiscountsClient({
             />
             
             {/* Sentinel для бесконечного скролла - ВСЕГДА создаем элемент, даже если hasMore=false, чтобы observer мог работать */}
-            <div id="scroll-sentinel" className="flex justify-center py-8 min-h-[100px]">
+            <div id="scroll-sentinel" className="flex flex-col items-center justify-center py-8 min-h-[100px]">
               {isLoadingMore && (
-                <div className="text-center text-gray-500 dark:text-gray-400">
-                  <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
-                  <p className="mt-2 text-sm">Загрузка ещё...</p>
+                <div className="text-center">
+                  <Spinner size="sm" className="mx-auto" />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Загрузка ещё...</p>
                 </div>
               )}
               {!hasMore && allDiscounts.length > 0 && (
-                <div className="text-center text-gray-400 dark:text-gray-500 text-sm">
+                <p className="text-center text-sm text-gray-400 dark:text-gray-500">
                   Все скидки загружены
-                </div>
+                </p>
               )}
             </div>
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-function Tabs({
-  view,
-  onChange,
-  favorites,
-  claimed,
-}: {
-  view: ViewMode;
-  onChange: (view: ViewMode) => void;
-  favorites: number;
-  claimed: number;
-}) {
-  const tabs: { id: ViewMode; label: string; count?: number }[] = [
-    { id: "all", label: "Все" },
-    { id: "claimed", label: "Мои", count: claimed },
-    { id: "favorites", label: "Избранное", count: favorites },
-  ];
-
-  return (
-    <div className="flex gap-1">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          onClick={() => onChange(tab.id)}
-          className={clsx(
-            "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition",
-            view === tab.id
-              ? "bg-blue-600 text-white shadow-sm"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-          )}
-        >
-          {tab.label}
-          {typeof tab.count === "number" && tab.count > 0 && (
-            <span className="rounded-full bg-white/20 px-1.5 py-px text-[10px] leading-tight dark:bg-black/20">
-              {tab.count}
-            </span>
-          )}
-        </button>
-      ))}
     </div>
   );
 }
@@ -997,12 +960,11 @@ function DiscountGrid({
 }) {
   if (discounts.length === 0) {
     return (
-      <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
-        <div>
-          <p className="text-lg font-medium">Нет предложений</p>
-          <p className="mt-1 text-sm">Попробуйте изменить фильтры</p>
-        </div>
-      </div>
+      <EmptyState
+        title="Нет предложений"
+        description="Попробуйте изменить фильтры"
+        className="min-h-[300px]"
+      />
     );
   }
 
@@ -1033,7 +995,7 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
     
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        console.log("[getCurrentPosition] ✅ Position received:", {
+        console.log("[getCurrentPosition] Position received:", {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
           accuracy: position.coords.accuracy,
@@ -1042,7 +1004,7 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
         resolve(position);
       },
       (error) => {
-        console.error("[getCurrentPosition] ❌ Error:", {
+        console.error("[getCurrentPosition] Error:", {
           code: error.code,
           message: error.message
         });

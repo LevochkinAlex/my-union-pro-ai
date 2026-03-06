@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { BellRing, Flame, Save } from "lucide-react";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
 type UserRole = "MEMBER" | "PENDING_MEMBER" | "PPO_HEAD" | "REGIONAL_CHAIRMAN" | "FEDERAL_CHAIRMAN" | "SUPER_ADMIN";
@@ -181,8 +182,9 @@ export default function AdminSettingsPage() {
 
       {/* Firebase & API Settings */}
       <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-4 lg:p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          🔥 Firebase & API Настройки
+        <h2 className="mb-6 inline-flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white">
+          <Flame className="h-5 w-5 text-orange-500" />
+          Firebase & API Настройки
         </h2>
 
         <form onSubmit={handleSaveSettings} className="space-y-6">
@@ -325,15 +327,21 @@ export default function AdminSettingsPage() {
             disabled={saving}
             className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {saving ? "Сохранение..." : "💾 Сохранить настройки"}
+            {saving ? "Сохранение..." : (
+              <span className="inline-flex items-center gap-1.5">
+                <Save className="h-4 w-4" />
+                Сохранить настройки
+              </span>
+            )}
           </button>
         </form>
       </div>
 
       {/* Broadcast Notifications */}
       <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-4 lg:p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          📢 Массовые уведомления
+        <h2 className="mb-6 inline-flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white">
+          <BellRing className="h-5 w-5 text-blue-500" />
+          Массовые уведомления
         </h2>
 
         {notificationMessage && (
@@ -382,7 +390,12 @@ export default function AdminSettingsPage() {
             disabled={sendingNotification}
             className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {sendingNotification ? "Отправка..." : "🔔 Отправить всем пользователям"}
+            {sendingNotification ? "Отправка..." : (
+              <span className="inline-flex items-center gap-1.5">
+                <BellRing className="h-4 w-4" />
+                Отправить всем пользователям
+              </span>
+            )}
           </button>
 
           <p className="text-xs text-gray-500 dark:text-gray-400 text-center">

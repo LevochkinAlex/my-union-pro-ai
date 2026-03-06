@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  getUserRoleLabel,
+  getMembershipStatusLabel,
+  getMembershipStatusBadgeClass,
+} from "@/lib/status-labels";
 
 const PAGE_SIZE = 20;
 
@@ -22,6 +27,12 @@ interface UserRow {
   membershipStatus: string;
   createdAt: string;
   documents: UserDoc[];
+  workplace: string | null;
+  organization: { id: string; name: string } | null;
+  ppoHeadOrganization: { id: string; name: string } | null;
+  effectiveOrganization: { id: string; name: string } | null;
+  chairmanOfOrganization: { id: string; name: string } | null;
+  effectiveWorkplace: string | null;
 }
 
 export default function AdminUsers() {
@@ -158,6 +169,12 @@ export default function AdminUsers() {
                   Статус
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Организация
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Место работы
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                   Дата регистрации
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
@@ -190,19 +207,30 @@ export default function AdminUsers() {
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {user.role}
+                        {getUserRoleLabel(user.role)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          user.membershipStatus === "APPROVED"
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                        }`}
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getMembershipStatusBadgeClass(
+                          user.membershipStatus
+                        )}`}
                       >
-                        {user.membershipStatus}
+                        {getMembershipStatusLabel(user.membershipStatus)}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                      {user.effectiveOrganization?.name || "—"}
+                      {user.chairmanOfOrganization?.id && (
+                        <div className="mt-1">
+                          <span className="inline-flex rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                            Председатель
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                      {user.effectiveWorkplace || "—"}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                       {user.createdAt

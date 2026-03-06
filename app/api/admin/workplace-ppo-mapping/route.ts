@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import { createOrUpdateWorkplacePPOMapping, findPPOByWorkplace } from "@/lib/workplace-ppo-mapping";
 
 /**
  * GET /api/admin/workplace-ppo-mapping
- * Получить список связей мест работы с ППО
+ * Получить список связей мест работы с ППО (SUPER_ADMIN, PPO_HEAD или org-head в рамках scope)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,13 +17,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем права администратора
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     });
 
-    if (user?.role !== "SUPER_ADMIN" && user?.role !== "PPO_HEAD") {
+    const isSuperAdmin = user?.role === "SUPER_ADMIN";
+    const isPpoHead = user?.role === "PPO_HEAD";
+    const orgHeadScope = !isSuperAdmin && !isPpoHead ? await getOrgHeadScope(session.user.id) : null;
+
+    if (!isSuperAdmin && !isPpoHead && !orgHeadScope) {
       return NextResponse.json(
         { error: "Недостаточно прав" },
         { status: 403 }
@@ -43,6 +47,11 @@ export async function GET(request: NextRequest) {
     }
     if (ppoOrganizationId) {
       where.ppoOrganizationId = ppoOrganizationId;
+      if (orgHeadScope && !orgHeadScope.organizationIds.includes(ppoOrganizationId)) {
+        return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+      }
+    } else if (orgHeadScope) {
+      where.ppoOrganizationId = { in: orgHeadScope.organizationIds };
     }
 
     const mappings = await prisma.workplacePPOMapping.findMany({
@@ -92,13 +101,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем права администратора
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     });
-
-    if (user?.role !== "SUPER_ADMIN" && user?.role !== "PPO_HEAD") {
+    const isSuperAdmin = user?.role === "SUPER_ADMIN";
+    const isPpoHead = user?.role === "PPO_HEAD";
+    const orgHeadScope = !isSuperAdmin && !isPpoHead ? await getOrgHeadScope(session.user.id) : null;
+    if (!isSuperAdmin && !isPpoHead && !orgHeadScope) {
       return NextResponse.json(
         { error: "Недостаточно прав" },
         { status: 403 }
@@ -126,6 +136,10 @@ export async function POST(request: NextRequest) {
         { error: "Привязка места работы возможна только для ППО, региональной или местной организации" },
         { status: 400 }
       );
+    }
+
+    if (orgHeadScope && !orgHeadScope.organizationIds.includes(ppoOrganizationId)) {
+      return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
     }
 
     const mapping = await createOrUpdateWorkplacePPOMapping(

@@ -110,12 +110,21 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Проверяем что пользователь может переключиться в этот режим
-    if (mode === "PPO_HEAD" && (!user.isPPOHead || !user.ppoHeadOrganizationId)) {
-      return NextResponse.json(
-        { error: "У вас нет прав председателя ППО" },
-        { status: 403 }
-      );
+    // Проверяем что пользователь может переключиться в этот режим.
+    // Региональный (РПО) и председатель ППО взаимоисключающие — не даём переключиться в ППО при наличии РПО.
+    if (mode === "PPO_HEAD") {
+      if (!user.isPPOHead || !user.ppoHeadOrganizationId) {
+        return NextResponse.json(
+          { error: "У вас нет прав председателя ППО" },
+          { status: 403 }
+        );
+      }
+      if (user.isRPOHead && user.rpoHeadOrganizationId) {
+        return NextResponse.json(
+          { error: "Региональный председатель не может переключаться в кабинет Председателя ППО" },
+          { status: 403 }
+        );
+      }
     }
     if (mode === "MPO_HEAD" && (!user.isMPOHead || !user.mpoHeadOrganizationId)) {
       return NextResponse.json(

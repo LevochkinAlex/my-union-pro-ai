@@ -1,7 +1,31 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { X, FolderPlus, Search, Hash, Users, MessageSquare, Calendar, Megaphone, Bot, Check, Archive } from 'lucide-react';
+import {
+  X,
+  FolderPlus,
+  Search,
+  Hash,
+  Users,
+  MessageSquare,
+  Calendar,
+  Megaphone,
+  Bot,
+  Check,
+  Archive,
+  Folder,
+  FolderOpen,
+  Files,
+  ClipboardList,
+  Briefcase,
+  Building2,
+  BarChart3,
+  NotebookPen,
+  Star,
+  Flame,
+  Lightbulb,
+  Target,
+} from 'lucide-react';
 import { safeJsonParse } from "@/lib/api-client";
 import { Chat } from "@/types/chat";
 import styles from "./CreateFolderModal.module.css";
@@ -16,18 +40,18 @@ interface CreateFolderModalProps {
 
 // Предустановленные иконки для папок
 const FOLDER_ICONS = [
-  { icon: "📁", label: "Папка" },
-  { icon: "📂", label: "Открытая папка" },
-  { icon: "🗂️", label: "Картотека" },
-  { icon: "📋", label: "Документы" },
-  { icon: "💼", label: "Работа" },
-  { icon: "🏢", label: "Офис" },
-  { icon: "📊", label: "Отчёты" },
-  { icon: "📝", label: "Заметки" },
-  { icon: "⭐", label: "Важное" },
-  { icon: "🔥", label: "Горящее" },
-  { icon: "💡", label: "Идеи" },
-  { icon: "🎯", label: "Цели" },
+  { icon: "folder", label: "Папка" },
+  { icon: "folder-open", label: "Открытая папка" },
+  { icon: "files", label: "Картотека" },
+  { icon: "clipboard", label: "Документы" },
+  { icon: "briefcase", label: "Работа" },
+  { icon: "building", label: "Офис" },
+  { icon: "chart", label: "Отчёты" },
+  { icon: "notes", label: "Заметки" },
+  { icon: "star", label: "Важное" },
+  { icon: "flame", label: "Горящее" },
+  { icon: "idea", label: "Идеи" },
+  { icon: "target", label: "Цели" },
 ];
 
 // Цвета для папок
@@ -59,7 +83,7 @@ export default function CreateFolderModal({
   currentUserId,
 }: CreateFolderModalProps) {
   const [name, setName] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState('📁');
+  const [selectedIcon, setSelectedIcon] = useState('folder');
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
@@ -69,7 +93,7 @@ export default function CreateFolderModal({
   useEffect(() => {
     if (isOpen) {
       setName('');
-      setSelectedIcon('📁');
+      setSelectedIcon('folder');
       setSelectedColor(null);
       setSearchTerm('');
       setSelectedChatIds([]);
@@ -190,7 +214,7 @@ export default function CreateFolderModal({
 
   const handleClose = () => {
     setName('');
-    setSelectedIcon('📁');
+    setSelectedIcon('folder');
     setSelectedColor(null);
     setSearchTerm('');
     setSelectedChatIds([]);
@@ -198,6 +222,35 @@ export default function CreateFolderModal({
   };
 
   if (!isOpen) return null;
+
+  const renderFolderIcon = (icon: string) => {
+    switch (icon) {
+      case "folder-open":
+        return <FolderOpen className="h-5 w-5" />;
+      case "files":
+        return <Files className="h-5 w-5" />;
+      case "clipboard":
+        return <ClipboardList className="h-5 w-5" />;
+      case "briefcase":
+        return <Briefcase className="h-5 w-5" />;
+      case "building":
+        return <Building2 className="h-5 w-5" />;
+      case "chart":
+        return <BarChart3 className="h-5 w-5" />;
+      case "notes":
+        return <NotebookPen className="h-5 w-5" />;
+      case "star":
+        return <Star className="h-5 w-5" />;
+      case "flame":
+        return <Flame className="h-5 w-5" />;
+      case "idea":
+        return <Lightbulb className="h-5 w-5" />;
+      case "target":
+        return <Target className="h-5 w-5" />;
+      default:
+        return <Folder className="h-5 w-5" />;
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -248,7 +301,7 @@ export default function CreateFolderModal({
                   key={icon}
                   type="button"
                   onClick={() => setSelectedIcon(icon)}
-                  className={`w-10 h-10 flex items-center justify-center rounded-lg text-xl transition-all ${
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg transition-all ${
                     selectedIcon === icon
                       ? 'bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-500'
                       : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -256,7 +309,7 @@ export default function CreateFolderModal({
                   title={label}
                   aria-label={`Выбрать иконку: ${label}`}
                 >
-                  {icon}
+                  {renderFolderIcon(icon)}
                 </button>
               ))}
             </div>

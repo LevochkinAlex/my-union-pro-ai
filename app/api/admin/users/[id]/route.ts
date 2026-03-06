@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MembershipStatus, UserRole } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
+import { getOrgHeadScope, canOrgHeadAccessUser } from "@/lib/org-head-permissions";
 import { invalidateUsersCache } from "@/lib/cache-invalidation";
+import {
+  resolveEffectiveOrganization,
+  resolveEffectiveWorkplace,
+  resolveEffectiveWorkplaceInn,
+} from "@/lib/user-effective-organization";
 
 type UpdatePayload = {
   firstName?: string | null;
@@ -33,12 +41,18 @@ export async function GET(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await ensureSuperAdmin();
-    if (error) return error;
-    
+    const superResult = await ensureSuperAdmin();
+    let scope: Awaited<ReturnType<typeof getOrgHeadScope>> = null;
+    if (superResult.error) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.id) return superResult.error;
+      scope = await getOrgHeadScope(session.user.id);
+      if (!scope) return superResult.error;
+    }
+
     const resolvedParams = await Promise.resolve(params);
     const userId = resolvedParams.id;
-    
+
     if (!userId) {
       return NextResponse.json({ error: "ID пользователя не указан" }, { status: 400 });
     }
@@ -48,6 +62,7 @@ export async function GET(
       include: {
         organization: true,
         ppoHeadOrganization: true,
+        mpoHeadOrganization: true,
         rpoHeadOrganization: true,
         documents: {
           orderBy: { createdAt: "desc" },
@@ -65,7 +80,21 @@ export async function GET(
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    return NextResponse.json({ user });
+    if (scope && !canOrgHeadAccessUser(scope, user)) {
+      return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+    }
+
+    const effectiveOrganization = resolveEffectiveOrganization(user);
+    const normalized = {
+      ...user,
+      effectiveOrganization,
+      effectiveWorkplace: resolveEffectiveWorkplace(user),
+      effectiveWorkplaceInn: resolveEffectiveWorkplaceInn(user),
+      chairmanOfOrganization:
+        user.ppoHeadOrganization ?? user.mpoHeadOrganization ?? user.rpoHeadOrganization ?? null,
+    };
+
+    return NextResponse.json({ user: normalized });
   } catch (err) {
     console.error(`[admin/users/GET] Error:`, err);
     return NextResponse.json({ error: "Внутренняя ошибка сервера" }, { status: 500 });
@@ -76,9 +105,13 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } | Promise<{ id: string }> },
 ) {
-  const { error } = await ensureSuperAdmin();
-  if (error) {
-    return error;
+  const superResult = await ensureSuperAdmin();
+  let scope: Awaited<ReturnType<typeof getOrgHeadScope>> = null;
+  if (superResult.error) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return superResult.error;
+    scope = await getOrgHeadScope(session.user.id);
+    if (!scope) return superResult.error;
   }
 
   const resolvedParams = await Promise.resolve(params);
@@ -89,6 +122,10 @@ export async function PUT(
     select: {
       id: true,
       role: true,
+      organizationId: true,
+      ppoHeadOrganizationId: true,
+      mpoHeadOrganizationId: true,
+      rpoHeadOrganizationId: true,
     },
   });
 
@@ -97,6 +134,10 @@ export async function PUT(
       { error: "Пользователь не найден" },
       { status: 404 },
     );
+  }
+
+  if (scope && !canOrgHeadAccessUser(scope, targetUser)) {
+    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
 
   let payload: UpdatePayload;
@@ -194,9 +235,14 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } | Promise<{ id: string }> },
 ) {
-  const { session, error } = await ensureSuperAdmin();
-  if (error) {
-    return error;
+  const superResult = await ensureSuperAdmin();
+  let scope: Awaited<ReturnType<typeof getOrgHeadScope>> = null;
+  let session = superResult.session;
+  if (superResult.error) {
+    session = await getServerSession(authOptions);
+    if (!session?.user?.id) return superResult.error;
+    scope = await getOrgHeadScope(session.user.id);
+    if (!scope) return superResult.error;
   }
 
   const resolvedParams = await Promise.resolve(params);
@@ -212,7 +258,14 @@ export async function DELETE(
 
   const userToDelete = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: {
+      id: true,
+      role: true,
+      organizationId: true,
+      ppoHeadOrganizationId: true,
+      mpoHeadOrganizationId: true,
+      rpoHeadOrganizationId: true,
+    },
   });
 
   if (!userToDelete) {
@@ -220,6 +273,10 @@ export async function DELETE(
       { error: "Пользователь не найден" },
       { status: 404 },
     );
+  }
+
+  if (scope && !canOrgHeadAccessUser(scope, userToDelete)) {
+    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
 
   if (userToDelete.role === "SUPER_ADMIN") {

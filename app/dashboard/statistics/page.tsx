@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { OrganizationType } from "@prisma/client";
 import { BarChart3, Building2, Users, ClipboardList, Mail, TrendingUp, User, AlertTriangle, Trophy } from "lucide-react";
+import { Card, CardHeader, CardTitle, PageHeader, Spinner } from "@/components/ui";
 import chartStyles from "./statistics.module.css";
 
 interface TimeSeriesData {
@@ -109,11 +110,7 @@ export default function StatisticsPage() {
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <Spinner size="lg" fullPage />;
   }
 
   if (error || !stats) {
@@ -133,15 +130,11 @@ export default function StatisticsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Заголовок */}
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
-          <BarChart3 className="h-7 w-7" /> Статистика и аналитика
-        </h1>
-        <p className="mt-1 text-gray-500 dark:text-gray-400">
-          {levelLabel}: {stats.organization?.name}
-        </p>
-      </div>
+      <PageHeader
+        title="Статистика и аналитика"
+        description={`${levelLabel}: ${stats.organization?.name}`}
+        icon={<BarChart3 className="h-7 w-7" />}
+      />
 
       {/* Основные метрики */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -174,33 +167,38 @@ export default function StatisticsPage() {
       {/* Графики временных рядов */}
       {stats.timeSeries && stats.timeSeries.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* График количества членов */}
-          <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-              <Users className="h-5 w-5" /> Количество членов профсоюза
-            </h2>
+          <Card padding="lg">
+            <CardHeader className="mb-4">
+              <CardTitle as="h2" className="flex items-center gap-2">
+                <Users className="h-5 w-5" /> Количество членов профсоюза
+              </CardTitle>
+            </CardHeader>
             <div className="h-64">
               <AreaChart data={stats.timeSeries} dataKey="totalMembers" color="#3b82f6" />
             </div>
-          </div>
+          </Card>
 
-          {/* График процента членства */}
-          <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-              📊 Процент членов ППО
-            </h2>
+          <Card padding="lg">
+            <CardHeader className="mb-4">
+              <CardTitle as="h2" className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Процент членов ППО
+              </CardTitle>
+            </CardHeader>
             <div className="h-64">
-              <BarChart data={stats.timeSeries} dataKey="membershipPercent" color="#10b981" />
+              <BarChartComponent data={stats.timeSeries} dataKey="membershipPercent" color="#10b981" />
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Активность за 30 дней */}
-      <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-          <TrendingUp className="h-5 w-5" /> Активность за последние 30 дней
-        </h2>
+      <Card padding="lg">
+        <CardHeader className="mb-4">
+          <CardTitle as="h2" className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" /> Активность за последние 30 дней
+          </CardTitle>
+        </CardHeader>
         <div className="grid gap-4 sm:grid-cols-3">
           <ActivityCard
             label="Новых членов"
@@ -221,15 +219,16 @@ export default function StatisticsPage() {
             icon={<Mail className="h-6 w-6" />}
           />
         </div>
-      </div>
+      </Card>
 
       {/* Статистика по отчётам и обращениям */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Отчёты по статусам */}
-        <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-            <ClipboardList className="h-5 w-5" /> Отчёты по статусам
-          </h2>
+        <Card padding="lg">
+          <CardHeader className="mb-4">
+            <CardTitle as="h2" className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" /> Отчёты по статусам
+            </CardTitle>
+          </CardHeader>
           {Object.keys(stats.stats.reports.byStatus).length > 0 ? (
             <div className="space-y-4">
               {Object.entries(stats.stats.reports.byStatus).map(([status, count]) => {
@@ -257,13 +256,14 @@ export default function StatisticsPage() {
           ) : (
             <p className="text-center text-gray-500 dark:text-gray-400">Нет данных</p>
           )}
-        </div>
+        </Card>
 
-        {/* Обращения по статусам */}
-        <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-            <Mail className="h-5 w-5" /> Обращения по статусам
-          </h2>
+        <Card padding="lg">
+          <CardHeader className="mb-4">
+            <CardTitle as="h2" className="flex items-center gap-2">
+              <Mail className="h-5 w-5" /> Обращения по статусам
+            </CardTitle>
+          </CardHeader>
           {Object.keys(stats.stats.tickets.byStatus).length > 0 ? (
             <div className="space-y-4">
               {Object.entries(stats.stats.tickets.byStatus).map(([status, count]) => {
@@ -291,14 +291,16 @@ export default function StatisticsPage() {
           ) : (
             <p className="text-center text-gray-500 dark:text-gray-400">Нет данных</p>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Топ организаций по членам */}
-      <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-          <Trophy className="h-5 w-5" /> Топ организаций по количеству членов
-        </h2>
+      <Card padding="lg">
+        <CardHeader className="mb-4">
+          <CardTitle as="h2" className="flex items-center gap-2">
+            <Trophy className="h-5 w-5" /> Топ организаций по количеству членов
+          </CardTitle>
+        </CardHeader>
         <div className="space-y-3">
           {stats.organizations
             .sort((a, b) => b.membersCount - a.membersCount)
@@ -325,14 +327,16 @@ export default function StatisticsPage() {
               </div>
             ))}
         </div>
-      </div>
+      </Card>
 
       {/* Организации без отчёта */}
       {stats.stats.orgsWithoutReport.length > 0 && (
-        <div className="rounded-xl bg-red-50 p-6 shadow-sm dark:bg-red-900/20">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-red-800 dark:text-red-300">
-            <AlertTriangle className="h-5 w-5" /> Организации без отчёта за {formatPeriod(stats.stats.currentPeriod)}
-          </h2>
+        <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20" padding="lg">
+          <CardHeader className="mb-4">
+            <CardTitle as="h2" className="text-red-800 dark:text-red-300 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" /> Организации без отчёта за {formatPeriod(stats.stats.currentPeriod)}
+            </CardTitle>
+          </CardHeader>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stats.stats.orgsWithoutReport.map((org) => (
               <div
@@ -346,7 +350,7 @@ export default function StatisticsPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -364,7 +368,7 @@ function MetricCard({
   color: string;
 }) {
   return (
-    <div className={`rounded-xl bg-gradient-to-br ${color} p-6 text-white shadow-lg`}>
+    <Card className={`bg-gradient-to-br ${color} border-0 text-white shadow-lg dark:border-0`} padding="lg">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white/80">{title}</p>
@@ -372,7 +376,7 @@ function MetricCard({
         </div>
         <span className="opacity-80">{icon}</span>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -415,7 +419,6 @@ function formatPeriod(period: string): string {
   return `${months[parseInt(month) - 1]} ${year}`;
 }
 
-// Компонент Area Chart (как в референсе)
 function AreaChart({
   data,
   dataKey,
@@ -434,7 +437,6 @@ function AreaChart({
   const minValue = Math.min(...data.map((d) => Number(d[dataKey]) || 0));
   const range = maxValue - minValue || 1;
 
-  // SVG path для area chart
   const width = 100;
   const height = 100;
   const padding = 5;
@@ -451,7 +453,6 @@ function AreaChart({
   return (
     <div className="relative h-full w-full">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" preserveAspectRatio="none">
-        {/* Градиент для заливки */}
         <defs>
           <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.3" />
@@ -459,7 +460,6 @@ function AreaChart({
           </linearGradient>
         </defs>
         
-        {/* Горизонтальные линии сетки */}
         {[0, 25, 50, 75, 100].map((pct) => (
           <line
             key={pct}
@@ -473,26 +473,21 @@ function AreaChart({
           />
         ))}
 
-        {/* Заливка */}
         <path d={areaPath} fill={`url(#gradient-${dataKey})`} />
         
-        {/* Линия */}
         <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         
-        {/* Точки */}
         {points.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r="2" fill={color} />
         ))}
       </svg>
       
-      {/* Подписи по оси X */}
       <div className="absolute bottom-0 left-0 right-0 flex justify-between px-1 text-[10px] text-gray-500 dark:text-gray-400">
         {data.filter((_, i) => i % 2 === 0 || i === data.length - 1).map((d, i) => (
           <span key={i}>{d.month}</span>
         ))}
       </div>
       
-      {/* Текущее значение */}
       <div
         ref={valueRef}
         className={`absolute right-0 top-0 rounded-lg bg-white/80 px-2 py-1 text-sm font-bold dark:bg-gray-800/80 ${chartStyles.chartValue}`}
@@ -503,8 +498,7 @@ function AreaChart({
   );
 }
 
-// Компонент Bar Chart (как в референсе)
-function BarChart({
+function BarChartComponent({
   data,
   dataKey,
   color,
@@ -539,7 +533,6 @@ function BarChart({
                 className={`w-full min-w-[8px] max-w-[24px] rounded-t-sm transition-all duration-300 group-hover:opacity-80 ${chartStyles.barFill}`}
               />
               
-              {/* Tooltip */}
               <div className="pointer-events-none absolute bottom-full mb-2 hidden rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block dark:bg-gray-700">
                 {value}%
               </div>
@@ -548,14 +541,12 @@ function BarChart({
         })}
       </div>
       
-      {/* Подписи по оси X */}
       <div className="mt-2 flex justify-between px-1 text-[10px] text-gray-500 dark:text-gray-400">
         {data.filter((_, i) => i % 2 === 0 || i === data.length - 1).map((d, i) => (
           <span key={i} className="text-center">{d.month}</span>
         ))}
       </div>
       
-      {/* Текущее значение */}
       <div
         ref={valueRef}
         className={`mt-2 text-center text-lg font-bold ${chartStyles.chartValue}`}

@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { Check, Download, Trash2, X } from "lucide-react";
+import {
+  getMembershipStatusBadgeClass,
+  getMembershipStatusLabel,
+  getUserRoleLabel,
+} from "@/lib/status-labels";
 
 interface Document {
   id: string;
@@ -71,6 +77,17 @@ interface UserData {
     name: string;
   } | null;
   rpoHeadOrganization: {
+    id: string;
+    name: string;
+  } | null;
+  effectiveOrganization?: {
+    id: string;
+    name: string;
+    inn?: string | null;
+  } | null;
+  effectiveWorkplace?: string | null;
+  effectiveWorkplaceInn?: string | null;
+  chairmanOfOrganization?: {
     id: string;
     name: string;
   } | null;
@@ -436,16 +453,10 @@ export default function AdminUserDetailsPage() {
             
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {user.role}
+                {getUserRoleLabel(user.role, user.isPPOHead)}
               </span>
-              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                user.membershipStatus === "APPROVED"
-                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                  : user.membershipStatus === "DOCUMENTS_PENDING"
-                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                  : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-              }`}>
-                {user.membershipStatus}
+              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getMembershipStatusBadgeClass(user.membershipStatus)}`}>
+                {getMembershipStatusLabel(user.membershipStatus)}
               </span>
               {user.isPPOHead && (
                 <span className="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-900 dark:text-purple-200">
@@ -474,14 +485,20 @@ export default function AdminUserDetailsPage() {
                   disabled={validating}
                   className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
                 >
-                  ✓ Одобрить
+                  <span className="inline-flex items-center gap-1.5">
+                    <Check className="h-4 w-4" />
+                    Одобрить
+                  </span>
                 </button>
                 <button
                   onClick={() => handleValidate("REJECTED")}
                   disabled={validating}
                   className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
                 >
-                  ✕ Отклонить
+                  <span className="inline-flex items-center gap-1.5">
+                    <X className="h-4 w-4" />
+                    Отклонить
+                  </span>
                 </button>
               </>
             )}
@@ -492,7 +509,12 @@ export default function AdminUserDetailsPage() {
                 disabled={deleting}
                 className="rounded-lg border border-red-300 bg-white px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
               >
-                {deleting ? "Удаление..." : "🗑️ Удалить"}
+                {deleting ? "Удаление..." : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Trash2 className="h-4 w-4" />
+                    Удалить
+                  </span>
+                )}
               </button>
             )}
           </div>
@@ -617,10 +639,10 @@ export default function AdminUserDetailsPage() {
         <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
           <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Место работы</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InfoField label="Организация (Профсоюз)" value={user.organization?.name} />
+            <InfoField label="Организация (Профсоюз)" value={user.effectiveOrganization?.name || user.organization?.name} />
             <InfoField label="Статус занятости" value={user.employmentStatus ? EMPLOYMENT_STATUS_MAP[user.employmentStatus] || user.employmentStatus : null} />
-            <InfoField label="Место работы" value={user.workplace} />
-            <InfoField label="ИНН работодателя" value={user.workplaceInn} />
+            <InfoField label="Место работы" value={user.effectiveWorkplace || user.workplace} />
+            <InfoField label="ИНН работодателя" value={user.effectiveWorkplaceInn || user.workplaceInn || user.effectiveOrganization?.inn} />
             <InfoField label="Руководитель" value={user.directorName} />
             <InfoField label="Должность руководителя" value={user.directorPosition} />
             <InfoField label="Должность" value={user.jobTitle} />
@@ -662,7 +684,7 @@ export default function AdminUserDetailsPage() {
                   <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
                     <p className="font-medium text-gray-900 dark:text-white">{child.name}</p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {child.gender === "М" ? "👦" : "👧"} {child.birthDate ? new Date(child.birthDate).toLocaleDateString("ru-RU") : ""}
+                      {child.gender} {child.birthDate ? new Date(child.birthDate).toLocaleDateString("ru-RU") : ""}
                     </p>
                   </div>
                 ))}
@@ -781,7 +803,10 @@ export default function AdminUserDetailsPage() {
                           target="_blank"
                           className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
                         >
-                          📄 Скачать
+                          <span className="inline-flex items-center gap-1.5">
+                            <Download className="h-4 w-4" />
+                            Скачать
+                          </span>
                         </a>
                       )}
                       {doc.signedFilePath && (
@@ -790,7 +815,10 @@ export default function AdminUserDetailsPage() {
                           target="_blank"
                           className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
                         >
-                          ✓ Подписанный
+                          <span className="inline-flex items-center gap-1.5">
+                            <Check className="h-4 w-4" />
+                            Подписанный
+                          </span>
                         </a>
                       )}
                     </div>
@@ -810,7 +838,7 @@ export default function AdminUserDetailsPage() {
             <InfoField label="Номер карточки" value={user.unionCardNumber} />
             <InfoField label="Дата вступления" value={user.membershipJoinedAt ? new Date(user.membershipJoinedAt).toLocaleDateString("ru-RU") : null} />
             <InfoField label="Статус членства" value={user.unionMembershipStatus} />
-            <InfoField label="Организация" value={user.organization?.name} />
+            <InfoField label="Организация" value={user.effectiveOrganization?.name || user.organization?.name} />
             {user.isPPOHead && user.ppoHeadOrganization && (
               <InfoField label="Председатель ППО" value={user.ppoHeadOrganization.name} />
             )}

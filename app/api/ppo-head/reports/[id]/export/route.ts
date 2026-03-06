@@ -8,6 +8,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { getOrgHead } from "@/lib/ppo-head-utils";
+import { getChildOrganizationIds } from "@/lib/ppo-head-utils";
 import ExcelJS from "exceljs";
 import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
 
@@ -36,7 +38,23 @@ export async function GET(
 
     const permissions = await checkUserPermissions(session.user.id, "reports_view");
 
+    // Fallback для руководителя МПО/РПО (org-head)
+    let orgHeadAccess = false;
     if (!permissions.hasAccess) {
+      const orgHead = await getOrgHead(session.user.id);
+      if (orgHead && (orgHead.level === "MPO" || orgHead.level === "RPO")) {
+        const childIds = await getChildOrganizationIds(orgHead.organizationId);
+        const reportPreview = await prisma.report.findUnique({
+          where: { id },
+          select: { organizationId: true },
+        });
+        if (reportPreview && childIds.includes(reportPreview.organizationId)) {
+          orgHeadAccess = true;
+        }
+      }
+    }
+
+    if (!permissions.hasAccess && !orgHeadAccess) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 

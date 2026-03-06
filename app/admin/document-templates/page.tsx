@@ -42,6 +42,19 @@ interface DocumentTemplate {
   updatedAt: string;
 }
 
+const DOC_TYPE_LABELS: Record<string, string> = {
+  MEMBERSHIP_APPLICATION: "Заявление о вступлении",
+  CONTRIBUTION_APPLICATION: "Заявление о взносах",
+  MEMBERSHIP_REMOVAL_APPLICATION: "Заявление о снятии с учета",
+  MEMBERSHIP_TRANSFER_APPLICATION: "Заявление о переходе",
+  AGENDA: "Повестка дня",
+  PROTOCOL: "Протокол",
+  RESOLUTION: "Постановление",
+  PROTOCOL_EXTRACT: "Выписка из протокола",
+  APPEAL: "Обращение",
+  OTHER: "Прочее",
+};
+
 const AVAILABLE_VARIABLES = TEMPLATE_VARIABLES_FOR_EDITOR;
 
 export default function DocumentTemplatesPage() {
@@ -50,7 +63,7 @@ export default function DocumentTemplatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [editorMode, setEditorMode] = useState<"wysiwyg" | "html">("html");
+  const [editorMode, setEditorMode] = useState<"wysiwyg" | "html">("wysiwyg");
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [formData, setFormData] = useState<{
     name: string;
@@ -543,7 +556,7 @@ export default function DocumentTemplatesPage() {
                   {template.description || "Без описания"}
                 </p>
                 <p className="mt-1 text-xs text-gray-500">
-                  Тип: {template.type} | Обновлен: {new Date(template.updatedAt).toLocaleDateString()}
+                  Тип: {DOC_TYPE_LABELS[template.type] || template.type} | Обновлен: {new Date(template.updatedAt).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex gap-2">

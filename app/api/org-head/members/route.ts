@@ -3,6 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
+import {
+  resolveEffectiveOrganization,
+  resolveEffectiveWorkplace,
+  resolveEffectiveWorkplaceInn,
+} from "@/lib/user-effective-organization";
 
 export async function GET(request: NextRequest) {
   try {
@@ -85,7 +90,10 @@ export async function GET(request: NextRequest) {
           membershipExclusionReason: true,
           organizationId: true,
           organization: {
-            select: { id: true, name: true, type: true },
+            select: { id: true, name: true, type: true, inn: true },
+          },
+          ppoHeadOrganization: {
+            select: { id: true, name: true, inn: true },
           },
           documents: {
             where: {
@@ -107,8 +115,16 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where }),
     ]);
 
+    const normalizedMembers = members.map((member) => ({
+      ...member,
+      effectiveOrganization: resolveEffectiveOrganization(member),
+      effectiveWorkplace: resolveEffectiveWorkplace(member),
+      effectiveWorkplaceInn: resolveEffectiveWorkplaceInn(member),
+      chairmanOfOrganization: member.ppoHeadOrganization ?? null,
+    }));
+
     return NextResponse.json({
-      members,
+      members: normalizedMembers,
       total,
       page,
       limit,

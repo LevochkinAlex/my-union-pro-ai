@@ -94,15 +94,15 @@ export default function MyDiscountsPage() {
       const result = await manualSync(force);
       
       if (result.success) {
-        console.log("[MyDiscounts] ✅ Manual sync completed");
+        console.log("[MyDiscounts] Manual sync completed");
         await loadMyDiscounts();
       } else {
-        console.error("[MyDiscounts] ❌ Sync failed:", result.message);
+        console.error("[MyDiscounts] Sync failed:", result.message);
       }
       
       return result;
     } catch (error) {
-      console.error("[MyDiscounts] ❌ Sync error:", error);
+      console.error("[MyDiscounts] Sync error:", error);
       return { success: false, cached: false, message: String(error) };
     }
     // Примечание: isSyncing управляется хуком useAutoSyncDiscounts
@@ -135,7 +135,7 @@ export default function MyDiscountsPage() {
       
       // Если данные в старом формате, принудительно синхронизируемся с BestBenefits
       if (hasOldFormat) {
-        console.log("[MyDiscounts] ⚠️ Old format detected in claimed data, forcing sync with BestBenefits...");
+        console.log("[MyDiscounts] Old format detected in claimed data, forcing sync with BestBenefits...");
         try {
           // Принудительная синхронизация (force=true)
           await syncWithBestBenefits(true);
@@ -148,7 +148,7 @@ export default function MyDiscountsPage() {
             // Обновляем claimedData на новые данные
             claimedData.length = 0;
             claimedData.push(...claimedDataAfterSync);
-            console.log("[MyDiscounts] ✅ Updated claimed data after sync:", claimedDataAfterSync);
+            console.log("[MyDiscounts] Updated claimed data after sync:", claimedDataAfterSync);
           }
         } catch (error) {
           console.error("[MyDiscounts] Failed to sync with BestBenefits:", error);
@@ -246,16 +246,16 @@ export default function MyDiscountsPage() {
           
           if (discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0 && discount.promoCode.toLowerCase() !== 'null') {
             promoCode = discount.promoCode.trim();
-            console.log(`[MyDiscounts] ✅ Using promo code from API for discount ${discount.id}:`, promoCode);
+            console.log(`[MyDiscounts] Using promo code from API for discount ${discount.id}:`, promoCode);
           } else if (claimedItem && claimedItem.promoCode) {
             // Приоритет 2: промокод из normalizedClaimedData (fallback)
             // Это особенно важно для вкладки "Избранное", где API может не обогатить промокодом
             console.log(`[MyDiscounts] Found claimed item for discount ${discount.id}:`, claimedItem);
             if (typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0 && claimedItem.promoCode.toLowerCase() !== 'null') {
               promoCode = claimedItem.promoCode.trim();
-              console.log(`[MyDiscounts] ✅ Using promo code from preferences for discount ${discount.id}:`, promoCode);
+              console.log(`[MyDiscounts] Using promo code from preferences for discount ${discount.id}:`, promoCode);
             } else {
-              console.log(`[MyDiscounts] ⚠️ Claimed item has invalid promo code:`, claimedItem.promoCode);
+              console.log(`[MyDiscounts] Claimed item has invalid promo code:`, claimedItem.promoCode);
             }
           } else {
             // Приоритет 3: пытаемся найти промокод в исходных данных (для старого формата)
@@ -271,14 +271,14 @@ export default function MyDiscountsPage() {
                 ? rawClaimedItem.promoCode.trim()
                 : undefined;
               if (promoCode) {
-                console.log(`[MyDiscounts] ✅ Using promo code from raw claimed data for discount ${discount.id}:`, promoCode);
+                console.log(`[MyDiscounts] Using promo code from raw claimed data for discount ${discount.id}:`, promoCode);
               }
             }
             
             // Если промокод все еще не найден, но скидка получена - это значит данные в старом формате
             // Промокод должен быть получен через синхронизацию с BestBenefits
             if (!promoCode && isClaimed) {
-              console.log(`[MyDiscounts] ⚠️ Discount ${discount.id} is claimed but promo code is missing. Data might be in old format. User should sync with BestBenefits.`);
+              console.log(`[MyDiscounts] Discount ${discount.id} is claimed but promo code is missing. Data might be in old format. User should sync with BestBenefits.`);
               console.log(`[MyDiscounts] Debug info:`, {
                 discountId: discount.id,
                 discountIdStr,
@@ -298,7 +298,7 @@ export default function MyDiscountsPage() {
         }
         
         // Если скидка не получена, возвращаем без промокода
-        console.log(`[MyDiscounts] ⚠️ Discount ${discount.id} is not claimed, no promo code`);
+        console.log(`[MyDiscounts] Discount ${discount.id} is not claimed, no promo code`);
         return discount;
       });
       

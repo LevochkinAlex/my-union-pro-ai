@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
+import { getOrgHeadScope, canOrgHeadAccessUser } from "@/lib/org-head-permissions";
 import { MembershipStatus } from "@prisma/client";
 import { sendMembershipStatusNotification } from "@/lib/membership-notifications";
 
@@ -9,8 +12,14 @@ export async function POST(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await ensureSuperAdmin();
-    if (error) return error;
+    const superResult = await ensureSuperAdmin();
+    let scope: Awaited<ReturnType<typeof getOrgHeadScope>> = null;
+    if (superResult.error) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.id) return superResult.error;
+      scope = await getOrgHeadScope(session.user.id);
+      if (!scope) return superResult.error;
+    }
 
     const resolvedParams = await Promise.resolve(params);
     const userId = resolvedParams.id;
@@ -43,6 +52,10 @@ export async function POST(
 
     if (!user) {
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+    }
+
+    if (scope && !canOrgHeadAccessUser(scope, user)) {
+      return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
     }
 
     // Обновляем статус пользователя

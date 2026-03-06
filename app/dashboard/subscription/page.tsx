@@ -5,6 +5,17 @@ import Link from "next/link";
 import { alertSuccess, alertError } from "@/lib/alert";
 import SubscriptionWidget from "@/components/dashboard/SubscriptionWidget";
 import BillingProfileModal from "@/components/dashboard/BillingProfileModal";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  PageHeader,
+  EmptyState,
+  StatusBadge,
+  Spinner,
+  Tabs,
+  DataTable,
+} from "@/components/ui";
 
 type TariffPeriod = "half_year" | "year";
 
@@ -68,6 +79,62 @@ const PERIOD_LABELS: Record<TariffPeriod, string> = {
   half_year: "6 месяцев",
   year: "12 месяцев",
 };
+
+const SUB_TABS = [
+  { id: "current", label: "Текущая подписка" },
+  { id: "tariffs", label: "Тарифы" },
+  { id: "payments", label: "История платежей" },
+] as const;
+
+const PAYMENT_COLUMNS = [
+  {
+    key: "createdAt",
+    header: "Дата",
+    render: (p: Payment) => new Date(p.createdAt).toLocaleDateString("ru-RU"),
+  },
+  {
+    key: "amountRub",
+    header: "Сумма",
+    render: (p: Payment) => `${p.amountRub} ₽`,
+  },
+  {
+    key: "period",
+    header: "Период",
+    render: (p: Payment) =>
+      `${new Date(p.periodStart).toLocaleDateString("ru-RU")} — ${new Date(p.periodEnd).toLocaleDateString("ru-RU")}`,
+    hideOnMobile: true as const,
+  },
+  {
+    key: "status",
+    header: "Статус",
+    render: (p: Payment) => {
+      const normalized = (p.status || "").toUpperCase();
+      const colorMap: Record<string, "green" | "red" | "gray" | "yellow"> = {
+        COMPLETED: "green",
+        FAILED: "red",
+        REFUNDED: "gray",
+      };
+      const label: Record<string, string> = {
+        COMPLETED: "Успешно",
+        FAILED: "Ошибка",
+        REFUNDED: "Возвращен",
+        PENDING: "Ожидает",
+      };
+      return (
+        <StatusBadge color={colorMap[normalized] ?? "yellow"}>
+          {label[normalized] ?? p.status ?? "—"}
+        </StatusBadge>
+      );
+    },
+  },
+  {
+    key: "gatewayStatus",
+    header: "Шлюз",
+    className: "text-xs text-gray-500 dark:text-gray-400",
+    render: (p: Payment) => p.gatewayStatus || "—",
+    hideOnMobile: true as const,
+  },
+];
 
 export default function SubscriptionPage() {
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
@@ -151,7 +218,6 @@ export default function SubscriptionPage() {
             break;
           }
 
-          // Явно финально неуспешный статус
           const failedStatuses = ["REJECTED", "CANCELED", "DEADLINE_EXPIRED", "REFUNDED"];
           if (failedStatuses.includes(String(data.status || "").toUpperCase())) {
             if (String(data.status || "").toUpperCase() === "REFUNDED") {
@@ -162,7 +228,6 @@ export default function SubscriptionPage() {
             break;
           }
 
-          // Еще обрабатывается: ждём и опрашиваем повторно
           if (attempt < 4) {
             await new Promise((resolve) => setTimeout(resolve, 2000));
           }
@@ -189,22 +254,6 @@ export default function SubscriptionPage() {
       cancelled = true;
     };
   }, []);
-  const getStatusLabel = (status: string) => {
-    const normalized = (status || "").toUpperCase();
-    if (normalized === "COMPLETED") return "Успешно";
-    if (normalized === "FAILED") return "Ошибка";
-    if (normalized === "REFUNDED") return "Возвращен";
-    if (normalized === "PENDING") return "Ожидает";
-    return status || "—";
-  };
-
-  const getStatusClass = (status: string) => {
-    const normalized = (status || "").toUpperCase();
-    if (normalized === "COMPLETED") return "text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/40";
-    if (normalized === "FAILED") return "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/40";
-    if (normalized === "REFUNDED") return "text-slate-700 bg-slate-100 dark:text-slate-300 dark:bg-slate-800/70";
-    return "text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40";
-  };
 
   const parsedCustomMembers = parseInt(customMembersInput, 10);
   const customMembers =
@@ -238,7 +287,6 @@ export default function SubscriptionPage() {
     }).format(value);
 
   const effectivePlanSelected = Boolean(selectedPlan || customMembers);
-
 
   const handleCheckout = async () => {
     if (!selectedPlan && !customMembers) {
@@ -359,8 +407,8 @@ export default function SubscriptionPage() {
   if (loading) {
     return (
       <div className="space-y-6 p-4 sm:p-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Подписка</h1>
-        <div className="animate-pulse h-64 bg-gray-100 dark:bg-gray-700 rounded-xl" />
+        <PageHeader title="Подписка" />
+        <Spinner size="lg" fullPage />
       </div>
     );
   }
@@ -368,16 +416,16 @@ export default function SubscriptionPage() {
   if (!subData) {
     return (
       <div className="space-y-6 p-4 sm:p-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Подписка</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Доступ только для председателей ППО. Управление подпиской организации доступно в вашем кабинете.
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-500">
-          Если вы председатель ППО, убедитесь, что в вашем профиле указана организация (членство в ППО или назначение председателем). Обратитесь к администратору при необходимости.
-        </p>
-        <Link href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:underline">
-          Вернуться на главную
-        </Link>
+        <PageHeader title="Подписка" />
+        <EmptyState
+          title="Доступ только для председателей ППО"
+          description="Управление подпиской организации доступно в вашем кабинете. Если вы председатель ППО, убедитесь, что в вашем профиле указана организация (членство в ППО или назначение председателем). Обратитесь к администратору при необходимости."
+          action={
+            <Link href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:underline">
+              Вернуться на главную
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -393,328 +441,264 @@ export default function SubscriptionPage() {
 
   return (
     <div className="space-y-8 p-4 sm:p-6 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Подписка</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Управление тарифом, лицензиями и платежами
-        </p>
-      </div>
+      <PageHeader
+        title="Подписка"
+        description="Управление тарифом, лицензиями и платежами"
+      />
 
-      {/* Виджет доступа и баланса */}
       <SubscriptionWidget onClick={() => setActiveTab("tariffs")} />
 
-      {/* Табы */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700">
-        <button
-          type="button"
-          onClick={() => setActiveTab("current")}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "current"
-              ? "border-blue-600 text-blue-600 dark:text-blue-400"
-              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-          }`}
-        >
-          Текущая подписка
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("tariffs")}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "tariffs"
-              ? "border-blue-600 text-blue-600 dark:text-blue-400"
-              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-          }`}
-        >
-          Тарифы
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("payments")}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "payments"
-              ? "border-blue-600 text-blue-600 dark:text-blue-400"
-              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-          }`}
-        >
-          История платежей
-        </button>
-      </div>
+      <Tabs
+        tabs={SUB_TABS as unknown as { id: string; label: string }[]}
+        activeTab={activeTab}
+        onChange={(id) => setActiveTab(id as SubTab)}
+      />
 
-      {/* Текущая подписка и продление */}
       {activeTab === "current" && (
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Текущая подписка
-        </h2>
-        {status === "NONE" || status === "EXPIRED" ? (
-          <div className="space-y-4">
-            <p className="text-gray-600 dark:text-gray-400">
-              {status === "NONE"
-                ? "Подписка не оформлена. Активируйте 14 дней теста без карты или выберите тариф."
-                : "Подписка истекла. Продлите доступ для организации."}
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleStartTrial}
-                disabled={trialLoading || isTrial}
-                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
-              >
-                {trialLoading ? "Активация…" : "14 дней теста без карты"}
-              </button>
+        <Card padding="lg">
+          <CardTitle as="h2">Текущая подписка</CardTitle>
+          {status === "NONE" || status === "EXPIRED" ? (
+            <div className="space-y-4 mt-4">
+              <p className="text-gray-600 dark:text-gray-400">
+                {status === "NONE"
+                  ? "Подписка не оформлена. Активируйте 14 дней теста без карты или выберите тариф."
+                  : "Подписка истекла. Продлите доступ для организации."}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleStartTrial}
+                  disabled={trialLoading || isTrial}
+                  className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+                >
+                  {trialLoading ? "Активация…" : "14 дней теста без карты"}
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-2 text-gray-700 dark:text-gray-300">
-            <p>
-              <span className="font-medium">Тариф:</span>{" "}
-              {subData?.subscription?.tariffLabel ?? "—"}
-            </p>
-            <p>
-              <span className="font-medium">Участников:</span>{" "}
-              {subData?.usage?.activeMembers ?? 0}
-              {subData?.subscription?.memberLimit != null &&
-                ` / ${subData.subscription.memberLimit}`}
-            </p>
-            {periodEnd && (
+          ) : (
+            <div className="space-y-2 text-gray-700 dark:text-gray-300 mt-4">
               <p>
-                <span className="font-medium">
-                  {isTrial ? "Пробный период до" : "Подписка до"}:
-                </span>{" "}
-                {new Date(periodEnd).toLocaleDateString("ru-RU", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-                {daysLeft != null && daysLeft >= 0 && (
-                  <span className={expiringSoon ? "text-amber-600 dark:text-amber-400" : ""}>
-                    {" "}(осталось {daysLeft} дн.)
-                  </span>
-                )}
+                <span className="font-medium">Тариф:</span>{" "}
+                {subData?.subscription?.tariffLabel ?? "—"}
               </p>
-            )}
-            {(status === "EXPIRED" || expiringSoon) && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("tariffs")}
-                className="inline-block mt-2 text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Продлить подписку →
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+              <p>
+                <span className="font-medium">Участников:</span>{" "}
+                {subData?.usage?.activeMembers ?? 0}
+                {subData?.subscription?.memberLimit != null &&
+                  ` / ${subData.subscription.memberLimit}`}
+              </p>
+              {periodEnd && (
+                <p>
+                  <span className="font-medium">
+                    {isTrial ? "Пробный период до" : "Подписка до"}:
+                  </span>{" "}
+                  {new Date(periodEnd).toLocaleDateString("ru-RU", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                  {daysLeft != null && daysLeft >= 0 && (
+                    <span className={expiringSoon ? "text-amber-600 dark:text-amber-400" : ""}>
+                      {" "}(осталось {daysLeft} дн.)
+                    </span>
+                  )}
+                </p>
+              )}
+              {(status === "EXPIRED" || expiringSoon) && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("tariffs")}
+                  className="inline-block mt-2 text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Продлить подписку →
+                </button>
+              )}
+            </div>
+          )}
+        </Card>
       )}
 
-      {/* Калькулятор и выбор тарифа */}
       {activeTab === "tariffs" && (
-      <div id="tariffs" className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Выбор тарифа
-        </h2>
+        <Card padding="lg" className="scroll-mt-8" id="tariffs">
+          <CardTitle as="h2">Выбор тарифа</CardTitle>
 
-        <div className="flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-          <label className="flex items-center gap-2">
-            <span className="text-gray-700 dark:text-gray-300 font-medium">Период:</span>
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value as TariffPeriod)}
-              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2"
-            >
-              {(Object.keys(PERIOD_LABELS) as TariffPeriod[]).map((p) => (
-                <option key={p} value={p}>
-                  {PERIOD_LABELS[p]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={handleCheckout}
-            disabled={checkoutLoading || !effectivePlanSelected}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {checkoutLoading ? "Переход к оплате…" : "Оплатить через T-Bank"}
-          </button>
-          <button
-            type="button"
-            onClick={handleInvoiceOffer}
-            disabled={!effectivePlanSelected}
-            className="px-4 py-2 border border-blue-300 text-blue-700 dark:text-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50"
-          >
-            Счет-оферта
-          </button>
-          <button
-            type="button"
-            onClick={() => setBillingProfileModalOpen(true)}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            {billingProfile ? "Редактировать реквизиты" : "Заполнить реквизиты"}
-          </button>
-        </div>
-        {billingProfile && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Платежный профиль:{" "}
-            {billingProfile.entityType === "INDIVIDUAL"
-              ? billingProfile.fullName || "Физлицо"
-              : billingProfile.companyName || "Организация"}
-            {billingProfile.inn ? `, ИНН ${billingProfile.inn}` : ""}
-          </p>
-        )}
-        {confirmingPayment && (
-          <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
-            Проверяем статус оплаты…
-          </p>
-        )}
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-          Сначала выберите период оплаты, затем тариф по количеству участников.
-        </p>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
-          {plans
-            .filter((p) => !p.isUnlimited)
-            .map((plan) => (
-              <button
-                key={plan.key}
-                type="button"
-                onClick={() => {
-                  setSelectedPlan(plan.key);
-                  setCustomMembersInput("");
-                  setIsCustomActive(false);
-                }}
-                className={`text-left p-4 rounded-xl border-2 transition-colors ${
-                  selectedPlan === plan.key
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400"
-                    : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
-                }`}
+          <div className="flex flex-wrap items-center gap-4 mt-4 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <label className="flex items-center gap-2">
+              <span className="text-gray-700 dark:text-gray-300 font-medium">Период:</span>
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value as TariffPeriod)}
+                className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2"
               >
-                <p className="font-medium text-gray-900 dark:text-white">{plan.label}</p>
+                {(Object.keys(PERIOD_LABELS) as TariffPeriod[]).map((p) => (
+                  <option key={p} value={p}>
+                    {PERIOD_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={checkoutLoading || !effectivePlanSelected}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {checkoutLoading ? "Переход к оплате…" : "Оплатить через T-Bank"}
+            </button>
+            <button
+              type="button"
+              onClick={handleInvoiceOffer}
+              disabled={!effectivePlanSelected}
+              className="px-4 py-2 border border-blue-300 text-blue-700 dark:text-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50"
+            >
+              Счет-оферта
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingProfileModalOpen(true)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              {billingProfile ? "Редактировать реквизиты" : "Заполнить реквизиты"}
+            </button>
+          </div>
+          {billingProfile && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              Платежный профиль:{" "}
+              {billingProfile.entityType === "INDIVIDUAL"
+                ? billingProfile.fullName || "Физлицо"
+                : billingProfile.companyName || "Организация"}
+              {billingProfile.inn ? `, ИНН ${billingProfile.inn}` : ""}
+            </p>
+          )}
+          {confirmingPayment && (
+            <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
+              Проверяем статус оплаты…
+            </p>
+          )}
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            Сначала выберите период оплаты, затем тариф по количеству участников.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+            {plans
+              .filter((p) => !p.isUnlimited)
+              .map((plan) => (
+                <button
+                  key={plan.key}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPlan(plan.key);
+                    setCustomMembersInput("");
+                    setIsCustomActive(false);
+                  }}
+                  className={`text-left p-4 rounded-xl border-2 transition-colors ${
+                    selectedPlan === plan.key
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400"
+                      : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                  }`}
+                >
+                  <p className="font-medium text-gray-900 dark:text-white">{plan.label}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {selectedPeriod === "half_year"
+                      ? `${plan.rateForHalfYear} ₽ за 1 пользователя / месяц`
+                      : `${plan.rateForYear} ₽ за 1 пользователя / месяц`}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                    {selectedPeriod === "half_year"
+                      ? `${plan.pricePerHalfYearFormatted} за 6 месяцев`
+                      : `${plan.pricePerYearFormatted} за 12 месяцев`}
+                  </p>
+                </button>
+              ))}
+            <label
+              htmlFor="custom-members-input"
+              className={`block text-left p-4 rounded-xl border-2 transition-colors cursor-pointer ${
+                customMembers || isCustomActive
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400"
+                  : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+              }`}
+            >
+              <p className="font-medium text-gray-900 dark:text-white">Своё количество лицензий</p>
+              <input
+                id="custom-members-input"
+                ref={customInputRef}
+                type="number"
+                min={1}
+                placeholder="Введите количество"
+                value={customMembersInput}
+                onChange={(e) => {
+                  setCustomMembersInput(e.target.value);
+                  if (e.target.value) setSelectedPlan("");
+                }}
+                onFocus={() => {
+                  setSelectedPlan("");
+                  setIsCustomActive(true);
+                }}
+                onBlur={() => {
+                  if (!customMembersInput.trim()) setIsCustomActive(false);
+                }}
+                className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
+              />
+              {customMembers && customRate && customAmount ? (
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {selectedPeriod === "half_year"
-                    ? `${plan.rateForHalfYear} ₽ за 1 пользователя / месяц`
-                    : `${plan.rateForYear} ₽ за 1 пользователя / месяц`}
+                  {customRate} ₽/польз./мес.
                 </p>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                  {selectedPeriod === "half_year" ? "6" : "12"} месяцев
+                </p>
+              )}
+              {customMembers && customAmount && (
                 <p className="text-xs text-gray-500 dark:text-gray-500">
-                  {selectedPeriod === "half_year"
-                    ? `${plan.pricePerHalfYearFormatted} за 6 месяцев`
-                    : `${plan.pricePerYearFormatted} за 12 месяцев`}
+                  {formatRub(customAmount)} за {selectedPeriod === "half_year" ? "6" : "12"} мес.
                 </p>
-              </button>
-            ))}
-          <label
-            htmlFor="custom-members-input"
-            className={`block text-left p-4 rounded-xl border-2 transition-colors cursor-pointer ${
-              customMembers || isCustomActive
-                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400"
-                : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
-            }`}
-          >
-            <p className="font-medium text-gray-900 dark:text-white">Своё количество лицензий</p>
-            <input
-              id="custom-members-input"
-              ref={customInputRef}
-              type="number"
-              min={1}
-              placeholder="Введите количество"
-              value={customMembersInput}
-              onChange={(e) => {
-                setCustomMembersInput(e.target.value);
-                if (e.target.value) setSelectedPlan("");
-              }}
-              onFocus={() => {
-                setSelectedPlan("");
-                setIsCustomActive(true);
-              }}
-              onBlur={() => {
-                if (!customMembersInput.trim()) setIsCustomActive(false);
-              }}
-              className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
-            />
-            {customMembers && customRate && customAmount ? (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {customRate} ₽/польз./мес.
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                {selectedPeriod === "half_year" ? "6" : "12"} месяцев
-              </p>
-            )}
-            {customMembers && customAmount && (
-              <p className="text-xs text-gray-500 dark:text-gray-500">
-                {formatRub(customAmount)} за {selectedPeriod === "half_year" ? "6" : "12"} мес.
-              </p>
-            )}
-          </label>
-        </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Тариф «Более 3600» — по запросу (договорная цена).
-        </p>
-      </div>
+              )}
+            </label>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Тариф «Более 3600» — по запросу (договорная цена).
+          </p>
+        </Card>
       )}
 
-      {/* История платежей */}
       {activeTab === "payments" && (
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            История платежей
-          </h2>
-          <button
-            type="button"
-            onClick={handleSyncPayments}
-            disabled={syncPaymentsLoading}
-            className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-          >
-            {syncPaymentsLoading ? "Синхронизация…" : "Синхронизировать с T-Bank"}
-          </button>
-        </div>
-        {!syncPaymentsLoading && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Авто-синхронизация с T-Bank выполняется при открытии вкладки.
-          </p>
-        )}
-        {payments.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400">Платежей пока нет</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                  <th className="py-2 pr-4">Дата</th>
-                  <th className="py-2 pr-4">Сумма</th>
-                  <th className="py-2 pr-4">Период</th>
-                  <th className="py-2">Статус</th>
-                  <th className="py-2 pl-4">Шлюз</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id} className="border-b border-gray-100 dark:border-gray-700">
-                    <td className="py-2 pr-4">
-                      {new Date(p.createdAt).toLocaleDateString("ru-RU")}
-                    </td>
-                    <td className="py-2 pr-4">{p.amountRub} ₽</td>
-                    <td className="py-2 pr-4">
-                      {new Date(p.periodStart).toLocaleDateString("ru-RU")} —{" "}
-                      {new Date(p.periodEnd).toLocaleDateString("ru-RU")}
-                    </td>
-                    <td className="py-2">
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusClass(p.status)}`}>
-                        {getStatusLabel(p.status)}
-                      </span>
-                    </td>
-                    <td className="py-2 pl-4 text-xs text-gray-500 dark:text-gray-400">
-                      {p.gatewayStatus || "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        <Card noPadding>
+          <CardHeader bordered className="px-6 pt-5">
+            <CardTitle as="h2">История платежей</CardTitle>
+            <button
+              type="button"
+              onClick={handleSyncPayments}
+              disabled={syncPaymentsLoading}
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            >
+              {syncPaymentsLoading ? "Синхронизация…" : "Синхронизировать с T-Bank"}
+            </button>
+          </CardHeader>
+          {!syncPaymentsLoading && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 px-6 pt-3">
+              Авто-синхронизация с T-Bank выполняется при открытии вкладки.
+            </p>
+          )}
+          {payments.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                title="Платежей пока нет"
+                description="История оплат появится здесь после первого платежа"
+              />
+            </div>
+          ) : (
+            <div className="mt-3">
+              <DataTable
+                columns={PAYMENT_COLUMNS}
+                data={payments}
+                keyExtractor={(p) => p.id}
+                card={false}
+              />
+            </div>
+          )}
+        </Card>
       )}
+
       <BillingProfileModal
         isOpen={billingProfileModalOpen}
         onClose={() => setBillingProfileModalOpen(false)}

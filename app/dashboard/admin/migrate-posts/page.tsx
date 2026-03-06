@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import {
+  AlertCircle,
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  FileText,
+  RefreshCw,
+} from "lucide-react";
 
 export default function MigratePostsPage() {
   const { data: session } = useSession();
@@ -44,18 +52,25 @@ export default function MigratePostsPage() {
           onClick={() => router.back()}
           className="mb-6 flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
         >
-          ← Назад
+          <ArrowLeft className="h-4 w-4" />
+          Назад
         </button>
 
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-          🔄 Миграция постов
+          <span className="inline-flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Миграция постов
+          </span>
         </h1>
 
         <div className="space-y-4">
           {/* Статистика */}
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
             <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              📊 Статистика
+              <span className="inline-flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Статистика
+              </span>
             </h2>
             <button
               onClick={() => runMigration("stats")}
@@ -69,7 +84,10 @@ export default function MigratePostsPage() {
           {/* Список статей */}
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
             <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              📄 Список статей
+              <span className="inline-flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Список статей
+              </span>
             </h2>
             <button
               onClick={() => runMigration("list-articles")}
@@ -83,7 +101,10 @@ export default function MigratePostsPage() {
           {/* Конвертация */}
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
             <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              🔄 Конвертация в статьи
+              <span className="inline-flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Конвертация в статьи
+              </span>
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               Конвертирует посты с длинным контентом (&gt;500 символов) или HTML разметкой в тип &quot;article&quot;
@@ -100,14 +121,20 @@ export default function MigratePostsPage() {
           {/* Результат */}
           {error && (
             <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 px-4 py-3 rounded">
-              ❌ {error}
+              <span className="inline-flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </span>
             </div>
           )}
 
           {result && (
             <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
               <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-                ✅ Результат
+                <span className="inline-flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  Результат
+                </span>
               </h2>
               <pre className="bg-gray-100 dark:bg-gray-900 p-4 rounded overflow-auto text-sm text-gray-800 dark:text-gray-200">
                 {JSON.stringify(result, null, 2)}

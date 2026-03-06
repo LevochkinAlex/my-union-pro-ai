@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+import { AlertTriangle, Info, Siren, XCircle } from "lucide-react";
 
 interface SystemLog {
   id: string;
@@ -118,13 +119,13 @@ export default function AdminLogsPage() {
   const getLevelIcon = (level: string) => {
     switch (level) {
       case "CRITICAL":
-        return "🚨";
+        return <Siren className="h-3.5 w-3.5" />;
       case "ERROR":
-        return "❌";
+        return <XCircle className="h-3.5 w-3.5" />;
       case "WARNING":
-        return "⚠️";
+        return <AlertTriangle className="h-3.5 w-3.5" />;
       default:
-        return "ℹ️";
+        return <Info className="h-3.5 w-3.5" />;
     }
   };
 
@@ -258,7 +259,9 @@ export default function AdminLogsPage() {
                     <tr className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getLevelColor(log.level)}`}>
-                          {getLevelIcon(log.level)} {log.level}
+                          <span className="inline-flex items-center gap-1">
+                            {getLevelIcon(log.level)} {log.level}
+                          </span>
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-400">

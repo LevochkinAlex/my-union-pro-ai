@@ -212,7 +212,7 @@ export default function RootLayout({
                   navigator.serviceWorker.register('/firebase-messaging-sw.js')
                     .then(function() { /* SW registered */ })
                     .catch(function(error) {
-                      console.error('[Firebase] ❌ Service Worker registration failed:', error);
+                      console.error('[Firebase] Service Worker registration failed:', error);
                     });
                 });
               }

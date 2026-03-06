@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Card, PageHeader, EmptyState, StatusBadge, Spinner } from "@/components/ui";
 
 interface RoleTemplate {
   id: string;
@@ -221,11 +222,7 @@ export default function RpoRolesPage() {
     Object.values(perms).filter(Boolean).length;
 
   if (status === "loading" || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    );
+    return <Spinner fullPage />;
   }
 
   if (error) {
@@ -240,34 +237,31 @@ export default function RpoRolesPage() {
 
   return (
     <div className="px-4 py-8 sm:px-8 lg:px-12 max-w-6xl">
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Роли и должности
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Управление шаблонами ролей для избирательного органа ППО
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePublishAll}
-            disabled={publishingAll || roles.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-          >
-            {publishingAll ? "Публикация..." : "Опубликовать все"}
-          </button>
-          <button
-            onClick={openCreateModal}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Создать роль
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Роли и должности"
+        description="Управление шаблонами ролей для избирательного органа ППО"
+        className="mb-6"
+        actions={
+          <>
+            <button
+              onClick={handlePublishAll}
+              disabled={publishingAll || roles.length === 0}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {publishingAll ? "Публикация..." : "Опубликовать все"}
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Создать роль
+            </button>
+          </>
+        }
+      />
 
       {publishResult && (
         <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300">
@@ -277,20 +271,19 @@ export default function RpoRolesPage() {
       )}
 
       {roles.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          <svg className="mx-auto h-12 w-12 mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          <p className="font-medium">Ролей пока нет</p>
-          <p className="text-sm mt-1">Создайте первую роль для избирательного органа</p>
-        </div>
+        <EmptyState
+          icon={
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          }
+          title="Ролей пока нет"
+          description="Создайте первую роль для избирательного органа"
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => (
-            <div
-              key={role.id}
-              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-            >
+            <Card key={role.id}>
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-900 dark:text-white truncate">
@@ -304,14 +297,10 @@ export default function RpoRolesPage() {
                 </div>
                 <div className="flex items-center gap-1 ml-2">
                   {role.isSystem && (
-                    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
-                      Системная
-                    </span>
+                    <StatusBadge color="blue">Системная</StatusBadge>
                   )}
                   {role.isElectedBody && (
-                    <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-600 dark:bg-purple-900/30 dark:text-purple-300">
-                      ИО
-                    </span>
+                    <StatusBadge color="purple">ИО</StatusBadge>
                   )}
                 </div>
               </div>
@@ -320,7 +309,7 @@ export default function RpoRolesPage() {
                 <span>{countActivePermissions(role.permissions)} прав</span>
                 <span>{role.staffCount} сотр.</span>
                 {!role.isActive && (
-                  <span className="text-red-500">Неактивна</span>
+                  <StatusBadge color="red">Неактивна</StatusBadge>
                 )}
               </div>
 
@@ -350,7 +339,7 @@ export default function RpoRolesPage() {
                   </button>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

@@ -978,10 +978,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       Ответ для <strong>{getUserName(replyToComment.user)}</strong>
                     </span>
                     <button
+                      type="button"
                       onClick={() => setReplyToComment(null)}
                       className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      title="Отменить ответ"
+                      aria-label="Отменить ответ"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
@@ -1019,8 +1022,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       }}
                       placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
                       rows={1}
-                      style={{ minHeight: '44px', maxHeight: '200px' }}
-                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden"
+                      aria-label={replyToComment ? "Текст ответа на комментарий" : "Текст комментария"}
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden min-h-[44px] max-h-[200px]"
                     />
                     <div className="mt-2 flex justify-end">
                       <button
@@ -1224,10 +1227,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 Комментарии ({comments.filter(c => !c.parentId).length})
               </h3>
               <button
+                type="button"
                 onClick={() => setShowAllCommentsModal(false)}
                 className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="Закрыть"
+                aria-label="Закрыть комментарии"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -1242,10 +1248,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       Ответ для <strong>{getUserName(replyToComment.user)}</strong>
                     </span>
                     <button
+                      type="button"
                       onClick={() => setReplyToComment(null)}
                       className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      title="Отменить ответ"
+                      aria-label="Отменить ответ"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
@@ -1282,8 +1291,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       }}
                       placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
                       rows={1}
-                      style={{ minHeight: '44px', maxHeight: '200px' }}
-                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden"
+                      aria-label={replyToComment ? "Текст ответа на комментарий" : "Текст комментария"}
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden min-h-[44px] max-h-[200px]"
                     />
                     <div className="mt-2 flex justify-end">
                       <button
@@ -1371,6 +1380,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                             value={editCommentText}
                             onChange={(e) => setEditCommentText(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                            aria-label="Редактировать комментарий"
+                            placeholder="Текст комментария"
                           />
                           <div className="flex gap-2">
                             <button
@@ -1494,8 +1505,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   setEditFilePreviews([]);
                 }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                title="Закрыть"
+                aria-label="Закрыть редактирование"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -1857,7 +1870,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                                     </button>
                                   </div>
                                   {isBroken && (
-                                    <p className="text-xs text-red-500 mt-1">⚠️ Сломанный путь - удалите это изображение</p>
+                                    <p className="mt-1 text-xs text-red-500">Сломанный путь - удалите это изображение</p>
                                   )}
     </div>
   );
@@ -1934,6 +1947,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     <input
                       type="file"
                       ref={editFileInputRef}
+                      aria-label="Выбрать изображение для поста"
+                      title="Выбрать изображение"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
@@ -1984,6 +1999,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                                     setEditFilePreviews(editFilePreviews.filter((_, i) => i !== index));
                                   }}
                                   className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                                  title="Удалить фото"
+                                  aria-label="Удалить фото"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2214,6 +2231,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       src={editVideoMetadata.embedUrl}
                       className="w-full h-64 rounded"
                       allowFullScreen
+                      title="Превью видео"
                     />
                   </div>
                 )}

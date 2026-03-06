@@ -30,7 +30,7 @@ export default function QuickApproveButton({ userId, userName }: QuickApproveBut
         throw new Error(error.error || "Ошибка одобрения");
       }
 
-      alert(`✅ ${userName} успешно одобрен`);
+      alert(`${userName} успешно одобрен`);
       router.refresh();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Произошла ошибка");
@@ -45,7 +45,7 @@ export default function QuickApproveButton({ userId, userName }: QuickApproveBut
       disabled={isLoading}
       className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
     >
-      {isLoading ? "..." : "✓ Одобрить"}
+      {isLoading ? "..." : "Одобрить"}
     </button>
   );
 }

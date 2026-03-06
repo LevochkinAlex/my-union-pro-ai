@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveEffectiveOrganization } from "@/lib/user-effective-organization";
 
 // GET /api/admin/users/search?email=xxx&phone=xxx
 // Поиск пользователя по email или телефону для назначения председателем
@@ -53,8 +54,24 @@ export async function GET(request: NextRequest) {
         role: true,
         membershipStatus: true,
         isPPOHead: true,
+        isMPOHead: true,
+        isRPOHead: true,
         ppoHeadOrganizationId: true,
+        mpoHeadOrganizationId: true,
+        rpoHeadOrganizationId: true,
         ppoHeadOrganization: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        mpoHeadOrganization: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        rpoHeadOrganization: {
           select: {
             id: true,
             name: true,
@@ -81,6 +98,9 @@ export async function GET(request: NextRequest) {
       .filter(Boolean)
       .join(" ");
 
+    const currentHeadOrganization = resolveEffectiveOrganization(user);
+    const isHead = user.isPPOHead || user.isMPOHead || user.isRPOHead;
+
     return NextResponse.json({
       found: true,
       user: {
@@ -96,7 +116,13 @@ export async function GET(request: NextRequest) {
         role: user.role,
         membershipStatus: user.membershipStatus,
         isPPOHead: user.isPPOHead,
+        isMPOHead: user.isMPOHead,
+        isRPOHead: user.isRPOHead,
+        isHead,
         currentPPOOrganization: user.ppoHeadOrganization,
+        currentMPOOrganization: user.mpoHeadOrganization,
+        currentRPOOrganization: user.rpoHeadOrganization,
+        currentHeadOrganization,
         memberOrganization: user.organization,
       },
     });

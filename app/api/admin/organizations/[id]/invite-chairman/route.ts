@@ -8,6 +8,7 @@ import { encryptPassword } from "@/lib/best-benefits-password";
 import { createBestBenefitsUser } from "@/lib/best-benefits-users";
 import { sendEmail } from "@/lib/email";
 import { createDefaultChannelForOrganization } from "@/lib/channel-utils";
+import { syncChairmanOrganizationFields } from "@/lib/admin-org-user-sync";
 
 /**
  * POST /api/admin/organizations/[id]/invite-chairman
@@ -106,7 +107,6 @@ export async function POST(
       const updateData: any = {
         isPPOHead: true,
         ppoHeadOrganizationId: id,
-        organizationId: id, // Также привязываем к организации как члена
         viewMode: "PPO_HEAD", // Переключаем в режим председателя
         membershipStatus: "APPROVED", // Председатель автоматически является членом
       };
@@ -121,6 +121,7 @@ export async function POST(
         where: { id: existingUserId },
         data: updateData,
       });
+      await syncChairmanOrganizationFields(prisma, existingUserId, id);
 
       const resolvedFirstName = firstName || existingUser.firstName || "";
       const resolvedLastName = lastName || existingUser.lastName || "";
@@ -198,7 +199,6 @@ export async function POST(
       const updateData: any = {
         isPPOHead: true,
         ppoHeadOrganizationId: id,
-        organizationId: id, // Также привязываем к организации как члена
         viewMode: "PPO_HEAD",
           firstName: firstName,
           lastName: lastName,
@@ -217,6 +217,7 @@ export async function POST(
         where: { id: existingUser.id },
         data: updateData,
       });
+      await syncChairmanOrganizationFields(prisma, updatedUser.id, id);
 
       // Обновляем организацию - указываем ФИО и должность председателя
       await prisma.organization.update({
@@ -282,7 +283,6 @@ export async function POST(
       const updateData: any = {
         isPPOHead: true,
         ppoHeadOrganizationId: id,
-        organizationId: id,
         viewMode: "PPO_HEAD",
         firstName: firstName,
         lastName: lastName,
@@ -298,6 +298,7 @@ export async function POST(
         where: { id: existingByPhone.id },
         data: updateData,
       });
+      await syncChairmanOrganizationFields(prisma, updatedUser.id, id);
       await prisma.organization.update({
         where: { id },
         data: {
@@ -343,7 +344,6 @@ export async function POST(
         lastName,
         middleName: middleName || null,
         jobTitle: jobTitle || null,
-        organizationId: id,
         role: "PPO_HEAD",
         isPPOHead: true,
         ppoHeadOrganizationId: id,
@@ -355,6 +355,7 @@ export async function POST(
         bestBenefitsPassword: encryptedBbPassword,
       },
     });
+    await syncChairmanOrganizationFields(prisma, newUser.id, id);
 
     // Обновляем организацию - указываем ФИО и должность председателя
     await prisma.organization.update({

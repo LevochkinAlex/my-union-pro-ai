@@ -70,7 +70,8 @@ export function canBeChairman(session: Session | null): boolean {
 
 /**
  * Доступные режимы для переключателя на основе сессии (без имён организаций).
- * Используется в layout и API view-mode без дублирования логики.
+ * ППО, МПО и РПО взаимоисключающие: показываем только один кабинет председателя,
+ * приоритет РПО > МПО > ППО (региональный не может быть одновременно «Председатель» и «Региональный»).
  */
 export function getAvailableViewModes(session: Session | null): ViewModeOption[] {
   if (!session?.user) {
@@ -89,14 +90,13 @@ export function getAvailableViewModes(session: Session | null): ViewModeOption[]
   if (canUseMemberMode) {
     modes.push({ mode: "MEMBER", label: "Член участник" });
   }
-  if (isPPOHead && u.ppoHeadOrganizationId) {
-    modes.push({ mode: "PPO_HEAD", label: "Председатель" });
-  }
-  if (isMPOHead && u.mpoHeadOrganizationId) {
-    modes.push({ mode: "MPO_HEAD", label: "Председатель МПО" });
-  }
+  // Только один кабинет председателя: РПО, МПО или ППО (в порядке приоритета)
   if (isRPOHead && u.rpoHeadOrganizationId) {
     modes.push({ mode: "RPO_HEAD", label: "Региональный" });
+  } else if (isMPOHead && u.mpoHeadOrganizationId) {
+    modes.push({ mode: "MPO_HEAD", label: "Председатель МПО" });
+  } else if (isPPOHead && u.ppoHeadOrganizationId) {
+    modes.push({ mode: "PPO_HEAD", label: "Председатель" });
   }
   if (modes.length === 0) {
     modes.push({ mode: "MEMBER", label: "Член участник" });

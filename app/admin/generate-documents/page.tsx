@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, CheckCircle2, XCircle } from "lucide-react";
 
 interface GenerationResult {
   total: number;
@@ -245,7 +246,10 @@ export default function GenerateDocumentsPage() {
                 <>
                   <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
                     <p className="text-sm text-green-800 dark:text-green-200">
-                      ✅ {result.message}
+                      <span className="inline-flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4" />
+                        {result.message}
+                      </span>
                     </p>
                   </div>
 
@@ -264,7 +268,10 @@ export default function GenerateDocumentsPage() {
                       <h4 className="font-medium text-gray-900 dark:text-white">Generated Documents:</h4>
                       {result.documents.map((doc: any) => (
                         <div key={doc.id} className="text-sm text-gray-600 dark:text-gray-400">
-                          ✓ {doc.title}
+                          <span className="inline-flex items-center gap-1.5">
+                            <Check className="h-4 w-4 text-green-600" />
+                            {doc.title}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -273,7 +280,10 @@ export default function GenerateDocumentsPage() {
               ) : (
                 <div className="rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
                   <p className="text-sm text-red-800 dark:text-red-200">
-                    ❌ {result.error}
+                    <span className="inline-flex items-center gap-1.5">
+                      <XCircle className="h-4 w-4" />
+                      {result.error}
+                    </span>
                   </p>
                   {result.profile && (
                     <div className="mt-2 text-xs text-red-700 dark:text-red-300">

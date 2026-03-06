@@ -38,3 +38,22 @@ export function canAssignHeadByOrganizationType(organizationType: "PRIMARY" | "L
   if (organizationType === "REGIONAL") return "RPO_HEAD";
   return null;
 }
+
+/** Проверяет, входит ли пользователь в scope руководителя (член организации или председатель одной из организаций scope). */
+export function canOrgHeadAccessUser(
+  scope: OrgHeadScope,
+  user: {
+    organizationId: string | null;
+    ppoHeadOrganizationId: string | null;
+    mpoHeadOrganizationId: string | null;
+    rpoHeadOrganizationId: string | null;
+  }
+): boolean {
+  const ids = scope.organizationIds;
+  return (
+    (user.organizationId != null && ids.includes(user.organizationId)) ||
+    (user.ppoHeadOrganizationId != null && ids.includes(user.ppoHeadOrganizationId)) ||
+    (user.mpoHeadOrganizationId != null && ids.includes(user.mpoHeadOrganizationId)) ||
+    (user.rpoHeadOrganizationId != null && ids.includes(user.rpoHeadOrganizationId))
+  );
+}

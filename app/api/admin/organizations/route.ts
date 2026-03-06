@@ -79,6 +79,30 @@ export async function GET(request: NextRequest) {
             members: true,
           },
         },
+        ppoChairman: {
+          select: {
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            jobTitle: true,
+          },
+        },
+        mpoChairman: {
+          select: {
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            jobTitle: true,
+          },
+        },
+        rpoChairman: {
+          select: {
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            jobTitle: true,
+          },
+        },
       },
       orderBy: [
         { level: "asc" },
@@ -86,8 +110,22 @@ export async function GET(request: NextRequest) {
       ],
     });
 
+    const normalized = organizations.map((org) => {
+      const head = org.ppoChairman ?? org.mpoChairman ?? org.rpoChairman ?? null;
+      if (!head) return org;
+      const headName = [head.lastName, head.firstName, head.middleName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      return {
+        ...org,
+        chairmanName: headName || org.chairmanName,
+        chairmanJobTitle: head.jobTitle || org.chairmanJobTitle,
+      };
+    });
+
     console.log("[admin/organizations] Successfully loaded", organizations.length, "organizations");
-    return NextResponse.json({ organizations });
+    return NextResponse.json({ organizations: normalized });
   } catch (error: any) {
     console.error("[admin/organizations] GET error:", error);
     console.error("[admin/organizations] GET error details:", {

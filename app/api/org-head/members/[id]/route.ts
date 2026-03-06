@@ -4,6 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import { normalizePhone } from "@/lib/utils/phone";
+import {
+  resolveEffectiveOrganization,
+  resolveEffectiveWorkplace,
+  resolveEffectiveWorkplaceInn,
+} from "@/lib/user-effective-organization";
 
 const MEMBER_SELECT = {
   id: true,
@@ -52,8 +57,8 @@ const MEMBER_SELECT = {
   createdAt: true,
   updatedAt: true,
   organizationId: true,
-  organization: { select: { id: true, name: true, type: true } },
-  ppoHeadOrganization: { select: { id: true, name: true } },
+  organization: { select: { id: true, name: true, type: true, inn: true } },
+  ppoHeadOrganization: { select: { id: true, name: true, inn: true } },
   documents: {
     select: {
       id: true,
@@ -98,7 +103,15 @@ export async function GET(
       return NextResponse.json({ error: "Нет доступа к пользователю" }, { status: 403 });
     }
 
-    return NextResponse.json({ member });
+    return NextResponse.json({
+      member: {
+        ...member,
+        effectiveOrganization: resolveEffectiveOrganization(member),
+        effectiveWorkplace: resolveEffectiveWorkplace(member),
+        effectiveWorkplaceInn: resolveEffectiveWorkplaceInn(member),
+        chairmanOfOrganization: member.ppoHeadOrganization ?? null,
+      },
+    });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error("[org-head/members/[id]] GET error:", msg);

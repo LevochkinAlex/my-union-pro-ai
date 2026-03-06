@@ -25,9 +25,18 @@ import {
   FolderPlus,
   Folder,
   FolderOpen,
+  Files,
+  ClipboardList,
   ArrowLeft,
   Trash2,
   Headset,
+  Building2,
+  BarChart3,
+  NotebookPen,
+  Star,
+  Flame,
+  Lightbulb,
+  Target,
 } from "lucide-react";
 import CreateFolderModal from "./CreateFolderModal";
 import { Chat, ChatUser } from "@/types/chat";
@@ -48,6 +57,36 @@ function getFolderIconClass(color: string | null | undefined): string {
   if (!color) return styles.folderIconDefault;
   const i = FOLDER_COLOR_HEXES.indexOf(color);
   return i >= 0 ? FOLDER_ICON_CLASSES[i] : styles.folderIconDefault;
+}
+
+function renderFolderIcon(icon: string | null | undefined, className: string) {
+  switch (icon) {
+    case "folder-open":
+      return <FolderOpen className={className} />;
+    case "files":
+      return <Files className={className} />;
+    case "clipboard":
+      return <ClipboardList className={className} />;
+    case "briefcase":
+      return <Briefcase className={className} />;
+    case "building":
+      return <Building2 className={className} />;
+    case "chart":
+      return <BarChart3 className={className} />;
+    case "notes":
+      return <NotebookPen className={className} />;
+    case "star":
+      return <Star className={className} />;
+    case "flame":
+      return <Flame className={className} />;
+    case "idea":
+      return <Lightbulb className={className} />;
+    case "target":
+      return <Target className={className} />;
+    case "folder":
+    default:
+      return <Folder className={className} />;
+  }
 }
 
 // ============================================================================
@@ -1067,7 +1106,7 @@ export default function SlackStyleSidebar({
                       <div
                         className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${getFolderIconClass(folder.color)}`}
                       >
-                        {folder.icon || "📁"}
+                        {renderFolderIcon(folder.icon, "h-5 w-5")}
                       </div>
                       {/* Красная точка если есть непрочитанные */}
                       {folder.unreadCount > 0 && (
@@ -1131,7 +1170,7 @@ export default function SlackStyleSidebar({
               <div
                 className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${getFolderIconClass(openFolder.color)}`}
               >
-                {openFolder.icon || "📁"}
+                {renderFolderIcon(openFolder.icon, "h-4 w-4")}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm text-gray-900 dark:text-white truncate">

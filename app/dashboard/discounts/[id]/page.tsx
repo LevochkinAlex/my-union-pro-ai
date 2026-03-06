@@ -189,7 +189,7 @@ export default function DiscountDetailPage() {
     if (!isClaimed || !discountId) return;
 
     const refreshPromoCode = async () => {
-      console.log(`[DiscountDetail] 🔄 Refreshing promo code for discount ${discountId}...`);
+      console.log(`[DiscountDetail] Refreshing promo code for discount ${discountId}...`);
       
       try {
         const response = await fetch("/api/discounts/refresh-promo", {
@@ -200,7 +200,7 @@ export default function DiscountDetailPage() {
         
         if (response.ok) {
           const result = await response.json();
-          console.log("[DiscountDetail] 📥 Fresh promo result:", result);
+          console.log("[DiscountDetail] Fresh promo result:", result);
           
           if (result.promoCode && result.promoCode.trim().length > 0) {
             const freshCode = result.promoCode.trim();
@@ -210,7 +210,7 @@ export default function DiscountDetailPage() {
               return { ...prev, promoCode: freshCode };
             });
           } else if (result.warning) {
-            console.warn(`[DiscountDetail] ⚠️ ${result.warning}`);
+            console.warn(`[DiscountDetail] ${result.warning}`);
           }
         }
       } catch (error) {
@@ -235,12 +235,12 @@ export default function DiscountDetailPage() {
     if (discount && isClaimed) {
       // Используем промокод из discount, если activatedPromoCode еще не установлен
       if (!activatedPromoCode && discount.promoCode && discount.promoCode.trim().length > 0) {
-        console.log("✅ Setting promo code from discount after load:", discount.promoCode);
+        console.log("Setting promo code from discount after load:", discount.promoCode);
         setActivatedPromoCode(discount.promoCode);
       }
       // Также обновляем discount.promoCode, если есть activatedPromoCode, но нет в discount
       else if (activatedPromoCode && (!discount.promoCode || discount.promoCode.trim().length === 0)) {
-        console.log("✅ Updating discount.promoCode from activatedPromoCode:", activatedPromoCode);
+        console.log("Updating discount.promoCode from activatedPromoCode:", activatedPromoCode);
         setDiscount({
           ...discount,
           promoCode: activatedPromoCode,
@@ -256,15 +256,15 @@ export default function DiscountDetailPage() {
       
       if (data.discounts && data.discounts.length > 0) {
         const disc = data.discounts[0];
-        console.log("📦 FULL DISCOUNT DATA:", disc);
-        console.log("🎫 Promo Code:", disc.promoCode, "Type:", typeof disc.promoCode);
-        console.log("📝 Short Description:", disc.shortDescription, "Type:", typeof disc.shortDescription);
-        console.log("📄 Description:", disc.description?.substring(0, 200));
-        console.log("🔗 Partner URL:", disc.partnerUrl, "Type:", typeof disc.partnerUrl);
-        console.log("🎁 Options:", disc.options, "Count:", disc.options?.length || 0);
+        console.log("FULL DISCOUNT DATA:", disc);
+        console.log("Promo Code:", disc.promoCode, "Type:", typeof disc.promoCode);
+        console.log("Short Description:", disc.shortDescription, "Type:", typeof disc.shortDescription);
+        console.log("Description:", disc.description?.substring(0, 200));
+        console.log("Partner URL:", disc.partnerUrl, "Type:", typeof disc.partnerUrl);
+        console.log("Options:", disc.options, "Count:", disc.options?.length || 0);
         setDiscount(disc);
       } else {
-        console.error("❌ No discounts in response:", data);
+        console.error("No discounts in response:", data);
       }
     } catch (error) {
       console.error("Failed to load discount:", error);
@@ -276,34 +276,34 @@ export default function DiscountDetailPage() {
   const syncWithBestBenefits = async () => {
     // Защита от бесконечного цикла и повторных вызовов
     if (isSyncing || hasSynced) {
-      console.log("⏭️ Sync already in progress or completed, skipping");
+      console.log("Sync already in progress or completed, skipping");
       return;
     }
 
     try {
       setIsSyncing(true);
-      console.log("🔄 Starting sync with BestBenefits...");
+      console.log("Starting sync with BestBenefits...");
       
       // Используем менеджер синхронизации с кэшированием
       const { syncManager } = await import("@/lib/sync-manager");
       const result = await syncManager.sync(); // Не форсируем, используем кэш
       
       if (result.success) {
-        console.log("✅ Sync result:", result);
+        console.log("Sync result:", result);
         setHasSynced(true);
         
         if (!result.cached) {
           // Перезагружаем preferences только если была реальная синхронизация
           await loadPreferences();
         } else {
-          console.log("⏭️ Using cached sync result, preferences already up to date");
+          console.log("Using cached sync result, preferences already up to date");
         }
       } else {
-        console.error("❌ Sync failed:", result.message);
+        console.error("Sync failed:", result.message);
         setHasSynced(true); // Помечаем как выполненную, чтобы не повторять
       }
     } catch (error) {
-      console.error("❌ Sync error:", error);
+      console.error("Sync error:", error);
       setHasSynced(true); // Помечаем как выполненную даже при ошибке
     } finally {
       setIsSyncing(false);
@@ -316,7 +316,7 @@ export default function DiscountDetailPage() {
       const data = await response.json();
       const filters = data.filters || {};
       
-      console.log("📋 LOADED PREFERENCES:", filters);
+      console.log("LOADED PREFERENCES:", filters);
       
       // Проверяем, есть ли эта скидка в claimed
       const claimedItem = filters.claimed?.find((item: any) => {
@@ -332,17 +332,17 @@ export default function DiscountDetailPage() {
       if (claimedItem) {
         const promoCode = typeof claimedItem === 'object' ? claimedItem.promoCode : null;
         if (promoCode && promoCode.trim().length > 0) {
-          console.log("✅ Found promo code in preferences:", promoCode);
+          console.log("Found promo code in preferences:", promoCode);
           setActivatedPromoCode(promoCode);
         } else {
-          console.log("ℹ️ Claimed item without promo code (card-based discount):", claimedItem);
+          console.log("Claimed item without promo code (card-based discount):", claimedItem);
           if (!hasSynced && !isSyncing) {
-            console.log("🔄 Syncing with BestBenefits once to check for promo code...");
+            console.log("Syncing with BestBenefits once to check for promo code...");
             syncWithBestBenefits();
           }
         }
       } else {
-        console.log("⚠️ Discount not found in claimed list");
+        console.log("Discount not found in claimed list");
       }
     } catch (error) {
       console.error("Failed to load preferences:", error);
@@ -355,7 +355,7 @@ export default function DiscountDetailPage() {
     const hasPromoCode = !!(activatedPromoCode || discount.promoCode);
     const hasOptions = !!(discount.options && discount.options.length > 0);
     
-    console.log("🔘 HANDLE CLAIM START:", {
+    console.log("HANDLE CLAIM START:", {
       isClaimed,
       hasPromoCode,
       promoCode: discount.promoCode || activatedPromoCode,
@@ -365,7 +365,7 @@ export default function DiscountDetailPage() {
     
     // Если есть варианты (options), показываем модальное окно выбора
     if (hasOptions) {
-      console.log("🎁 Showing options modal with", discount.options!.length, "options");
+      console.log("Showing options modal with", discount.options!.length, "options");
       setShowOptionsModal(true);
       return;
     }
@@ -375,12 +375,12 @@ export default function DiscountDetailPage() {
     // - без промокода: пробуем перевыпустить/получить код заново
     if (isClaimed) {
       if (hasPromoCode) {
-        console.log("⏩ Already claimed, showing modal with promo code");
+        console.log("Already claimed, showing modal with promo code");
         setShowPromoModal(true);
         return;
       }
 
-      console.log("🔄 Already claimed without promo code, trying to re-activate");
+      console.log("Already claimed without promo code, trying to re-activate");
       await activateDiscount(discount.id);
       return;
     }
@@ -393,7 +393,7 @@ export default function DiscountDetailPage() {
   const handleGetNewPromoCode = async () => {
     if (!discount) return;
     
-    console.log("🔄 Getting NEW promo code for discount:", discount.id);
+    console.log("Getting NEW promo code for discount:", discount.id);
     
     // Если есть варианты - показываем выбор
     if (discount.options && discount.options.length > 0) {
@@ -410,7 +410,7 @@ export default function DiscountDetailPage() {
   const activateOption = async (optionId: number) => {
     if (!discount) return;
     
-    console.log("🎯 Activating option:", optionId);
+    console.log("Activating option:", optionId);
     setActivatingOptionId(optionId);
     
     try {
@@ -426,7 +426,7 @@ export default function DiscountDetailPage() {
   const activateDiscount = async (idToActivate: number) => {
     if (!discount) return;
     
-    console.log("🔄 Activating discount/option:", idToActivate);
+    console.log("Activating discount/option:", idToActivate);
     const wasClaimed = isClaimed;
     setIsClaimed(true);
     
@@ -444,7 +444,7 @@ export default function DiscountDetailPage() {
       });
       
       const result = await response.json();
-      console.log("🎯 ACTIVATION API RESPONSE:", result);
+      console.log("ACTIVATION API RESPONSE:", result);
 
       if (!response.ok || result?.error) {
         const reason = result?.details || result?.error || "Не удалось получить промокод от BestBenefits";
@@ -464,7 +464,7 @@ export default function DiscountDetailPage() {
       const finalPromoCode = result.promoCode || discount.promoCode || activatedPromoCode;
       
       if (finalPromoCode && finalPromoCode.trim().length > 0) {
-        console.log("✅ Setting promo code for display:", finalPromoCode);
+        console.log("Setting promo code for display:", finalPromoCode);
         setActivatedPromoCode(finalPromoCode);
         setDiscount({
           ...discount,
@@ -472,13 +472,13 @@ export default function DiscountDetailPage() {
         });
         setShowPromoModal(true);
       } else if (result.cardBased === true || result.bestBenefitsActivated === true) {
-        console.log("ℹ️ Discount activated without promo code (card-based discount)");
+        console.log("Discount activated without promo code (card-based discount)");
         setShowPromoModal(true);
       } else {
         throw new Error(result.activationMessage || "BestBenefits не выдал промокод");
       }
     } catch (error) {
-      console.error("❌ Failed to activate:", error);
+      console.error("Failed to activate:", error);
       setIsClaimed(wasClaimed);
       alert(
         error instanceof Error
@@ -489,12 +489,12 @@ export default function DiscountDetailPage() {
   };
 
   const handleOpenPartner = () => {
-    console.log("🔗 Opening partner URL:", discount?.partnerUrl);
+    console.log("Opening partner URL:", discount?.partnerUrl);
     if (discount?.partnerUrl) {
-      console.log("✅ Opening partner site in new tab:", discount.partnerUrl);
+      console.log("Opening partner site in new tab:", discount.partnerUrl);
       window.open(discount.partnerUrl, "_blank");
     } else {
-      console.log("📱 No partner URL, opening My Discounts page");
+      console.log("No partner URL, opening My Discounts page");
       router.push("/dashboard/discounts/my");
     }
     setShowPromoModal(false);
@@ -502,7 +502,7 @@ export default function DiscountDetailPage() {
 
   const handleCopyPromo = async () => {
     const promoToCopy = activatedPromoCode || discount?.promoCode;
-    console.log("🎫 Copying promo code:", promoToCopy);
+    console.log("Copying promo code:", promoToCopy);
     if (!promoToCopy || !navigator?.clipboard) return;
 
     try {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { AlertTriangle, CheckCircle2, Clock3, User, XCircle } from "lucide-react";
 
 interface SyncStatus {
   totalDiscounts: number;
@@ -135,19 +136,22 @@ export default function AdminDiscountsPage() {
       case "SUCCESS":
         return (
           <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-            ✓ Успешно
+            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+            Успешно
           </span>
         );
       case "PARTIAL":
         return (
           <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-            ⚠ Частично
+            <AlertTriangle className="mr-1 h-3.5 w-3.5" />
+            Частично
           </span>
         );
       case "FAILED":
         return (
           <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
-            ✕ Ошибка
+            <XCircle className="mr-1 h-3.5 w-3.5" />
+            Ошибка
           </span>
         );
       default:
@@ -160,13 +164,15 @@ export default function AdminDiscountsPage() {
       case "CRON":
         return (
           <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-            🕐 Авто
+            <Clock3 className="mr-1 h-3.5 w-3.5" />
+            Авто
           </span>
         );
       case "MANUAL":
         return (
           <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-            👤 Ручная
+            <User className="mr-1 h-3.5 w-3.5" />
+            Ручная
           </span>
         );
       default:
@@ -485,8 +491,9 @@ export default function AdminDiscountsPage() {
 
       {/* Info Card */}
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900/20">
-        <h3 className="font-semibold text-blue-700 dark:text-blue-300">
-          💡 Как работает синхронизация
+        <h3 className="inline-flex items-center gap-2 font-semibold text-blue-700 dark:text-blue-300">
+          <AlertTriangle className="h-4 w-4" />
+          Как работает синхронизация
         </h3>
         <ul className="mt-2 space-y-1 text-sm text-blue-600 dark:text-blue-400">
           <li>• <strong>Автоматически:</strong> Cron запускает синхронизацию каждый день в 03:00</li>

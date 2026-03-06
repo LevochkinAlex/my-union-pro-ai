@@ -55,16 +55,21 @@ interface Document {
   createdAt: string;
 }
 
-type DocumentTab = "organization" | "personal";
+type DocumentTab = "organization" | "personal" | "templates";
 
 export default function PPOHeadDocumentsPage() {
   const { data: session } = useSession();
+  const isRpoMode =
+    (session?.user as { viewMode?: string; isRPOHead?: boolean } | undefined)?.viewMode === "RPO_HEAD" ||
+    (session?.user as { viewMode?: string; isRPOHead?: boolean } | undefined)?.isRPOHead === true;
   const [activeTab, setActiveTab] = useState<DocumentTab>("organization");
   const [journalDocuments, setJournalDocuments] = useState<Document[]>([]);
   const [isLoadingJournal, setIsLoadingJournal] = useState(false);
   const [orgDocuments, setOrgDocuments] = useState<Document[]>([]);
   const [personalDocuments, setPersonalDocuments] = useState<Document[]>([]);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
+  const [allTemplates, setAllTemplates] = useState<DocumentTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -104,6 +109,13 @@ export default function PPOHeadDocumentsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (isRpoMode) {
+      setActiveTab("organization");
+      setIsCreating(true);
+    }
+  }, [isRpoMode]);
 
   useEffect(() => {
     // При изменении типа документа обновляем список шаблонов
@@ -229,6 +241,24 @@ export default function PPOHeadDocumentsPage() {
       }
     } catch (error) {
       console.error("Ошибка загрузки членов:", error);
+    }
+  };
+
+  const loadAllTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      let response = await fetch("/api/ppo-head/document-templates");
+      if (response.status === 403) {
+        response = await fetch("/api/org-head/document-templates");
+      }
+      if (response.ok) {
+        const data = await response.json();
+        setAllTemplates(data.templates || []);
+      }
+    } catch (error) {
+      console.error("Ошибка загрузки всех шаблонов:", error);
+    } finally {
+      setIsLoadingTemplates(false);
     }
   };
 
@@ -383,7 +413,9 @@ export default function PPOHeadDocumentsPage() {
     return labels[status] || status;
   };
 
-  const currentDocuments = activeTab === "organization" ? orgDocuments : personalDocuments;
+  const currentDocuments = activeTab === "organization"
+    ? orgDocuments
+    : (isRpoMode ? orgDocuments : personalDocuments);
 
   if (isLoading) {
     return (
@@ -401,10 +433,12 @@ export default function PPOHeadDocumentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Документы
+            {isRpoMode ? "Конструктор документов" : "Документы"}
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Управление документами организации и личными документами
+            {isRpoMode
+              ? "Создание организационных документов по шаблонам РПО"
+              : "Управление документами организации и личными документами"}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -414,7 +448,7 @@ export default function PPOHeadDocumentsPage() {
           >
             Журнал документов
           </a>
-          {activeTab === "organization" && (
+          {activeTab === "organization" && !isRpoMode && (
             <button
               onClick={() => setIsCreating(true)}
               className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
@@ -436,7 +470,7 @@ export default function PPOHeadDocumentsPage() {
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
-            Документы организации
+            {isRpoMode ? "Конструктор" : "Документы организации"}
             {orgDocuments.length > 0 && (
               <span className="ml-2 rounded-full bg-blue-200 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                 {orgDocuments.length}
@@ -451,10 +485,10 @@ export default function PPOHeadDocumentsPage() {
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
-            Личные
-            {personalDocuments.length > 0 && (
+            {isRpoMode ? "Журнал" : "Личные"}
+            {(isRpoMode ? orgDocuments.length : personalDocuments.length) > 0 && (
               <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                {personalDocuments.length}
+                {isRpoMode ? orgDocuments.length : personalDocuments.length}
               </span>
             )}
           </button>
@@ -462,7 +496,7 @@ export default function PPOHeadDocumentsPage() {
       </div>
 
       {/* Информационный блок для таба организации */}
-      {activeTab === "organization" && !isCreating && (
+      {activeTab === "organization" && !isCreating && !isRpoMode && (
         <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
           <div className="flex items-start gap-3">
             <svg className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -482,7 +516,7 @@ export default function PPOHeadDocumentsPage() {
       )}
 
       {/* Форма создания документа организации */}
-      {isCreating && activeTab === "organization" && (
+      {activeTab === "organization" && (isCreating || isRpoMode) && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="mb-4 text-xl font-semibold">Создание документа</h2>
 
@@ -810,12 +844,13 @@ export default function PPOHeadDocumentsPage() {
       )}
 
       {/* Список документов */}
+      {activeTab !== "organization" && (
       <div className="space-y-4">
         {currentDocuments.length === 0 ? (
           <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
             <p className="text-gray-600 dark:text-gray-400">
-              {activeTab === "organization" 
-                ? "Документов организации пока нет. Создайте первый документ."
+              {isRpoMode
+                ? "Журнал документов пока пуст."
                 : "Личных документов пока нет."}
             </p>
           </div>
@@ -865,6 +900,7 @@ export default function PPOHeadDocumentsPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 import { prisma } from "@/lib/prisma";
 import DiscountsPageWrapper from "@/components/dashboard/DiscountsPageWrapper";
+import { PageHeader } from "@/components/ui";
 import type { DiscountPreferenceResponse } from "@/types/discounts";
 
 // Указываем, что страница динамическая (использует getServerSession)
@@ -14,18 +15,18 @@ export default async function DiscountsPage() {
   
   // ИСПРАВЛЕНО: Добавлено логирование
   if (!session?.user?.id) {
-    console.log("[discounts/page] ⚠️ No session or user ID, redirecting to /login");
+    console.log("[discounts/page] No session or user ID, redirecting to /login");
     redirect("/login");
   }
 
   const userId = session.user.id;
 
   if (!userId || typeof userId !== 'string') {
-    console.log("[discounts/page] ⚠️ Invalid userId type:", typeof userId, "- redirecting to /login");
+    console.log("[discounts/page] Invalid userId type:", typeof userId, "- redirecting to /login");
     redirect("/login");
   }
   
-  console.log("[discounts/page] ✅ Loading discounts for user:", userId);
+  console.log("[discounts/page] Loading discounts for user:", userId);
 
   let initialData;
   let preference;
@@ -40,7 +41,7 @@ export default async function DiscountsPage() {
     
     [initialData, preference, user] = await Promise.all([
       Promise.race([fetchPromise, timeoutPromise]).catch((error) => {
-        console.error("[discounts/page] ❌ Error loading discounts:", error);
+        console.error("[discounts/page] Error loading discounts:", error);
         // Возвращаем пустую структуру данных в случае ошибки
         return {
           discounts: [],
@@ -65,7 +66,7 @@ export default async function DiscountsPage() {
       }),
     ]);
   } catch (error) {
-    console.error("[discounts/page] ❌ Critical error loading page:", error);
+    console.error("[discounts/page] Critical error loading page:", error);
     // Возвращаем минимальную структуру для отображения страницы
     initialData = {
       discounts: [],
@@ -135,19 +136,15 @@ export default async function DiscountsPage() {
   
   // Логируем для отладки
   if (autoCityId) {
-    console.log(`[discounts] ✅ Auto-selected city ID: ${autoCityId} from preferredDiscountCity: "${user?.preferredDiscountCity}"`);
+    console.log(`[discounts] Auto-selected city ID: ${autoCityId} from preferredDiscountCity: "${user?.preferredDiscountCity}"`);
   }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Скидки от партнёров
-        </h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Скидки, бонусы и спецпредложения для членов профсоюзов
-        </p>
-      </div>
+      <PageHeader
+        title="Скидки от партнёров"
+        description="Скидки, бонусы и спецпредложения для членов профсоюзов"
+      />
 
       <DiscountsPageWrapper
         initialData={initialData}
