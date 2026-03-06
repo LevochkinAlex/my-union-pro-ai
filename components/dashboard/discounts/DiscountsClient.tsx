@@ -867,7 +867,7 @@ export default function DiscountsClient({
             </svg>
           </div>
 
-          <div className="sm:w-52">
+          <div className="sm:w-72 lg:w-80">
             <CityFilter
               cities={data.cities || []}
               value={filters.cityId}
