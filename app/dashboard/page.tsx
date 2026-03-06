@@ -507,8 +507,11 @@ export default async function DashboardPage() {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   
-  // Получаем организацию пользователя для фильтрации
-  const userOrganizationId = userRole?.organization?.id;
+  // Получаем организацию пользователя для фильтрации (учитываем председателей)
+  const userOrganizationId =
+    userRole?.ppoHeadOrganization?.id ||
+    userRole?.organization?.id ||
+    null;
 
   const [
     subscriptions,
@@ -531,12 +534,9 @@ export default async function DashboardPage() {
     prisma.newsPost.findMany({
       where: {
         isPublished: true,
-        // Фильтруем по организации пользователя через канал
-        ...(userOrganizationId ? {
-          channel: {
-            organizationId: userOrganizationId,
-          },
-        } : {}),
+        channel: {
+          organizationId: userOrganizationId || "___none___",
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -615,10 +615,7 @@ export default async function DashboardPage() {
         },
         // ВАЖНО: Показываем только одобренных членов профсоюза
         membershipStatus: "APPROVED",
-        // Фильтруем по организации пользователя
-        ...(userOrganizationId ? {
-          organizationId: userOrganizationId,
-        } : {}),
+        organizationId: userOrganizationId || "___none___",
       },
       orderBy: {
         createdAt: "desc",

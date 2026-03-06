@@ -6,6 +6,7 @@ import { withCache, getCacheKey } from "@/lib/cache";
 import * as Sentry from "@sentry/nextjs";
 import { isDemoUserId } from "@/lib/demo";
 import { getDemoProfsetyUsers } from "@/lib/demo";
+import { getChildOrganizationIds } from "@/lib/ppo-head-utils";
 
 // GET - получение списка пользователей с поиском (только внутри организации пользователя)
 export async function GET(request: NextRequest) {
@@ -52,30 +53,57 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Получаем организацию текущего пользователя
+    // Получаем организацию текущего пользователя (учитываем председателей и руководителей)
     const currentUser = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { organizationId: true },
+      select: {
+        organizationId: true,
+        ppoHeadOrganizationId: true,
+        mpoHeadOrganizationId: true,
+        rpoHeadOrganizationId: true,
+        viewMode: true,
+      },
     });
 
-    const userOrganizationId = currentUser?.organizationId;
+    const viewMode = currentUser?.viewMode;
+    const rpoOrgId = currentUser?.rpoHeadOrganizationId;
+    const mpoOrgId = currentUser?.mpoHeadOrganizationId;
+    const isOrgHead = (viewMode === "RPO_HEAD" && rpoOrgId) || (viewMode === "MPO_HEAD" && mpoOrgId);
+
+    let orgFilter: any = {};
+    let orgFilterKey = "none";
+
+    if (isOrgHead) {
+      const headOrgId = rpoOrgId || mpoOrgId!;
+      const childIds = await getChildOrganizationIds(headOrgId);
+      const allOrgIds = [headOrgId, ...childIds];
+      orgFilter = { organizationId: { in: allOrgIds } };
+      orgFilterKey = `orgHead:${headOrgId}`;
+    } else {
+      const userOrganizationId =
+        currentUser?.ppoHeadOrganizationId ||
+        currentUser?.organizationId ||
+        null;
+      if (userOrganizationId) {
+        orgFilter = { organizationId: userOrganizationId };
+        orgFilterKey = userOrganizationId;
+      } else {
+        orgFilter = { organizationId: "___none___" };
+        orgFilterKey = "empty";
+      }
+    }
 
     const skip = (page - 1) * limit;
 
-    // Строим условия поиска
     const where: any = {
       id: {
-        not: session.user.id, // Исключаем текущего пользователя
+        not: session.user.id,
       },
       role: {
         not: "SUPER_ADMIN",
       },
-      // ВАЖНО: Показываем только одобренных членов профсоюза
       membershipStatus: "APPROVED",
-      // ВАЖНО: Показываем только пользователей из той же организации
-      ...(userOrganizationId ? {
-        organizationId: userOrganizationId,
-      } : {}),
+      ...orgFilter,
     };
 
     // Поиск по полям пользователя
@@ -96,7 +124,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Кешируем запрос пользователей на 2 минуты (данные меняются редко)
-    const cacheKey = getCacheKey("users:list", { search, organizationId: userOrganizationId || "none", page, limit });
+    const cacheKey = getCacheKey("users:list", { search, organizationId: orgFilterKey, page, limit });
     
     const result = await Sentry.startSpan(
       {
@@ -105,7 +133,7 @@ export async function GET(request: NextRequest) {
       },
       async (span) => {
         span.setAttribute("search", search);
-        span.setAttribute("organizationId", userOrganizationId || "none");
+        span.setAttribute("organizationId", orgFilterKey);
         span.setAttribute("page", page);
         span.setAttribute("limit", limit);
         
