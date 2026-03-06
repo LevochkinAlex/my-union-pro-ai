@@ -4,13 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { OrganizationType } from "@prisma/client";
 import { Building2 } from "lucide-react";
-
-const ORG_TYPE_LABELS: Record<OrganizationType, string> = {
-  PRIMARY: "ППО",
-  LOCAL: "МПО",
-  REGIONAL: "РПО",
-  FEDERAL: "ФПО",
-};
+import { ORG_TYPE_LABELS } from "@/lib/status-labels";
 
 interface OrganizationDetail {
   id: string;

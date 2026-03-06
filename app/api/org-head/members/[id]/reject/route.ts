@@ -5,10 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import { sendUserNotification } from "@/lib/notifications";
 
-/**
- * POST /api/org-head/members/[id]/reject
- * Отклонить заявку на вступление (для РПО)
- */
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -31,7 +27,7 @@ export async function POST(
       const body = await request.json();
       reason = (body.reason || "").trim();
     } catch {
-      // noop
+      // empty body
     }
 
     if (!reason) {
@@ -43,13 +39,7 @@ export async function POST(
 
     const member = await prisma.user.findUnique({
       where: { id: memberId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        organizationId: true,
-        membershipStatus: true,
-      },
+      select: { id: true, organizationId: true, membershipStatus: true },
     });
 
     if (!member) {
@@ -62,16 +52,14 @@ export async function POST(
 
     if (member.membershipStatus === "APPROVED") {
       return NextResponse.json(
-        { error: "Нельзя отклонить уже одобренного пользователя. Используйте исключение." },
+        { error: "Нельзя отклонить одобренного пользователя. Используйте исключение." },
         { status: 400 }
       );
     }
 
     const updated = await prisma.user.update({
       where: { id: memberId },
-      data: {
-        membershipStatus: "REJECTED",
-      },
+      data: { membershipStatus: "REJECTED" },
     });
 
     try {
@@ -82,8 +70,9 @@ export async function POST(
         body: `Ваша заявка на вступление в профсоюз отклонена. Причина: ${reason}`,
         url: `${process.env.NEXT_PUBLIC_APP_URL || ""}/dashboard/profile`,
       });
-    } catch (notifErr: any) {
-      console.warn("[org-head/members/reject] notification failed:", notifErr?.message);
+    } catch (notifErr: unknown) {
+      const notifMsg = notifErr instanceof Error ? notifErr.message : "unknown";
+      console.warn("[org-head/members/reject] notification failed:", notifMsg);
     }
 
     return NextResponse.json({
@@ -91,14 +80,9 @@ export async function POST(
       message: "Заявка отклонена",
       member: updated,
     });
-  } catch (error: any) {
-    console.error("[org-head/members/[id]/reject] POST error:", error);
-    return NextResponse.json(
-      {
-        error: "Ошибка при отклонении заявки",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[org-head/members/reject]", msg);
+    return NextResponse.json({ error: "Ошибка при отклонении заявки" }, { status: 500 });
   }
 }

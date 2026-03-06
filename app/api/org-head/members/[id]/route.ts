@@ -5,19 +5,72 @@ import { prisma } from "@/lib/prisma";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import { normalizePhone } from "@/lib/utils/phone";
 
-type UpdateBody = {
-  firstName?: string | null;
-  lastName?: string | null;
-  middleName?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  jobTitle?: string | null;
-  organizationId?: string;
-  membershipJoinedAt?: string | null;
-};
+const MEMBER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  middleName: true,
+  email: true,
+  phone: true,
+  authPhone: true,
+  jobTitle: true,
+  profession: true,
+  education: true,
+  workplace: true,
+  workplaceInn: true,
+  directorName: true,
+  directorPosition: true,
+  employmentStatus: true,
+  avatarUrl: true,
+  dateOfBirth: true,
+  address: true,
+  preferredDiscountCity: true,
+  aboutMe: true,
+  hobbies: true,
+  maritalStatus: true,
+  spouseInfo: true,
+  hasChildren: true,
+  childrenInfo: true,
+  childrenBirthDates: true,
+  training: true,
+  additionalInfo: true,
+  professions: true,
+  educations: true,
+  awards: true,
+  membershipStatus: true,
+  unionMembershipStatus: true,
+  unionCardNumber: true,
+  membershipJoinedAt: true,
+  membershipExcludedAt: true,
+  membershipExclusionReason: true,
+  bestBenefitsUserId: true,
+  bestBenefitsStatus: true,
+  emailVerified: true,
+  role: true,
+  isPPOHead: true,
+  ppoHeadOrganizationId: true,
+  createdAt: true,
+  updatedAt: true,
+  organizationId: true,
+  organization: { select: { id: true, name: true, type: true } },
+  ppoHeadOrganization: { select: { id: true, name: true } },
+  documents: {
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      title: true,
+      fileName: true,
+      filePath: true,
+      signedFilePath: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" as const },
+  },
+} as const;
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -34,73 +87,7 @@ export async function GET(
     const { id } = await context.params;
     const member = await prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        email: true,
-        phone: true,
-        authPhone: true,
-        jobTitle: true,
-        profession: true,
-        education: true,
-        workplace: true,
-        workplaceInn: true,
-        directorName: true,
-        directorPosition: true,
-        employmentStatus: true,
-        avatarUrl: true,
-        dateOfBirth: true,
-        address: true,
-        preferredDiscountCity: true,
-        aboutMe: true,
-        hobbies: true,
-        maritalStatus: true,
-        spouseInfo: true,
-        hasChildren: true,
-        childrenInfo: true,
-        childrenBirthDates: true,
-        training: true,
-        additionalInfo: true,
-        professions: true,
-        educations: true,
-        awards: true,
-        membershipStatus: true,
-        unionMembershipStatus: true,
-        unionCardNumber: true,
-        membershipJoinedAt: true,
-        membershipExcludedAt: true,
-        membershipExclusionReason: true,
-        bestBenefitsUserId: true,
-        bestBenefitsStatus: true,
-        emailVerified: true,
-        role: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-        createdAt: true,
-        updatedAt: true,
-        organizationId: true,
-        organization: {
-          select: { id: true, name: true, type: true },
-        },
-        ppoHeadOrganization: {
-          select: { id: true, name: true },
-        },
-        documents: {
-          select: {
-            id: true,
-            type: true,
-            status: true,
-            title: true,
-            fileName: true,
-            filePath: true,
-            signedFilePath: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc" as const },
-        },
-      },
+      select: MEMBER_SELECT,
     });
 
     if (!member) {
@@ -112,14 +99,23 @@ export async function GET(
     }
 
     return NextResponse.json({ member });
-  } catch (error: any) {
-    console.error("[org-head/members/[id]] GET error:", error);
-    return NextResponse.json(
-      { error: "Ошибка получения пользователя", details: error?.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[org-head/members/[id]] GET error:", msg);
+    return NextResponse.json({ error: "Ошибка получения пользователя" }, { status: 500 });
   }
 }
+
+type UpdateBody = {
+  firstName?: string | null;
+  lastName?: string | null;
+  middleName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  jobTitle?: string | null;
+  organizationId?: string;
+  membershipJoinedAt?: string | null;
+};
 
 export async function PATCH(
   request: NextRequest,
@@ -183,11 +179,15 @@ export async function PATCH(
       }
       if (!scope.organizationIds.includes(body.organizationId)) {
         return NextResponse.json(
-          { error: "Можно переводить пользователя только в организацию из вашего scope" },
+          { error: "Можно переводить пользователя только в организацию из вашего контура" },
           { status: 403 }
         );
       }
       payload.organizationId = body.organizationId;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return NextResponse.json({ error: "Нет данных для обновления" }, { status: 400 });
     }
 
     const updated = await prisma.user.update({
@@ -201,20 +201,16 @@ export async function PATCH(
         email: true,
         phone: true,
         jobTitle: true,
+        membershipJoinedAt: true,
         organizationId: true,
-        organization: {
-          select: { id: true, name: true, type: true },
-        },
+        organization: { select: { id: true, name: true, type: true } },
       },
     });
 
     return NextResponse.json({ member: updated });
-  } catch (error: any) {
-    console.error("[org-head/members/[id]] PATCH error:", error);
-    return NextResponse.json(
-      { error: "Ошибка обновления пользователя", details: error?.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[org-head/members/[id]] PATCH error:", msg);
+    return NextResponse.json({ error: "Ошибка обновления пользователя" }, { status: 500 });
   }
 }
-

@@ -47,12 +47,7 @@ interface OrgStats {
   }[];
 }
 
-const ORG_TYPE_LABELS: Record<OrganizationType, string> = {
-  PRIMARY: "ППО",
-  LOCAL: "МПО",
-  REGIONAL: "РПО",
-  FEDERAL: "ФПО",
-};
+import { ORG_TYPE_LABELS } from "@/lib/status-labels";
 
 const REPORT_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Черновик",

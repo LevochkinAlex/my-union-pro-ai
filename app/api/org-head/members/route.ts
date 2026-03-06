@@ -17,40 +17,51 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status"); // pending | approved | all
+    const status = searchParams.get("status");
     const q = searchParams.get("q")?.trim() || "";
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      organizationId: { in: scope.organizationIds },
-    };
+    const conditions: Record<string, unknown>[] = [
+      { organizationId: { in: scope.organizationIds } },
+    ];
 
     if (status === "pending") {
-      where.membershipStatus = {
-        in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
-      };
-      where.unionMembershipStatus = { not: "ACCEPTED" };
+      conditions.push({
+        membershipStatus: { in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"] },
+      });
+      conditions.push({ unionMembershipStatus: { not: "ACCEPTED" } });
     } else if (status === "approved") {
-      where.OR = [
-        { membershipStatus: "APPROVED" },
-        { unionMembershipStatus: "ACCEPTED" },
-      ];
+      conditions.push({
+        OR: [
+          { membershipStatus: "APPROVED" },
+          { unionMembershipStatus: "ACCEPTED" },
+        ],
+      });
     } else if (status === "excluded") {
-      where.membershipStatus = { in: ["EXCLUDED", "REJECTED"] };
+      conditions.push({
+        OR: [
+          { membershipStatus: { in: ["EXCLUDED", "REJECTED"] } },
+          { unionMembershipStatus: "REMOVED" },
+        ],
+      });
     }
 
     if (q.length >= 1) {
-      where.OR = [
-        { lastName: { contains: q, mode: "insensitive" } },
-        { firstName: { contains: q, mode: "insensitive" } },
-        { middleName: { contains: q, mode: "insensitive" } },
-        { email: { contains: q, mode: "insensitive" } },
-        { phone: { contains: q } },
-        { jobTitle: { contains: q, mode: "insensitive" } },
-      ];
+      conditions.push({
+        OR: [
+          { lastName: { contains: q, mode: "insensitive" } },
+          { firstName: { contains: q, mode: "insensitive" } },
+          { middleName: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { phone: { contains: q } },
+          { jobTitle: { contains: q, mode: "insensitive" } },
+        ],
+      });
     }
+
+    const where = { AND: conditions };
 
     const [members, total] = await Promise.all([
       prisma.user.findMany({
@@ -74,23 +85,18 @@ export async function GET(request: NextRequest) {
           membershipExclusionReason: true,
           organizationId: true,
           organization: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            },
+            select: { id: true, name: true, type: true },
           },
           documents: {
             where: {
-              type: {
-                in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
-              },
+              type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
             },
             select: {
               id: true,
               type: true,
               status: true,
               filePath: true,
+              signedFilePath: true,
             },
           },
         },
@@ -101,23 +107,19 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where }),
     ]);
 
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-
     return NextResponse.json({
       members,
       total,
       page,
       limit,
-      totalPages,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
       scopeLevel: scope.level,
     });
-  } catch (error: any) {
-    console.error("[org-head/members] GET error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[org-head/members] GET error:", msg);
     return NextResponse.json(
-      {
-        error: "Ошибка при получении пользователей",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
+      { error: "Ошибка при получении пользователей" },
       { status: 500 }
     );
   }

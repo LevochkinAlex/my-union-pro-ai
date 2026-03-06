@@ -32,12 +32,12 @@ export async function POST(
         }
       }
     } catch {
-      // noop
+      // use default date
     }
 
     const member = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, organizationId: true, membershipStatus: true },
+      select: { id: true, organizationId: true, membershipStatus: true, unionMembershipStatus: true },
     });
 
     if (!member) {
@@ -45,6 +45,19 @@ export async function POST(
     }
     if (!member.organizationId || !scope.organizationIds.includes(member.organizationId)) {
       return NextResponse.json({ error: "Нет доступа к пользователю" }, { status: 403 });
+    }
+
+    if (member.membershipStatus === "APPROVED" && member.unionMembershipStatus === "ACCEPTED") {
+      return NextResponse.json(
+        { error: "Пользователь уже одобрен" },
+        { status: 400 }
+      );
+    }
+    if (member.membershipStatus === "EXCLUDED") {
+      return NextResponse.json(
+        { error: "Нельзя одобрить исключённого пользователя. Сначала измените статус." },
+        { status: 400 }
+      );
     }
 
     const updatedMember = await prisma.user.update({
@@ -61,21 +74,20 @@ export async function POST(
       },
     });
 
-    await subscribeUserToOrganizationChannel(member.id, member.organizationId);
+    try {
+      await subscribeUserToOrganizationChannel(member.id, member.organizationId);
+    } catch {
+      // non-critical
+    }
 
     return NextResponse.json({
       success: true,
       message: "Пользователь одобрен",
       member: updatedMember,
     });
-  } catch (error: any) {
-    console.error("[org-head/members/[id]/approve] POST error:", error);
-    return NextResponse.json(
-      {
-        error: "Ошибка при одобрении",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[org-head/members/approve]", msg);
+    return NextResponse.json({ error: "Ошибка при одобрении" }, { status: 500 });
   }
 }

@@ -23,18 +23,14 @@ export async function POST(
     let reason = "";
     try {
       const body = await request.json();
-      reason = body.reason || "";
+      reason = (body.reason || "").trim();
     } catch {
-      // noop
+      // empty body is acceptable
     }
 
     const member = await prisma.user.findUnique({
       where: { id: memberId },
-      select: {
-        id: true,
-        organizationId: true,
-        membershipStatus: true,
-      },
+      select: { id: true, organizationId: true, membershipStatus: true, unionMembershipStatus: true },
     });
 
     if (!member) {
@@ -43,7 +39,7 @@ export async function POST(
     if (!member.organizationId || !scope.organizationIds.includes(member.organizationId)) {
       return NextResponse.json({ error: "Нет доступа к пользователю" }, { status: 403 });
     }
-    if (member.membershipStatus !== "APPROVED") {
+    if (member.membershipStatus !== "APPROVED" && member.unionMembershipStatus !== "ACCEPTED") {
       return NextResponse.json(
         { error: "Можно исключить только активных членов профсоюза" },
         { status: 400 }
@@ -68,14 +64,9 @@ export async function POST(
       success: true,
       message: "Пользователь исключён",
     });
-  } catch (error: any) {
-    console.error("[org-head/members/[id]/exclude] POST error:", error);
-    return NextResponse.json(
-      {
-        error: "Ошибка при исключении",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[org-head/members/exclude]", msg);
+    return NextResponse.json({ error: "Ошибка при исключении" }, { status: 500 });
   }
 }

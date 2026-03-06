@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { OrganizationType } from "@prisma/client";
 import { Building2 } from "lucide-react";
+import { ORG_TYPE_LABELS } from "@/lib/status-labels";
 
 const PAGE_SIZE = 20;
 
@@ -28,13 +29,6 @@ interface Organization {
   isActive?: boolean;
   children?: Organization[];
 }
-
-const ORG_TYPE_LABELS: Record<OrganizationType, string> = {
-  PRIMARY: "ППО",
-  LOCAL: "МПО",
-  REGIONAL: "РПО",
-  FEDERAL: "ФПО",
-};
 
 const ORG_TYPE_COLORS: Record<OrganizationType, string> = {
   PRIMARY: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
