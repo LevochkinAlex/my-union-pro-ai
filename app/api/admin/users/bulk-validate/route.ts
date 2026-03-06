@@ -86,9 +86,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const notificationStatus = action === "approve" ? "APPROVED" : "REJECTED";
     for (const uid of allowedIds) {
       try {
-        await sendMembershipStatusNotification(uid, newStatus);
+        await sendMembershipStatusNotification(uid, notificationStatus);
       } catch (e) {
         console.error("[bulk-validate] Notification error for", uid, e);
       }

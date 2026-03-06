@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MembershipStatus, Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import {
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     );
     const skip = (page - 1) * limit;
 
-    const searchWhere = search
+    const searchWhere: Prisma.UserWhereInput | undefined = search
       ? (() => {
           const words = search.split(/\s+/).filter((w) => w.length > 0);
           if (words.length === 0) return undefined;
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
         })()
       : undefined;
 
-    const scopeWhere = scope
+    const scopeWhere: Prisma.UserWhereInput | undefined = scope
       ? {
           OR: [
             { organizationId: { in: scope.organizationIds } },
@@ -69,24 +70,29 @@ export async function GET(request: NextRequest) {
         }
       : undefined;
 
-    const tabWhere =
+    const validationStatuses: MembershipStatus[] = [
+      "PENDING_VERIFICATION",
+      "DOCUMENTS_PENDING",
+      "PROFILE_INCOMPLETE",
+    ];
+
+    const tabWhere: Prisma.UserWhereInput | undefined =
       tab === "validation"
         ? {
             membershipStatus: {
-              in: [
-                "PENDING_VERIFICATION",
-                "DOCUMENTS_PENDING",
-                "PROFILE_INCOMPLETE",
-                "PENDING_APPROVAL",
-              ],
+              in: validationStatuses,
             },
           }
         : tab === "active"
           ? { membershipStatus: "APPROVED" }
           : undefined;
 
-    const where = [searchWhere, scopeWhere, tabWhere].filter(Boolean).length
-      ? { AND: [searchWhere, scopeWhere, tabWhere].filter(Boolean) }
+    const whereClauses: Prisma.UserWhereInput[] = [];
+    if (searchWhere) whereClauses.push(searchWhere);
+    if (scopeWhere) whereClauses.push(scopeWhere);
+    if (tabWhere) whereClauses.push(tabWhere);
+    const where: Prisma.UserWhereInput | undefined = whereClauses.length
+      ? { AND: whereClauses }
       : undefined;
 
     const [users, total] = await Promise.all([
@@ -152,7 +158,7 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where }),
     ]);
 
-    const normalizedUsers = users.map((user) => {
+    const normalizedUsers = users.map((user: any) => {
       const effectiveOrganization = resolveEffectiveOrganization(user);
       return {
         ...user,
