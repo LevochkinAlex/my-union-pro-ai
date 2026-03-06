@@ -110,6 +110,27 @@ export const BEST_BENEFITS_STATUS_LABELS: Record<string, string> = {
   INACTIVE: "Неактивен",
 };
 
+/** Подписи статусов документов для отображения в UI */
+export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Черновик",
+  GENERATED: "Сформирован",
+  PENDING_REVIEW: "На рассмотрении",
+  PENDING_APPROVAL: "На согласовании",
+  PENDING_SIGNATURE: "На подписи",
+  SIGNED: "Подписан",
+  REGISTERED: "Зарегистрирован",
+  SENT: "Отправлен",
+  RECEIVED: "Получен",
+  COMPLETED: "Исполнен",
+  REJECTED: "Отклонён",
+  ARCHIVED: "В архиве",
+};
+
+export function getDocumentStatusLabel(status?: string | null): string {
+  const key = (status || "").toUpperCase();
+  return DOCUMENT_STATUS_LABELS[key] || (status || "—");
+}
+
 export function getDocumentStatusInfo(doc: { status: string; signedFilePath?: string | null }): { text: string; color: string } {
   if (doc.status === "SIGNED" || doc.signedFilePath) {
     return { text: "Подписан", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" };
@@ -117,7 +138,7 @@ export function getDocumentStatusInfo(doc: { status: string; signedFilePath?: st
   if (doc.status === "GENERATED") {
     return { text: "Сформирован", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" };
   }
-  return { text: doc.status, color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" };
+  return { text: getDocumentStatusLabel(doc.status), color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" };
 }
 
 export function getEffectiveMemberStatus(membershipStatus: string, unionMembershipStatus?: string | null): string {

@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { Check, Download, Trash2, X } from "lucide-react";
 import {
   getMembershipStatusBadgeClass,
+  getDocumentStatusLabel,
   getMembershipStatusLabel,
   getUserRoleLabel,
 } from "@/lib/status-labels";
@@ -789,7 +790,7 @@ export default function AdminUserDetailsPage() {
                           doc.status === "DRAFT" ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200" :
                           "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
                         }`}>
-                          {doc.status}
+                          {getDocumentStatusLabel(doc.status)}
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -837,7 +838,7 @@ export default function AdminUserDetailsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InfoField label="Номер карточки" value={user.unionCardNumber} />
             <InfoField label="Дата вступления" value={user.membershipJoinedAt ? new Date(user.membershipJoinedAt).toLocaleDateString("ru-RU") : null} />
-            <InfoField label="Статус членства" value={user.unionMembershipStatus} />
+            <InfoField label="Статус членства" value={getMembershipStatusLabel(user.unionMembershipStatus)} />
             <InfoField label="Организация" value={user.effectiveOrganization?.name || user.organization?.name} />
             {user.isPPOHead && user.ppoHeadOrganization && (
               <InfoField label="Председатель ППО" value={user.ppoHeadOrganization.name} />
@@ -857,7 +858,7 @@ export default function AdminUserDetailsPage() {
                       <p className="font-medium text-gray-900 dark:text-white">{h.organizationName}</p>
                       <span className="text-sm text-gray-500">{new Date(h.statusDate).toLocaleDateString("ru-RU")}</span>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{h.status}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{getMembershipStatusLabel(h.status)}</p>
                     {h.notes && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{h.notes}</p>}
                   </div>
                 ))}

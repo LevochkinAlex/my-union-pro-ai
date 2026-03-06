@@ -1436,7 +1436,7 @@ export default function MembersPage() {
                     {detailTab === "membership" && (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <InfoField label="Статус членства" value={MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus} />
+                          <InfoField label="Статус членства" value={getMembershipStatusLabel(memberDetails.membershipStatus)} />
                           {memberDetails.unionCardNumber && <InfoField label="Номер профсоюзного билета" value={memberDetails.unionCardNumber} />}
                           <div className="space-y-1">
                             <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Дата вступления</span>

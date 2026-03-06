@@ -281,67 +281,74 @@ export default function RpoRolesPage() {
           description="Создайте первую роль для избирательного органа"
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="space-y-3 list-none p-0 m-0">
           {roles.map((role) => (
-            <Card key={role.id}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                    {role.name}
-                  </h3>
-                  {role.description && (
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-                      {role.description}
-                    </p>
-                  )}
+            <li key={role.id}>
+              <Card className="p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        {role.name}
+                      </h3>
+                      {role.isSystem && (
+                        <StatusBadge color="blue">Системная</StatusBadge>
+                      )}
+                      {role.isElectedBody && (
+                        <StatusBadge color="purple">ИО</StatusBadge>
+                      )}
+                      {role.isManagement && (
+                        <StatusBadge color="amber">Руководство</StatusBadge>
+                      )}
+                      {!role.isActive && (
+                        <StatusBadge color="red">Неактивна</StatusBadge>
+                      )}
+                    </div>
+                    {role.description && (
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {role.description}
+                      </p>
+                    )}
+                    <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                      <span>{countActivePermissions(role.permissions)} прав</span>
+                      <span>{role.staffCount} сотр.</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(role)}
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Редактировать
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePublish(role)}
+                      disabled={publishingId === role.id}
+                      className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {publishingId === role.id ? "Публикация…" : "Опубликовать"}
+                    </button>
+                    {!role.isSystem && role.staffCount === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(role)}
+                        className="rounded-lg border border-red-200 p-2 text-red-500 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20 transition-colors"
+                        title="Удалить роль"
+                        aria-label={`Удалить роль ${role.name}`}
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 ml-2">
-                  {role.isSystem && (
-                    <StatusBadge color="blue">Системная</StatusBadge>
-                  )}
-                  {role.isElectedBody && (
-                    <StatusBadge color="purple">ИО</StatusBadge>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                <span>{countActivePermissions(role.permissions)} прав</span>
-                <span>{role.staffCount} сотр.</span>
-                {!role.isActive && (
-                  <StatusBadge color="red">Неактивна</StatusBadge>
-                )}
-              </div>
-
-              <div className="mt-4 flex items-center gap-2">
-                <button
-                  onClick={() => openEditModal(role)}
-                  className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Редактировать
-                </button>
-                <button
-                  onClick={() => handlePublish(role)}
-                  disabled={publishingId === role.id}
-                  className="flex-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  {publishingId === role.id ? "..." : "Опубликовать"}
-                </button>
-                {!role.isSystem && role.staffCount === 0 && (
-                  <button
-                    onClick={() => handleDelete(role)}
-                    className="rounded-lg border border-red-200 p-1.5 text-red-500 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20 transition-colors"
-                    title="Удалить"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </Card>
+              </Card>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {showModal && (

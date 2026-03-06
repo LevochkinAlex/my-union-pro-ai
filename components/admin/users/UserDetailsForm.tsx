@@ -8,6 +8,7 @@ import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
+import { getUserRoleLabel, getMembershipStatusLabel } from "@/lib/status-labels";
 
 type UserDetailsFormProps = {
   user: {
@@ -408,7 +409,7 @@ export default function UserDetailsForm({
                 >
                   {ROLE_OPTIONS.map((role) => (
                     <option key={role} value={role}>
-                      {role}
+                      {getUserRoleLabel(role)}
                     </option>
                   ))}
                 </select>
@@ -433,7 +434,7 @@ export default function UserDetailsForm({
                 >
                   {STATUS_OPTIONS.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {getMembershipStatusLabel(status)}
                     </option>
                   ))}
                 </select>

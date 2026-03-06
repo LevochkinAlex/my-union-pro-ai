@@ -28,6 +28,12 @@ export async function GET(request: NextRequest) {
       if (!session?.user?.id) return superResult.error;
       scope = await getOrgHeadScope(session.user.id);
       if (!scope) return superResult.error;
+      if (!scope.organizationIds?.length) {
+        return NextResponse.json(
+          { error: "Нет организаций в зоне ответственности" },
+          { status: 403 }
+        );
+      }
     }
 
     const { searchParams } = new URL(request.url);
@@ -178,9 +184,13 @@ export async function GET(request: NextRequest) {
       totalPages: Math.ceil(total / limit),
     });
   } catch (e) {
-    console.error("[admin/users] GET list error:", e);
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error("[admin/users] GET list error:", err.message, err.stack);
     return NextResponse.json(
-      { error: "Ошибка загрузки списка пользователей" },
+      {
+        error: "Ошибка загрузки списка пользователей",
+        details: process.env.NODE_ENV === "development" ? err.message : undefined,
+      },
       { status: 500 }
     );
   }
