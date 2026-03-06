@@ -239,19 +239,36 @@ export default function OrgHeadUserDetailPage({ params }: { params: Promise<{ id
                 >
                   Редактировать
                 </button>
-                {member.membershipStatus !== "APPROVED" && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await fetch(`/api/org-head/members/${id}/approve`, { method: "POST" });
-                      if (res.ok) fetchMember(id);
-                    }}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                  >
-                    Одобрить
-                  </button>
+                {member.membershipStatus !== "APPROVED" && member.unionMembershipStatus !== "ACCEPTED" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await fetch(`/api/org-head/members/${id}/approve`, { method: "POST" });
+                        if (res.ok) fetchMember(id);
+                      }}
+                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      Одобрить
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm("Отклонить заявку?")) return;
+                        const res = await fetch(`/api/org-head/members/${id}/exclude`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ reason: "Заявка отклонена руководителем" }),
+                        });
+                        if (res.ok) fetchMember(id);
+                      }}
+                      className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                    >
+                      Отклонить
+                    </button>
+                  </>
                 )}
-                {member.membershipStatus === "APPROVED" && (
+                {(member.membershipStatus === "APPROVED" || member.unionMembershipStatus === "ACCEPTED") && (
                   <button
                     type="button"
                     onClick={async () => {
