@@ -1,7 +1,7 @@
 /**
  * Транслитерация латиницы → кириллица (русский).
- * Используется для ФИО из VK ID, когда приходят имена латиницей (Vitalij → Виталий).
- * ГОСТ 7.79-2000 (Б) и типичные варианты для имён.
+ * Используется для ФИО из VK ID / Telegram, когда приходят имена латиницей.
+ * ГОСТ 7.79-2000 (Б) и типичные варианты для русских имён.
  */
 const MULTI: [RegExp, string][] = [
   [/shch/gi, "щ"],
@@ -11,15 +11,26 @@ const MULTI: [RegExp, string][] = [
   [/yo/gi, "ё"],
   [/yu/gi, "ю"],
   [/ya/gi, "я"],
-  [/ye/gi, "ье"],
+  [/ye/gi, "е"],
+  [/ey\b/gi, "ей"],
   [/iy\b/gi, "ий"],
   [/ij\b/gi, "ий"],
+  [/oy\b/gi, "ой"],
+  [/ay\b/gi, "ай"],
+  [/ia\b/gi, "ия"],
+  [/ia(?=[a-z])/gi, "иа"],
+  [/\bje/gi, "е"],
+  [/je/gi, "ье"],
+  [/ks/gi, "кс"],
+  [/ts/gi, "ц"],
+  [/x/gi, "кс"],
 ];
 
 const SINGLE_LOWER: Record<string, string> = {
   a: "а", b: "б", v: "в", g: "г", d: "д", e: "е", z: "з", i: "и", j: "й",
   k: "к", l: "л", m: "м", n: "н", o: "о", p: "п", r: "р", s: "с", t: "т",
-  u: "у", f: "ф", h: "х", c: "ц", y: "ы", "'": "ь", "`": "ь",
+  u: "у", f: "ф", h: "х", c: "ц", w: "в", y: "ы",
+  "'": "ь", "`": "ь",
 };
 
 /** Проверяет, что строка выглядит как латиница (есть латинские буквы и нет кириллицы). */
@@ -42,7 +53,12 @@ export function translitLatinToCyrillic(text: string): string {
 
   let result = trimmed;
   for (const [re, repl] of MULTI) {
-    result = result.replace(re, repl);
+    result = result.replace(re, (match) => {
+      if (match[0] === match[0].toUpperCase()) {
+        return repl[0].toUpperCase() + repl.slice(1);
+      }
+      return repl;
+    });
   }
   const out: string[] = [];
   for (const c of result) {

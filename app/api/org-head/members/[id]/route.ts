@@ -13,6 +13,7 @@ type UpdateBody = {
   phone?: string | null;
   jobTitle?: string | null;
   organizationId?: string;
+  membershipJoinedAt?: string | null;
 };
 
 export async function GET(
@@ -47,6 +48,13 @@ export async function GET(
         isPPOHead: true,
         ppoHeadOrganizationId: true,
         createdAt: true,
+        membershipJoinedAt: true,
+        membershipExcludedAt: true,
+        membershipExclusionReason: true,
+        dateOfBirth: true,
+        address: true,
+        workplace: true,
+        unionCardNumber: true,
         organizationId: true,
         organization: {
           select: { id: true, name: true, type: true },
@@ -117,6 +125,16 @@ export async function PATCH(
     }
     if (body.jobTitle !== undefined) {
       payload.jobTitle = body.jobTitle ? body.jobTitle.trim() : null;
+    }
+    if (body.membershipJoinedAt !== undefined) {
+      if (body.membershipJoinedAt) {
+        const parsed = new Date(body.membershipJoinedAt);
+        if (!isNaN(parsed.getTime()) && parsed <= new Date()) {
+          payload.membershipJoinedAt = parsed;
+        }
+      } else {
+        payload.membershipJoinedAt = null;
+      }
     }
     if (body.organizationId !== undefined) {
       if (member.isPPOHead) {

@@ -33,9 +33,13 @@ export async function GET(request: NextRequest) {
       };
       where.unionMembershipStatus = { not: "ACCEPTED" };
     } else if (status === "approved") {
-      where.membershipStatus = "APPROVED";
+      where.OR = [
+        { membershipStatus: "APPROVED" },
+        { unionMembershipStatus: "ACCEPTED" },
+      ];
+    } else if (status === "excluded") {
+      where.membershipStatus = { in: ["EXCLUDED", "REJECTED"] };
     }
-    // status === "all" или пусто — все пользователи в scope
 
     if (q.length >= 1) {
       where.OR = [
@@ -65,6 +69,9 @@ export async function GET(request: NextRequest) {
           role: true,
           isPPOHead: true,
           createdAt: true,
+          membershipJoinedAt: true,
+          membershipExcludedAt: true,
+          membershipExclusionReason: true,
           organizationId: true,
           organization: {
             select: {

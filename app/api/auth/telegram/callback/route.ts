@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { translitLatinToCyrillic } from "@/lib/translit-latin-to-cyrillic";
 
 /**
  * Telegram Login Widget Callback
@@ -167,9 +168,8 @@ export async function GET(request: NextRequest) {
         data: {
           telegramChatId: id,
           telegramUsername: username || currentUser?.telegramUsername || undefined,
-          // Обновляем имя ТОЛЬКО если его не было (приоритет существующим данным)
-          firstName: currentUser?.firstName || first_name || undefined,
-          lastName: currentUser?.lastName || last_name || undefined,
+          firstName: currentUser?.firstName || (first_name ? translitLatinToCyrillic(first_name) : undefined),
+          lastName: currentUser?.lastName || (last_name ? translitLatinToCyrillic(last_name) : undefined),
           avatarUrl: currentUser?.avatarUrl || photo_url || undefined,
         },
       });
@@ -201,8 +201,8 @@ export async function GET(request: NextRequest) {
             data: {
               telegramChatId: id,
               telegramUsername: username || user.telegramUsername,
-              firstName: first_name || user.firstName,
-              lastName: last_name || user.lastName,
+              firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || user.firstName,
+              lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || user.lastName,
               avatarUrl: photo_url || user.avatarUrl,
             },
           });
@@ -260,9 +260,9 @@ export async function GET(request: NextRequest) {
           const updateData: any = {
             telegramChatId: id,
             telegramUsername: username || user.telegramUsername,
-            firstName: first_name || user.firstName,
-            lastName: last_name || user.lastName,
-            phone: normalizedPhone, // Нормализуем номер
+            firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || user.firstName,
+            lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || user.lastName,
+            phone: normalizedPhone,
           };
           
           // Если authPhone еще не установлен, устанавливаем его (телефон первой авторизации)
@@ -290,8 +290,8 @@ export async function GET(request: NextRequest) {
           where: { id: user.id },
           data: {
             telegramUsername: username || user.telegramUsername,
-            firstName: first_name || user.firstName,
-            lastName: last_name || user.lastName,
+            firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || user.firstName,
+            lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || user.lastName,
             phone: normalizedPhone || user.phone,
           },
         });
@@ -311,8 +311,8 @@ export async function GET(request: NextRequest) {
             where: { id: existingTgUser.id },
             data: {
               telegramUsername: username || existingTgUser.telegramUsername,
-              firstName: first_name || existingTgUser.firstName,
-              lastName: last_name || existingTgUser.lastName,
+              firstName: (first_name ? translitLatinToCyrillic(first_name) : null) || existingTgUser.firstName,
+              lastName: (last_name ? translitLatinToCyrillic(last_name) : null) || existingTgUser.lastName,
               phone: normalizedPhone || existingTgUser.phone,
             },
           });
@@ -324,8 +324,8 @@ export async function GET(request: NextRequest) {
               data: {
                 telegramChatId: id,
                 telegramUsername: username || null,
-                firstName: first_name || null,
-                lastName: last_name || null,
+                firstName: first_name ? translitLatinToCyrillic(first_name) : null,
+                lastName: last_name ? translitLatinToCyrillic(last_name) : null,
                 phone: normalizedPhone,
                 authPhone: normalizedPhone, // Устанавливаем authPhone при первой авторизации через Telegram
                 role: "PENDING_MEMBER",
