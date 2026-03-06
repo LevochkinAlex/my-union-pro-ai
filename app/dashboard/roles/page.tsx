@@ -236,7 +236,7 @@ export default function RpoRolesPage() {
   }
 
   return (
-    <div className="px-4 py-8 sm:px-8 lg:px-12 max-w-6xl">
+    <div className="max-w-6xl">
       <PageHeader
         title="Роли и должности"
         description="Управление шаблонами ролей для избирательного органа ППО"
