@@ -298,7 +298,7 @@ export default function RpoRolesPage() {
                         <StatusBadge color="purple">ИО</StatusBadge>
                       )}
                       {role.isManagement && (
-                        <StatusBadge color="amber">Руководство</StatusBadge>
+                        <StatusBadge color="orange">Руководство</StatusBadge>
                       )}
                       {!role.isActive && (
                         <StatusBadge color="red">Неактивна</StatusBadge>
