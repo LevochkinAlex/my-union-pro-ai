@@ -513,15 +513,10 @@ export async function GET(request: NextRequest) {
     // В режиме участника (MEMBER) фильтруем чаты:
     // - Только личные чаты (PRIVATE)
     // - Свои обращения (где userId === session.user.id)
-    // - Каналы (CHANNEL) - только для просмотра и комментирования
+    // - Каналы (CHANNEL): для обычного участника — каналы своей ППО + региональный;
+    //   для участника-РПО (председатель переключился в режим участника) — только канал «Региональные новости».
     if (isMemberMode) {
       const isRPOUser = user?.isRPOHead === true && user?.rpoHeadOrganizationId != null;
-      let rpoScopeOrgIds: string[] | null = null;
-      if (isRPOUser) {
-        const { getOrgHeadScope } = await import("@/lib/org-head-permissions");
-        const scope = await getOrgHeadScope(userId);
-        rpoScopeOrgIds = scope?.organizationIds ?? null;
-      }
 
       // Получаем ID своих обращений
       const userTickets = await prisma.ticket.findMany({
@@ -539,15 +534,13 @@ export async function GET(request: NextRequest) {
         if (chat.type === "CHANNEL") {
           const channelOrgId = chat.newsChannelOrganizationId ?? null;
           const channelName = String(chat.displayName || chat.name || "");
-          // Для channels без organizationId показываем только глобальный региональный канал.
+          // Участник-РПО видит только один канал — «Региональные новости» (свой региональный).
+          if (isRPOUser) {
+            return channelOrgId === null && channelName === REGIONAL_NEWS_CHANNEL_NAME;
+          }
+          // Обычный участник: каналы без organizationId — только глобальный региональный; с orgId — только своей ППО.
           if (channelOrgId === null) {
             return channelName === REGIONAL_NEWS_CHANNEL_NAME;
-          }
-          // РПО (даже в MEMBER режиме): показываем только каналы подчинённых организаций,
-          // исключая собственную региональную организацию (её канал дублирует глобальный региональный).
-          if (isRPOUser && rpoScopeOrgIds && rpoScopeOrgIds.length > 0) {
-            const childOrgIds = rpoScopeOrgIds.filter((id) => id !== user.rpoHeadOrganizationId);
-            return childOrgIds.includes(channelOrgId);
           }
           return currentOrgId != null && channelOrgId === currentOrgId;
         }

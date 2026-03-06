@@ -340,11 +340,11 @@ function StatCard({
   return (
     <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
       <div className="flex items-center gap-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${color} text-white`}>
+        <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg ${color} text-white`}>
           {icon}
         </div>
-        <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>
+        <div className="min-w-0">
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{title}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
         </div>
       </div>

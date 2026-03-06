@@ -159,7 +159,7 @@ export default async function DashboardPage() {
   // Если пользователь в режиме руководителя МПО/РПО, показываем специальный дашборд
   if (showOrgHeadDashboard) {
     return (
-      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="space-y-6 p-0">
         <OrgHeadDashboard />
       </div>
     );
