@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { alertError, alertSuccess } from "@/lib/alert";
 
 type EntityType = "INDIVIDUAL" | "INDIVIDUAL_ENTREPRENEUR" | "LEGAL_ENTITY";
@@ -166,15 +166,15 @@ export default function BillingProfileModal({ isOpen, onClose, onSaved }: Billin
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-3xl">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 p-6 pb-4">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Платежный профиль для счета-оферты</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-          Заполните реквизиты покупателя. Банковские реквизиты плательщика в счете-оферте не обязательны.
-          Обязательные поля отмечены <span className="text-red-500">*</span>.
-        </p>
-        </div>
+        <ModalHeader className="pb-4">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Платежный профиль для счета-оферты</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+            Заполните реквизиты покупателя. Банковские реквизиты плательщика в счете-оферте не обязательны.
+            Обязательные поля отмечены <span className="text-red-500">*</span>.
+          </p>
+        </ModalHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">
+        <ModalBody className="pb-4">
         <div className="grid gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Тип плательщика</label>
@@ -332,9 +332,9 @@ export default function BillingProfileModal({ isOpen, onClose, onSaved }: Billin
             </div>
           </div>
         </div>
-        </div>
+        </ModalBody>
 
-        <div className="shrink-0 mt-2 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
+        <ModalFooter className="mt-2 flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -350,7 +350,7 @@ export default function BillingProfileModal({ isOpen, onClose, onSaved }: Billin
           >
             {loading ? "Сохранение..." : "Сохранить профиль"}
           </button>
-        </div>
+        </ModalFooter>
       </div>
     </Modal>
   );

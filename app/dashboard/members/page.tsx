@@ -7,7 +7,7 @@ import Link from "next/link";
 import { FileText, Trophy, AlertTriangle, Users, Star as StarIcon } from "lucide-react";
 import { alertSuccess, alertError } from "@/lib/alert";
 import { getEffectiveMemberStatus, getMembershipStatusLabel } from "@/lib/status-labels";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import {
   Card,
   PageHeader,
@@ -966,13 +966,15 @@ export default function MembersPage() {
         }}
         className="max-w-md"
       >
-        <div className="p-6 w-full">
+        <ModalHeader>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Одобрить {approveTargetIds.length > 1 ? `(${approveTargetIds.length})` : "заявку"}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Укажите дату зачисления в члены ППО. Если участник вступил ранее (оффлайн), выберите фактическую дату.
           </p>
+        </ModalHeader>
+        <ModalBody className="w-full">
           <div className="mb-4">
             <label htmlFor="approve-date" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Дата вступления <span className="text-red-500">*</span>
@@ -988,25 +990,25 @@ export default function MembersPage() {
               className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             />
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleApproveConfirm}
-              disabled={isApproving || !approveDate}
-              className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-50"
-            >
-              {isApproving ? "Одобрение..." : "Одобрить"}
-            </button>
-            <button
-              onClick={() => {
-                setShowApproveModal(false);
-                setApproveTargetIds([]);
-              }}
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-            >
-              Отмена
-            </button>
-          </div>
-        </div>
+        </ModalBody>
+        <ModalFooter className="flex gap-2">
+          <button
+            onClick={handleApproveConfirm}
+            disabled={isApproving || !approveDate}
+            className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+          >
+            {isApproving ? "Одобрение..." : "Одобрить"}
+          </button>
+          <button
+            onClick={() => {
+              setShowApproveModal(false);
+              setApproveTargetIds([]);
+            }}
+            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            Отмена
+          </button>
+        </ModalFooter>
       </Modal>
 
       {/* Модалка редактирования даты вступления */}
@@ -1016,7 +1018,8 @@ export default function MembersPage() {
         className="max-w-md"
       >
         {memberDetails && (
-          <div className="p-6">
+          <>
+            <ModalHeader>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               Редактировать дату вступления
             </h2>
@@ -1028,6 +1031,8 @@ export default function MembersPage() {
                   .join(" ")}
               </strong>
             </p>
+            </ModalHeader>
+            <ModalBody>
             <div className="mb-4">
               <label htmlFor="edit-joined-date" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Дата вступления
@@ -1045,7 +1050,8 @@ export default function MembersPage() {
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
               После сохранения потребуется перегенерировать заявления участника (дата вступления в них изменится).
             </div>
-            <div className="flex gap-2">
+            </ModalBody>
+            <ModalFooter className="flex gap-2">
               <button
                 onClick={handleSaveJoinedDate}
                 disabled={isSavingJoinedDate || !editJoinedDateValue}
@@ -1059,8 +1065,8 @@ export default function MembersPage() {
               >
                 Отмена
               </button>
-            </div>
-          </div>
+            </ModalFooter>
+          </>
         )}
       </Modal>
 
@@ -1075,19 +1081,22 @@ export default function MembersPage() {
         className="max-w-md"
       >
         {selectedMember && (
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Отклонить заявку</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Заявка от:{" "}
-              <strong>
-                {[selectedMember.lastName, selectedMember.firstName, selectedMember.middleName]
-                  .filter(Boolean)
-                  .join(" ")}
-              </strong>
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Укажите причину отклонения. Это сообщение будет отправлено заявителю в чат и на email.
-            </p>
+          <>
+            <ModalHeader>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Отклонить заявку</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Заявка от:{" "}
+                <strong>
+                  {[selectedMember.lastName, selectedMember.firstName, selectedMember.middleName]
+                    .filter(Boolean)
+                    .join(" ")}
+                </strong>
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Укажите причину отклонения. Это сообщение будет отправлено заявителю в чат и на email.
+              </p>
+            </ModalHeader>
+            <ModalBody>
             <textarea
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
@@ -1095,7 +1104,8 @@ export default function MembersPage() {
               rows={4}
               placeholder="Например: В документах обнаружены ошибки, требуется корректировка..."
             />
-            <div className="flex gap-2">
+            </ModalBody>
+            <ModalFooter className="flex gap-2">
               <button
                 onClick={handleReject}
                 disabled={isSubmitting || !rejectionReason.trim()}
@@ -1113,8 +1123,8 @@ export default function MembersPage() {
               >
                 Отмена
               </button>
-            </div>
-          </div>
+            </ModalFooter>
+          </>
         )}
       </Modal>
 

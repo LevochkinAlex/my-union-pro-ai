@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { ProgressBarFill } from "@/components/ui/ProgressBarFill";
 
 export interface AwardAttachment {
@@ -187,11 +187,12 @@ export default function AdditionalInfoModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="w-full max-w-2xl flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[85vh]">
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+      <ModalHeader>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
           Заполните дополнительную информацию и награды
         </h2>
-
+      </ModalHeader>
+      <ModalBody className="p-4 md:p-6">
         {loading ? (
           <div className="py-8 text-center text-gray-500 dark:text-gray-400">Загрузка...</div>
         ) : (
@@ -453,42 +454,44 @@ export default function AdditionalInfoModal({
               </div>
             )}
 
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                {step > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                  >
-                    Назад
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                {step < 2 ? (
-                  <button
-                    type="button"
-                    onClick={() => setStep(2)}
-                    className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    Далее: Награды
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={saving}
-                    className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    {saving ? "Сохранение..." : "Сохранить"}
-                  </button>
-                )}
-              </div>
-            </div>
           </>
         )}
-      </div>
+      </ModalBody>
+      {!loading && (
+        <ModalFooter className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Назад
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {step < 2 ? (
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                Далее: Награды
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={saving}
+                className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {saving ? "Сохранение..." : "Сохранить"}
+              </button>
+            )}
+          </div>
+        </ModalFooter>
+      )}
     </Modal>
   );
 }

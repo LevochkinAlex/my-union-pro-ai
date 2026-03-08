@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
@@ -833,11 +833,11 @@ export default function QuestionnaireModal({
   if (isLoading) {
     return (
       <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
-        <div className="p-8 text-center">
+        <ModalBody className="p-8 text-center">
           <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
           <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Загрузка анкеты...</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">Получение данных профиля и документов</p>
-        </div>
+        </ModalBody>
       </Modal>
     );
   }
@@ -845,22 +845,22 @@ export default function QuestionnaireModal({
   return (
     <>
       <Modal isOpen={isOpen} onClose={onClose} className="w-full max-w-2xl lg:max-w-3xl flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[85vh]">
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-6 w-full">
-          <div className="mb-4 sm:mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white pr-8 sm:pr-0">
-              Заполнение анкеты для вступления в профсоюз
-            </h2>
-            {autoSaving && (
-              <span className="text-sm text-blue-600 dark:text-blue-400">
-                Сохранение...
-              </span>
-            )}
-            {lastSavedField && !autoSaving && (
-              <span className="text-sm text-green-600 dark:text-green-400">
-                ✓ Сохранено
-              </span>
-            )}
-          </div>
+        <ModalHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white pr-8 sm:pr-0">
+            Заполнение анкеты для вступления в профсоюз
+          </h2>
+          {autoSaving && (
+            <span className="text-sm text-blue-600 dark:text-blue-400">
+              Сохранение...
+            </span>
+          )}
+          {lastSavedField && !autoSaving && (
+            <span className="text-sm text-green-600 dark:text-green-400">
+              ✓ Сохранено
+            </span>
+          )}
+        </ModalHeader>
+        <ModalBody className="p-3 sm:p-4 md:p-6 w-full">
 
           {/* Прогресс */}
           <div className="mb-4 sm:mb-6">
@@ -1583,10 +1583,10 @@ export default function QuestionnaireModal({
             </div>
           )}
 
-        </div>
+        </ModalBody>
 
         {/* Кнопки навигации — всегда внизу модалки, не скроллятся */}
-        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 sm:p-4 md:p-6 pt-3 sm:pt-4 rounded-b-3xl">
+        <ModalFooter className="p-3 sm:p-4 md:p-6 pt-3 sm:pt-4 rounded-b-3xl">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               onClick={() => {
@@ -1695,7 +1695,7 @@ export default function QuestionnaireModal({
               </button>
             )}
           </div>
-        </div>
+        </ModalFooter>
       </Modal>
       <ChangePhoneModal
         isOpen={isChangePhoneModalOpen}

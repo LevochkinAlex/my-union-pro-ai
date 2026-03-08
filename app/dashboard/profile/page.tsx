@@ -13,7 +13,7 @@ import EmailValidationField from "@/components/form/EmailValidationField";
 import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 
 // Маппинг между enum значениями в БД и человекочитаемыми значениями
 const MARITAL_STATUS_MAP = {
@@ -2366,10 +2366,12 @@ export default function ProfilePage() {
               onClose={() => setShowEditJoinedDateModal(false)}
               className="max-w-md"
             >
-              <div className="p-6">
+              <ModalHeader>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                   Редактировать дату вступления
                 </h2>
+              </ModalHeader>
+              <ModalBody>
                 <div className="mb-4">
                   <label htmlFor="profile-edit-joined-date" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Дата вступления
@@ -2387,24 +2389,24 @@ export default function ProfilePage() {
                 <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
                   После сохранения потребуется перегенерировать заявления (дата вступления в них изменится).
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSaveJoinedDate}
-                    disabled={isSavingJoinedDate || !editJoinedDateValue}
-                    className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {isSavingJoinedDate ? "Сохранение..." : "Сохранить"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowEditJoinedDateModal(false)}
-                    className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-                  >
-                    Отмена
-                  </button>
-                </div>
-              </div>
+              </ModalBody>
+              <ModalFooter className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveJoinedDate}
+                  disabled={isSavingJoinedDate || !editJoinedDateValue}
+                  className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+                >
+                  {isSavingJoinedDate ? "Сохранение..." : "Сохранить"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditJoinedDateModal(false)}
+                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                >
+                  Отмена
+                </button>
+              </ModalFooter>
             </Modal>
 
             {/* Текущая организация */}

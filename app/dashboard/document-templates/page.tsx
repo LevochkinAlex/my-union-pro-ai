@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import { TEMPLATE_VARIABLES_FOR_EDITOR } from "@/lib/document-templates/variables";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 
 const DocumentTemplateEditor = dynamic(
   () => import("@/components/admin/DocumentTemplateEditor"),
@@ -315,12 +315,12 @@ export default function DocumentTemplatesPage() {
         className="max-w-4xl"
       >
         <div className="flex flex-col h-full max-h-[85vh]">
-          <div className="flex-shrink-0 px-4 pt-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+          <ModalHeader className="px-4 pt-4 pb-2">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               {isCreating ? "Создание шаблона" : "Редактирование шаблона"}
             </h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
+          </ModalHeader>
+          <ModalBody className="p-4 lg:p-6 space-y-4">
             <div>
               <label htmlFor="templateName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Название
@@ -496,23 +496,22 @@ export default function DocumentTemplatesPage() {
                 <span className="text-sm text-gray-700 dark:text-gray-300">По умолчанию</span>
               </label>
             </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-              >
-                Сохранить
-              </button>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-              >
-                Отмена
-              </button>
-            </div>
-          </div>
+          </ModalBody>
+          <ModalFooter className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              Сохранить
+            </button>
+            <button
+              type="button"
+              onClick={closeModal}
+              className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+            >
+              Отмена
+            </button>
+          </ModalFooter>
         </div>
       </Modal>
 

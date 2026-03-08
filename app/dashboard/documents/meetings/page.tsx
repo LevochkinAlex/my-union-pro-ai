@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 import Link from "next/link";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { MembershipGate } from "@/components/MembershipGate";
 import { useMembershipAccess } from "@/hooks/useMembershipAccess";
 
@@ -669,11 +669,13 @@ export default function MeetingsPage() {
         onClose={() => setShowProtocolFromAgendaModal(false)}
         className="max-w-2xl w-full"
       >
-        <div className="p-6">
+        <ModalHeader>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Новый протокол</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Выберите заседание с уже сформированной повесткой, для которого нужно создать протокол.
           </p>
+        </ModalHeader>
+        <ModalBody className="p-6">
           {(() => {
             const withAgendaNoProtocol = meetings.filter(m => m.agendaDocument && !m.protocolDocument);
             if (withAgendaNoProtocol.length === 0) {
@@ -710,7 +712,7 @@ export default function MeetingsPage() {
               </ul>
             );
           })()}
-        </div>
+        </ModalBody>
       </Modal>
 
       {/* Модальное окно создания заседания */}
@@ -722,32 +724,32 @@ export default function MeetingsPage() {
         <div className="flex flex-col max-h-[85vh] min-h-0">
           {postCreateStep === "choose" ? (
             <>
-              <div className="p-6">
+              <ModalHeader>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Заседание создано</h2>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   Сформировать документ «Повестка дня» сейчас или сохранить как черновик и сделать это позже?
                 </p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleGenerateAgenda}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                  >
-                    Сформировать повестку дня
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      alertSuccess("Сохранено как черновик");
-                      loadMeetings();
-                      resetFormAndClose();
-                    }}
-                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-                  >
-                    Сохранить как черновик
-                  </button>
-                </div>
-              </div>
+              </ModalHeader>
+              <ModalFooter className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleGenerateAgenda}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
+                  Сформировать повестку дня
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alertSuccess("Сохранено как черновик");
+                    loadMeetings();
+                    resetFormAndClose();
+                  }}
+                  className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                >
+                  Сохранить как черновик
+                </button>
+              </ModalFooter>
             </>
           ) : postCreateStep === "generating" ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
@@ -756,8 +758,10 @@ export default function MeetingsPage() {
             </div>
           ) : (
             <>
-          <div className="flex-1 min-h-0 overflow-y-auto p-6">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Новое заседание</h2>
+          <ModalHeader>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Новое заседание</h2>
+          </ModalHeader>
+          <ModalBody className="p-6">
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -1309,8 +1313,8 @@ export default function MeetingsPage() {
             </button>
           </div>
 
-          </div>
-          <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-800/80">
+          </ModalBody>
+          <ModalFooter className="bg-gray-50 dark:bg-gray-800/80">
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleCreateMeeting}
@@ -1326,7 +1330,7 @@ export default function MeetingsPage() {
                 Отмена
               </button>
             </div>
-          </div>
+          </ModalFooter>
             </>
           )}
         </div>

@@ -10,6 +10,15 @@ interface ModalProps {
   isFullscreen?: boolean; // Default to false for backwards compatibility
 }
 
+interface ModalSectionProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+function joinClasses(...parts: Array<string | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
@@ -99,3 +108,31 @@ export const Modal: React.FC<ModalProps> = ({
     </div>
   );
 };
+
+export const ModalHeader: React.FC<ModalSectionProps> = ({ children, className }) => (
+  <div
+    className={joinClasses(
+      "shrink-0 border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-900",
+      className
+    )}
+  >
+    {children}
+  </div>
+);
+
+export const ModalBody: React.FC<ModalSectionProps> = ({ children, className }) => (
+  <div className={joinClasses("min-h-0 flex-1 overflow-y-auto px-6 py-4", className)}>
+    {children}
+  </div>
+);
+
+export const ModalFooter: React.FC<ModalSectionProps> = ({ children, className }) => (
+  <div
+    className={joinClasses(
+      "shrink-0 border-t border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-900",
+      className
+    )}
+  >
+    {children}
+  </div>
+);

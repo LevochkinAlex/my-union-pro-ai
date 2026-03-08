@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 import Link from "next/link";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { MembershipGate } from "@/components/MembershipGate";
 
 interface Participant {
@@ -3267,12 +3267,12 @@ export default function MeetingDetailPage({
         className="max-w-6xl w-full"
         isFullscreen={false}
       >
-        <div className="p-4">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Просмотр документа
-            </h3>
-          </div>
+        <ModalHeader>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Просмотр документа
+          </h3>
+        </ModalHeader>
+        <ModalBody className="p-4">
           {pdfPreviewUrl && (
             <div className="w-full h-[80vh] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900">
               <iframe
@@ -3282,7 +3282,16 @@ export default function MeetingDetailPage({
               />
             </div>
           )}
-        </div>
+        </ModalBody>
+        <ModalFooter className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setPdfPreviewUrl(null)}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Закрыть
+          </button>
+        </ModalFooter>
       </Modal>
     </div>
   )}

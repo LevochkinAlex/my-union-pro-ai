@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { useSession } from "next-auth/react";
 
 interface ChangePhoneModalProps {
@@ -76,13 +76,12 @@ export default function ChangePhoneModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
-      <div className="p-6">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Изменить номер телефона
-          </h2>
-        </div>
-
+      <ModalHeader>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+          Изменить номер телефона
+        </h2>
+      </ModalHeader>
+      <ModalBody>
         <div className="space-y-4">
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -138,16 +137,15 @@ export default function ChangePhoneModal({
             </>
           )}
         </div>
-
-        <div className="mt-6 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-          >
-            {step === "waiting" ? "Закрыть" : "Отмена"}
-          </button>
-        </div>
-      </div>
+      </ModalBody>
+      <ModalFooter className="flex justify-end">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+        >
+          {step === "waiting" ? "Закрыть" : "Отмена"}
+        </button>
+      </ModalFooter>
     </Modal>
   );
 }
