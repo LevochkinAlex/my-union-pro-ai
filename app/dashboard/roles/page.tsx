@@ -354,11 +354,14 @@ export default function RpoRolesPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800 mx-4">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-              {editingRole ? "Редактирование роли" : "Новая роль"}
-            </h2>
+          <div className="mx-4 flex w-full max-w-2xl min-h-0 max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-gray-800">
+            <div className="shrink-0 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                {editingRole ? "Редактирование роли" : "Новая роль"}
+              </h2>
+            </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -444,8 +447,10 @@ export default function RpoRolesPage() {
                 </div>
               </div>
             </div>
+            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="shrink-0 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowModal(false)}
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -459,6 +464,7 @@ export default function RpoRolesPage() {
               >
                 {editingRole ? "Сохранить" : "Создать"}
               </button>
+            </div>
             </div>
           </div>
         </div>

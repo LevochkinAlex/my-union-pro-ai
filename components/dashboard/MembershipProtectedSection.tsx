@@ -2,7 +2,7 @@
 
 import { useMembershipAccess } from "@/hooks/useMembershipAccess";
 import Link from "next/link";
-import { ReactNode } from "react";
+import { Children, ReactNode } from "react";
 
 interface MembershipProtectedSectionProps {
   children: ReactNode;
@@ -18,6 +18,13 @@ export default function MembershipProtectedSection({
   title = "Доступно членам профсоюза",
 }: MembershipProtectedSectionProps) {
   const { status, isApproved, isLoading } = useMembershipAccess();
+  const hasRenderableChildren = Children.toArray(children).length > 0;
+
+  // Если в секции нет контента, не рендерим lock-оверлей.
+  // Иначе оверлей появляется в контейнере нулевой высоты и визуально "плавает".
+  if (!hasRenderableChildren) {
+    return null;
+  }
 
   // Исключённый: не показываем секцию вообще (ни контент, ни блюр)
   if (status === "excluded") {

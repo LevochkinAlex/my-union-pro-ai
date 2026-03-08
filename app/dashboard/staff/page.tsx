@@ -780,11 +780,14 @@ export default function StaffManagementPage() {
       {/* Модалка добавления сотрудника */}
       {showAddStaffModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              Добавить сотрудника
-            </h2>
+          <div className="mx-4 flex w-full max-w-md min-h-0 max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-800">
+            <div className="shrink-0 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Добавить сотрудника
+              </h2>
+            </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
             {addStaffResult ? (
               <div>
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
@@ -964,6 +967,7 @@ export default function StaffManagementPage() {
                 </div>
               </form>
             )}
+            </div>
           </div>
         </div>
       )}
@@ -1032,16 +1036,19 @@ function EditStaffModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-          Редактировать сотрудника
-        </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          {[member.user.lastName, member.user.firstName, member.user.middleName].filter(Boolean).join(" ") || member.user.email || "Без имени"}
-          {member.user.email && (
-            <span className="block text-gray-600 dark:text-gray-300 mt-1">{member.user.email}</span>
-          )}
-        </p>
+      <div className="mx-4 flex w-full max-w-md min-h-0 max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-800">
+        <div className="shrink-0 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            Редактировать сотрудника
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {[member.user.lastName, member.user.firstName, member.user.middleName].filter(Boolean).join(" ") || member.user.email || "Без имени"}
+            {member.user.email && (
+              <span className="block text-gray-600 dark:text-gray-300 mt-1">{member.user.email}</span>
+            )}
+          </p>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <div>
           <label htmlFor="edit-member-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Роль (должность)
@@ -1064,7 +1071,9 @@ function EditStaffModal({
             </select>
           )}
         </div>
-        <div className="flex gap-3 mt-6">
+        </div>
+        <div className="shrink-0 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div className="flex gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -1079,6 +1088,7 @@ function EditStaffModal({
           >
             {saving ? "Сохранение..." : "Сохранить"}
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -1134,16 +1144,19 @@ function EditRoleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-          Настройка роли: {role.name}
-        </h2>
-        {role.description && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            {role.description}
-          </p>
-        )}
+      <div className="mx-4 flex w-full max-w-lg min-h-0 max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-800">
+        <div className="shrink-0 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            Настройка роли: {role.name}
+          </h2>
+          {role.description && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {role.description}
+            </p>
+          )}
+        </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <div className="space-y-6">
           {permissionGroups.map((group) => (
             <div key={group.name}>
@@ -1171,8 +1184,9 @@ function EditRoleModal({
             </div>
           ))}
         </div>
-
-        <div className="flex gap-3 mt-6">
+        </div>
+        <div className="shrink-0 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div className="flex gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -1187,6 +1201,7 @@ function EditRoleModal({
           >
             {saving ? "Сохранение..." : "Сохранить"}
           </button>
+        </div>
         </div>
       </div>
     </div>
