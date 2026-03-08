@@ -15,7 +15,7 @@
     "docs:pdf": "node scripts/md-to-pdf-docs.mjs",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "test": "node --import tsx --test __tests__/documents-helpers.test.ts __tests__/chat-flows.test.ts __tests__/meeting-agenda-notify.test.ts __tests__/meeting-document-approval-api.test.ts __tests__/login-copy.test.ts __tests__/auth-translit.test.ts __tests__/news-publication.test.ts __tests__/staff-permissions-matrix.test.ts",
+    "test": "node --import tsx --test __tests__/documents-helpers.test.ts __tests__/chat-flows.test.ts __tests__/meeting-agenda-notify.test.ts __tests__/meeting-document-approval-api.test.ts __tests__/login-copy.test.ts __tests__/auth-translit.test.ts __tests__/news-publication.test.ts __tests__/staff-permissions-matrix.test.ts __tests__/document-workflow-permissions.test.ts __tests__/dictionaries-job-titles.test.ts __tests__/security-role-access.test.ts",
     "test:chat": "node --import tsx --test __tests__/chat-flows.test.ts",
     "test:news": "node --import tsx --test __tests__/news-publication.test.ts",
     "test:api": "dotenv -e .env.local -- node scripts/test-tickets-api.mjs",

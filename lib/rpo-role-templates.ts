@@ -3,7 +3,7 @@ import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
 import type { StaffPermissionsMap } from "@/lib/staff-permission-matrix";
 
-const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
+export const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
   name: string;
   description: string;
   permissions: StaffPermissionsMap;
@@ -16,7 +16,7 @@ const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
     isElectedBody: true,
     isManagement: true,
     permissions: {
-      documents_view: true, documents_create: true, documents_edit: true, documents_approve: true, documents_sign: true,
+      documents_view: true, documents_create: true, documents_edit: true, documents_review: true, documents_approve: true, documents_sign: true,
       discounts_view: true, discounts_manage: true,
       members_view: true, members_edit: true, members_manage: true,
       appeals_view: true, appeals_respond: true, appeals_manage: true,
@@ -31,11 +31,11 @@ const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
     name: "Бухгалтер",
     description: "Доступ к документам, отчетам и просмотру членов профсоюза",
     permissions: {
-      documents_view: true, documents_create: true, documents_edit: true, documents_approve: false, documents_sign: false,
+      documents_view: true, documents_create: true, documents_edit: true, documents_review: false, documents_approve: false, documents_sign: false,
       discounts_view: false, discounts_manage: false,
       members_view: true, members_edit: false, members_manage: false,
       appeals_view: false, appeals_respond: false, appeals_manage: false,
-      chats_view: true, chats_participate: true, chats_create: false,
+      chats_view: false, chats_participate: false, chats_create: false,
       news_view: true, news_create: false, news_manage: false,
       reports_view: true, reports_create: true,
       settings_view: false, settings_manage: false,
@@ -46,12 +46,12 @@ const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
     name: "Секретарь",
     description: "Работа с документами, обращениями и новостями",
     permissions: {
-      documents_view: true, documents_create: true, documents_edit: true, documents_approve: true, documents_sign: true,
+      documents_view: true, documents_create: true, documents_edit: true, documents_review: true, documents_approve: true, documents_sign: false,
       discounts_view: true, discounts_manage: false,
       members_view: true, members_edit: false, members_manage: false,
-      appeals_view: true, appeals_respond: true, appeals_manage: false,
+      appeals_view: true, appeals_respond: true, appeals_manage: true,
       chats_view: true, chats_participate: true, chats_create: false,
-      news_view: true, news_create: true, news_manage: false,
+      news_view: true, news_create: true, news_manage: true,
       reports_view: true, reports_create: false,
       settings_view: false, settings_manage: false,
       staff_view: true, staff_manage: false,
@@ -61,7 +61,7 @@ const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
     name: "Специалист по работе с членами",
     description: "Доступ к карточкам членов профсоюза, скидкам и обращениям",
     permissions: {
-      documents_view: true, documents_create: false, documents_edit: false, documents_approve: false, documents_sign: false,
+      documents_view: true, documents_create: false, documents_edit: false, documents_review: false, documents_approve: false, documents_sign: false,
       discounts_view: true, discounts_manage: true,
       members_view: true, members_edit: true, members_manage: false,
       appeals_view: true, appeals_respond: true, appeals_manage: false,
@@ -76,9 +76,9 @@ const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
     name: "Специалист по информационной работе",
     description: "Работа с новостями и чатами",
     permissions: {
-      documents_view: true, documents_create: false, documents_edit: false, documents_approve: false, documents_sign: false,
+      documents_view: true, documents_create: false, documents_edit: false, documents_review: false, documents_approve: false, documents_sign: false,
       discounts_view: true, discounts_manage: false,
-      members_view: true, members_edit: false, members_manage: false,
+      members_view: false, members_edit: false, members_manage: false,
       appeals_view: false, appeals_respond: false, appeals_manage: false,
       chats_view: true, chats_participate: true, chats_create: true,
       news_view: true, news_create: true, news_manage: true,
@@ -92,10 +92,10 @@ const DEFAULT_RPO_ROLE_TEMPLATES: Array<{
     description: "Член выборного органа (профсоюзного комитета), участвует в заседаниях",
     isElectedBody: true,
     permissions: {
-      documents_view: true, documents_create: false, documents_edit: false, documents_approve: true, documents_sign: false,
+      documents_view: true, documents_create: false, documents_edit: false, documents_review: true, documents_approve: false, documents_sign: false,
       discounts_view: true, discounts_manage: false,
       members_view: true, members_edit: false, members_manage: false,
-      appeals_view: true, appeals_respond: false, appeals_manage: false,
+      appeals_view: false, appeals_respond: false, appeals_manage: false,
       chats_view: true, chats_participate: true, chats_create: false,
       news_view: true, news_create: false, news_manage: false,
       reports_view: false, reports_create: false,

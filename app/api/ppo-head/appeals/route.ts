@@ -105,6 +105,13 @@ export async function GET(request: NextRequest) {
           tickets: [],
         });
       }
+
+      if (member.organizationId !== perm.organizationId) {
+        return NextResponse.json(
+          { error: "Нет доступа к обращениям пользователя из другой организации" },
+          { status: 403 }
+        );
+      }
       
       // Показываем все обращения этого пользователя
       where = {

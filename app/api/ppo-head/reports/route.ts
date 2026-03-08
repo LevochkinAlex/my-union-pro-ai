@@ -8,36 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-/**
- * Получить организацию пользователя (как Председатель или сотрудник)
- */
-async function getUserOrganization(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      isPPOHead: true,
-      ppoHeadOrganizationId: true,
-      viewMode: true,
-    },
-  });
-
-  // Если пользователь - Председатель в режиме PPO_HEAD
-  if (user?.isPPOHead && user.ppoHeadOrganizationId && user.viewMode === "PPO_HEAD") {
-    return user.ppoHeadOrganizationId;
-  }
-
-  // Проверяем, является ли сотрудником
-  const staffPosition = await prisma.organizationStaff.findFirst({
-    where: {
-      userId,
-      status: "ACTIVE",
-    },
-    select: { organizationId: true },
-  });
-
-  return staffPosition?.organizationId || null;
-}
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 // GET - список отчётов организации
 export async function GET(request: NextRequest) {
@@ -48,11 +19,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const organizationId = await getUserOrganization(session.user.id);
-    
-    if (!organizationId) {
-      return NextResponse.json({ reports: [] });
+    const access = await checkUserPermissions(session.user.id, "reports_view");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "reports_view",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
+    const organizationId = access.organizationId;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
@@ -63,7 +41,7 @@ export async function GET(request: NextRequest) {
     // Получаем ID дочерних организаций если нужно
     let organizationIds = [organizationId];
     
-    if (includeChildren) {
+    if (includeChildren && access.isChairman) {
       const childOrgs = await prisma.organization.findMany({
         where: { parentId: organizationId },
         select: { id: true },
@@ -145,11 +123,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const organizationId = await getUserOrganization(session.user.id);
-    
-    if (!organizationId) {
-      return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
+    const access = await checkUserPermissions(session.user.id, "reports_create");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "reports_create",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
+    const organizationId = access.organizationId;
 
     const body = await request.json();
     const { templateId, periodYear, periodMonth } = body;

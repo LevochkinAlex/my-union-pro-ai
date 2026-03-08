@@ -39,7 +39,7 @@ export async function PUT(
     if (isRPOHead) {
       organizationId = userFlags?.rpoHeadOrganizationId || null;
     } else {
-      const perm = await checkUserPermissions(session.user.id, "news_create");
+      const perm = await checkUserPermissions(session.user.id, "news_manage");
       if (!perm.hasAccess || !perm.organizationId) {
         return NextResponse.json(
           { error: "Доступ запрещен или организация не назначена" },

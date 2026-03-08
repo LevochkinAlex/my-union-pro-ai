@@ -51,8 +51,9 @@ const PERMISSION_LABELS: Record<string, string> = {
   documents_view: "Просмотр документов (Входящие / Исходящие)",
   documents_create: "Создание заседаний, повесток, протоколов",
   documents_edit: "Редактирование черновиков документов",
-  documents_approve: "Согласование повесток и протоколов",
-  documents_sign: "Подписание протоколов",
+  documents_review: "Согласование документа участником без редактирования",
+  documents_approve: "Утверждение документа и запуск подписи",
+  documents_sign: "Подписание утверждённых документов",
   discounts_view: "Просмотр скидок",
   discounts_manage: "Управление скидками",
   members_view: "Просмотр членов",
@@ -1113,7 +1114,7 @@ function EditRoleModal({
   const permissionGroups = [
     {
       name: "Документы",
-      keys: ["documents_view", "documents_create", "documents_edit", "documents_approve", "documents_sign"],
+      keys: ["documents_view", "documents_create", "documents_edit", "documents_review", "documents_approve", "documents_sign"],
     },
     { name: "Скидки", keys: ["discounts_view", "discounts_manage"] },
     {

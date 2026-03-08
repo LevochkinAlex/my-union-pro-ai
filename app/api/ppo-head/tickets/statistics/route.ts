@@ -2,34 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-/**
- * Получить организацию пользователя (как Председатель или сотрудник) — та же логика, что в отчётах
- */
-async function getUserOrganization(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      isPPOHead: true,
-      ppoHeadOrganizationId: true,
-      viewMode: true,
-    },
-  });
-
-  if (user?.isPPOHead && user.ppoHeadOrganizationId && user.viewMode === "PPO_HEAD") {
-    return user.ppoHeadOrganizationId;
-  }
-
-  const staffPosition = await prisma.organizationStaff.findFirst({
-    where: {
-      userId,
-      status: "ACTIVE",
-    },
-    select: { organizationId: true },
-  });
-
-  return staffPosition?.organizationId || null;
-}
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * GET /api/ppo-head/tickets/statistics
@@ -43,31 +16,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const organizationId = await getUserOrganization(session.user.id);
-
-    if (!organizationId) {
-      return NextResponse.json({
-        period: { year: new Date().getFullYear(), month: undefined },
-        statistics: {
-          total: 0,
-          resolved: 0,
-          pending: 0,
-          inProgress: 0,
-          rejected: 0,
-          resolutionRate: 0,
-          avgRating: null,
-          ratedCount: 0,
-          avgResolutionTime: null,
-          byType: {},
-          byPriority: {},
-          ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-          byMonth: Object.fromEntries(
-            Array.from({ length: 12 }, (_, i) => [i + 1, { total: 0, resolved: 0 }])
-          ),
+    const access = await checkUserPermissions(session.user.id, "appeals_view");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "appeals_view",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
         },
-        recentRated: [],
-      });
+        { status: 403 }
+      );
     }
+    const organizationId = access.organizationId;
 
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));

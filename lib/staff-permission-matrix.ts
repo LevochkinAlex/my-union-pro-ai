@@ -2,6 +2,7 @@ export const STAFF_PERMISSION_KEYS = [
   "documents_view",
   "documents_create",
   "documents_edit",
+  "documents_review",
   "documents_approve",
   "documents_sign",
   "discounts_view",

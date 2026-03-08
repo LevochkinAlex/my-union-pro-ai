@@ -21,8 +21,9 @@ const PERMISSION_LABELS: Record<string, string> = {
   documents_view: "Просмотр документов",
   documents_create: "Создание заседаний и протоколов",
   documents_edit: "Редактирование документов",
-  documents_approve: "Согласование документов",
-  documents_sign: "Подписание протоколов",
+  documents_review: "Согласование документа участником без редактирования",
+  documents_approve: "Утверждение документа и запуск подписи",
+  documents_sign: "Подписание утвержденных документов",
   discounts_view: "Просмотр скидок",
   discounts_manage: "Управление скидками",
   members_view: "Просмотр членов",
@@ -46,7 +47,7 @@ const PERMISSION_LABELS: Record<string, string> = {
 };
 
 const PERMISSION_GROUPS: { label: string; keys: string[] }[] = [
-  { label: "Документы", keys: ["documents_view", "documents_create", "documents_edit", "documents_approve", "documents_sign"] },
+  { label: "Документы", keys: ["documents_view", "documents_create", "documents_edit", "documents_review", "documents_approve", "documents_sign"] },
   { label: "Члены", keys: ["members_view", "members_edit", "members_manage"] },
   { label: "Обращения", keys: ["appeals_view", "appeals_respond", "appeals_manage"] },
   { label: "Чаты", keys: ["chats_view", "chats_participate", "chats_create"] },

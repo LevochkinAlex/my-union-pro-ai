@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { optimizeWithPreset } from "@/lib/image-optimizer";
 import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -14,12 +15,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь - председатель
-    const isPPOHead = session.user.viewMode === "PPO_HEAD" || 
-      (session.user.role === "PPO_HEAD" && !(session.user as any).isPPOHead);
-    
-    if (!isPPOHead && session.user.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
+    const perm = await checkUserPermissions(session.user.id, "chats_create");
+    if (!perm.hasAccess || !perm.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "chats_create",
+          denyReason: perm.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
     }
 
     const formData = await request.formData();

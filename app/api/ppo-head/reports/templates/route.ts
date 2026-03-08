@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,58 +17,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Получаем данные пользователя напрямую из БД
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-        viewMode: true,
-      },
-    });
-
-    // Определяем организацию пользователя
-    let organizationId: string | null = null;
-    
-    // Если пользователь - Председатель в режиме PPO_HEAD
-    if (user?.isPPOHead && user.ppoHeadOrganizationId && user.viewMode === "PPO_HEAD") {
-      organizationId = user.ppoHeadOrganizationId;
-    } else {
-      // Проверяем, является ли сотрудником
-      const staffPosition = await prisma.organizationStaff.findFirst({
-        where: {
-          userId: session.user.id,
-          status: "ACTIVE",
+    const access = await checkUserPermissions(session.user.id, "reports_view");
+    if (!access.hasAccess || !access.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Нет доступа",
+          requiredPermission: "reports_view",
+          denyReason: access.denyReason || "MISSING_PERMISSION",
         },
-        select: { organizationId: true },
-      });
-      organizationId = staffPosition?.organizationId || null;
+        { status: 403 }
+      );
     }
-
-    if (!organizationId) {
-      // Если нет привязки к организации, вернём все активные шаблоны
-      const allTemplates = await prisma.reportTemplate.findMany({
-        where: { isActive: true },
-        include: {
-          sections: {
-            orderBy: { order: "asc" },
-            include: {
-              fields: {
-                orderBy: { order: "asc" },
-              },
-            },
-          },
-        },
-        orderBy: { code: "asc" },
-      });
-
-      return NextResponse.json({
-        templates: allTemplates.map((t) => ({
-          ...t,
-          reportsCount: 0,
-        })),
-      });
-    }
+    const organizationId = access.organizationId;
 
     // Получаем тип организации для фильтрации шаблонов
     const organization = await prisma.organization.findUnique({

@@ -3,53 +3,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
-
-// Типы действий workflow
-type WorkflowAction = 
-  | "submit_for_review"      // Отправить на рассмотрение
-  | "submit_for_approval"    // Отправить на согласование
-  | "approve"                // Согласовать
-  | "reject"                 // Отклонить
-  | "submit_for_signature"   // Отправить на подпись
-  | "sign"                   // Подписать
-  | "register"               // Зарегистрировать
-  | "send"                   // Отправить (для исходящих)
-  | "receive"                // Принять (для входящих)
-  | "complete"               // Исполнить
-  | "archive"                // В архив
-  | "return_to_draft";       // Вернуть в черновик
-
-// Матрица переходов статусов
-const STATUS_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ["GENERATED", "PENDING_REVIEW", "PENDING_APPROVAL", "ARCHIVED"],
-  GENERATED: ["PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "SIGNED", "ARCHIVED"],
-  PENDING_REVIEW: ["PENDING_APPROVAL", "REJECTED", "DRAFT"],
-  PENDING_APPROVAL: ["PENDING_SIGNATURE", "APPROVED", "REJECTED", "DRAFT"],
-  PENDING_SIGNATURE: ["SIGNED", "REJECTED", "PENDING_APPROVAL"],
-  SIGNED: ["REGISTERED"],
-  REGISTERED: ["SENT", "COMPLETED", "ARCHIVED"],
-  SENT: ["COMPLETED", "ARCHIVED"],
-  RECEIVED: ["PENDING_REVIEW", "COMPLETED", "ARCHIVED"],
-  COMPLETED: ["ARCHIVED"],
-  REJECTED: ["DRAFT"],
-  ARCHIVED: [],
-};
-
-// Права для действий
-const ACTION_PERMISSIONS: Record<WorkflowAction, string[]> = {
-  submit_for_review: ["documents_create", "documents_edit"],
-  submit_for_approval: ["documents_create", "documents_edit"],
-  approve: ["documents_approve"],
-  reject: ["documents_approve"],
-  submit_for_signature: ["documents_approve"],
-  sign: ["documents_sign"],
-  register: ["documents_create"],
-  send: ["documents_create"],
-  receive: ["documents_create"],
-  complete: ["documents_edit"],
-  archive: ["documents_edit"],
-  return_to_draft: ["documents_edit"],
-};
+import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
+import {
+  type WorkflowAction,
+  STATUS_ACTIONS,
+  hasWorkflowActionPermission,
+  getAllowedActionsForStatus,
+  isWorkflowAction,
+} from "@/lib/document-workflow-permissions";
 
 /**
  * POST /api/ppo-head/documents/[id]/workflow
@@ -68,21 +29,19 @@ export async function POST(
 
     const { id: documentId } = await params;
 
-    const perm = await checkUserPermissions(session.user.id, "documents_edit");
+    const perm = await checkUserPermissions(session.user.id);
     if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         {
           error: "Нет доступа",
-          requiredPermission: "documents_edit",
+          requiredPermission: "documents_view",
           denyReason: perm.denyReason || "MISSING_PERMISSION",
         },
         { status: 403 }
       );
     }
     const organizationId = perm.organizationId;
-    const userPermissions = Object.entries(perm.permissions)
-      .filter(([, value]) => value === true)
-      .map(([key]) => key);
+    const normalizedPermissions = normalizeStaffPermissions(perm.permissions);
 
     // Получаем документ
     const document = await prisma.document.findUnique({
@@ -112,14 +71,14 @@ export async function POST(
     if (!action) {
       return NextResponse.json({ error: "Действие не указано" }, { status: 400 });
     }
+    if (!isWorkflowAction(action)) {
+      return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
+    }
 
     // Проверяем права на действие
-    const requiredPermissions = ACTION_PERMISSIONS[action];
-    const hasPermission = requiredPermissions.some(p => userPermissions.includes(p));
-    
-    if (!hasPermission) {
+    if (!hasWorkflowActionPermission(normalizedPermissions, action)) {
       return NextResponse.json(
-        { error: `Нет прав для действия: ${action}` },
+        { error: `Нет прав для действия: ${action}`, action },
         { status: 403 }
       );
     }
@@ -170,12 +129,27 @@ export async function POST(
     }
 
     // Проверяем возможность перехода
-    const allowedTransitions = STATUS_TRANSITIONS[currentStatus];
+    const allowedTransitions = STATUS_ACTIONS[currentStatus]
+      ?.map((a) => mapActionToStatus(a))
+      .filter(Boolean);
     if (!allowedTransitions?.includes(newStatus)) {
       return NextResponse.json(
         { error: `Нельзя перейти из статуса ${currentStatus} в ${newStatus}` },
         { status: 400 }
       );
+    }
+
+    if (action === "approve" || action === "reject") {
+      const myApproval = document.approvals.find(
+        (approval) => approval.userId === session.user!.id
+      );
+
+      if (document.approvals.length > 0 && (!myApproval || myApproval.status !== "PENDING")) {
+        return NextResponse.json(
+          { error: "Согласовать или отклонить может только назначенный согласующий" },
+          { status: 403 }
+        );
+      }
     }
 
     // Начинаем транзакцию
@@ -293,7 +267,7 @@ export async function POST(
  * Получить историю статусов документа
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -310,6 +284,7 @@ export async function GET(
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
     const organizationId = permView.organizationId;
+    const normalizedPermissions = normalizeStaffPermissions(permView.permissions);
 
     // Получаем документ с историей
     const document = await prisma.document.findUnique({
@@ -339,7 +314,7 @@ export async function GET(
     }
 
     // Определяем доступные действия
-    const availableActions = getAvailableActions(document.status);
+    const availableActions = getAllowedActionsForStatus(document.status, normalizedPermissions);
 
     return NextResponse.json({
       currentStatus: document.status,
@@ -403,33 +378,34 @@ async function generateRegNumber(
   return prefix ? `${prefix}-${formattedNumber}/${year}` : `${formattedNumber}/${year}`;
 }
 
-// Получить доступные действия для статуса
-function getAvailableActions(status: string): WorkflowAction[] {
-  switch (status) {
-    case "DRAFT":
-      return ["submit_for_review", "submit_for_approval", "archive"];
-    case "GENERATED":
-      return ["submit_for_review", "submit_for_approval", "submit_for_signature", "sign", "archive"];
-    case "PENDING_REVIEW":
-      return ["submit_for_approval", "reject", "return_to_draft"];
-    case "PENDING_APPROVAL":
-      return ["approve", "reject", "return_to_draft"];
-    case "PENDING_SIGNATURE":
-      return ["sign", "reject"];
-    case "SIGNED":
-      return ["register"];
-    case "REGISTERED":
-      return ["send", "complete", "archive"];
-    case "SENT":
-      return ["complete", "archive"];
-    case "RECEIVED":
-      return ["submit_for_review", "complete", "archive"];
-    case "COMPLETED":
-      return ["archive"];
-    case "REJECTED":
-      return ["return_to_draft"];
+function mapActionToStatus(action: WorkflowAction): string {
+  switch (action) {
+    case "submit_for_review":
+      return "PENDING_REVIEW";
+    case "submit_for_approval":
+      return "PENDING_APPROVAL";
+    case "approve":
+      return "PENDING_SIGNATURE";
+    case "reject":
+      return "REJECTED";
+    case "submit_for_signature":
+      return "PENDING_SIGNATURE";
+    case "sign":
+      return "SIGNED";
+    case "register":
+      return "REGISTERED";
+    case "send":
+      return "SENT";
+    case "receive":
+      return "RECEIVED";
+    case "complete":
+      return "COMPLETED";
+    case "archive":
+      return "ARCHIVED";
+    case "return_to_draft":
+      return "DRAFT";
     default:
-      return [];
+      return "DRAFT";
   }
 }
 

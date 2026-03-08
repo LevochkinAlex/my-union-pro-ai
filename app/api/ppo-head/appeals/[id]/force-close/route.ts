@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendMassNotification } from '@/lib/notifications';
+import { checkUserPermissions } from '@/lib/staff-permissions';
 
 /**
  * POST /api/ppo-head/appeals/[id]/force-close
@@ -18,6 +19,18 @@ export async function POST(
       return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
     }
 
+    const perm = await checkUserPermissions(session.user.id, "appeals_manage");
+    if (!perm.hasAccess || !perm.organizationId) {
+      return NextResponse.json(
+        {
+          error: "Недостаточно прав для принудительного закрытия",
+          requiredPermission: "appeals_manage",
+          denyReason: perm.denyReason || "MISSING_PERMISSION",
+        },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const { reason } = await request.json();
 
@@ -28,9 +41,10 @@ export async function POST(
       );
     }
 
+    const publicIdNormalized = typeof id === "string" ? id.replace(/-/g, "") : id;
     // Получаем обращение
     const ticket = await prisma.ticket.findFirst({
-      where: { publicId: id },
+      where: { OR: [{ publicId: publicIdNormalized }, { id }] },
       include: {
         user: {
           select: {
@@ -41,16 +55,7 @@ export async function POST(
           },
         },
         organization: {
-          include: {
-            members: {
-              where: {
-                role: 'PPO_HEAD',
-              },
-              select: {
-                id: true,
-              },
-            },
-          },
+          select: { id: true },
         },
         chat: {
           include: {
@@ -72,14 +77,9 @@ export async function POST(
       );
     }
 
-    // Проверяем, что пользователь - председатель организации обращения
-    const isChairman = ticket.organization?.members?.some(
-      (m) => m.id === session.user.id
-    );
-
-    if (!isChairman) {
+    if (ticket.organizationId !== perm.organizationId) {
       return NextResponse.json(
-        { error: 'Только председатель может принудительно закрыть обращение' },
+        { error: 'Нет доступа к обращению другой организации' },
         { status: 403 }
       );
     }

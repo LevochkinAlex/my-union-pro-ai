@@ -23,6 +23,9 @@ export async function POST(
     const { id: meetingId, documentId } = await params;
     const body = await request.json().catch(() => ({}));
     const { action = "approve", comment } = body as { action?: "approve" | "reject"; comment?: string };
+    if (action !== "approve" && action !== "reject") {
+      return NextResponse.json({ error: "Некорректное действие согласования" }, { status: 400 });
+    }
 
     // Проверяем документ и согласование
     const document = await prisma.document.findUnique({
@@ -120,17 +123,10 @@ export async function POST(
         },
       });
     } else {
-      // Участник добавлен после отправки на согласование — создаём запись и сразу проставляем решение
-      await prisma.documentApproval.create({
-        data: {
-          documentId: document.id,
-          userId: session.user.id,
-          order: document.approvals.length + 1,
-          status: newStatus,
-          comment: comment || null,
-          approvedAt: new Date(),
-        },
-      });
+      return NextResponse.json(
+        { error: "Вы не назначены согласующим по этому документу" },
+        { status: 403 }
+      );
     }
 
     const allApprovals = await prisma.documentApproval.findMany({

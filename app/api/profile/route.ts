@@ -12,6 +12,7 @@ import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
 import { saveUserProfileToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { sendMassNotification } from "@/lib/notifications";
 import { withCache, getCacheKey } from "@/lib/cache";
+import { isRestrictedJobTitleForSelfService } from "@/lib/dictionaries";
 // Удалено: SystemMessages - больше не используется
 
 function normalizeString(value: unknown): string | null {
@@ -346,6 +347,16 @@ export async function PUT(request: NextRequest) {
         bestBenefitsPassword: true,
       },
     });
+
+    if (
+      isRestrictedJobTitleForSelfService(jobTitle) &&
+      normalizeString(userBeforeUpdate?.jobTitle) !== jobTitle
+    ) {
+      return NextResponse.json(
+        { error: "Должность председателя назначается только через РПО" },
+        { status: 400 }
+      );
+    }
 
     // === НОРМАЛИЗАЦИЯ ТЕЛЕФОНА ===
     const normalizedPhone = normalizePhone(phone);

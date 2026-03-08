@@ -1,5 +1,19 @@
 import { prisma } from "@/lib/prisma";
 
+const RESTRICTED_SELF_SERVICE_JOB_TITLES = new Set([
+  "председатель",
+  "председатель ппо",
+]);
+
+function normalizeJobTitleKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function isRestrictedJobTitleForSelfService(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return RESTRICTED_SELF_SERVICE_JOB_TITLES.has(normalizeJobTitleKey(value));
+}
+
 /**
  * Словарь алиасов для медицинских должностей
  * Ключ - что пользователь может написать, значение - как искать в справочнике
@@ -268,8 +282,9 @@ export async function getProfessions() {
  * Получает список всех должностей (для API)
  */
 export async function getJobTitles() {
-  return await prisma.jobTitle.findMany({
+  const titles = await prisma.jobTitle.findMany({
     orderBy: { name: "asc" },
   });
+  return titles.filter((title) => !isRestrictedJobTitleForSelfService(title.name));
 }
 

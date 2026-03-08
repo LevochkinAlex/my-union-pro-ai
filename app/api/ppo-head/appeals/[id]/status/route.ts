@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { TicketStatus } from "@prisma/client";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
 import { sendUserNotification } from "@/lib/notifications";
 
 const ALLOWED_STATUSES = ["PENDING", "IN_PROGRESS", "RESOLVED"] as const;
@@ -60,12 +61,17 @@ export async function PATCH(
       return NextResponse.json({ error: "Обращение не найдено" }, { status: 404 });
     }
 
-    const perm = await checkUserPermissions(session.user.id, "appeals_manage");
-    if (!perm.hasAccess || perm.organizationId !== ticket.organizationId) {
+    const perm = await checkUserPermissions(session.user.id);
+    const normalizedPermissions = normalizeStaffPermissions(perm.permissions);
+    const canRespond =
+      normalizedPermissions.appeals_respond === true ||
+      normalizedPermissions.appeals_manage === true;
+
+    if (!perm.hasAccess || !canRespond || perm.organizationId !== ticket.organizationId) {
       return NextResponse.json(
         {
           error: "Только председатель или сотрудник с правом управления обращениями может менять статус",
-          requiredPermission: "appeals_manage",
+          requiredPermission: "appeals_respond",
           denyReason: perm.denyReason || "MISSING_PERMISSION",
         },
         { status: 403 }

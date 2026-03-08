@@ -31,6 +31,7 @@ export async function GET(
       where: { id: chatId },
       include: {
         participants: {
+          where: { leftAt: null },
           include: {
             user: {
               select: {
@@ -49,6 +50,11 @@ export async function GET(
 
     if (!chat) {
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
+    }
+
+    const isParticipant = chat.participants.some((p) => p.userId === session.user.id);
+    if (!isParticipant) {
+      return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 
     return NextResponse.json({ chat });
@@ -90,7 +96,7 @@ export async function PUT(
         type: true, 
         createdById: true,
         participants: {
-          where: { userId: session.user.id },
+          where: { userId: session.user.id, leftAt: null },
           select: { role: true }
         }
       },
@@ -115,7 +121,7 @@ export async function PUT(
     const isParticipant = chat.participants.length > 0;
     const isAdmin = chat.participants.some(p => p.role === "admin");
     
-    const canEdit = isCreator || isLegacyGroup || isParticipant;
+    const canEdit = isCreator || isParticipant || (isLegacyGroup && isParticipant);
     console.log("[ppo-head/chats] PUT - canEdit:", canEdit, "isCreator:", isCreator, "isLegacyGroup:", isLegacyGroup, "isParticipant:", isParticipant, "isAdmin:", isAdmin);
     
     if (!canEdit) {
@@ -171,7 +177,7 @@ export async function DELETE(
         type: true,
         createdById: true,
         participants: {
-          where: { userId: session.user.id },
+          where: { userId: session.user.id, leftAt: null },
           select: { role: true }
         }
       },
@@ -199,7 +205,8 @@ export async function DELETE(
     const isLegacyGroup = !chat.createdById;
     const isAdmin = chat.participants.some(p => p.role === "admin");
     
-    const canDelete = isCreator || isLegacyGroup || isAdmin;
+    const isParticipant = chat.participants.length > 0;
+    const canDelete = isCreator || isAdmin || (isLegacyGroup && isParticipant);
     if (!canDelete) {
       return NextResponse.json(
         { error: "Только создатель или админ группы может её удалить" },
