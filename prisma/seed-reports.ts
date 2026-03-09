@@ -513,6 +513,9 @@ async function seedReportTemplate(templateData: TemplateData): Promise<void> {
     });
 
     // Создаём поля секции
+    const fieldCodes = (sectionData.fields as Array<{ code: string }>).map(
+      (f) => f.code
+    );
     for (const fieldData of sectionData.fields) {
       const field = fieldData as any; // Type assertion для доступа к optional полям
       await prisma.reportTemplateField.upsert({
@@ -556,9 +559,25 @@ async function seedReportTemplate(templateData: TemplateData): Promise<void> {
         },
       });
     }
+    // Удаляем поля, которых нет в актуальном шаблоне (например, после удаления раздела)
+    await prisma.reportTemplateField.deleteMany({
+      where: {
+        sectionId: section.id,
+        code: { notIn: fieldCodes },
+      },
+    });
 
     console.log(`    ✅ ${sectionData.fields.length} fields created`);
   }
+
+  // Удаляем секции шаблона, которых нет в актуальном шаблоне
+  const sectionCodes = templateData.sections.map((s) => s.code);
+  await prisma.reportTemplateSection.deleteMany({
+    where: {
+      templateId: template.id,
+      code: { notIn: sectionCodes },
+    },
+  });
 
   console.log(`\n✅ Template "${templateData.name}" seeded successfully!`);
 }
@@ -635,51 +654,8 @@ const MONTHLY_REPORT_TEMPLATE = {
     },
     {
       code: "section2",
-      title: "II. Членские взносы",
+      title: "II. Проведённые мероприятия",
       order: 2,
-      fields: [
-        {
-          code: "monthly_fees_planned",
-          name: "fees_planned",
-          title: "План по сбору членских взносов (руб.)",
-          num: "1",
-          fieldType: "decimal",
-          isRequired: true,
-          order: 1,
-        },
-        {
-          code: "monthly_fees_collected",
-          name: "fees_collected",
-          title: "Фактически собрано членских взносов (руб.)",
-          num: "2",
-          fieldType: "decimal",
-          isRequired: true,
-          order: 2,
-        },
-        {
-          code: "monthly_fees_percent",
-          name: "fees_percent",
-          title: "Процент выполнения плана (%)",
-          num: "3",
-          fieldType: "decimal",
-          formula: "(monthly_fees_collected / monthly_fees_planned) * 100",
-          help: "Рассчитывается автоматически",
-          order: 3,
-        },
-        {
-          code: "monthly_fees_debt",
-          name: "fees_debt",
-          title: "Задолженность по членским взносам (руб.)",
-          num: "4",
-          fieldType: "decimal",
-          order: 4,
-        },
-      ],
-    },
-    {
-      code: "section3",
-      title: "III. Проведённые мероприятия",
-      order: 3,
       fields: [
         {
           code: "monthly_meetings_count",
@@ -724,9 +700,9 @@ const MONTHLY_REPORT_TEMPLATE = {
       ],
     },
     {
-      code: "section4",
-      title: "IV. Материальная помощь",
-      order: 4,
+      code: "section3",
+      title: "III. Материальная помощь",
+      order: 3,
       fields: [
         {
           code: "monthly_help_requests",
@@ -755,9 +731,9 @@ const MONTHLY_REPORT_TEMPLATE = {
       ],
     },
     {
-      code: "section5",
-      title: "V. Примечания",
-      order: 5,
+      code: "section4",
+      title: "IV. Примечания",
+      order: 4,
       fields: [
         {
           code: "monthly_notes",

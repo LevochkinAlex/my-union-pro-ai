@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileText, Trophy, AlertTriangle, Users, Star as StarIcon } from "lucide-react";
+import { FileText, Trophy, AlertTriangle, Users, Star as StarIcon, Search } from "lucide-react";
 import { alertSuccess, alertError } from "@/lib/alert";
 import { getEffectiveMemberStatus, getMembershipStatusLabel } from "@/lib/status-labels";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
@@ -268,6 +268,10 @@ export default function MembersPage() {
   // Sorting state
   const [sortField, setSortField] = useState<"name" | "date" | "email">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Поиск по ФИО / должности (с дебаунсом)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   
   // Компактный режим
   const [compactMode, setCompactMode] = useState(true);
@@ -283,11 +287,17 @@ export default function MembersPage() {
     }
   }, [status, isPPOHead, router]);
 
+  // Дебаунс поиска
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
   useEffect(() => {
     if (isPPOHead) {
       loadMembers();
     }
-  }, [activeTab, isPPOHead]);
+  }, [activeTab, debouncedSearch, isPPOHead]);
 
   const loadMembers = async () => {
     try {
@@ -296,7 +306,9 @@ export default function MembersPage() {
 
       const statusParam =
         activeTab === "validation" ? "pending" : activeTab === "excluded" ? "excluded" : "approved";
-      const response = await fetch(`/api/ppo-head/members?status=${statusParam}`);
+      const params = new URLSearchParams({ status: statusParam });
+      if (debouncedSearch) params.set("q", debouncedSearch);
+      const response = await fetch(`/api/ppo-head/members?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Ошибка загрузки членов профсоюза");
       }
@@ -688,7 +700,7 @@ export default function MembersPage() {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [activeTab]);
+  }, [activeTab, debouncedSearch]);
 
   if (isLoading) {
     return <Spinner fullPage />;
@@ -722,6 +734,26 @@ export default function MembersPage() {
         activeTab={activeTab}
         onChange={(id) => setActiveTab(id as "validation" | "active" | "excluded")}
       />
+
+      {/* Поиск по ФИО и должности */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none" aria-hidden />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Поиск по ФИО или должности..."
+            className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 dark:focus:border-blue-400 text-sm"
+            aria-label="Поиск членов профсоюза"
+          />
+        </div>
+        {searchQuery && (
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            Найдено: {members.length}
+          </span>
+        )}
+      </div>
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
