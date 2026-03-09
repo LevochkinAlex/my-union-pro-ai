@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, PageHeader, EmptyState, StatusBadge, Spinner } from "@/components/ui";
+import Checkbox from "@/components/form/input/Checkbox";
 
 interface RoleTemplate {
   id: string;
@@ -296,10 +297,14 @@ export default function RpoRolesPage() {
                         <StatusBadge color="blue">Системная</StatusBadge>
                       )}
                       {role.isElectedBody && (
-                        <StatusBadge color="purple">ИО</StatusBadge>
+                        <span title="Участвует в заседаниях (состав участников, повестка)">
+                          <StatusBadge color="purple">В заседаниях</StatusBadge>
+                        </span>
                       )}
                       {role.isManagement && (
-                        <StatusBadge color="orange">Руководство</StatusBadge>
+                        <span title="Может быть докладчиком в пунктах повестки">
+                          <StatusBadge color="orange">Докладчик</StatusBadge>
+                        </span>
                       )}
                       {!role.isActive && (
                         <StatusBadge color="red">Неактивна</StatusBadge>
@@ -389,25 +394,35 @@ export default function RpoRolesPage() {
                 />
               </div>
 
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.isElectedBody}
-                    onChange={(e) => setForm({ ...form, isElectedBody: e.target.checked })}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Избирательный орган</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.isManagement}
-                    onChange={(e) => setForm({ ...form, isManagement: e.target.checked })}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Руководство</span>
-                </label>
+              <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+                <p className="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Участие в заседаниях профкома
+                </p>
+                <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                  Эти настройки влияют на то, как сотрудники с этой ролью отображаются в документах и повестках заседаний.
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <Checkbox
+                      checked={form.isElectedBody}
+                      onChange={(checked) => setForm({ ...form, isElectedBody: checked })}
+                      label="Участвует в заседаниях"
+                    />
+                    <p className="mt-0.5 pl-8 text-xs text-gray-500 dark:text-gray-400">
+                      Сотрудник попадает в состав участников заседания (повестка дня, протокол)
+                    </p>
+                  </div>
+                  <div>
+                    <Checkbox
+                      checked={form.isManagement}
+                      onChange={(checked) => setForm({ ...form, isManagement: checked })}
+                      label="Может быть докладчиком"
+                    />
+                    <p className="mt-0.5 pl-8 text-xs text-gray-500 dark:text-gray-400">
+                      Сотрудник показывается в полях «Докладывает» и «Со-докладчик» при создании пунктов повестки
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -417,28 +432,22 @@ export default function RpoRolesPage() {
                     const allEnabled = group.keys.every((k) => form.permissions[k]);
                     return (
                       <div key={group.label} className="rounded-lg border border-gray-100 p-3 dark:border-gray-700">
-                        <button
-                          type="button"
-                          onClick={() => toggleGroupAll(group.keys)}
-                          className="flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200 mb-2 hover:text-blue-600"
-                        >
-                          <span
-                            aria-hidden
-                            className={`inline-block h-4 w-4 rounded border ${allEnabled ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"}`}
+                        <div className="mb-2">
+                          <Checkbox
+                            checked={allEnabled}
+                            onChange={() => toggleGroupAll(group.keys)}
+                            label={group.label}
                           />
-                          {group.label}
-                        </button>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-6">
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-8">
                           {group.keys.map((key) => (
-                            <label key={key} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                              <input
-                                type="checkbox"
-                                checked={!!form.permissions[key]}
-                                onChange={() => togglePermission(key)}
-                                className="rounded border-gray-300"
-                              />
-                              {PERMISSION_LABELS[key] || key}
-                            </label>
+                            <Checkbox
+                              key={key}
+                              checked={!!form.permissions[key]}
+                              onChange={() => togglePermission(key)}
+                              label={PERMISSION_LABELS[key] || key}
+                              className="text-xs"
+                            />
                           ))}
                         </div>
                       </div>
