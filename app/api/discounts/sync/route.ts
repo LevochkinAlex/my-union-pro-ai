@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user.bestBenefitsUserId) {
-      console.log("[sync-discounts] User not synced to BestBenefits yet");
+      console.warn("[sync-discounts] User not synced to BestBenefits yet");
       return NextResponse.json({
         success: true,
         message: "Пользователь ещё не синхронизирован с BestBenefits",
@@ -55,12 +55,9 @@ export async function POST(request: NextRequest) {
     if (user.bestBenefitsPassword) {
       try {
         userPassword = decryptPassword(user.bestBenefitsPassword);
-        console.log(`[sync-discounts] ✅ Using PERSONAL token for user ${user.email}`);
       } catch (error) {
         console.error(`[sync-discounts] Failed to decrypt password:`, error);
       }
-    } else {
-      console.warn(`[sync-discounts] ⚠️ No password - using organization token (legacy)`);
     }
 
     // Синхронизируем скидки с BestBenefits
@@ -70,14 +67,12 @@ export async function POST(request: NextRequest) {
       userPassword
     );
 
-    console.log("[sync-discounts] Sync result:", syncResult);
 
     // Получаем информацию о скидках для обновления сроков действия
     // Запрашиваем только активированные скидки пользователя
     const validActivations = await getValidActivatedDiscounts(user.id);
     
     if (validActivations.length > 0) {
-      console.log(`[sync-discounts] Updating validity for ${validActivations.length} discounts`);
       
       // Получаем информацию о скидках из BestBenefits для обновления validUntil
       const discountIds = validActivations.map(a => a.discountId);

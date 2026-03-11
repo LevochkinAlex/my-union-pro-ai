@@ -1,14 +1,19 @@
 /**
- * BestBenefits Profsoyuzy API User Management
- * 
- * Manages user creation and status updates in BestBenefits platform
- * Docs: public/best_benefits/profsoyuzy_doc.html
+ * BestBenefits Organization API User Management
+ *
+ * Manages user creation and status updates in BestBenefits platform.
+ * Supports both legacy `/api/profsoyuzy/*` and current `/api/myunion/*` paths.
  */
 
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 
-const PROFSOYUZY_API_BASE = "https://bestbenefits.ru/api/profsoyuzy";
-const PROFSOYUZY_TOKEN = process.env.BB_PROFSOYUZY_TOKEN;
+const ORG_API_BASES = [
+  process.env.BB_ORG_API_BASE?.trim(),
+  "https://bestbenefits.ru/api/myunion",
+  "https://bestbenefits.ru/api/profsoyuzy",
+].filter(Boolean) as string[];
+
+const ORG_TOKEN = process.env.BB_PROFSOYUZY_TOKEN;
 
 interface CreateUserParams {
   name: string;
@@ -46,17 +51,81 @@ interface ChangeStatusResponse {
 }
 
 /**
- * Get authorization token for Profsoyuzy API
+ * Get authorization token for organization API.
  * Uses direct token if available, otherwise falls back to auth flow
  */
 async function getProfsoyuzyToken(): Promise<string> {
   // Use direct token if available (preferred)
-  if (PROFSOYUZY_TOKEN) {
-    return PROFSOYUZY_TOKEN;
+  if (ORG_TOKEN) {
+    return ORG_TOKEN;
   }
   
   // Fallback to regular auth flow
   return getBestBenefitsToken();
+}
+
+type OrgApiResponse = {
+  status?: string;
+  message?: string;
+  data?: any;
+  errors?: Record<string, string[]>;
+};
+
+async function safeReadJson(response: Response): Promise<OrgApiResponse> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return (await response.json()) as OrgApiResponse;
+  }
+  const text = await response.text();
+  return {
+    status: "error",
+    message: text || `HTTP ${response.status}`,
+  };
+}
+
+async function postToOrganizationApi(path: string, payload: Record<string, unknown>): Promise<OrgApiResponse> {
+  const token = await getProfsoyuzyToken();
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < ORG_API_BASES.length; i += 1) {
+    const base = ORG_API_BASES[i];
+    const url = `${base}${path}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await safeReadJson(response);
+
+      // Если endpoint не существует на текущем base, пробуем следующий.
+      if (!response.ok && response.status === 404 && i < ORG_API_BASES.length - 1) {
+        console.warn(`[BestBenefits Users] Endpoint not found on ${base}, trying next base`);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorsPart = data?.errors ? ` | errors: ${JSON.stringify(data.errors)}` : "";
+        throw new Error(`${data?.message || `HTTP ${response.status}`}${errorsPart}`);
+      }
+
+      return data;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      // Для последнего base — отдаём ошибку наружу.
+      if (i === ORG_API_BASES.length - 1) {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error("Organization API request failed");
 }
 
 /**
@@ -67,31 +136,12 @@ export async function createBestBenefitsUser(
   params: CreateUserParams
 ): Promise<CreateUserResponse> {
   try {
-    const token = await getProfsoyuzyToken();
-
-    const response = await fetch(`${PROFSOYUZY_API_BASE}/create_user`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        name: params.name,
-        email: params.email,
-        password: params.password,
-        city_id: params.city_id ?? null,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("[BestBenefits Users] Create user failed:", response.status, data);
-      throw new Error(
-        `Failed to create user in BestBenefits: ${data.message || response.statusText}`
-      );
-    }
+    const data = (await postToOrganizationApi("/create_user", {
+      name: params.name,
+      email: params.email,
+      password: params.password,
+      city_id: params.city_id ?? null,
+    })) as CreateUserResponse;
 
     console.log("[BestBenefits Users] User created successfully. Full response:", JSON.stringify(data, null, 2));
     console.log("[BestBenefits Users] User ID:", data.data?.id || data.id || data.user_id || 'NOT FOUND');
@@ -109,29 +159,10 @@ export async function changeBestBenefitsUserStatus(
   params: ChangeStatusParams
 ): Promise<ChangeStatusResponse> {
   try {
-    const token = await getProfsoyuzyToken();
-
-    const response = await fetch(`${PROFSOYUZY_API_BASE}/change_status`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        id: params.id,
-        city: params.city ?? null,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("[BestBenefits Users] Change status failed:", response.status, data);
-      throw new Error(
-        `Failed to change user status in BestBenefits: ${data.message || response.statusText}`
-      );
-    }
+    const data = (await postToOrganizationApi("/change_status", {
+      id: params.id,
+      city: params.city ?? null,
+    })) as ChangeStatusResponse;
 
     console.log("[BestBenefits Users] Status changed successfully:", data.data?.id);
     return data;

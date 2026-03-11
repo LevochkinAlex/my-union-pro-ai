@@ -13,6 +13,7 @@ import {
 import { attachCoordinatesToCities, calculateDistanceKm, getCityCoordinates } from "@/lib/geo";
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 import { getAllRussianCities } from "@/lib/constants/russian-regions";
+import { getDiscountsFromLocalDB } from "@/lib/fetch-discounts-from-db";
 
 const SAMPLE_FILE = path.join(process.cwd(), "public", "best_benefits", "sample-discounts.json");
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
@@ -178,15 +179,37 @@ export async function fetchBestBenefitsDiscounts(
       
       return result;
     } catch (error) {
-      console.error("[best-benefits] Real API fetch failed:", error);
-      // Fallback to sample data if real API fails
+      console.warn("[best-benefits] Real API fetch failed, using fallback:", error);
+      // Fallback 1: попробовать локальную БД (каталог от крона sync-discounts)
+      try {
+        const localResult = await getDiscountsFromLocalDB(sanitizedParams);
+        if (localResult && localResult.discounts.length > 0) {
+          return {
+            ...localResult,
+            cities: attachCoordinatesToCities(localResult.cities),
+          };
+        }
+      } catch (localErr) {
+        console.warn("[best-benefits] Local DB fallback failed:", localErr);
+      }
+      // Fallback 2: sample data
       const fallbackData = await fetchFromSample();
       return await normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
     }
   }
 
-  // Use sample data by default (for testing)
-  // console.log("[best-benefits] Using sample data (USE_REAL_BB_API not enabled)");
+  // USE_REAL_BB_API не включён: пробуем локальную БД (каталог от крона), затем sample
+  try {
+    const localResult = await getDiscountsFromLocalDB(sanitizedParams);
+    if (localResult && localResult.discounts.length > 0) {
+      return {
+        ...localResult,
+        cities: attachCoordinatesToCities(localResult.cities),
+      };
+    }
+  } catch (localErr) {
+    console.warn("[best-benefits] Local DB fallback (no real API) failed:", localErr);
+  }
   const fallbackData = await fetchFromSample();
   return await normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
 }
@@ -419,7 +442,9 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("[best-benefits] API error:", response.status, errorText);
+    // В dev-режиме console.error отображается как "Issue" в оверлее Next.js.
+    // Для ожидаемых сетевых/авторизационных ошибок используем warn и fallback выше по стеку.
+    console.warn("[best-benefits] API error:", response.status, errorText);
     throw new Error(`BestBenefits API responded with ${response.status}: ${errorText}`);
   }
 
@@ -520,9 +545,13 @@ async function normalizeResponse(
     
     if (filtered.length === 0 && discounts.length > 0) {
       console.warn(`[best-benefits] ⚠️ WARNING: No discounts found for cityId ${params.cityId} (${selectedCityName})!`);
-      console.warn(`[best-benefits] Available city IDs in discounts:`, 
+      console.warn(`[best-benefits] Available city IDs in discounts:`,
         Array.from(new Set(discounts.flatMap(d => d.cities.map(c => `${c.name}(${c.id})`)))).join(', ')
       );
+      // Для fallback/sample: чтобы не показывать "Нет предложений", показываем все скидки
+      if (context.source === "fallback") {
+        filtered = discounts;
+      }
     }
   }
   

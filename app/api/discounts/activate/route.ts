@@ -34,11 +34,6 @@ export async function POST(request: NextRequest) {
     // discountId используется для активации в BestBenefits API
     const discountIdForDb = parentDiscountId || discountId;
     
-    console.log(`[activate-discount] Activating:`, {
-      discountId, // ID для API (скидка или вариант)
-      parentDiscountId, // ID родительской скидки (если есть)
-      discountIdForDb, // ID для сохранения в БД
-    });
 
     // Get user data for BestBenefits activation
     const user = await prisma.user.findUnique({
@@ -62,20 +57,12 @@ export async function POST(request: NextRequest) {
     let activationMessage: string | null = null;
 
     if (user.bestBenefitsUserId) {
-      console.log(`[activate-discount] Attempting BestBenefits activation:`, {
-        userId: user.id,
-        bestBenefitsUserId: user.bestBenefitsUserId,
-        discountId,
-        email: user.email,
-        hasPassword: !!user.bestBenefitsPassword,
-      });
 
       // Decrypt user's BestBenefits password for personal token
       let userPassword: string | undefined;
       if (user.bestBenefitsPassword) {
         try {
           userPassword = decryptPassword(user.bestBenefitsPassword);
-          console.log(`[activate-discount] ✅ Using PERSONAL token for user ${user.email}`);
         } catch (error) {
           console.error(`[activate-discount] Failed to decrypt password:`, error);
         }
@@ -96,22 +83,13 @@ export async function POST(request: NextRequest) {
       cardBased = activationResult.cardBased === true;
       activationMessage = activationResult.message || null;
 
-      console.log(`[activate-discount] Activation result:`, {
-        success: activationResult.success,
-        bestBenefitsActivated,
-        promoCodeFromBB: promoCode,
-        promoCodeFromRequest: requestPromoCode,
-      });
     } else {
-      console.log(
-        `[activate-discount] User ${user.id} not synced to BestBenefits yet, skipping API activation`
-      );
+      console.warn(`[activate-discount] User ${user.id} not synced to BestBenefits, skipping API activation`);
     }
 
     // Используем промокод из BestBenefits, если есть, иначе из запроса (из discount)
     if (!promoCode && requestPromoCode && requestPromoCode.trim().length > 0) {
       promoCode = requestPromoCode;
-      console.log(`[activate-discount] Using promo code from request (discount):`, promoCode);
     }
 
     // Если промокода нет, проверяем, может он уже сохранен в БД
@@ -119,7 +97,6 @@ export async function POST(request: NextRequest) {
       const existingPromoCode = await getDiscountPromoCode(user.id, discountId);
       if (existingPromoCode) {
         promoCode = existingPromoCode;
-        console.log(`[activate-discount] Using existing promo code from DB:`, promoCode);
       }
     }
 
@@ -161,12 +138,6 @@ export async function POST(request: NextRequest) {
       activatedAt: new Date(),
     });
 
-    console.log(`[activate-discount] ✅ Saved to DiscountActivation:`, {
-      discountId: discountIdForDb,
-      activatedOptionId: discountId !== discountIdForDb ? discountId : null,
-      promoCode,
-      validUntil,
-    });
 
     // Обновляем DiscountPreference для обратной совместимости
     const existingPrefs = await prisma.discountPreference.findUnique({
