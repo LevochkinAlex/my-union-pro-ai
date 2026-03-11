@@ -39,7 +39,7 @@ export default async function DashboardLayout({
 
   // Берём флаги ролей и аватар из БД (fallback на сессию при ошибке)
   let viewMode = getViewMode(session);
-  let serverViewModes = getAvailableViewModes(session, false);
+  let serverViewModes = getAvailableViewModes(session);
   let isPPOHead = session.user.isPPOHead ?? false;
   let avatarUrl: string | null | undefined = undefined;
   let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
