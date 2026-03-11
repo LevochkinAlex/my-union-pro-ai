@@ -144,7 +144,7 @@ export async function createBestBenefitsUser(
     })) as CreateUserResponse;
 
     console.log("[BestBenefits Users] User created successfully. Full response:", JSON.stringify(data, null, 2));
-    console.log("[BestBenefits Users] User ID:", data.data?.id || data.id || data.user_id || 'NOT FOUND');
+    console.log("[BestBenefits Users] User ID:", data.data?.id || "NOT FOUND");
     return data;
   } catch (error) {
     console.error("[BestBenefits Users] Error creating user:", error);
