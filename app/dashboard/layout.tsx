@@ -90,8 +90,7 @@ export default async function DashboardLayout({
         isPPOHead = dbUserResult.isPPOHead ?? false;
         const fakeSession = { user: dbUserResult } as any;
         viewMode = getViewMode(fakeSession);
-        const isStaff = staffResult?.isStaff === true || Boolean(activeStaffPosition);
-        serverViewModes = getAvailableViewModes(fakeSession, isStaff);
+        serverViewModes = getAvailableViewModes(fakeSession);
         dbUser = dbUserResult;
       }
       console.log("[dashboard/layout] userId:", session.user.id, "dbUser:", dbUserResult ? { role: dbUserResult.role, isRPOHead: dbUserResult.isRPOHead, rpoHeadOrganizationId: dbUserResult.rpoHeadOrganizationId, viewMode: dbUserResult.viewMode } : "null", "serverViewModes:", serverViewModes);
