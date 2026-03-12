@@ -119,10 +119,8 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [isLoading, setIsLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [autoSaving, setAutoSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [emailVerified, setEmailVerified] = useState<Date | null>(null);
-  const [lastSavedField, setLastSavedField] = useState<string | null>(null);
   const [dateOfBirthError, setDateOfBirthError] = useState<string | null>(null);
   
   // Справочники профессий и должностей
@@ -866,63 +864,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Функция автосохранения отдельного поля
-  const autoSaveField = async (fieldName: string, value: any) => {
-    if (autoSaving) return; // Предотвращаем множественные одновременные запросы
-    
-    setAutoSaving(true);
-    setLastSavedField(fieldName);
-    
-    try {
-      const payload: any = {};
-      
-      // Подготавливаем данные для отправки
-      if (fieldName === 'organizationId') {
-        payload.organizationId = value || null;
-      } else {
-        payload[fieldName] = value;
-      }
-
-      const response = await fetch("/api/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Не удалось сохранить");
-      }
-
-      // Обновляем organization объект, если изменилась организация
-      if (fieldName === 'organizationId' && value) {
-        const selectedOrg = organizations.find(org => org.id === value);
-        if (selectedOrg) {
-          setProfileData(prev => ({
-            ...prev,
-            organization: {
-              id: selectedOrg.id,
-              name: selectedOrg.name || selectedOrg.fullPath || '',
-              inn: null, // ИНН можно получить из API если нужно
-            }
-          }));
-        }
-      }
-    } catch (error) {
-      console.error(`[autoSave] Error saving field ${fieldName}:`, error);
-      // Не показываем ошибку пользователю при автосохранении, только в консоль
-    } finally {
-      setAutoSaving(false);
-      // Убираем индикатор через 2 секунды
-      setTimeout(() => setLastSavedField(null), 2000);
-    }
-  };
-
-  const handleFieldBlur = (fieldName: string, value: any) => {
-    autoSaveField(fieldName, value);
-  };
 
   const handleSendPpoNotInList = async () => {
     const text = manualPpoText.trim();
@@ -1275,7 +1216,6 @@ export default function ProfilePage() {
                       directorName: workplace.directorName,
                       directorPosition: workplace.directorPosition,
                     }));
-                    handleFieldBlur("workplace", workplace.name);
                     try {
                       const response = await fetch(
                         `/api/workplace/ppo?workplaceName=${encodeURIComponent(workplace.name)}&workplaceInn=${encodeURIComponent(workplace.inn)}`
@@ -1286,7 +1226,6 @@ export default function ProfilePage() {
                         setPpoOptionsForWorkplace(Array.isArray(list) ? list : []);
                         if (list.length === 1 && list[0]?.id) {
                           setProfileData(prev => ({ ...prev, organizationId: list[0].id }));
-                          handleFieldBlur("organizationId", list[0].id);
                           setPpoAutoFilled(true);
                           setShowManualPpo(false);
                           setMessage({ type: "success", text: `По справочнику определена ППО: ${list[0].name}` });
@@ -1294,7 +1233,6 @@ export default function ProfilePage() {
                         } else if (list.length > 1) {
                           setPpoAutoFilled(false);
                           setProfileData(prev => ({ ...prev, organizationId: list[0]?.id || null }));
-                          if (list[0]?.id) handleFieldBlur("organizationId", list[0].id);
                           setMessage({ type: "success", text: "Выберите ваше ППО из привязанных к месту работы." });
                           setTimeout(() => setMessage(null), 5000);
                         } else {
@@ -1337,7 +1275,6 @@ export default function ProfilePage() {
                 value={profileData.jobTitle}
                 onChange={(value) => {
                   setProfileData(prev => ({ ...prev, jobTitle: value }));
-                  if (jobTitles.includes(value)) handleFieldBlur("jobTitle", value);
                 }}
                 options={jobTitles}
                 placeholder="Начните вводить должность..."
@@ -1369,7 +1306,6 @@ export default function ProfilePage() {
                   onChange={(organizationId) => {
                     setProfileData(prev => ({ ...prev, organizationId: organizationId || null }));
                     setPpoAutoFilled(false);
-                    if (organizationId) handleFieldBlur("organizationId", organizationId);
                   }}
                   options={
                     ppoOptionsForWorkplace.length > 0
@@ -1434,7 +1370,6 @@ export default function ProfilePage() {
                 aria-label="Фамилия"
                 value={profileData.lastName}
                 onChange={handleNameChange("lastName")}
-                onBlur={() => handleFieldBlur("lastName", profileData.lastName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 required
               />
@@ -1450,7 +1385,6 @@ export default function ProfilePage() {
                 aria-label="Имя"
                 value={profileData.firstName}
                 onChange={handleNameChange("firstName")}
-                onBlur={() => handleFieldBlur("firstName", profileData.firstName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 required
               />
@@ -1465,7 +1399,6 @@ export default function ProfilePage() {
                 name="middleName"
                 value={profileData.middleName}
                 onChange={handleNameChange("middleName")}
-                onBlur={() => handleFieldBlur("middleName", profileData.middleName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 placeholder="Например: Петрович"
               />
@@ -1504,10 +1437,7 @@ export default function ProfilePage() {
                       setMessage({ type: "error", text: "Возраст не может превышать 100 лет" });
                     } else {
                       setDateOfBirthError(null);
-                      handleFieldBlur("dateOfBirth", profileData.dateOfBirth);
                     }
-                  } else {
-                    handleFieldBlur("dateOfBirth", profileData.dateOfBirth);
                   }
                 }}
                 error={dateOfBirthError || undefined}
@@ -1523,7 +1453,6 @@ export default function ProfilePage() {
                 name="phone"
                 value={profileData.phone}
                 onChange={handleProfileChange}
-                onBlur={() => handleFieldBlur("phone", profileData.phone)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -1535,7 +1464,6 @@ export default function ProfilePage() {
                 name="address"
                 value={profileData.address}
                 onChange={handleAddressChange}
-                onBlur={() => handleFieldBlur("address", profileData.address)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -1566,7 +1494,6 @@ export default function ProfilePage() {
                 name="preferredDiscountCity"
                 value={profileData.preferredDiscountCity}
                 onChange={handleProfileChange}
-                onBlur={() => handleFieldBlur("preferredDiscountCity", profileData.preferredDiscountCity)}
                 placeholder="Например: Москва, Санкт-Петербург, Казань..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
@@ -1679,7 +1606,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Информация о супруге/супруге</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Информация о супруге</label>
               <textarea
                 name="spouseInfo"
                 value={additionalInfo.spouseInfo}

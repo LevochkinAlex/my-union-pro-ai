@@ -269,10 +269,29 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const normalizedName = name.trim();
+
+    // Защита от дублей каналов внутри одной организации
+    const duplicateChannel = await prisma.newsChannel.findFirst({
+      where: {
+        organizationId: permCreate.organizationId!,
+        name: {
+          equals: normalizedName,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true },
+    });
+    if (duplicateChannel) {
+      return NextResponse.json(
+        { error: "Канал с таким названием уже существует в вашей организации" },
+        { status: 400 }
+      );
+    }
 
     const channel = await prisma.newsChannel.create({
       data: {
-        name: name.trim(),
+        name: normalizedName,
         description: description?.trim() || null,
         iconUrl: iconUrl || null,
         organizationId: permCreate.organizationId!,

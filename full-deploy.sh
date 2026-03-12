@@ -2,8 +2,21 @@
 
 set -e
 
-# Данные от VDS из env (например: export DEPLOY_SERVER=root@194.87.49.210 DEPLOY_PASSWORD=...)
-SERVER="${DEPLOY_SERVER:?Set DEPLOY_SERVER env}"
+# Подхват только переменных деплоя из .env (без source всего файла)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  while IFS= read -r line; do
+    [[ ! "$line" =~ ^(DEPLOY_SERVER|DEPLOY_PASSWORD|VDS_HOST|VDS_PASSWORD)= ]] && continue
+    export "$line"
+  done < "$SCRIPT_DIR/.env"
+fi
+# Убираем кавычки из значений, прочитанных из .env
+strip_quotes() { echo "$1" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"; }
+[ -n "$VDS_HOST" ] && [ -z "$DEPLOY_SERVER" ] && export DEPLOY_SERVER="root@$(strip_quotes "$VDS_HOST")"
+[ -n "$VDS_PASSWORD" ] && [ -z "$DEPLOY_PASSWORD" ] && export DEPLOY_PASSWORD="$(strip_quotes "$VDS_PASSWORD")"
+
+# Данные от VDS из env (или из .env)
+SERVER="${DEPLOY_SERVER:?Set DEPLOY_SERVER or VDS_HOST in .env}"
 PASSWORD="${DEPLOY_PASSWORD:?Set DEPLOY_PASSWORD env}"
 PROJECT_DIR="${DEPLOY_PROJECT_DIR:-/opt/my-union-pro}"
 

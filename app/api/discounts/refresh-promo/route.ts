@@ -57,8 +57,13 @@ export async function POST(request: NextRequest) {
     let userToken: string;
     try {
       userToken = await getUserBestBenefitsToken(user.email, password);
-    } catch (error) {
-      console.error("[refresh-promo] Failed to get user token:", error);
+    } catch (error: any) {
+      const is401 = error?.message?.includes("401") || error?.message?.includes("User authentication failed");
+      if (is401) {
+        console.warn("[refresh-promo] BB 401 (invalid/expired credentials), returning cache");
+      } else {
+        console.error("[refresh-promo] Failed to get user token:", error);
+      }
       return NextResponse.json({ error: "Ошибка получения токена", promoCode: null }, { status: 200 });
     }
 

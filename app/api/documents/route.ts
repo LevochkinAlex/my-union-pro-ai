@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHead } from "@/lib/ppo-head-utils";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { getViewMode } from "@/lib/session-user";
 import { getDemoMemberOutgoingDocuments } from "@/lib/demo";
 import fs from "fs";
 import path from "path";
@@ -70,14 +71,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Член выборного органа = председатель (ППО/МПО/РПО) или сотрудник организации (зам., член профкома)
+    // Текущий режим: в «Член участник» показываем только устав и заявления; в «Сотрудник»/председатель — по роли
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { viewMode: true },
+    });
+    const viewMode = getViewMode({ user: dbUser ?? session.user } as any);
+
+    // Член выборного органа = председатель или сотрудник в режиме Сотрудник (документы заседаний и т.д.)
     const orgHead = await getOrgHead(session.user.id);
+    const isStaffInDb = !!(await prisma.organizationStaff.findFirst({
+      where: { userId: session.user.id, status: "ACTIVE" },
+      select: { id: true },
+    }));
     const isElectedBody =
-      !!orgHead ||
-      !!(await prisma.organizationStaff.findFirst({
-        where: { userId: session.user.id, status: "ACTIVE" },
-        select: { id: true },
-      }));
+      viewMode !== "MEMBER" &&
+      (!!orgHead ||
+        isStaffInDb);
 
     // Получаем документы пользователя (исходящие - созданные пользователем)
     const outgoingDocuments = await prisma.document.findMany({
@@ -316,9 +326,22 @@ export async function GET(request: NextRequest) {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
+    // В режиме «Член участник»: входящие — только устав и не связанные с заседаниями; исходящие — только заявления
+    const finalIncoming =
+      viewMode === "MEMBER"
+        ? incomingWithApproval.filter((d: { meetingId?: string }) => !d.meetingId)
+        : incomingWithApproval;
+    const finalOutgoing =
+      viewMode === "MEMBER"
+        ? sortedOutgoingDocuments.filter(
+            (d: { type: string }) =>
+              d.type === "MEMBERSHIP_APPLICATION" || d.type === "CONTRIBUTION_APPLICATION"
+          )
+        : sortedOutgoingDocuments;
+
     return NextResponse.json({ 
-      incomingDocuments: incomingWithApproval,
-      outgoingDocuments: sortedOutgoingDocuments,
+      incomingDocuments: finalIncoming,
+      outgoingDocuments: finalOutgoing,
       isElectedBody,
     });
   } catch (error) {
