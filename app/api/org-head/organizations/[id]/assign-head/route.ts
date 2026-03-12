@@ -86,6 +86,11 @@ export async function POST(
             role: "PPO_HEAD",
             isPPOHead: true,
             ppoHeadOrganizationId: organization.id,
+            // Председатель ППО должен быть членом той же ППО.
+            organizationId: organization.id,
+            organizationName: null,
+            membershipStatus: "APPROVED",
+            unionMembershipStatus: "ACCEPTED",
             viewMode: "PPO_HEAD",
           },
         });

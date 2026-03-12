@@ -5,6 +5,22 @@
 
 import { prisma } from "@/lib/prisma";
 
+function normalizeWorkplaceName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/["'`«»]/g, " ")
+    .replace(/[.,()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isStrongNameMatch(inputName: string, mappedName: string): boolean {
+  const a = normalizeWorkplaceName(inputName);
+  const b = normalizeWorkplaceName(mappedName);
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
 export interface WorkplacePPOMapping {
   id: string;
   workplaceName: string;
@@ -44,18 +60,9 @@ export async function findPPOByWorkplace(
     return null;
   }
 
-  // Нормализуем название (убираем лишние пробелы, приводим к нижнему регистру для сравнения)
-  const normalizedName = workplaceName.trim().toLowerCase();
-
-  // Ищем точное совпадение по ИНН и названию
-  const mapping = await prisma.workplacePPOMapping.findFirst({
-    where: {
-      workplaceInn: workplaceInn.trim(),
-      workplaceName: {
-        equals: normalizedName,
-        mode: "insensitive",
-      },
-    },
+  const inn = workplaceInn.trim();
+  const mappings = await prisma.workplacePPOMapping.findMany({
+    where: { workplaceInn: inn },
     include: {
       ppoOrganization: {
         select: {
@@ -67,37 +74,14 @@ export async function findPPOByWorkplace(
         },
       },
     },
+    orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
   });
 
+  const mapping = mappings.find((m) => isStrongNameMatch(workplaceName, m.workplaceName));
   if (mapping) {
     return {
       ppoOrganizationId: mapping.ppoOrganizationId,
       ppoOrganization: mapping.ppoOrganization,
-    };
-  }
-
-  // Если не найдено точное совпадение, ищем только по ИНН
-  const mappingByInn = await prisma.workplacePPOMapping.findFirst({
-    where: {
-      workplaceInn: workplaceInn.trim(),
-    },
-    include: {
-      ppoOrganization: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          chairmanName: true,
-          chairmanJobTitle: true,
-        },
-      },
-    },
-  });
-
-  if (mappingByInn) {
-    return {
-      ppoOrganizationId: mappingByInn.ppoOrganizationId,
-      ppoOrganization: mappingByInn.ppoOrganization,
     };
   }
 
@@ -114,8 +98,8 @@ export interface PPOOption {
 
 /**
  * Найти все ППО, привязанные к месту работы (по названию и ИНН).
- * Сначала ищем точное совпадение по (workplaceName, workplaceInn), затем по ИНН.
- * У одной организации (ИНН) может быть несколько записей в справочнике → несколько ППО на выбор.
+ * Сначала отбираем записи по ИНН, затем строго матчим название (нормализация + contains).
+ * Важно: не делаем безусловный fallback "только по ИНН", чтобы не подставлять чужую ППО.
  */
 export async function findPPOsByWorkplace(
   workplaceName: string,
@@ -128,11 +112,10 @@ export async function findPPOsByWorkplace(
   const inn = workplaceInn.trim();
   const name = workplaceName.trim();
 
-  // Сначала ищем точное совпадение по названию и ИНН (без учёта регистра)
-  let mappings = await prisma.workplacePPOMapping.findMany({
+  // Берём все записи по ИНН и затем строго фильтруем по названию.
+  const mappingsByInn = await prisma.workplacePPOMapping.findMany({
     where: {
       workplaceInn: inn,
-      workplaceName: { equals: name, mode: "insensitive" },
     },
     include: {
       ppoOrganization: {
@@ -148,24 +131,8 @@ export async function findPPOsByWorkplace(
     orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
   });
 
-  // Если нет точного совпадения по названию — fallback: все привязки по ИНН
-  if (mappings.length === 0) {
-    mappings = await prisma.workplacePPOMapping.findMany({
-      where: { workplaceInn: inn },
-      include: {
-        ppoOrganization: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            chairmanName: true,
-            chairmanJobTitle: true,
-          },
-        },
-      },
-      orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
-    });
-  }
+  const mappings = mappingsByInn.filter((m) => isStrongNameMatch(name, m.workplaceName));
+  if (mappings.length === 0) return [];
 
   const seen = new Set<string>();
   const result: PPOOption[] = [];

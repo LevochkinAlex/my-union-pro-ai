@@ -5,6 +5,105 @@
 import { prisma } from "@/lib/prisma";
 import { REGIONAL_NEWS_CHANNEL_NAME } from "@/lib/regional-news";
 
+async function ensureChannelParticipants(
+  chatId: string,
+  organizationId: string | null | undefined,
+  chairmanId: string
+): Promise<void> {
+  // Для канала организации подписываем:
+  // 1) одобренных пользователей этой организации,
+  // 2) всех активных сотрудников этой организации (независимо от membershipStatus).
+  // Для регионального канала — всех одобренных пользователей.
+  const members = await prisma.user.findMany({
+    where: organizationId
+      ? {
+          OR: [
+            {
+              organizationId,
+              membershipStatus: "APPROVED",
+            },
+            {
+              staffPositions: {
+                some: {
+                  organizationId,
+                  status: "ACTIVE",
+                },
+              },
+            },
+          ],
+        }
+      : {
+          membershipStatus: "APPROVED",
+        },
+    select: { id: true },
+  });
+
+  const targetMemberIds = members.map((m) => m.id);
+  const existingParticipants = await prisma.chatParticipant.findMany({
+    where: {
+      chatId,
+      userId: { in: [chairmanId, ...targetMemberIds] },
+    },
+    select: { userId: true, leftAt: true, role: true },
+  });
+
+  const byUserId = new Map(
+    existingParticipants
+      .filter((p): p is { userId: string; leftAt: Date | null; role: string } => Boolean(p.userId))
+      .map((p) => [p.userId, p])
+  );
+
+  // Председатель должен быть активным админом канала
+  const chairmanParticipant = byUserId.get(chairmanId);
+  if (!chairmanParticipant) {
+    await prisma.chatParticipant.create({
+      data: {
+        chatId,
+        userId: chairmanId,
+        role: "admin",
+      },
+    });
+  } else if (chairmanParticipant.leftAt !== null || chairmanParticipant.role !== "admin") {
+    await prisma.chatParticipant.update({
+      where: { chatId_userId: { chatId, userId: chairmanId } },
+      data: {
+        leftAt: null,
+        role: "admin",
+      },
+    });
+  }
+
+  const missingMemberIds: string[] = [];
+  const rejoinMemberIds: string[] = [];
+  for (const memberId of targetMemberIds) {
+    if (memberId === chairmanId) continue;
+    const existing = byUserId.get(memberId);
+    if (!existing) {
+      missingMemberIds.push(memberId);
+    } else if (existing.leftAt !== null) {
+      rejoinMemberIds.push(memberId);
+    }
+  }
+
+  if (rejoinMemberIds.length > 0) {
+    await prisma.chatParticipant.updateMany({
+      where: { chatId, userId: { in: rejoinMemberIds } },
+      data: { leftAt: null, role: "member" },
+    });
+  }
+
+  if (missingMemberIds.length > 0) {
+    await prisma.chatParticipant.createMany({
+      data: missingMemberIds.map((userId) => ({
+        chatId,
+        userId,
+        role: "member",
+      })),
+      skipDuplicates: true,
+    });
+  }
+}
+
 /**
  * Создает Chat для NewsChannel, если его еще нет
  * Подписывает всех участников организации на канал
@@ -19,10 +118,6 @@ export async function syncChannelWithChat(
       where: { newsChannelId },
       select: { id: true },
     });
-
-    if (existingChat) {
-      return existingChat.id;
-    }
 
     // Получаем информацию о канале
     const channel = await prisma.newsChannel.findUnique({
@@ -75,6 +170,12 @@ export async function syncChannelWithChat(
       return null;
     }
 
+    if (existingChat) {
+      // Канал уже создан: дополнительно синхронизируем подписки участников
+      await ensureChannelParticipants(existingChat.id, organizationId ?? null, chairmanId);
+      return existingChat.id;
+    }
+
     // Создаем Chat для канала
     const chat = await prisma.chat.create({
       data: {
@@ -93,36 +194,7 @@ export async function syncChannelWithChat(
       },
     });
 
-    // Подписываем участников на канал:
-    // - для канала организации: только users этой организации
-    // - для глобального канала: всех одобренных users системы
-    const members = await prisma.user.findMany({
-      where: organizationId
-        ? {
-            organizationId,
-            membershipStatus: "APPROVED",
-          }
-        : {
-            membershipStatus: "APPROVED",
-          },
-      select: { id: true },
-    });
-
-    // Добавляем участников (исключая председателя, который уже добавлен)
-    const memberIds = members
-      .map(m => m.id)
-      .filter(id => id !== chairmanId);
-
-    if (memberIds.length > 0) {
-      await prisma.chatParticipant.createMany({
-        data: memberIds.map(userId => ({
-          chatId: chat.id,
-          userId,
-          role: "member",
-        })),
-        skipDuplicates: true,
-      });
-    }
+    await ensureChannelParticipants(chat.id, organizationId ?? null, chairmanId);
 
     console.log(`[channel-sync] ✅ Created Chat ${chat.id} for NewsChannel ${newsChannelId}`);
     return chat.id;

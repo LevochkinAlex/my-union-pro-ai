@@ -1,7 +1,7 @@
 import type { Session } from "next-auth";
 
-/** Режим кабинета: участник или один из председателей */
-export const VIEW_MODES = ["MEMBER", "PPO_HEAD", "MPO_HEAD", "RPO_HEAD"] as const;
+/** Режим кабинета: участник, сотрудник (по роли РПО) или один из председателей */
+export const VIEW_MODES = ["MEMBER", "STAFF", "PPO_HEAD", "MPO_HEAD", "RPO_HEAD"] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
 
 export interface ViewModeOption {
@@ -71,9 +71,13 @@ export function canBeChairman(session: Session | null): boolean {
 /**
  * Доступные режимы для переключателя на основе сессии (без имён организаций).
  * ППО, МПО и РПО взаимоисключающие: показываем только один кабинет председателя,
- * приоритет РПО > МПО > ППО (региональный не может быть одновременно «Председатель» и «Региональный»).
+ * приоритет РПО > МПО > ППО.
+ * Если пользователь — сотрудник (добавлен председателем по роли РПО), добавляется режим «Сотрудник».
  */
-export function getAvailableViewModes(session: Session | null): ViewModeOption[] {
+export function getAvailableViewModes(
+  session: Session | null,
+  isStaff?: boolean
+): ViewModeOption[] {
   if (!session?.user) {
     return [{ mode: "MEMBER", label: "Член участник" }];
   }
@@ -84,11 +88,15 @@ export function getAvailableViewModes(session: Session | null): ViewModeOption[]
   const isPPOHead = Boolean(u.isPPOHead || role === "PPO_HEAD");
   const isMPOHead = Boolean(u.isMPOHead);
   const isRPOHead = Boolean(u.isRPOHead);
-  const canUseMemberMode = isMemberRole || isPPOHead || isMPOHead || isRPOHead;
+  const canUseMemberMode = isMemberRole || isPPOHead || isMPOHead || isRPOHead || isStaff;
 
   const modes: ViewModeOption[] = [];
   if (canUseMemberMode) {
     modes.push({ mode: "MEMBER", label: "Член участник" });
+  }
+  // Режим «Сотрудник»: у кого есть активная должность по роли РПО (добавлен председателем ППО)
+  if (isStaff) {
+    modes.push({ mode: "STAFF", label: "Сотрудник" });
   }
   // Только один кабинет председателя: РПО, МПО или ППО (в порядке приоритета)
   if (isRPOHead && u.rpoHeadOrganizationId) {

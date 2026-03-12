@@ -8,6 +8,7 @@ import {
   getOrCreatePrivateChat,
   getChatById,
   ChatFilter,
+  formatChatInfo,
 } from "@/lib/chat-service";
 import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
 import { getSupportUserId } from "@/lib/support-user";
@@ -326,6 +327,61 @@ export async function GET(request: NextRequest) {
       (user?.isPPOHead && !user?.viewMode) || // Обратная совместимость
       (user?.isMPOHead && !user?.viewMode) ||
       (user?.isRPOHead && !user?.viewMode);
+
+    // Самовосстановление подписки на каналы:
+    // если пользователь выпал из участников channel-чата (исторические данные/миграции),
+    // возвращаем его в каналы своей организации и в региональный канал.
+    try {
+      const channelChats = await prisma.chat.findMany({
+        where: {
+          type: "CHANNEL",
+          newsChannel: {
+            OR: [
+              { organizationId: currentOrgId },
+              { organizationId: null, name: REGIONAL_NEWS_CHANNEL_NAME },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+
+      for (const ch of channelChats) {
+        const existingParticipant = await prisma.chatParticipant.findUnique({
+          where: {
+            chatId_userId: {
+              chatId: ch.id,
+              userId,
+            },
+          },
+          select: { id: true, leftAt: true },
+        });
+
+        if (!existingParticipant) {
+          await prisma.chatParticipant.create({
+            data: {
+              chatId: ch.id,
+              userId,
+              role: "member",
+            },
+          }).catch(() => {});
+        } else if (existingParticipant.leftAt) {
+          await prisma.chatParticipant.update({
+            where: {
+              chatId_userId: {
+                chatId: ch.id,
+                userId,
+              },
+            },
+            data: {
+              leftAt: null,
+              role: "member",
+            },
+          }).catch(() => {});
+        }
+      }
+    } catch (repairErr) {
+      console.warn("[chat] channel membership self-heal warning:", repairErr);
+    }
     
     // ВАЖНО: Для участников всегда инвалидируем кэш, чтобы получить актуальные данные
     // Это гарантирует, что личные чаты будут видны после переключения режима
@@ -544,7 +600,8 @@ export async function GET(request: NextRequest) {
           }
           return currentOrgId != null && channelOrgId === currentOrgId;
         }
-        if (chat.type === "GROUP" && chat.meetingId) return true;
+        // В режиме участника не показываем чаты заседаний (GROUP+meetingId) — они доступны только в режиме «Сотрудник»/председатель
+        if (chat.type === "GROUP" && chat.meetingId) return false;
         return false;
       });
     } else if (currentOrgId != null) {
@@ -567,6 +624,87 @@ export async function GET(request: NextRequest) {
         }
         return channelOrgId === currentOrgId;
       });
+    }
+
+    // Fallback: принудительно добавляем каналы организации + региональный канал в выдачу,
+    // даже если они временно выпали из основного списка (исторические расхождения/кэш).
+    try {
+      const shouldIncludeOrgChannels =
+        currentOrgId != null && !(user?.viewMode === "RPO_HEAD" && user?.rpoHeadOrganizationId != null);
+      if (shouldIncludeOrgChannels) {
+        const fallbackChannelChats = await prisma.chat.findMany({
+          where: {
+            type: "CHANNEL",
+            newsChannel: {
+              OR: [
+                { organizationId: currentOrgId },
+                { organizationId: null, name: REGIONAL_NEWS_CHANNEL_NAME },
+              ],
+            },
+          },
+          include: {
+            participants: {
+              where: { leftAt: null },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    avatarUrl: true,
+                  },
+                },
+              },
+            },
+            lastMessage: {
+              select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                messageType: true,
+              },
+            },
+            newsChannel: {
+              select: {
+                id: true,
+                name: true,
+                iconUrl: true,
+                organizationId: true,
+                organization: { select: { name: true } },
+              },
+            },
+            ticket: {
+              select: {
+                id: true,
+                publicId: true,
+                title: true,
+              },
+            },
+            _count: {
+              select: {
+                participants: true,
+                messages: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+        });
+
+        const existingIds = new Set(filteredChats.map((c: any) => c.id));
+        for (const channelChat of fallbackChannelChats) {
+          if (existingIds.has(channelChat.id)) continue;
+          const formatted = formatChatInfo(channelChat, userId, 0);
+          if (formatted) {
+            filteredChats.push(formatted as any);
+            existingIds.add(channelChat.id);
+          }
+        }
+      }
+    } catch (fallbackErr) {
+      console.warn("[chat] channel fallback merge warning:", fallbackErr);
     }
 
     // Добавляем ИИ чат и чат техподдержки в начало списка
@@ -738,10 +876,35 @@ export async function POST(request: NextRequest) {
               where: { id: userId },
               select: { organizationId: true },
             });
+            const normalizedChannelName = (name || defaultName).trim();
+            if (!normalizedChannelName) {
+              return NextResponse.json(
+                { error: "Название канала обязательно" },
+                { status: 400 }
+              );
+            }
+
+            // Не даём создавать дубли каналов с одинаковым названием в одной организации
+            const duplicateNewsChannel = await prisma.newsChannel.findFirst({
+              where: {
+                organizationId: user?.organizationId || null,
+                name: {
+                  equals: normalizedChannelName,
+                  mode: "insensitive",
+                },
+              },
+              select: { id: true },
+            });
+            if (duplicateNewsChannel) {
+              return NextResponse.json(
+                { error: "Канал с таким названием уже существует" },
+                { status: 400 }
+              );
+            }
             
             const newsChannel = await prisma.newsChannel.create({
               data: {
-                name: name || defaultName,
+                name: normalizedChannelName,
                 description: description?.trim() || null,
                 iconUrl: iconUrl || null,
                 organizationId: user?.organizationId || null,

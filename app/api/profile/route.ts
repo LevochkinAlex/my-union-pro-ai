@@ -13,6 +13,7 @@ import { saveUserProfileToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { sendMassNotification } from "@/lib/notifications";
 import { withCache, getCacheKey } from "@/lib/cache";
 import { isRestrictedJobTitleForSelfService } from "@/lib/dictionaries";
+import { findPPOsByWorkplace } from "@/lib/workplace-ppo-mapping";
 // Удалено: SystemMessages - больше не используется
 
 function normalizeString(value: unknown): string | null {
@@ -340,6 +341,8 @@ export async function PUT(request: NextRequest) {
         profession: true,
         education: true,
         organizationId: true,
+        isPPOHead: true,
+        ppoHeadOrganizationId: true,
         membershipStatus: true,
         unionMembershipStatus: true,
         profileChangedAfterDocuments: true, // Нужен для проверки изменения флага
@@ -347,6 +350,70 @@ export async function PUT(request: NextRequest) {
         bestBenefitsPassword: true,
       },
     });
+
+    let effectiveOrganizationId = organizationId;
+    const effectiveWorkplace = workplace ?? userBeforeUpdate?.workplace ?? null;
+    const effectiveWorkplaceInn = workplaceInn ?? userBeforeUpdate?.workplaceInn ?? null;
+
+    // Запрещаем сохранять произвольное место работы: ППО должна определяться через справочник привязок.
+    if (effectiveWorkplace && effectiveWorkplaceInn) {
+      const ppoOptions = await findPPOsByWorkplace(effectiveWorkplace, effectiveWorkplaceInn);
+      if (ppoOptions.length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Для выбранного места работы не найдена привязанная ППО в справочнике. Выберите место работы из привязанных или обратитесь к администратору.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const currentOrRequestedOrganizationId =
+        effectiveOrganizationId !== undefined
+          ? effectiveOrganizationId
+          : (userBeforeUpdate?.organizationId ?? null);
+
+      if (!currentOrRequestedOrganizationId) {
+        if (ppoOptions.length === 1) {
+          effectiveOrganizationId = ppoOptions[0].id;
+        } else {
+          return NextResponse.json(
+            {
+              error:
+                "Для данного места работы найдено несколько ППО. Выберите организацию профсоюза из списка.",
+            },
+            { status: 400 }
+          );
+        }
+      } else if (!ppoOptions.some((p) => p.id === currentOrRequestedOrganizationId)) {
+        return NextResponse.json(
+          {
+            error:
+              "Выбранная организация профсоюза не привязана к указанному месту работы. Выберите ППО из справочника.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Председатель ППО не может быть членом другой организации.
+    if (userBeforeUpdate?.isPPOHead && userBeforeUpdate?.ppoHeadOrganizationId) {
+      if (effectiveOrganizationId === null) {
+        return NextResponse.json(
+          { error: "Председатель ППО не может очистить организацию в профиле. Сначала снимите роль председателя." },
+          { status: 400 }
+        );
+      }
+      if (
+        effectiveOrganizationId !== undefined &&
+        effectiveOrganizationId !== userBeforeUpdate.ppoHeadOrganizationId
+      ) {
+        return NextResponse.json(
+          { error: "Председатель ППО должен состоять в той же организации, где назначен председателем." },
+          { status: 400 }
+        );
+      }
+    }
 
     if (
       isRestrictedJobTitleForSelfService(jobTitle) &&
@@ -464,8 +531,8 @@ export async function PUT(request: NextRequest) {
     // Используем фактические значения, которые будут сохранены
     // ВАЖНО: organizationId сравниваем только если он явно передан в body
     // Это предотвращает ложное определение изменений при автосохранении других полей
-    const actualOrganizationId = organizationId !== undefined 
-      ? organizationId  // null или непустая строка
+    const actualOrganizationId = effectiveOrganizationId !== undefined 
+      ? effectiveOrganizationId  // null или непустая строка
       : (userBeforeUpdate?.organizationId || null);
     
     const documentsAffectingFields = [
@@ -509,7 +576,7 @@ export async function PUT(request: NextRequest) {
       firstName: firstName ? capitalizeName(firstName) : null,
       lastName: lastName ? capitalizeName(lastName) : null,
       phone: normalizedPhone,
-      organizationId: organizationId || null,
+      organizationId: actualOrganizationId || null,
     });
 
     // ВАЖНО: Не перезаписываем существующие данные на null, если приходят пустые строки
@@ -561,15 +628,16 @@ export async function PUT(request: NextRequest) {
     updateData.email = emailToSave;
     updateData.phone = normalizedPhone || (userBeforeUpdate?.phone || null);
     
-    // ВАЖНО: organizationId обновляем только если он явно передан в body
-    // Это предотвращает случайное стирание организации при автосохранении других полей
-    // organizationId может быть: undefined (не трогаем), null (явная очистка), или строка (новое значение)
-    if (organizationId !== undefined) {
-      updateData.organizationId = organizationId; // null или непустая строка
+    // organizationId обновляем при явной передаче ИЛИ при автоподстановке из справочника workplace->PPO.
+    const shouldUpdateOrganizationId =
+      organizationId !== undefined ||
+      String(userBeforeUpdate?.organizationId || "") !== String(actualOrganizationId ?? "");
+    if (shouldUpdateOrganizationId) {
+      updateData.organizationId = actualOrganizationId; // null или непустая строка
       updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
       // Исключённый сменил организацию — переводим в «ожидает одобрения», как при первой подаче
       const isExcluded = userBeforeUpdate?.membershipStatus === "EXCLUDED" || userBeforeUpdate?.unionMembershipStatus === "REMOVED";
-      const orgChanged = String(userBeforeUpdate?.organizationId || "") !== String(organizationId ?? "");
+      const orgChanged = String(userBeforeUpdate?.organizationId || "") !== String(actualOrganizationId ?? "");
       if (isExcluded && orgChanged) {
         updateData.membershipStatus = "PROFILE_INCOMPLETE";
         updateData.unionMembershipStatus = "NOT_ACCEPTED";

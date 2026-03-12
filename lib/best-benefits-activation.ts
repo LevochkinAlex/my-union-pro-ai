@@ -374,7 +374,11 @@ export async function getUserActivatedDiscounts(
           
           // Если это клиентская ошибка (4xx) - не пробуем снова
           if (response.status >= 400 && response.status < 500) {
-            console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+            if (response.status === 401) {
+              console.warn(`[BestBenefits Activation] BB 401 (user token invalid), returning empty array, keeping local data`);
+            } else {
+              console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+            }
             return [];
           }
           
@@ -589,14 +593,21 @@ export async function getUserActivatedDiscounts(
       return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
+      const isAuthError = lastError.message.includes("401") || lastError.message.includes("User authentication failed");
+      if (isAuthError) {
+        console.warn(`[BestBenefits Activation] User BB auth failed (attempt ${attempt + 1}), using local data:`, lastError.message);
+      } else {
+        console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
+      }
       
       // Если это последняя попытка, возвращаем пустой массив
       // НЕ используем fallback, чтобы не показывать невалидные промокоды
       if (attempt >= retries) {
-        console.error("[BestBenefits Activation] All attempts failed, returning empty array (no fallback to prevent invalid promo codes)", {
-          error: lastError.message,
-        });
+        if (!isAuthError) {
+          console.error("[BestBenefits Activation] All attempts failed, returning empty array (no fallback to prevent invalid promo codes)", {
+            error: lastError.message,
+          });
+        }
         return [];
       }
       
@@ -606,10 +617,12 @@ export async function getUserActivatedDiscounts(
   }
 
   // Если все попытки провалились, возвращаем пустой массив
-  // НЕ используем fallback, чтобы не показывать невалидные промокоды
-  console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)", {
-    error: lastError?.message,
-  });
+  const isAuthError = lastError?.message?.includes("401") || lastError?.message?.includes("User authentication failed");
+  if (!isAuthError) {
+    console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)", {
+      error: lastError?.message,
+    });
+  }
   return [];
 }
 

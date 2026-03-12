@@ -86,7 +86,12 @@ export async function getUserBestBenefitsToken(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[UserAuth] Authentication failed for ${login}:`, response.status, errorText);
+        // 401 = неверный email/пароль — ожидаемая ситуация (устаревший пароль в БД, пользователь сменил пароль в BB)
+        if (response.status === 401) {
+          console.warn(`[UserAuth] BestBenefits 401 for ${login} (invalid credentials or expired). Use sync/reset password to fix.`);
+        } else {
+          console.error(`[UserAuth] Authentication failed for ${login}:`, response.status, errorText);
+        }
         lastError = new Error(`User authentication failed: ${response.status} - ${errorText}`);
         continue;
       }
