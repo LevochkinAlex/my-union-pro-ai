@@ -2,14 +2,15 @@
 
 set -e
 
-SERVER="root@194.87.49.210"
-PASSWORD="wu,iMrZj6goZh?"
-PROJECT_DIR="/opt/my-union-pro"
+# Данные от VDS из env (например: export DEPLOY_SERVER=root@194.87.49.210 DEPLOY_PASSWORD=...)
+SERVER="${DEPLOY_SERVER:?Set DEPLOY_SERVER env}"
+PASSWORD="${DEPLOY_PASSWORD:?Set DEPLOY_PASSWORD env}"
+PROJECT_DIR="${DEPLOY_PROJECT_DIR:-/opt/my-union-pro}"
 
 echo "🚀 Starting full deployment..."
 echo ""
 
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER" << 'ENDSSH'
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER" 'set -e
 cd /opt/my-union-pro
 
 echo "=== Step 1: Git Pull ==="
@@ -37,7 +38,7 @@ pm2 logs my-union-pro --lines 10 --nostream
 echo ""
 
 echo "✅ Deployment completed!"
-ENDSSH
+'
 
 echo ""
 echo "✨ Full deployment finished!"
