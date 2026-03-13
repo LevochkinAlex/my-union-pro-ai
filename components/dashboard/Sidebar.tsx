@@ -237,20 +237,12 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                         <Link
                           key={subItem.href}
                           href={subItem.href}
-                          prefetch={false}
-                          onClick={(e) => {
-                            if (isNavigating) {
-                              e.preventDefault();
-                              return;
-                            }
-                            setIsNavigating(true);
-                            setTimeout(() => setIsNavigating(false), 500);
-                          }}
+                          prefetch={true}
                           className={`block rounded-md px-2.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                            subIsActive
-                              ? "bg-blue-100 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                              : "text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700/50"
-                          } ${isNavigating ? "pointer-events-none opacity-70" : ""}`}
+                              subIsActive
+                                ? "bg-blue-100 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                : "text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700/50"
+                          }`}
                         >
                           {subItem.label}
                         </Link>

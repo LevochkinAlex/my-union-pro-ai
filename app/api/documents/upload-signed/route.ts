@@ -162,28 +162,38 @@ export async function POST(request: NextRequest) {
     const fileKey = `signed/${safeFileName}`;
     
     let publicPath: string;
-    
-    // Всегда загружаем на VDS, если он настроен
+
+    const saveLocally = async (): Promise<string> => {
+      const uploadsDir = path.join(process.cwd(), "public", "uploads", "signed");
+      await mkdir(uploadsDir, { recursive: true });
+      const localPath = path.join(uploadsDir, safeFileName);
+      await writeFile(localPath, buffer);
+      return `/uploads/signed/${safeFileName}`;
+    };
+
     if (isVDSStorageConfigured()) {
       try {
         publicPath = await uploadFileToVDS(fileKey, buffer, file.type);
         console.log(`[upload-signed] File uploaded to VDS: ${publicPath}`);
       } catch (vdsError) {
         console.error("[upload-signed] VDS upload failed:", vdsError);
-        throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+        publicPath = await saveLocally();
+        console.log("[upload-signed] Fallback: file saved locally:", publicPath);
       }
     } else {
-      throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
+      publicPath = await saveLocally();
+      console.log("[upload-signed] File saved locally (VDS не настроен):", publicPath);
     }
 
     console.log("[upload-signed] File saved:", publicPath);
 
-    // Обновляем документ в БД и запускаем верификацию
+    // Для протокола заседания статус SIGNED выставляется только по кнопке «Подписать», не при загрузке скана
+    const isProtocol = !!document.meetingAsProtocol;
     const updatedDoc = await prisma.document.update({
       where: { id: documentId },
       data: {
         signedFilePath: publicPath,
-        status: "SIGNED",
+        ...(isProtocol ? {} : { status: "SIGNED" }),
         verificationStatus: "VERIFYING",
         verificationMessage: null,
         verifiedAt: null,

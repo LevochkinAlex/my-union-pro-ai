@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { useMembershipAccess } from "@/hooks/useMembershipAccess";
@@ -196,14 +195,6 @@ export default function DocumentsPage() {
   useEffect(() => {
     setActiveTab(tabParam);
   }, [tabParam]);
-
-  // Члены выборного органа: Исходящие = заседания (редирект на страницу заседаний).
-  // Не редиректим, если: re-applying, или не одобрен (pending/incomplete) — показываем заявления.
-  useEffect(() => {
-    if (!isLoading && isElectedBody && activeTab === "outgoing" && !isReApplying && isApproved) {
-      router.replace("/dashboard/documents/meetings");
-    }
-  }, [isLoading, isElectedBody, activeTab, router, isReApplying, isApproved]);
 
   const handleRegenerateDocuments = async () => {
     const confirmed = await confirm("Вы уверены, что хотите переформировать документы? Старые документы будут заменены.", "Подтвердите переформирование");
@@ -523,20 +514,6 @@ export default function DocumentsPage() {
     );
   }
 
-  // Члены выборного органа (одобренные): Исходящие = страница заседаний.
-  // Не одобренным и обычным членам показываем заявления на этой странице.
-  if (isElectedBody && isApproved && activeTab === "outgoing") {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4">
-        <Spinner />
-        <p className="text-gray-600 dark:text-gray-400">Переход к заседаниям...</p>
-        <Link href="/dashboard/documents/meetings" className="mt-2 inline-block text-blue-600 dark:text-blue-400 hover:underline">
-          Открыть заседания
-        </Link>
-      </div>
-    );
-  }
-
   const filteredIncoming =
     activeTab === "incoming" && incomingFilter !== "all"
       ? incomingDocuments.filter((doc) => getDocFilterType(doc) === incomingFilter)
@@ -568,18 +545,11 @@ export default function DocumentsPage() {
           {
             id: "outgoing",
             label: "Исходящие",
-            count:
-              (!isElectedBody || !isApproved) && outgoingDocuments.length > 0
-                ? outgoingDocuments.length
-                : undefined,
+            count: outgoingDocuments.length > 0 ? outgoingDocuments.length : undefined,
           },
         ]}
         activeTab={activeTab}
         onChange={(tabId) => {
-          if (tabId === "outgoing" && isElectedBody && isApproved) {
-            router.push("/dashboard/documents/meetings");
-            return;
-          }
           setActiveTab(tabId as "incoming" | "outgoing");
           router.replace(`/dashboard/documents?tab=${tabId}`);
         }}

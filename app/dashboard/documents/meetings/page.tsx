@@ -569,7 +569,7 @@ export default function MeetingsPage() {
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
-            Все документы
+            Все заседания
             {meetings.length > 0 && (
               <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                 {meetings.length}

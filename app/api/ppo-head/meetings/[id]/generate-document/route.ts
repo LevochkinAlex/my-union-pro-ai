@@ -34,7 +34,19 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { documentType, approve, regNumber: regNumberOverride } = body; // documentType: "AGENDA" | "PROTOCOL"; approve: true — сразу утвердить; regNumber — необязательный свой номер документа
+    const {
+      documentType,
+      approve,
+      regNumber: regNumberOverride,
+      protocolProceduralData: bodyProcedural,
+      meetingTime: bodyMeetingTime,
+      meetingDate: bodyMeetingDate,
+      meetingPlace: bodyMeetingPlace,
+      invitedGuests: bodyInvitedGuests,
+      voteCounterUserIds: bodyVoteCounterIds,
+      presidingOfficerUserId: bodyPresidingId,
+      secretaryUserId: bodySecretaryId,
+    } = body; // при формировании протокола — все текущие значения с формы
 
     if (!documentType || !["AGENDA", "PROTOCOL"].includes(documentType)) {
       return NextResponse.json(
@@ -148,7 +160,11 @@ export async function POST(
       regNumber = `${docPrefix}${String(nextNumber).padStart(5, "0")}`;
     }
 
-    const docDate = formatDate(meeting.scheduledDate);
+    // Дата заседания в документе: при формировании протокола — с формы, иначе из БД
+    const docDate =
+      documentType === "PROTOCOL" && bodyMeetingDate && typeof bodyMeetingDate === "string" && bodyMeetingDate.trim() !== ""
+        ? formatDate(new Date(bodyMeetingDate.trim()))
+        : formatDate(meeting.scheduledDate);
 
     // ФИО в документы (повестка, протокол): участники заседания = выборный орган из «Управление сотрудниками»
     // (meeting.participants созданы при создании заседания из списка elected-body-members);
@@ -164,12 +180,15 @@ export async function POST(
     const presentMembers = meeting.participants.filter(p => presentStatuses.includes(p.attendance));
     const absentMembers = meeting.participants.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED");
 
-    // Для протокола: подписывают Председательствующий и Секретарь (избранные на заседании — presidingOfficerUserId, secretaryUserId)
+    // Для протокола: подписывают Председательствующий и Секретарь; при формировании документа используем переданные с формы id, иначе — из БД
+    const effectivePresidingId = documentType === "PROTOCOL" && (bodyPresidingId != null && bodyPresidingId !== "") ? bodyPresidingId : meeting.presidingOfficerUserId;
+    const effectiveSecretaryId = documentType === "PROTOCOL" && (bodySecretaryId != null && bodySecretaryId !== "") ? bodySecretaryId : meeting.secretaryUserId;
+
     let presidingOfficerName = "";
     let protocolSecretaryName = "";
-    if (documentType === "PROTOCOL" && (meeting.presidingOfficerUserId || meeting.secretaryUserId)) {
-      const userIds = [meeting.presidingOfficerUserId, meeting.secretaryUserId].filter(Boolean) as string[];
-      const fromParticipants = userIds.map(uid => meeting.participants.find(p => p.userId === uid)?.user).filter(Boolean);
+    if (documentType === "PROTOCOL" && (effectivePresidingId || effectiveSecretaryId)) {
+      const userIds = [effectivePresidingId, effectiveSecretaryId].filter(Boolean) as string[];
+      const fromParticipants = userIds.map(uid => meeting.participants.find((p: any) => p.userId === uid)?.user).filter(Boolean);
       const foundIds = new Set(fromParticipants.map((u: any) => u.id));
       const missingIds = userIds.filter(uid => !foundIds.has(uid));
       let extraUsers: Array<{ id: string; firstName: string | null; lastName: string | null; middleName: string | null }> = [];
@@ -183,12 +202,12 @@ export async function POST(
         ...fromParticipants,
         ...extraUsers,
       ] as Array<{ id: string; firstName: string | null; lastName: string | null; middleName: string | null }>;
-      if (meeting.presidingOfficerUserId) {
-        const u = allUsers.find((u: any) => u.id === meeting.presidingOfficerUserId);
+      if (effectivePresidingId) {
+        const u = allUsers.find((u: any) => u.id === effectivePresidingId);
         presidingOfficerName = u ? formatUserName(u) : "";
       }
-      if (meeting.secretaryUserId) {
-        const u = allUsers.find((u: any) => u.id === meeting.secretaryUserId);
+      if (effectiveSecretaryId) {
+        const u = allUsers.find((u: any) => u.id === effectiveSecretaryId);
         protocolSecretaryName = u ? formatUserName(u) : "";
       }
     }
@@ -204,8 +223,17 @@ export async function POST(
     const absentMembersList = absentMembers.map(p =>
       p.user ? formatUserName(p.user) : p.externalName || ""
     ).filter(Boolean);
+    // Полный список членов профкома (в составе выборного органа) для блока «В состав профкома избраны»
+    const allMembersList = meeting.participants
+      .filter((p: any) => p.canVote)
+      .map((p: any) => (p.user ? formatUserName(p.user) : p.externalName || ""))
+      .filter(Boolean);
 
-    const procedural = (meeting as any).protocolProceduralData || {};
+    // При формировании протокола используем переданные с формы данные голосований (блоки 2–5), иначе — из БД
+    const procedural =
+      documentType === "PROTOCOL" && bodyProcedural && typeof bodyProcedural === "object"
+        ? bodyProcedural
+        : (meeting as any).protocolProceduralData || {};
 
     const resolveUserName = (userId: string | undefined) => {
       if (!userId) return "";
@@ -214,12 +242,35 @@ export async function POST(
       return "";
     };
 
+    // Ответственные за подсчёт голосов: при формировании протокола — с формы, иначе из БД
     const voteCounterIds: string[] = (() => {
+      if (documentType === "PROTOCOL" && bodyVoteCounterIds != null) {
+        if (Array.isArray(bodyVoteCounterIds)) return bodyVoteCounterIds.filter((id): id is string => typeof id === "string");
+        if (typeof bodyVoteCounterIds === "string") {
+          try { return JSON.parse(bodyVoteCounterIds) as string[]; } catch { return []; }
+        }
+      }
       const raw = (meeting as any).voteCounterUserIds;
       if (!raw) return [];
       try { return typeof raw === "string" ? JSON.parse(raw) : raw; } catch { return []; }
     })();
     const voteCounterNames = voteCounterIds.map(resolveUserName).filter(Boolean);
+
+    // При формировании протокола время начала берём с формы, если передано
+    const meetingTime =
+      documentType === "PROTOCOL" && typeof bodyMeetingTime === "string" && bodyMeetingTime.trim() !== ""
+        ? bodyMeetingTime.trim()
+        : meeting.scheduledTime || "";
+
+    // Место и гости: при формировании протокола — с формы, иначе из БД
+    const meetingPlace =
+      documentType === "PROTOCOL" && bodyMeetingPlace !== undefined && bodyMeetingPlace !== null
+        ? String(bodyMeetingPlace).trim()
+        : meeting.location || "";
+    const invitedGuestsValue =
+      documentType === "PROTOCOL" && bodyInvitedGuests !== undefined && bodyInvitedGuests !== null
+        ? String(bodyInvitedGuests).trim()
+        : (meeting as any).invitedGuests || "";
 
     const templateData = {
       organizationName: meeting.organization.name,
@@ -227,8 +278,8 @@ export async function POST(
       organizationChairmanJobTitle: meeting.organization.chairmanJobTitle || "Председатель профкома",
       meetingNumber: meeting.number || "1",
       meetingDate: docDate,
-      meetingTime: meeting.scheduledTime || "",
-      meetingPlace: meeting.location || "",
+      meetingTime,
+      meetingPlace,
       regNumber,
       currentDate: formatDate(new Date()),
 
@@ -241,7 +292,9 @@ export async function POST(
       presentMembers: presentMembersList.join(", "),
       absentMembersList,
       absentMembers: absentMembersList.join(", "),
-      invitedGuests: (meeting as any).invitedGuests || "",
+      absentCount: absentMembersList.length,
+      allMembersList,
+      invitedGuests: invitedGuestsValue,
 
       totalMembers: totalEligible,
       presentCount: presentVotersCount,
@@ -492,10 +545,6 @@ function generateAgendaHTML(meeting: any, data: any): string {
     .info-row { margin: 6px 0; }
     .agenda-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
     .agenda-table td { border: 1px solid #333; }
-    .signatures { margin-top: 50px; page-break-inside: avoid; }
-    .sig-row { display: flex; justify-content: space-between; margin-top: 40px; }
-    .sig-block { width: 45%; }
-    .sig-block .sig-line { border-bottom: 1px solid #000; margin-bottom: 4px; margin-top: 30px; }
   </style>
 </head>
 <body>
@@ -517,21 +566,6 @@ function generateAgendaHTML(meeting: any, data: any): string {
       ${agendaItemsHtml}
     </tbody>
   </table>
-
-  <div class="signatures">
-    <div class="sig-row">
-      <div class="sig-block">
-        <div>Председатель:</div>
-        <div class="sig-line"></div>
-        <div>${escapeHtml(data.chairmanName || "_________________________")}</div>
-      </div>
-      <div class="sig-block">
-        <div>Секретарь:</div>
-        <div class="sig-line"></div>
-        <div>${escapeHtml(data.secretaryName || "_________________________")}</div>
-      </div>
-    </div>
-  </div>
 </body>
 </html>
   `.trim();
@@ -568,11 +602,20 @@ function generateProtocolHTML(meeting: any, data: any): string {
     </div>
   `;
 
-  const agendaListHtml = meeting.agendaItems.map((item: any) =>
-    `<p style="margin: 2px 0; padding-left: 20px;">${item.orderNumber}. ${escapeHtml(item.title)}</p>`
-  ).join("");
+  // В блоке 5 в протоколе перечисляем все пункты; без галочки — с припиской «(не актуально)»
+  const approvedAgendaIds = proc.agendaApprovedItemIds;
+  const approvedSet =
+    approvedAgendaIds && Array.isArray(approvedAgendaIds) && approvedAgendaIds.length > 0
+      ? new Set(approvedAgendaIds as string[])
+      : new Set(meeting.agendaItems.map((item: any) => item.id));
+  const agendaListHtml = meeting.agendaItems.map((item: any) => {
+    const suffix = approvedSet.has(item.id) ? "" : " <strong>(не актуально)</strong>";
+    return `<p style="margin: 2px 0; padding-left: 20px;">${item.orderNumber}. ${escapeHtml(item.title)}${suffix}</p>`;
+  }).join("");
 
-  const agendaItemsHtml = meeting.agendaItems.map((item: any) => {
+  // Блок 6 «Рассмотрение вопросов повестки дня»: только активные (отмеченные галочкой) пункты
+  const agendaItemsForBlock6 = meeting.agendaItems.filter((item: any) => approvedSet.has(item.id));
+  const agendaItemsHtml = agendaItemsForBlock6.map((item: any) => {
     const speakerName = item.speakerName ||
       (item.speaker ? [item.speaker.lastName, item.speaker.firstName, item.speaker.middleName].filter(Boolean).join(" ") : "");
     const positionText = (item.speakerPosition || (item.speaker?.jobTitle ?? "")).trim();
@@ -597,6 +640,10 @@ function generateProtocolHTML(meeting: any, data: any): string {
   ).join("<br>");
 
   const absentMemberLines = (data.absentMembersList || []).map((name: string, i: number) =>
+    `${i + 1}. ${escapeHtml(name)}`
+  ).join("<br>");
+
+  const allMemberLines = (data.allMembersList || []).map((name: string, i: number) =>
     `${i + 1}. ${escapeHtml(name)}`
   ).join("<br>");
 
@@ -633,7 +680,6 @@ function generateProtocolHTML(meeting: any, data: any): string {
     .sig-block .sig-title { margin-bottom: 30px; }
     .sig-block .sig-line { border-bottom: 1px solid #000; margin-bottom: 4px; }
     .sig-block .sig-name { font-size: 13px; }
-    .divider { border: none; border-top: 1px solid #ccc; margin: 16px 0; }
   </style>
 </head>
 <body>
@@ -650,21 +696,20 @@ function generateProtocolHTML(meeting: any, data: any): string {
 
   <div class="presence-section">
     <p><strong>В состав профкома избраны:</strong> ${data.totalMembers} чел.</p>
+    <div style="padding-left: 20px; margin: 4px 0;">${allMemberLines || "____________________"}</div>
 
     <p><strong>Присутствовали на заседании:</strong> ${data.presentCount} чел.</p>
     <div style="padding-left: 20px; margin: 4px 0;">${presentMemberLines || "____________________"}</div>
 
     ${absentMemberLines ? `
-    <p><strong>Отсутствовали:</strong></p>
+    <p><strong>Отсутствовали:</strong> ${data.absentCount} чел.</p>
     <div style="padding-left: 20px; margin: 4px 0;">${absentMemberLines}</div>
     ` : ""}
 
     ${data.invitedGuests ? `<p><strong>Присутствовали гости:</strong> ${escapeHtml(data.invitedGuests)}</p>` : ""}
   </div>
 
-  <p class="quorum-statement">В соответствии с п.&nbsp;3 ст.&nbsp;18 Устава Профсоюза заседание профсоюзного комитета считается правомочным (имеет кворум) и объявляется открытым. Присутствуют ${data.presentCount} из ${data.totalMembers} членов (необходимо не менее ${data.quorumRequired}).</p>
-
-  <hr class="divider">
+  <p class="quorum-statement">В соответствии с п.&nbsp;3 ст.&nbsp;18 Устава Профсоюза заседание профсоюзного комитета считается правомочным (имеет кворум) и объявляется открытым.</p>
 
   ${proceduralBlock(
     "Об избрании председательствующего",
@@ -674,8 +719,6 @@ function generateProtocolHTML(meeting: any, data: any): string {
     vFor("chairmanVotesFor"), vFor("chairmanVotesAgainst"), vFor("chairmanVotesAbstained"),
   )}
 
-  <hr class="divider">
-
   ${proceduralBlock(
     "Об избрании секретаря",
     "Об избрании секретаря на заседании Профкома.",
@@ -684,8 +727,6 @@ function generateProtocolHTML(meeting: any, data: any): string {
     vFor("secretaryVotesFor"), vFor("secretaryVotesAgainst"), vFor("secretaryVotesAbstained"),
   )}
 
-  <hr class="divider">
-
   ${proceduralBlock(
     "О порядке подсчёта голосов",
     "О порядке подсчёта голосов на заседании профкома.",
@@ -693,8 +734,6 @@ function generateProtocolHTML(meeting: any, data: any): string {
     `Поручить вести подсчет голосов на заседании Профкома – ${data.voteCounterNames.length > 0 ? escapeHtml(data.voteCounterNames.join(", ")) : "____________________"}`,
     vFor("voteCounterVotesFor"), vFor("voteCounterVotesAgainst"), vFor("voteCounterVotesAbstained"),
   )}
-
-  <hr class="divider">
 
   <div class="protocol-block">
     <p><strong>СЛУШАЛИ:</strong> О повестке дня заседания профсоюзного комитета.</p>
@@ -705,8 +744,6 @@ function generateProtocolHTML(meeting: any, data: any): string {
     <p class="vote-line">«За» – ${vFor("agendaApprovalVotesFor")}; &nbsp; «Против» – ${vFor("agendaApprovalVotesAgainst")}; &nbsp; «Воздержались» – ${vFor("agendaApprovalVotesAbstained")}</p>
     <p><em>${getVoteResult(vFor("agendaApprovalVotesFor"), vFor("agendaApprovalVotesAgainst"), vFor("agendaApprovalVotesAbstained"))}</em></p>
   </div>
-
-  <hr class="divider">
 
   ${agendaItemsHtml}
 

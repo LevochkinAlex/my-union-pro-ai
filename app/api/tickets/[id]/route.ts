@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatAppealId } from "@/lib/appeal-id";
-import { sendChatMessage } from "@/lib/chat-server-utils";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getDemoMemberTicketById } from "@/lib/demo";
 

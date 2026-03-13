@@ -34,6 +34,8 @@ export interface TemplateVariables {
   votingParticipants?: string;
   presentMembers?: string;
   absentMembers?: string;
+  /** Список членов профкома (в составе выборного органа) для блока «В состав профкома избраны» */
+  allMembersList?: string;
   secretaryName?: string;
   secretaryJobTitle?: string;
   resolutionNumber?: string;
@@ -72,6 +74,7 @@ export const TEMPLATE_VARIABLES_FOR_EDITOR: { key: keyof TemplateVariables | str
   { key: "votingParticipants", label: "Участники голосования (список ФИО и должностей)" },
   { key: "presentMembers", label: "Присутствующие члены профкома (список)" },
   { key: "absentMembers", label: "Отсутствующие члены профкома (список)" },
+  { key: "allMembersList", label: "В состав профкома избраны (список ФИО)" },
   { key: "secretaryName", label: "ФИО секретаря" },
   { key: "secretaryJobTitle", label: "Должность секретаря" },
   { key: "resolutionNumber", label: "Номер постановления" },

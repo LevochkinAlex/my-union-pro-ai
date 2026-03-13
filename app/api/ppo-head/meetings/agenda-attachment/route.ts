@@ -10,6 +10,7 @@ import { authOptions } from "@/lib/auth";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import path from "path";
+import { writeFile, mkdir } from "fs/promises";
 
 if (typeof window === "undefined") {
   initVDSStorageFromEnv();
@@ -67,18 +68,30 @@ export async function POST(request: NextRequest) {
     const fileName = `${Date.now()}_${safeName}`;
     const fileKey = `meeting-attachments/${fileName}`;
 
-    if (!isVDSStorageConfigured()) {
-      return NextResponse.json(
-        { error: "Хранилище файлов не настроено. Обратитесь к администратору." },
-        { status: 503 }
-      );
+    const saveLocally = async (): Promise<string> => {
+      const uploadsDir = path.join(process.cwd(), "public", "uploads", "meeting-attachments");
+      await mkdir(uploadsDir, { recursive: true });
+      const localPath = path.join(uploadsDir, fileName);
+      await writeFile(localPath, buffer);
+      return `/uploads/meeting-attachments/${fileName}`;
+    };
+
+    let url: string;
+
+    if (isVDSStorageConfigured()) {
+      try {
+        const vdsPath = await uploadFileToVDS(fileKey, buffer, file.type || "application/octet-stream");
+        url = vdsPath.replace(/^\/uploads\//, "/api/uploads/");
+      } catch (vdsError) {
+        console.error("[ppo-head/meetings/agenda-attachment] VDS upload failed, saving locally:", vdsError);
+        url = await saveLocally();
+      }
+    } else {
+      url = await saveLocally();
     }
 
-    const vdsPath = await uploadFileToVDS(fileKey, buffer, file.type || "application/octet-stream");
-    const apiUrl = vdsPath.replace(/^\/uploads\//, "/api/uploads/");
-
     return NextResponse.json({
-      url: apiUrl,
+      url,
       name: file.name,
       size: file.size,
     });
