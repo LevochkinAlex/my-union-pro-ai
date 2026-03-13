@@ -19,22 +19,37 @@ export default function AdminInvoicesPage() {
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [offerFilter, setOfferFilter] = useState("");
   const [skip, setSkip] = useState(0);
   const limit = 30;
 
   const load = async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const params = new URLSearchParams({ limit: String(limit), skip: String(skip) });
       if (offerFilter.trim()) params.set("offerNumber", offerFilter.trim());
       const res = await fetch(`/api/admin/subscription/invoices?${params}`);
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        if (res.status === 401) {
+          setErrorMessage("Нужно заново авторизоваться.");
+        } else if (res.status === 403) {
+          setErrorMessage("Доступ только для суперадминистратора.");
+        } else {
+          const text = await res.text().catch(() => "");
+          setErrorMessage(text || "Не удалось загрузить список счетов.");
+        }
+        setInvoices([]);
+        setTotal(0);
+        return;
+      }
       const data = await res.json();
       setInvoices(data.invoices ?? []);
       setTotal(data.total ?? 0);
     } catch (e) {
       console.error(e);
+      setErrorMessage("Ошибка сети при загрузке счетов.");
       setInvoices([]);
       setTotal(0);
     } finally {
@@ -86,6 +101,10 @@ export default function AdminInvoicesPage() {
       {loading ? (
         <div className="flex justify-center py-8">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-r-transparent" />
+        </div>
+      ) : errorMessage ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+          {errorMessage}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
