@@ -53,13 +53,14 @@ export async function PATCH(
   const meta = (payment.metadata as Record<string, unknown>) || {};
   const tariffLabel = tariffKey ? (getTariffByKey(tariffKey)?.label ?? `До ${memberLimit} участников`) : `До ${memberLimit} участников`;
 
+  const resolvedTariffKey = tariffKey ?? meta.tariffKey;
   await prisma.organizationPayment.update({
     where: { id: paymentId },
     data: {
       metadata: {
         ...meta,
         memberLimit,
-        tariffKey: tariffKey ?? meta.tariffKey,
+        tariffKey: resolvedTariffKey != null ? String(resolvedTariffKey) : null,
         tariffLabel,
       },
     },
