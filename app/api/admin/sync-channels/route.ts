@@ -27,11 +27,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
-    // Получаем все NewsChannel без связанного Chat
-    const channelsWithoutChat = await prisma.newsChannel.findMany({
-      where: {
-        chat: null,
-      },
+    const { searchParams } = new URL(request.url);
+    const fullSync =
+      searchParams.get("full") === "1" ||
+      searchParams.get("full") === "true" ||
+      searchParams.get("mode") === "full";
+
+    // Обычный режим: только каналы без chat.
+    // fullSync: все каналы (для досинхронизации участников уже существующих каналов).
+    const channels = await prisma.newsChannel.findMany({
+      where: fullSync
+        ? undefined
+        : {
+            chat: null,
+          },
       include: {
         organization: {
           select: {
@@ -54,15 +63,14 @@ export async function POST(request: NextRequest) {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const channel of channelsWithoutChat) {
+    for (const channel of channels) {
       if (!channel.organizationId) {
-        console.warn(`[sync-channels] Channel ${channel.id} has no organizationId`);
-        errorCount++;
-        continue;
+        // Глобальные каналы (например, "Региональные новости") тоже синхронизируем.
+        // Для них organizationId = null и логика в syncChannelWithChat это поддерживает.
       }
 
       try {
-        const chatId = await syncChannelWithChat(channel.id, channel.organizationId);
+        const chatId = await syncChannelWithChat(channel.id, channel.organizationId ?? null);
         if (chatId) {
           successCount++;
           results.push({
@@ -94,8 +102,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      mode: fullSync ? "full" : "missing_chat_only",
       message: `Синхронизировано ${successCount} каналов, ошибок: ${errorCount}`,
-      total: channelsWithoutChat.length,
+      total: channels.length,
       successCount,
       errorCount,
       results,

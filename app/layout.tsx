@@ -56,6 +56,8 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
+        {/* Яндекс Партнёрка: верификационный код (временно, потом удалить) */}
+        <meta name="yandex-verification" content="zbrq7qg64z2qsesl" />
         {/* Favicon и иконки для всех браузеров (с поддержкой CDN) */}
         <IconsHead />
         
@@ -222,6 +224,8 @@ export default function RootLayout({
       </head>
       <body className="font-sans" suppressHydrationWarning>
         <Providers>{children}</Providers>
+        {/* Яндекс Партнёрка: копирайт zbrq7qg64z2qsesl (временно, потом удалить) */}
+        <span data-yandex-partner="zbrq7qg64z2qsesl" style={{ position: 'absolute', left: 0, top: 0, fontSize: '1px', opacity: 0.01, pointerEvents: 'none' }}>copyright zbrq7qg64z2qsesl</span>
       </body>
     </html>
   );

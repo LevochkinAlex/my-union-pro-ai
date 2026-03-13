@@ -5,7 +5,6 @@
  * Uses PERSONAL user tokens, not organization token
  */
 
-import { getBestBenefitsToken } from "@/lib/best-benefits-auth"; // For organization operations
 import { getUserBestBenefitsToken } from "@/lib/best-benefits-user-auth"; // For user operations
 
 const ACTIVATION_API_BASE = "https://bestbenefits.ru/api";
@@ -33,6 +32,13 @@ interface ActivationResponse {
     expiresAt?: string;
     end_date?: string;
   };
+}
+
+const DEBUG_BB_ACTIVATION = process.env.DEBUG_BB_ACTIVATION === "true";
+function debugLog(...args: unknown[]) {
+  if (DEBUG_BB_ACTIVATION) {
+    console.log(...args);
+  }
 }
 
 function decodeUnicodeEscapes(input: string): string {
@@ -78,7 +84,7 @@ export async function activateBestBenefitsDiscount(
     
     if (params.password) {
       // User has BestBenefits account - use their personal token
-      console.log("[BestBenefits Activation] Using PERSONAL token for user:", params.email);
+      debugLog("[BestBenefits Activation] Using PERSONAL token for user:", params.email);
       token = await getUserBestBenefitsToken(params.email, params.password);
     } else {
       // НЕ используем organization token - это может активировать скидки от организации (p-crusader@yandex.ru)
@@ -101,7 +107,7 @@ export async function activateBestBenefitsDiscount(
       id: params.discountId, // ID предложения
     };
 
-    console.log("[BestBenefits Activation] 🔄 Attempting activation via /promo endpoint:", {
+    debugLog("[BestBenefits Activation] 🔄 Attempting activation via /promo endpoint:", {
       url,
       payload,
       discountId: params.discountId,
@@ -117,14 +123,14 @@ export async function activateBestBenefitsDiscount(
       body: JSON.stringify(payload),
     });
 
-    console.log("[BestBenefits Activation] ========================================");
-    console.log("[BestBenefits Activation] Response status:", response.status, response.statusText);
-    console.log("[BestBenefits Activation] Response headers:", Object.fromEntries(response.headers.entries()));
-    console.log("[BestBenefits Activation] ========================================");
+    debugLog("[BestBenefits Activation] ========================================");
+    debugLog("[BestBenefits Activation] Response status:", response.status, response.statusText);
+    debugLog("[BestBenefits Activation] Response headers:", Object.fromEntries(response.headers.entries()));
+    debugLog("[BestBenefits Activation] ========================================");
 
     // Всегда читаем тело ответа как текст сначала для подробного логирования
     const responseText = await response.text();
-    console.log("[BestBenefits Activation] Raw response body:", responseText);
+    debugLog("[BestBenefits Activation] Raw response body:", responseText);
 
     if (!response.ok) {
       console.error("[BestBenefits Activation] ❌ HTTP error:", {
@@ -151,7 +157,7 @@ export async function activateBestBenefitsDiscount(
     let data;
     try {
       data = JSON.parse(responseText);
-      console.log("[BestBenefits Activation] ✅ Parsed JSON response:", JSON.stringify(data, null, 2));
+      debugLog("[BestBenefits Activation] ✅ Parsed JSON response:", JSON.stringify(data, null, 2));
     } catch (e) {
       console.error("[BestBenefits Activation] ❌ Failed to parse JSON:", e);
       return {
@@ -180,7 +186,7 @@ export async function activateBestBenefitsDiscount(
         ? rawCode.trim()
         : null;
     
-    console.log("[BestBenefits Activation] Extracted promo code:", promoCode);
+    debugLog("[BestBenefits Activation] Extracted promo code:", promoCode);
     
     if (data.status === "success") {
       // Некоторые предложения в BB активируются без буквенно-цифрового кода (по карточке/купону)
@@ -323,7 +329,7 @@ export async function getUserActivatedDiscounts(
       let token: string;
       
       if (password) {
-        console.log("[BestBenefits Activation] Using PERSONAL token for user:", bestBenefitsUserId);
+        debugLog("[BestBenefits Activation] Using PERSONAL token for user:", bestBenefitsUserId);
         token = await getUserBestBenefitsToken(bestBenefitsUserId, password);
       } else {
         // НЕ используем organization token - это может вернуть скидки от организации
@@ -332,7 +338,7 @@ export async function getUserActivatedDiscounts(
         return [];
       }
 
-      console.log(`[BestBenefits Activation] Fetching activated discounts for user: ${bestBenefitsUserId} (attempt ${attempt + 1}/${retries + 1})`);
+      debugLog(`[BestBenefits Activation] Fetching activated discounts for user: ${bestBenefitsUserId} (attempt ${attempt + 1}/${retries + 1})`);
 
       // Собираем все страницы (API поддерживает пагинацию)
       let activatedProducts: any[] = [];
@@ -360,7 +366,7 @@ export async function getUserActivatedDiscounts(
           
           // Если это 5xx ошибка (серверная), пробуем еще раз
           if (response.status >= 500 && attempt < retries) {
-            console.log(`[BestBenefits Activation] Server error ${response.status}, retrying...`);
+            debugLog(`[BestBenefits Activation] Server error ${response.status}, retrying...`);
             await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
             fetchSuccess = false;
             break; // выходим из do-while, for retry
@@ -368,12 +374,16 @@ export async function getUserActivatedDiscounts(
           
           // Если это клиентская ошибка (4xx) - не пробуем снова
           if (response.status >= 400 && response.status < 500) {
-            console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+            if (response.status === 401) {
+              console.warn(`[BestBenefits Activation] BB 401 (user token invalid), returning empty array, keeping local data`);
+            } else {
+              console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+            }
             return [];
           }
           
           if (attempt < retries) {
-            console.log(`[BestBenefits Activation] Retrying after error on attempt ${attempt + 1}...`);
+            debugLog(`[BestBenefits Activation] Retrying after error on attempt ${attempt + 1}...`);
             await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
             fetchSuccess = false;
             break; // выходим из do-while, for retry
@@ -385,7 +395,7 @@ export async function getUserActivatedDiscounts(
 
         const data = await response.json();
         if (currentPage === 1) {
-          console.log("[BestBenefits Activation] API Response (page 1):", JSON.stringify(data, null, 2));
+          debugLog("[BestBenefits Activation] API Response (page 1):", JSON.stringify(data, null, 2));
         }
         
         lastPage = data?.meta?.last_page ?? 1;
@@ -395,7 +405,7 @@ export async function getUserActivatedDiscounts(
           : [];
         
         activatedProducts = activatedProducts.concat(pageData);
-        console.log(`[BestBenefits Activation] Page ${currentPage}/${lastPage}: got ${pageData.length} items (total: ${activatedProducts.length})`);
+        debugLog(`[BestBenefits Activation] Page ${currentPage}/${lastPage}: got ${pageData.length} items (total: ${activatedProducts.length})`);
         currentPage++;
       } while (currentPage <= lastPage);
 
@@ -418,8 +428,8 @@ export async function getUserActivatedDiscounts(
       //   ]
       // }
       
-      console.log("[BestBenefits Activation] Found activated discounts:", activatedProducts.length);
-      console.log("[BestBenefits Activation] Raw products data:", JSON.stringify(activatedProducts, null, 2));
+      debugLog("[BestBenefits Activation] Found activated discounts:", activatedProducts.length);
+      debugLog("[BestBenefits Activation] Raw products data:", JSON.stringify(activatedProducts, null, 2));
     
     // Extract discount IDs and promo codes
     // Каждый продукт может иметь несколько кодов, берем первый активный
@@ -430,7 +440,7 @@ export async function getUserActivatedDiscounts(
       let promoCode: string | undefined = undefined;
       
       if (p.codes && Array.isArray(p.codes) && p.codes.length > 0) {
-        console.log(`[BestBenefits Activation] Product ${id} has ${p.codes.length} codes, searching for active one...`);
+        debugLog(`[BestBenefits Activation] Product ${id} has ${p.codes.length} codes, searching for active one...`);
         
         // Ищем первый активный код с неистекшей датой
         const now = new Date();
@@ -438,7 +448,7 @@ export async function getUserActivatedDiscounts(
           const code = c?.code || c?.promo_code || c?.promoCode;
           const endDate = c?.end_date || c?.endDate || c?.end_date_time;
           
-          console.log(`[BestBenefits Activation] Checking code ${index + 1}/${p.codes.length} for product ${id}:`, {
+          debugLog(`[BestBenefits Activation] Checking code ${index + 1}/${p.codes.length} for product ${id}:`, {
             code,
             endDate,
             codeType: typeof code,
@@ -451,7 +461,7 @@ export async function getUserActivatedDiscounts(
               code.trim().length === 0 || 
               code === 'Промокод деактивирован' ||
               code.toLowerCase() === 'deactivated') {
-            console.log(`[BestBenefits Activation] Code ${index + 1} is invalid:`, code);
+            debugLog(`[BestBenefits Activation] Code ${index + 1} is invalid:`, code);
             return false;
           }
           
@@ -473,7 +483,7 @@ export async function getUserActivatedDiscounts(
               const expirationTime = expirationDate.getTime();
               const nowTime = now.getTime();
               
-              console.log(`[BestBenefits Activation] Date check for code ${code}:`, {
+              debugLog(`[BestBenefits Activation] Date check for code ${code}:`, {
                 endDate,
                 expirationTime,
                 nowTime,
@@ -483,10 +493,10 @@ export async function getUserActivatedDiscounts(
               });
               
               if (expirationTime < nowTime) {
-                console.log(`[BestBenefits Activation] ⚠️ Promo code ${code} expired on ${endDate} (now: ${now.toISOString()})`);
+                debugLog(`[BestBenefits Activation] ⚠️ Promo code ${code} expired on ${endDate} (now: ${now.toISOString()})`);
                 return false;
               } else {
-                console.log(`[BestBenefits Activation] ✅ Promo code ${code} is valid until ${endDate}`);
+                debugLog(`[BestBenefits Activation] ✅ Promo code ${code} is valid until ${endDate}`);
               }
             } catch (error) {
               console.warn(`[BestBenefits Activation] Failed to parse end_date for code ${code}:`, endDate, error);
@@ -494,7 +504,7 @@ export async function getUserActivatedDiscounts(
               return true;
             }
           } else {
-            console.log(`[BestBenefits Activation] Code ${code} has no end_date, considering valid`);
+            debugLog(`[BestBenefits Activation] Code ${code} has no end_date, considering valid`);
           }
           
           return true;
@@ -505,12 +515,12 @@ export async function getUserActivatedDiscounts(
           // Нормализуем: строки "null" и "undefined" игнорируем
           if (code && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined') {
             promoCode = code;
-            console.log(`[BestBenefits Activation] ✅ Found active promo code for product ${id}:`, promoCode);
+            debugLog(`[BestBenefits Activation] ✅ Found active promo code for product ${id}:`, promoCode);
           } else {
-            console.log(`[BestBenefits Activation] ⚠️ Active code found but invalid:`, code);
+            debugLog(`[BestBenefits Activation] ⚠️ Active code found but invalid:`, code);
           }
         } else {
-          console.log(`[BestBenefits Activation] ⚠️ No active code found for product ${id} (checked ${p.codes.length} codes)`);
+          debugLog(`[BestBenefits Activation] ⚠️ No active code found for product ${id} (checked ${p.codes.length} codes)`);
         }
       } else if (p.promo_code) {
         // Прямое поле promo_code - применяем проверку
@@ -547,7 +557,7 @@ export async function getUserActivatedDiscounts(
         }
       }
       
-      console.log("[BestBenefits Activation] Processing product:", { 
+      debugLog("[BestBenefits Activation] Processing product:", { 
         id, 
         promoCode, 
         codesCount: p.codes?.length || 0,
@@ -579,18 +589,25 @@ export async function getUserActivatedDiscounts(
       };
     }).filter((p: any) => p.id !== null);
     
-      console.log("[BestBenefits Activation] Processed discounts:", result);
+      debugLog("[BestBenefits Activation] Processed discounts:", result);
       return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
+      const isAuthError = lastError.message.includes("401") || lastError.message.includes("User authentication failed");
+      if (isAuthError) {
+        console.warn(`[BestBenefits Activation] User BB auth failed (attempt ${attempt + 1}), using local data:`, lastError.message);
+      } else {
+        console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
+      }
       
       // Если это последняя попытка, возвращаем пустой массив
       // НЕ используем fallback, чтобы не показывать невалидные промокоды
       if (attempt >= retries) {
-        console.error("[BestBenefits Activation] All attempts failed, returning empty array (no fallback to prevent invalid promo codes)", {
-          error: lastError.message,
-        });
+        if (!isAuthError) {
+          console.error("[BestBenefits Activation] All attempts failed, returning empty array (no fallback to prevent invalid promo codes)", {
+            error: lastError.message,
+          });
+        }
         return [];
       }
       
@@ -600,10 +617,12 @@ export async function getUserActivatedDiscounts(
   }
 
   // Если все попытки провалились, возвращаем пустой массив
-  // НЕ используем fallback, чтобы не показывать невалидные промокоды
-  console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)", {
-    error: lastError?.message,
-  });
+  const isAuthError = lastError?.message?.includes("401") || lastError?.message?.includes("User authentication failed");
+  if (!isAuthError) {
+    console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)", {
+      error: lastError?.message,
+    });
+  }
   return [];
 }
 
@@ -628,12 +647,12 @@ export async function safeActivateDiscount(params: ActivateDiscountParams): Prom
   message?: string;
 }> {
   try {
-    console.log("[BestBenefits Activation] Starting activation for discount:", params.discountId);
+    debugLog("[BestBenefits Activation] Starting activation for discount:", params.discountId);
     
     // Вызываем активацию через правильный endpoint
     const result = await activateBestBenefitsDiscount(params);
     
-    console.log("[BestBenefits Activation] Activation result:", {
+    debugLog("[BestBenefits Activation] Activation result:", {
       status: result.status,
       success: result.success,
       promoCode: result.promoCode,
@@ -641,7 +660,7 @@ export async function safeActivateDiscount(params: ActivateDiscountParams): Prom
     });
     
     if (result.status === "success" && result.success === true) {
-      console.log("[BestBenefits Activation] ✅ Successfully activated on BestBenefits", {
+      debugLog("[BestBenefits Activation] ✅ Successfully activated on BestBenefits", {
         discountId: params.discountId,
         promoCode: result.promoCode,
       });

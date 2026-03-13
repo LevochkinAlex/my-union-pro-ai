@@ -157,6 +157,18 @@ export async function POST(request: NextRequest) {
     const today = new Date();
     const offerNumber = `MYU-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    await prisma.issuedInvoice.create({
+      data: {
+        organizationId,
+        offerNumber,
+        amountRub: Math.round(amountRub),
+        period,
+        memberLimit,
+        tariffLabel,
+        createdById: session.user.id,
+      },
+    });
+
     const doc = new PDFDocument({
       size: "A4",
       margin: 40,

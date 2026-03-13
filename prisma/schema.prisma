@@ -288,7 +288,7 @@ model User {
   createdMeetings       Meeting[]            @relation("MeetingCreatedBy")
   meetingParticipations MeetingParticipant[] @relation("UserMeetingParticipations")
   agendaItemsSpeaker    MeetingAgendaItem[]  @relation("AgendaItemSpeaker")
-  agendaItemsCoSpeaker MeetingAgendaItem[]  @relation("AgendaItemCoSpeaker")
+  agendaItemsCoSpeaker  MeetingAgendaItem[]  @relation("AgendaItemCoSpeaker")
   agendaVotes           MeetingAgendaVote[]  @relation("UserAgendaVotes")
 
   @@index([email])
@@ -506,9 +506,10 @@ model Organization {
   workplaceMappings WorkplacePPOMapping[] @relation("WorkplacePPOMapping")
 
   // Подписка (тариф, лимит участников, срок) — для ППО и организаций с платным доступом
-  subscription OrganizationSubscription?
-  payments     OrganizationPayment[]
+  subscription   OrganizationSubscription?
+  payments       OrganizationPayment[]
   billingProfile OrganizationBillingProfile?
+  issuedInvoices IssuedInvoice[]
 
   @@index([type])
   @@index([parentId])
@@ -526,7 +527,7 @@ enum BillingEntityType {
 model OrganizationBillingProfile {
   id String @id @default(cuid())
 
-  organizationId String @unique
+  organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   entityType BillingEntityType
@@ -535,16 +536,16 @@ model OrganizationBillingProfile {
   fullName String?
 
   // Для ИП/ЮЛ
-  companyName String?
-  inn         String?
-  kpp         String?
-  ogrn        String?
+  companyName  String?
+  inn          String?
+  kpp          String?
+  ogrn         String?
   legalAddress String?
 
   // Банковские реквизиты плательщика
-  checkingAccount String?
-  bankName        String?
-  bik             String?
+  checkingAccount      String?
+  bankName             String?
+  bik                  String?
   correspondentAccount String?
 
   // Контакты
@@ -560,18 +561,18 @@ model OrganizationBillingProfile {
 
 // Статус подписки организации
 enum SubscriptionStatus {
-  NONE       // Нет подписки
-  TRIAL      // Пробный период (14 дней без карты)
-  ACTIVE     // Оплаченная подписка активна
-  EXPIRED    // Подписка истекла
-  CANCELLED  // Отменена
+  NONE // Нет подписки
+  TRIAL // Пробный период (14 дней без карты)
+  ACTIVE // Оплаченная подписка активна
+  EXPIRED // Подписка истекла
+  CANCELLED // Отменена
 }
 
 // Подписка организации (тариф, лимит участников, срок)
 model OrganizationSubscription {
   id String @id @default(cuid())
 
-  organizationId String   @unique
+  organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   status SubscriptionStatus @default(NONE)
@@ -583,13 +584,13 @@ model OrganizationSubscription {
   tariffKey String?
 
   // Период подписки
-  trialEndsAt    DateTime? // Окончание пробного периода (14 дней)
-  periodEndsAt   DateTime? // Окончание оплаченного периода
+  trialEndsAt     DateTime? // Окончание пробного периода (14 дней)
+  periodEndsAt    DateTime? // Окончание оплаченного периода
   periodStartedAt DateTime? // Начало текущего оплаченного периода
 
   // Ручное управление суперадмином: доп. дни, свой лимит, безлимит, тест
   manualOverride   Boolean @default(false)
-  addedDaysByAdmin Int?   // Доп. дни, добавленные админом
+  addedDaysByAdmin Int? // Доп. дни, добавленные админом
   adminNote        String? @db.Text
 
   createdAt DateTime @default(now())
@@ -613,8 +614,8 @@ model OrganizationPayment {
   subscriptionId String?
   subscription   OrganizationSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
 
-  amountCents Int      // Сумма в копейках
-  currency    String   @default("RUB")
+  amountCents Int // Сумма в копейках
+  currency    String @default("RUB")
 
   // Период, за который оплачено
   periodStart DateTime
@@ -633,6 +634,26 @@ model OrganizationPayment {
 
   @@index([organizationId])
   @@index([subscriptionId])
+  @@index([createdAt])
+}
+
+// Выставленные счета-оферты (чтобы суперадмины видели, кто какой счёт получил)
+model IssuedInvoice {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  offerNumber String @unique // MYU-YYYYMM-XXXX
+  amountRub   Int // Сумма в рублях
+  period      String // half_year | year
+  memberLimit Int // Кол-во участников по тарифу
+  tariffLabel String // Название тарифа для отображения
+
+  createdById String? // Кто сгенерировал (председатель организации)
+  createdAt   DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([offerNumber])
   @@index([createdAt])
 }
 
@@ -988,7 +1009,7 @@ model Meeting {
 
   // Созыватель/Организатор (опционально: при удалении пользователя можно обнулить в коде)
   createdById String?
-  createdBy   User?  @relation("MeetingCreatedBy", fields: [createdById], references: [id])
+  createdBy   User?   @relation("MeetingCreatedBy", fields: [createdById], references: [id])
 
   // Метаданные
   notes         String? @db.Text // Примечания
@@ -1081,9 +1102,9 @@ model MeetingAgendaItem {
   speakerName     String? // ФИО докладчика (если не из системы)
   speakerPosition String? // Должность докладчика
   // Со-докладчик (в документ в клеточку «докладывал»)
-  coSpeakerId   String?
-  coSpeaker     User?   @relation("AgendaItemCoSpeaker", fields: [coSpeakerId], references: [id])
-  coSpeakerName String?
+  coSpeakerId     String?
+  coSpeaker       User?   @relation("AgendaItemCoSpeaker", fields: [coSpeakerId], references: [id])
+  coSpeakerName   String?
 
   // ПОСТАНОВИЛИ
   resolutionText String? @db.Text // Текст постановления
@@ -2189,7 +2210,7 @@ model ChatParticipant {
   chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   userId String?
-  user   User?  @relation("ChatParticipants", fields: [userId], references: [id], onDelete: SetNull)
+  user   User?   @relation("ChatParticipants", fields: [userId], references: [id], onDelete: SetNull)
 
   // Плейсхолдер для удалённого пользователя: при удалении User в этом поле сохраняем "Удалённый пользователь"
   deletedUserDisplayName String? @db.Text
@@ -2792,7 +2813,7 @@ model ChatFolderChat {
   folder   ChatFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
   chatId String
-  chat   Chat @relation("ChatFolders", fields: [chatId], references: [id], onDelete: Cascade)
+  chat   Chat   @relation("ChatFolders", fields: [chatId], references: [id], onDelete: Cascade)
 
   // Порядок чата внутри папки
   order Int @default(0)

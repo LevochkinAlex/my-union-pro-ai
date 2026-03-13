@@ -448,7 +448,9 @@ export default function DiscountDetailPage() {
 
       if (!response.ok || result?.error) {
         const reason = result?.details || result?.error || "Не удалось получить промокод от BestBenefits";
-        throw new Error(reason);
+        setIsClaimed(wasClaimed);
+        alert(toReadableError(reason));
+        return;
       }
 
       if (result.demoBlocked) {
@@ -475,7 +477,9 @@ export default function DiscountDetailPage() {
         console.log("Discount activated without promo code (card-based discount)");
         setShowPromoModal(true);
       } else {
-        throw new Error(result.activationMessage || "BestBenefits не выдал промокод");
+        setIsClaimed(wasClaimed);
+        alert(toReadableError(result.activationMessage || "BestBenefits не выдал промокод"));
+        return;
       }
     } catch (error) {
       console.error("Failed to activate:", error);

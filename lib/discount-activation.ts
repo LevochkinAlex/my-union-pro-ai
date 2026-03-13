@@ -250,7 +250,12 @@ export async function syncDiscountsWithBestBenefits(
     console.log(`[discount-activation] ✅ Sync complete: ${synced} new, ${updated} updated, ${expired} expired`);
 
   } catch (error: any) {
-    console.error(`[discount-activation] ❌ Sync failed:`, error);
+    const isAuthError = error?.message?.includes("401") || error?.message?.includes("User authentication failed");
+    if (isAuthError) {
+      console.warn(`[discount-activation] BB auth failed (invalid/expired user credentials), keeping local data:`, error?.message);
+    } else {
+      console.error(`[discount-activation] ❌ Sync failed:`, error);
+    }
     errors.push(`Sync failed: ${error.message}`);
     
     // FALLBACK: при ошибке API возвращаем данные из локальной БД

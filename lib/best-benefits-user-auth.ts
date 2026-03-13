@@ -12,6 +12,12 @@ interface AuthResponse {
 }
 
 const AUTH_URL = "https://bestbenefits.ru/api/auth";
+const DEBUG_BB_USER_AUTH = process.env.DEBUG_BB_USER_AUTH === "true";
+function debugUserAuth(...args: unknown[]) {
+  if (DEBUG_BB_USER_AUTH) {
+    console.log(...args);
+  }
+}
 
 // Cache user tokens (user email -> {token, expiry})
 const userTokenCache = new Map<string, { token: string; expiry: number }>();
@@ -29,7 +35,7 @@ async function resolveBestBenefitsEmailByUserId(userId: string): Promise<string 
     });
 
     if (user?.email) {
-      console.log(`[UserAuth] Resolved BB user ID ${userId} to email ${user.email}`);
+      debugUserAuth(`[UserAuth] Resolved BB user ID ${userId} to email ${user.email}`);
       return user.email;
     }
   } catch (error) {
@@ -57,7 +63,7 @@ export async function getUserBestBenefitsToken(
   for (const login of loginCandidates) {
     const cached = userTokenCache.get(login);
     if (cached && cached.expiry > Date.now()) {
-      console.log(`[UserAuth] Using cached token for ${login}`);
+      debugUserAuth(`[UserAuth] Using cached token for ${login}`);
       return cached.token;
     }
   }
@@ -65,7 +71,7 @@ export async function getUserBestBenefitsToken(
   let lastError: unknown = null;
   for (const login of loginCandidates) {
     try {
-      console.log(`[UserAuth] Authenticating user with login: ${login}`);
+      debugUserAuth(`[UserAuth] Authenticating user with login: ${login}`);
 
       const response = await fetch(AUTH_URL, {
         method: "POST",
@@ -80,7 +86,12 @@ export async function getUserBestBenefitsToken(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[UserAuth] Authentication failed for ${login}:`, response.status, errorText);
+        // 401 = неверный email/пароль — ожидаемая ситуация (устаревший пароль в БД, пользователь сменил пароль в BB)
+        if (response.status === 401) {
+          console.warn(`[UserAuth] BestBenefits 401 for ${login} (invalid credentials or expired). Use sync/reset password to fix.`);
+        } else {
+          console.error(`[UserAuth] Authentication failed for ${login}:`, response.status, errorText);
+        }
         lastError = new Error(`User authentication failed: ${response.status} - ${errorText}`);
         continue;
       }
@@ -104,7 +115,7 @@ export async function getUserBestBenefitsToken(
         });
       }
 
-      console.log(`[UserAuth] ✅ User authenticated: ${login}`);
+      debugUserAuth(`[UserAuth] ✅ User authenticated: ${login}`);
       return data.access_token;
     } catch (error) {
       lastError = error;
@@ -122,7 +133,7 @@ export async function getUserBestBenefitsToken(
  */
 export function clearUserToken(email: string): void {
   userTokenCache.delete(email);
-  console.log(`[UserAuth] Cleared token for ${email}`);
+  debugUserAuth(`[UserAuth] Cleared token for ${email}`);
 }
 
 /**
@@ -130,6 +141,6 @@ export function clearUserToken(email: string): void {
  */
 export function clearAllUserTokens(): void {
   userTokenCache.clear();
-  console.log(`[UserAuth] Cleared all user tokens`);
+  debugUserAuth(`[UserAuth] Cleared all user tokens`);
 }
 

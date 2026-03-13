@@ -152,3 +152,27 @@ export function formatPrice(rub: number): string {
   if (rub === 0) return "Договорная";
   return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(rub);
 }
+
+/**
+ * По сумме и периоду подобрать возможное кол-во участников (тарифы, дающие эту сумму).
+ * Для 23700 ₽ за 6 мес. вернёт точное совпадение: 50 участников (79 ₽/мес/чел).
+ */
+export function inferMemberLimitFromAmount(
+  amountRub: number,
+  period: TariffPeriod
+): Array<{ memberLimit: number; tariffLabel: string; amountRub: number; ratePerUserPerMonth: number }> {
+  const results: Array<{ memberLimit: number; tariffLabel: string; amountRub: number; ratePerUserPerMonth: number }> = [];
+  const plans = TARIFF_PLANS.filter((p) => p.memberLimit != null) as (TariffPlan & { memberLimit: number })[];
+  for (const plan of plans) {
+    const sum = getPriceForPeriod(plan, period);
+    if (Math.abs(sum - amountRub) < 1) {
+      results.push({
+        memberLimit: plan.memberLimit,
+        tariffLabel: plan.label,
+        amountRub: sum,
+        ratePerUserPerMonth: plan.pricePerUserPerMonth,
+      });
+    }
+  }
+  return results;
+}

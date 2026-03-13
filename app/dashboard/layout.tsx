@@ -9,9 +9,11 @@ import MobileLayout from "@/components/dashboard/MobileLayout";
 import TourGuideProvider from "@/components/dashboard/TourGuideProvider";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import DemoBanner from "@/components/dashboard/DemoBanner";
+import MaintenanceBanner from "@/components/dashboard/MaintenanceBanner";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { getViewMode, getAvailableViewModes } from "@/lib/session-user";
+import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
 
 // Указываем, что layout динамический (использует getServerSession)
 export const dynamic = 'force-dynamic';
@@ -46,7 +48,7 @@ export default async function DashboardLayout({
   if (session.user.id !== DEMO_MEMBER_USER_ID && !isDemo) {
     const LAYOUT_DB_TIMEOUT_MS = 2000;
     try {
-      const [dbUserResult, staffResult] = await Promise.all([
+      const [dbUserResult, staffResult, activeStaffPosition] = await Promise.all([
         prisma.user.findUnique({
           where: { id: session.user.id },
           select: {
@@ -70,6 +72,18 @@ export default async function DashboardLayout({
             setTimeout(() => resolve({ isStaff: false, permissions: {} }), LAYOUT_DB_TIMEOUT_MS)
           ),
         ]).catch(() => ({ isStaff: false, permissions: {} })),
+        prisma.organizationStaff.findFirst({
+          where: { userId: session.user.id, status: "ACTIVE" },
+          select: {
+            id: true,
+            organizationId: true,
+            role: {
+              select: {
+                permissions: true,
+              },
+            },
+          },
+        }),
       ]);
       if (dbUserResult) {
         avatarUrl = dbUserResult.avatarUrl ?? undefined;
@@ -82,6 +96,12 @@ export default async function DashboardLayout({
       console.log("[dashboard/layout] userId:", session.user.id, "dbUser:", dbUserResult ? { role: dbUserResult.role, isRPOHead: dbUserResult.isRPOHead, rpoHeadOrganizationId: dbUserResult.rpoHeadOrganizationId, viewMode: dbUserResult.viewMode } : "null", "serverViewModes:", serverViewModes);
       if (staffResult.isStaff && staffResult.permissions) {
         staffPermissions = { isStaff: true, permissions: staffResult.permissions };
+      } else if (activeStaffPosition) {
+        // Fallback: если резолвер прав не успел/упал, но должность активна — строим права из роли.
+        staffPermissions = {
+          isStaff: true,
+          permissions: normalizeStaffPermissions(activeStaffPosition.role?.permissions),
+        };
       }
     } catch (error) {
       console.error("[dashboard/layout] Database query error:", error);
@@ -102,7 +122,8 @@ export default async function DashboardLayout({
   const showRPOHeadMenu = viewMode === "RPO_HEAD";
   const showOrgHeadMenu = showMPOHeadMenu || showRPOHeadMenu; // МПО или РПО
 
-  const showStaffMenu = staffPermissions?.isStaff === true;
+  // Меню сотрудника показываем только когда выбран режим «Сотрудник» — иначе наложение с участником (документы, чаты)
+  const showStaffMenu = viewMode === "STAFF" && staffPermissions?.isStaff === true;
 
   // Исключённый член ППО (не re-applying): только Главная, Профиль, Мои скидки, Чат
   const dbMembershipStatus = (dbUser as { membershipStatus?: string; unionMembershipStatus?: string } | null)?.membershipStatus;
@@ -710,6 +731,8 @@ export default async function DashboardLayout({
         <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300 min-w-0 bg-gray-50 dark:bg-gray-900">
           {/* Impersonation Banner */}
           {isImpersonating && <ImpersonationBanner />}
+          {/* Временный баннер о модернизации для членов и председателей */}
+          <MaintenanceBanner userId={session.user.id} />
           <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0 min-h-full">
           <div data-tour="main-content" className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0 bg-gray-50 dark:bg-gray-900 min-h-full">
             <div className="px-4 py-8 sm:px-8 lg:px-12 min-h-full w-full max-w-full min-w-0 bg-gray-50 dark:bg-gray-900">

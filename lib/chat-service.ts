@@ -505,9 +505,11 @@ export async function getUserChats(
     }
   }
   
-  // Удаляем дубликаты приватных чатов с одним и тем же собеседником.
-  // В базе могли остаться исторические дубли из-за гонок создания.
-  const dedupedChats = dedupePrivateChatsByPeer(formattedChats);
+  // Удаляем исторические дубли:
+  // 1) приватные чаты с одним и тем же собеседником,
+  // 2) каналы с одинаковым отображаемым именем в пределах одной организации.
+  const dedupedPrivateChats = dedupePrivateChatsByPeer(formattedChats);
+  const dedupedChats = dedupeChannelChatsByDisplay(dedupedPrivateChats);
 
   // Сохраняем в кэш (TTL: 30 секунд)
   try {
@@ -763,6 +765,38 @@ function dedupePrivateChatsByPeer(chats: ChatInfo[]): ChatInfo[] {
   }
 
   return [...passthrough, ...Array.from(byPeer.values())].sort(
+    (a, b) => new Date(b.lastMessageAt ?? b.createdAt).getTime() - new Date(a.lastMessageAt ?? a.createdAt).getTime()
+  );
+}
+
+function dedupeChannelChatsByDisplay(chats: ChatInfo[]): ChatInfo[] {
+  const byKey = new Map<string, ChatInfo>();
+  const passthrough: ChatInfo[] = [];
+
+  for (const chat of chats) {
+    if (chat.type !== "CHANNEL") {
+      passthrough.push(chat);
+      continue;
+    }
+
+    const orgKey = chat.newsChannelOrganizationId ?? "regional";
+    const nameKey = (chat.displayName || chat.name || "").trim().toLowerCase();
+    const key = `${orgKey}::${nameKey}`;
+
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, chat);
+      continue;
+    }
+
+    const prevTs = prev.lastMessageAt ? new Date(prev.lastMessageAt).getTime() : new Date(prev.createdAt).getTime();
+    const currTs = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : new Date(chat.createdAt).getTime();
+    if (currTs > prevTs) {
+      byKey.set(key, chat);
+    }
+  }
+
+  return [...passthrough, ...Array.from(byKey.values())].sort(
     (a, b) => new Date(b.lastMessageAt ?? b.createdAt).getTime() - new Date(a.lastMessageAt ?? a.createdAt).getTime()
   );
 }
@@ -1233,16 +1267,14 @@ export function formatChatInfo(
   let otherUser: OtherUserInfo;
 
   if (isChannel) {
-    // Название канала = название ППО (организации). Для каналов "Основной" подставляем имя организации
+    // Для канала используем его собственное имя.
+    // Только для канала "Основной" подставляем имя организации (ППО),
+    // чтобы в списке показывалось читаемое название вместо технического "Основной".
     const orgId = (chat.newsChannel as any)?.organizationId;
     const resolvedOrgName = orgId && orgNamesByOrgId?.get(orgId);
-    const rawName =
-      resolvedOrgName ||
-      (chat.newsChannel as any)?.organization?.name ||
-      chat.newsChannel?.name ||
-      chat.name ||
-      "Канал";
-    displayName = rawName === "Основной" ? (resolvedOrgName || (chat.newsChannel as any)?.organization?.name || "Канал организации") : rawName;
+    const channelName = chat.newsChannel?.name || chat.name || "Канал";
+    const orgName = resolvedOrgName || (chat.newsChannel as any)?.organization?.name || "Канал организации";
+    displayName = channelName === "Основной" ? orgName : channelName;
     displayAvatar = chat.newsChannel?.iconUrl || chat.iconUrl || null;
     otherUser = {
       id: chat.id,

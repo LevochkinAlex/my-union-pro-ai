@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getAvailableViewModes, resolveCurrentMode } from "@/lib/session-user";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 // GET /api/user/view-mode
 // Текущий режим и доступные режимы — только из сессии (без запроса в БД)
@@ -30,33 +31,39 @@ export async function GET() {
     });
   }
 
-  // Для РПО/МПО/ППО берём актуальные флаги из БД, а при ошибке откатываемся на сессию.
+  // Для РПО/МПО/ППО и сотрудников берём актуальные флаги из БД.
   let sourceUser: any = session.user;
+  let isStaff = false;
   try {
-    const dbUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        role: true,
-        viewMode: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-        isMPOHead: true,
-        mpoHeadOrganizationId: true,
-        isRPOHead: true,
-        rpoHeadOrganizationId: true,
-        ppoHeadOrganization: { select: { name: true } },
-        mpoHeadOrganization: { select: { name: true } },
-        rpoHeadOrganization: { select: { name: true } },
-      },
-    });
-    if (dbUser) {
-      sourceUser = dbUser;
-    }
+    const [dbUser, activeStaffPosition] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          role: true,
+          viewMode: true,
+          isPPOHead: true,
+          ppoHeadOrganizationId: true,
+          isMPOHead: true,
+          mpoHeadOrganizationId: true,
+          isRPOHead: true,
+          rpoHeadOrganizationId: true,
+          ppoHeadOrganization: { select: { name: true } },
+          mpoHeadOrganization: { select: { name: true } },
+          rpoHeadOrganization: { select: { name: true } },
+        },
+      }),
+      prisma.organizationStaff.findFirst({
+        where: { userId: session.user.id, status: "ACTIVE" },
+        select: { id: true },
+      }),
+    ]);
+    if (dbUser) sourceUser = dbUser;
+    isStaff = Boolean(activeStaffPosition);
   } catch (error) {
     console.warn("[user/view-mode] GET fallback to session:", error);
   }
 
-  const availableModes = getAvailableViewModes({ user: sourceUser } as any);
+  const availableModes = getAvailableViewModes({ user: sourceUser } as any, isStaff);
   const currentMode = resolveCurrentMode(sourceUser.viewMode ?? session.user.viewMode, availableModes);
 
   return NextResponse.json({
@@ -82,32 +89,48 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { mode } = body;
 
-    if (!mode || !["MEMBER", "PPO_HEAD", "MPO_HEAD", "RPO_HEAD"].includes(mode)) {
+    if (!mode || !["MEMBER", "STAFF", "PPO_HEAD", "MPO_HEAD", "RPO_HEAD"].includes(mode)) {
       return NextResponse.json(
         { error: "Неверный режим просмотра" },
         { status: 400 }
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        role: true,
-        isPPOHead: true,
-        isMPOHead: true,
-        isRPOHead: true,
-        ppoHeadOrganizationId: true,
-        mpoHeadOrganizationId: true,
-        rpoHeadOrganizationId: true,
-      },
-    });
+    const [user, staffPerm, activeStaffPosition] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          role: true,
+          isPPOHead: true,
+          isMPOHead: true,
+          isRPOHead: true,
+          ppoHeadOrganizationId: true,
+          mpoHeadOrganizationId: true,
+          rpoHeadOrganizationId: true,
+        },
+      }),
+      checkUserPermissions(session.user.id),
+      prisma.organizationStaff.findFirst({
+        where: { userId: session.user.id, status: "ACTIVE" },
+        select: { id: true },
+      }),
+    ]);
 
     if (!user) {
       return NextResponse.json(
         { error: "Пользователь не найден" },
         { status: 404 }
       );
+    }
+
+    if (mode === "STAFF") {
+      if (!staffPerm?.isStaff && !activeStaffPosition) {
+        return NextResponse.json(
+          { error: "У вас нет прав сотрудника (должность по роли РПО)" },
+          { status: 403 }
+        );
+      }
     }
 
     // Проверяем что пользователь может переключиться в этот режим.
@@ -173,7 +196,10 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    const availableModes = getAvailableViewModes({ user: updatedUser } as any);
+    const availableModes = getAvailableViewModes(
+      { user: updatedUser } as any,
+      Boolean(activeStaffPosition)
+    );
     const currentMode = resolveCurrentMode(updatedUser.viewMode, availableModes);
 
     // Сбрасываем кеш страниц dashboard
@@ -191,6 +217,8 @@ export async function PUT(request: NextRequest) {
           ? "Вы переключились в режим Председателя МПО"
           : mode === "RPO_HEAD"
           ? "Вы переключились в режим Председателя РПО"
+          : mode === "STAFF"
+          ? "Вы переключились в режим Сотрудника"
           : "Вы переключились в режим Члена профсоюза",
     });
   } catch (error) {
