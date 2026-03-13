@@ -228,10 +228,17 @@ export async function generatePDFFromHTML(html: string): Promise<Buffer> {
       margin: {
         top: "2cm",
         right: "2cm",
-        bottom: "2cm",
+        bottom: "2.2cm",
         left: "2cm",
       },
       printBackground: true,
+      displayHeaderFooter: true,
+      footerTemplate: `
+        <div style="width: 100%; font-size: 10px; text-align: center; font-family: 'Times New Roman', Times, serif; color: #333;">
+          <span class="pageNumber"></span> из <span class="totalPages"></span>
+        </div>
+      `,
+      headerTemplate: "<div></div>",
     });
     
     return Buffer.from(pdfBuffer);

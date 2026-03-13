@@ -47,9 +47,17 @@ const PROTOCOL_TEMPLATE_HTML = `
     <span style="font-weight: bold;">Место проведения:</span> {{meetingPlace}}
   </div>
   
+  <!-- В состав профкома избраны -->
+  <div style="margin: 20px 0;">
+    <p style="font-weight: bold; margin-bottom: 10px;">В состав профкома избраны:</p>
+    <div style="margin-left: 20px;">
+      {{allMembersList}}
+    </div>
+  </div>
+  
   <!-- Присутствовали -->
   <div style="margin: 20px 0;">
-    <p style="font-weight: bold; margin-bottom: 10px;">Присутствовали:</p>
+    <p style="font-weight: bold; margin-bottom: 10px;">Присутствовали на заседании:</p>
     <div style="margin-left: 20px;">
       {{presentMembers}}
     </div>

@@ -172,7 +172,8 @@ export default async function DashboardLayout({
       ),
       subItems: [
         { href: "/dashboard/documents?tab=incoming", label: "Входящие" },
-        { href: (isReApplying || !isApproved) ? "/dashboard/documents?tab=outgoing" : "/dashboard/documents/meetings", label: "Исходящие" },
+        { href: "/dashboard/documents?tab=outgoing", label: "Исходящие" },
+        ...((!isReApplying && isApproved) ? [{ href: "/dashboard/documents/meetings", label: "Заседания профкома" }] : []),
       ],
     });
     
@@ -317,7 +318,8 @@ export default async function DashboardLayout({
         ),
         subItems: [
           { href: "/dashboard/documents?tab=incoming", label: "Входящие" },
-          { href: (isReApplying || !isApproved) ? "/dashboard/documents?tab=outgoing" : "/dashboard/documents/meetings", label: "Исходящие" },
+          { href: "/dashboard/documents?tab=outgoing", label: "Исходящие" },
+          ...((!isReApplying && isApproved) ? [{ href: "/dashboard/documents/meetings", label: "Заседания профкома" }] : []),
         ],
       });
     }

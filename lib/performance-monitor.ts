@@ -145,7 +145,7 @@ export function withPerformanceMonitoring<T>(
   return handler(cacheHit)
     .then(async (result) => {
       const duration = Date.now() - startTime;
-      
+
       // Логируем метрику асинхронно (не блокируем ответ)
       logPerformanceMetric({
         endpoint,
