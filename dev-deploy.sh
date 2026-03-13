@@ -22,10 +22,10 @@ echo ""
 sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER" 'set -e
 cd /opt/my-union-pro-dev
 
-echo "=== Step 1: Git (checkout dev, pull) ==="
+echo "=== Step 1: Git (checkout dev, fetch, reset to origin/dev) ==="
 git fetch origin dev
 git checkout dev
-git pull origin dev
+git reset --hard origin/dev
 echo ""
 
 echo "=== Step 2: Installing dependencies ==="
