@@ -1,5 +1,14 @@
 # Деплой и проверки
 
+## Отключение защиты ветки main (чтобы пушить без PR)
+
+1. Открой: **https://github.com/usmanoffcom/my-union-pro-ai/settings/branches**
+2. Найди правило для ветки **main** → нажми **Edit** (или **Delete** правила).
+3. Либо убери галочку **"Require a pull request before merging"**, либо удали правило целиком.
+4. Сохрани (**Save changes**).
+
+После этого можно пушить в `main` напрямую: `git push origin main`.
+
 ## Актуальные скрипты
 
 | Скрипт | Назначение |
