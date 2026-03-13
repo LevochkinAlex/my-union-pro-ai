@@ -13,6 +13,7 @@ import {
   getTariffByKey,
   type TariffPeriod,
 } from "@/lib/constants/tariffs";
+import { syncInvoiceToOneC } from "@/lib/one-c-integration";
 
 function formatMoney(value: number): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -144,9 +145,15 @@ export async function POST(request: NextRequest) {
       amountRub = getPriceForPeriod(tariff, period);
     }
 
-    const profile = await prisma.organizationBillingProfile.findUnique({
-      where: { organizationId },
-    });
+    const [profile, organization] = await Promise.all([
+      prisma.organizationBillingProfile.findUnique({
+        where: { organizationId },
+      }),
+      prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true, name: true, inn: true },
+      }),
+    ]);
     if (!profile) {
       return NextResponse.json(
         { error: "Сначала заполните платежный профиль для счета-оферты" },
@@ -168,6 +175,38 @@ export async function POST(request: NextRequest) {
         createdById: session.user.id,
       },
     });
+
+    const oneCSync = await syncInvoiceToOneC({
+      offerNumber,
+      amountRub: Math.round(amountRub),
+      period,
+      memberLimit,
+      tariffLabel,
+      issuedAt: today,
+      organization: {
+        id: organizationId,
+        name: organization?.name || "Организация",
+        inn: organization?.inn || null,
+      },
+      payer: {
+        entityType: profile.entityType,
+        fullName: profile.fullName,
+        companyName: profile.companyName,
+        inn: profile.inn,
+        kpp: profile.kpp,
+        ogrn: profile.ogrn,
+        legalAddress: profile.legalAddress,
+        checkingAccount: profile.checkingAccount,
+        bankName: profile.bankName,
+        bik: profile.bik,
+        correspondentAccount: profile.correspondentAccount,
+        contactEmail: profile.contactEmail,
+        contactPhone: profile.contactPhone,
+      },
+    });
+    if (oneCSync.status === "failed") {
+      console.warn("[invoice-offer] Failed to sync with 1C:", oneCSync.message);
+    }
 
     const doc = new PDFDocument({
       size: "A4",
@@ -365,6 +404,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Content-Length": String(pdfBuffer.length),
+        "X-MyUnion-1C-Sync": oneCSync.status,
       },
     });
   } catch (e: unknown) {

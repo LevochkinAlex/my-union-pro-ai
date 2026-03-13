@@ -392,6 +392,7 @@ export default function SubscriptionPage() {
       alertError(data.error || "Не удалось сформировать счет-оферту");
       return;
     }
+    const oneCSync = (res.headers.get("X-MyUnion-1C-Sync") || "").toLowerCase();
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -401,7 +402,13 @@ export default function SubscriptionPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    alertSuccess("Счет-оферта сформирован");
+    if (oneCSync === "ok") {
+      alertSuccess("Счет-оферта сформирован и отправлен в 1С");
+    } else if (oneCSync === "failed") {
+      alertSuccess("Счет-оферта сформирован. Отправка в 1С не удалась");
+    } else {
+      alertSuccess("Счет-оферта сформирован");
+    }
   };
 
   if (loading) {
