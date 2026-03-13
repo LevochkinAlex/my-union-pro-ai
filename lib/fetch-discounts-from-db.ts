@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type {
   DiscountSearchParams,
@@ -58,21 +59,112 @@ export async function getDiscountsFromLocalDB(
       ];
     }
 
-    const [total, discounts, categories] = await Promise.all([
-      prisma.discount.count({ where }),
-      prisma.discount.findMany({
-        where,
-        orderBy: [
-          { isPremium: "desc" },
-          { lastSyncedAt: "desc" },
-        ],
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.discountCategory.findMany({
-        orderBy: { order: "asc" },
-      }),
-    ]);
+    // При фильтре по городу: считаем и выбираем скидки с фильтром по cities в БД,
+    // чтобы не резать по take(limit) до фильтрации и не показывать только 20.
+    const useCityFilterInDb = Boolean(cityId && !search);
+
+    let total: number;
+    let discounts: Array<{
+      id: number;
+      title: string;
+      description: string | null;
+      shortDescription: string | null;
+      discountValue: string | null;
+      partnerUrl: string | null;
+      imageUrl: string | null;
+      tags: unknown;
+      isPremium: boolean;
+      categories: unknown;
+      mainCategoryId: number | null;
+      mainCategoryName: string | null;
+      cities: unknown;
+      options: unknown;
+      bbUpdatedAt: Date | null;
+      validUntil: Date | null;
+    }>;
+
+    if (useCityFilterInDb && cityId != null) {
+      // Условие по городу: глобальные (cities пусто/null) или в списке городов есть cityId
+      const cityCondition = Prisma.sql`(
+        "cities" IS NULL
+        OR "cities"::jsonb = '[]'::jsonb
+        OR (
+          jsonb_typeof("cities"::jsonb) = 'array'
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements("cities"::jsonb) AS e
+            WHERE (e->>'id')::int = ${cityId}
+          )
+        )
+      )`;
+      const baseConditions = [Prisma.sql`"isActive" = true`, Prisma.sql`("validUntil" IS NULL OR "validUntil" >= NOW())`, cityCondition];
+      if (ids && ids.length > 0) {
+        baseConditions.push(Prisma.sql`"id" = ANY(${ids})`);
+      }
+      if (categoryIds.length > 0) {
+        baseConditions.push(Prisma.sql`"mainCategoryId" = ANY(${categoryIds})`);
+      }
+      if (premiumOnly) {
+        baseConditions.push(Prisma.sql`"isPremium" = true`);
+      }
+      const whereSql = Prisma.join(baseConditions, " AND ");
+
+      const [countResult, rows] = await Promise.all([
+        prisma.$queryRaw<[{ count: bigint }]>(
+          Prisma.sql`SELECT count(*)::int AS count FROM "Discount" WHERE ${whereSql}`
+        ),
+        prisma.$queryRaw<
+          Array<{
+            id: number;
+            title: string;
+            description: string | null;
+            shortDescription: string | null;
+            discountValue: string | null;
+            partnerUrl: string | null;
+            imageUrl: string | null;
+            tags: unknown;
+            isPremium: boolean;
+            categories: unknown;
+            mainCategoryId: number | null;
+            mainCategoryName: string | null;
+            cities: unknown;
+            options: unknown;
+            bbUpdatedAt: Date | null;
+            validUntil: Date | null;
+          }>
+        >(
+          Prisma.sql`
+            SELECT id, title, description, "shortDescription", "discountValue", "partnerUrl", "imageUrl",
+                   tags, "isPremium", categories, "mainCategoryId", "mainCategoryName", cities, options,
+                   "bbUpdatedAt", "validUntil"
+            FROM "Discount"
+            WHERE ${whereSql}
+            ORDER BY "isPremium" DESC, "lastSyncedAt" DESC
+            LIMIT ${limit} OFFSET ${(page - 1) * limit}
+          `
+        ),
+      ]);
+      total = Number(countResult[0]?.count ?? 0);
+      discounts = rows;
+    } else {
+      const [totalCount, list] = await Promise.all([
+        prisma.discount.count({ where }),
+        prisma.discount.findMany({
+          where,
+          orderBy: [
+            { isPremium: "desc" },
+            { lastSyncedAt: "desc" },
+          ],
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+      ]);
+      total = totalCount;
+      discounts = list;
+    }
+
+    const categories = await prisma.discountCategory.findMany({
+      orderBy: { order: "asc" },
+    });
 
     const items: DiscountItem[] = discounts.map((d) => ({
       id: d.id,
@@ -95,15 +187,6 @@ export async function getDiscountsFromLocalDB(
       validUntil: d.validUntil?.toISOString() || null,
     }));
 
-    // Фильтр по городу (cities в JSON)
-    let filteredItems = items;
-    if (cityId && !search) {
-      filteredItems = items.filter((item) => {
-        if (!item.cities || item.cities.length === 0) return true;
-        return item.cities.some((c: any) => c.id === cityId);
-      });
-    }
-
     const citiesMap = new Map<number, DiscountCity>();
     const allForCities = await prisma.discount.findMany({
       where: { isActive: true },
@@ -122,7 +205,7 @@ export async function getDiscountsFromLocalDB(
     );
 
     const result: DiscountSearchResult = {
-      discounts: filteredItems,
+      discounts: items,
       categories: categories.map((c) => ({
         id: c.id,
         name: c.name,
@@ -131,10 +214,10 @@ export async function getDiscountsFromLocalDB(
       })),
       cities,
       meta: {
-        total: cityId && !search ? filteredItems.length : total,
+        total,
         page,
         perPage: limit,
-        hasMore: cityId && !search ? false : page * limit < total,
+        hasMore: page * limit < total,
       },
       fetchedAt: new Date().toISOString(),
       source: "fallback",

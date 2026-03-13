@@ -125,9 +125,12 @@ async function fetchAllCitiesForFilter(): Promise<DiscountCity[]> {
 export async function fetchBestBenefitsDiscounts(
   params: DiscountSearchParams = {}
 ): Promise<DiscountSearchResult> {
+  // При выборе города запрашиваем больше скидок за раз, иначе API может отдавать только 20 и hasMore=false
+  const baseLimit = params.limit ?? 20;
+  const limitWhenCity = Math.min(100, Math.max(baseLimit, 50));
   const sanitizedParams = {
     ...params,
-    limit: params.limit ?? 20, // Увеличиваем с 15 до 20 для соответствия клиенту
+    limit: (params.cityId || params.cityName) && !params.search ? limitWhenCity : baseLimit,
     page: params.page ?? 1,
   };
 
