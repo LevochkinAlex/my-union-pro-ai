@@ -43,8 +43,11 @@ export async function GET(
       orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     });
 
+    // Исключаем дубликат "Член профкома." (с точкой) из списка
+    const filteredRoles = roles.filter((r) => r.name !== "Член профкома.");
+
     return NextResponse.json({
-      roles: roles.map((r) => ({
+      roles: filteredRoles.map((r) => ({
         id: r.id,
         name: r.name,
         description: r.description,

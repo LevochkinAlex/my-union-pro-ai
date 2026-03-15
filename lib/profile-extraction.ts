@@ -1177,16 +1177,6 @@ function validateExtractedProfile(data: Record<string, any>): Record<string, any
 }
 
 /**
- * Форматирует дату в формат ДД.ММ.ГГГГ для отображения
- */
-export function formatDateForDisplay(date: Date): string {
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = date.getFullYear();
-  return `${day}.${month}.${year}`;
-}
-
-/**
  * Проверяет полноту профиля
  */
 export function isProfileComplete(user: any): boolean {

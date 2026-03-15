@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
+import { readFile } from "fs/promises";
 import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 
 if (typeof window === "undefined") {
@@ -44,12 +45,25 @@ export async function GET(
     const ext = path.extname(filename).toLowerCase();
     const contentType = MIME[ext] || "application/octet-stream";
 
-    if (!isVDSStorageConfigured()) {
-      return NextResponse.json({ error: "Storage not configured" }, { status: 503 });
-    }
+    let fileBuffer: Buffer;
 
-    const fileKey = `meeting-attachments/${filename}`;
-    const fileBuffer = await getFileFromVDS(fileKey);
+    if (isVDSStorageConfigured()) {
+      try {
+        const fileKey = `meeting-attachments/${filename}`;
+        fileBuffer = await getFileFromVDS(fileKey);
+      } catch (vdsError) {
+        console.error("[uploads/meeting-attachments] VDS read failed:", vdsError);
+        return NextResponse.json({ error: "File not found" }, { status: 404 });
+      }
+    } else {
+      const localPath = path.join(process.cwd(), "public", "uploads", "meeting-attachments", filename);
+      try {
+        fileBuffer = await readFile(localPath);
+      } catch (localError) {
+        console.error("[uploads/meeting-attachments] Local read failed:", localError);
+        return NextResponse.json({ error: "File not found" }, { status: 404 });
+      }
+    }
 
     return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,

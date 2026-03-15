@@ -4,7 +4,6 @@
 
 import { prisma } from "@/lib/prisma";
 import { ChatType } from "@prisma/client";
-import { assignAgendaToUserIds } from "@/lib/meeting-agenda-notify";
 
 export interface MeetingGroupChatResult {
   chatId: string;
@@ -57,10 +56,7 @@ export async function ensureMeetingGroupChat(meetingId: string): Promise<Meeting
         })),
         skipDuplicates: true,
       });
-      // Назначаем повестку новым участникам (копии во входящие + уведомления)
-      await assignAgendaToUserIds(meetingId, toAdd, chairmanUserId).catch((err) =>
-        console.warn("[meeting-chat] assignAgendaToUserIds:", err)
-      );
+      // Рассылка повестки — только по кнопкам «Разослать на согласование» или «Утвердить без согласования», не при синхронизации чата.
     }
     return { chatId: meeting.groupChat.id, created: false };
   }

@@ -46,43 +46,96 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status"); // PENDING, ACTIVE, INACTIVE
     const roleId = searchParams.get("roleId");
 
-    const staff = await prisma.organizationStaff.findMany({
-      where: {
+    const [staff, organization] = await Promise.all([
+      prisma.organizationStaff.findMany({
+        where: {
+          organizationId,
+          ...(status && { status: status as any }),
+          ...(roleId && { roleId }),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              email: true,
+              phone: true,
+              avatarUrl: true,
+            },
+          },
+          role: {
+            select: {
+              id: true,
+              name: true,
+              permissions: true,
+            },
+          },
+        },
+        orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      }),
+      prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: {
+          createdAt: true,
+          ppoChairman: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              email: true,
+              phone: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const staffUserIds = new Set(staff.map((s) => s.userId));
+    const chairman = organization?.ppoChairman;
+    const chairmanInList = chairman && staffUserIds.has(chairman.id);
+
+    let resultStaff = staff.map((item) => ({
+      ...item,
+      role: {
+        ...item.role,
+        permissions: normalizeStaffPermissions(item.role.permissions),
+      },
+    }));
+
+    if (chairman && !chairmanInList) {
+      const chairmanEntry = {
+        id: `chairman-${chairman.id}`,
+        userId: chairman.id,
         organizationId,
-        ...(status && { status: status as any }),
-        ...(roleId && { roleId }),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            email: true,
-            phone: true,
-            avatarUrl: true,
-          },
-        },
+        roleId: "chairman",
+        status: "ACTIVE" as const,
+        invitedAt: organization!.createdAt,
+        acceptedAt: organization!.createdAt,
+        user: chairman,
         role: {
-          select: {
-            id: true,
-            name: true,
-            permissions: true,
-          },
+          id: "chairman",
+          name: "Председатель",
+          permissions: normalizeStaffPermissions({}),
         },
-      },
-      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    });
+      };
+      resultStaff = [chairmanEntry, ...resultStaff];
+    }
+
+    const roleOrder = (m: { id: string; role?: { name?: string } }): number => {
+      if (m.id.startsWith("chairman-") || (m.role?.name && /^председатель(\s|$)/i.test(m.role.name) && !/зам|заместитель/i.test(m.role.name))) return 1;
+      if (m.role?.name && /зам|заместитель/i.test(m.role.name)) return 2;
+      if (m.role?.name && /член\s*профкома/i.test(m.role.name)) return 3;
+      if (m.role?.name && /бухгалтер/i.test(m.role.name)) return 4;
+      return 5;
+    };
+    resultStaff = [...resultStaff].sort((a, b) => roleOrder(a) - roleOrder(b));
 
     return NextResponse.json({
-      staff: staff.map((item) => ({
-        ...item,
-        role: {
-          ...item.role,
-          permissions: normalizeStaffPermissions(item.role.permissions),
-        },
-      })),
+      staff: resultStaff,
     });
   } catch (error) {
     console.error("[API] Error fetching staff:", error);

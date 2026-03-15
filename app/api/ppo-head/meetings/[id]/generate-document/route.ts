@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentType, DocumentStatus, DocumentCategory } from "@prisma/client";
 import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
-import { assignAgendaToParticipantsAndNotify } from "@/lib/meeting-agenda-notify";
 
 // Форматирование даты в русском формате
 function formatDate(date: Date): string {
@@ -59,6 +58,7 @@ export async function POST(
     const meeting = await prisma.meeting.findUnique({
       where: { id },
       include: {
+        agendaDocument: { select: { id: true, status: true } },
         organization: {
           select: { 
             id: true, 
@@ -103,6 +103,22 @@ export async function POST(
 
     if (meeting.organizationId !== perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
+    }
+
+    // Протокол можно создавать только после утверждения повестки председателем
+    if (documentType === "PROTOCOL") {
+      if (!meeting.agendaDocument) {
+        return NextResponse.json(
+          { error: "Сначала создайте и утвердите повестку дня" },
+          { status: 400 }
+        );
+      }
+      if (meeting.agendaDocument.status !== "COMPLETED") {
+        return NextResponse.json(
+          { error: "Создание протокола возможно только после утверждения повестки председателем (кнопка «Утвердить повестку»)" },
+          { status: 400 }
+        );
+      }
     }
 
     // Проверка кворума для протокола (50% + 1 от числа членов Профкома с правом голоса)
@@ -368,6 +384,29 @@ export async function POST(
           updatedAt: new Date(),
         },
       });
+      // Сбрасываем согласования: все «согласовано» → «Ожидает»
+      await prisma.documentApproval.updateMany({
+        where: { documentId: document.id },
+        data: { status: "PENDING", comment: null, approvedAt: null },
+      });
+      // Обновляем копии во «Входящих» у участников — подменяем на новый PDF и контент
+      const fileName = filePath ? filePath.split("/").pop() : null;
+      const copies = await prisma.document.findMany({
+        where: { metadata: { path: ["originalDocumentId"], equals: document.id } },
+        select: { id: true },
+      });
+      if (copies.length > 0) {
+        await prisma.document.updateMany({
+          where: { id: { in: copies.map((c) => c.id) } },
+          data: {
+            title: documentTitle,
+            content: htmlContent,
+            filePath,
+            fileName,
+            updatedAt: new Date(),
+          },
+        });
+      }
     } else if (existingProtocolDoc) {
       // Обновляем существующий протокол (перезаписываем PDF и контент, опционально утверждаем)
       document = await prisma.document.update({
@@ -405,24 +444,12 @@ export async function POST(
       });
     }
 
-    // Привязка документа к заседанию и рассылка участникам (только при создании повестки)
+    // Привязка документа к заседанию (только при создании повестки). Рассылка — только по кнопкам «Разослать на согласование» или «Утвердить без согласования».
     if (documentType === "AGENDA" && !meeting.agendaDocumentId) {
       await prisma.meeting.update({
         where: { id: meeting.id },
         data: { agendaDocumentId: document.id },
       });
-      const currentUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { lastName: true, firstName: true },
-      });
-      const chairmanName = [currentUser?.lastName, currentUser?.firstName].filter(Boolean).join(" ") || "Председатель";
-      try {
-        const result = await assignAgendaToParticipantsAndNotify(meeting.id, session.user.id, chairmanName);
-        console.log(`[generate-document] Повестка: назначено ${result.assignedCount} участникам, уведомлено ${result.notifiedCount}`);
-      } catch (notifyErr) {
-        console.error("[generate-document] Ошибка рассылки повестки участникам:", notifyErr);
-        // Не падаем — документ создан; рассылку можно повторить кнопкой «Разослать на согласование» или «Отправить уведомления»
-      }
     } else if (documentType === "PROTOCOL" && !existingProtocolDoc) {
       await prisma.meeting.update({
         where: { id: meeting.id },
@@ -594,7 +621,7 @@ function generateProtocolHTML(meeting: any, data: any): string {
   ) => `
     <div class="protocol-block">
       <p><strong>СЛУШАЛИ:</strong> ${escapeHtml(listenedText)}</p>
-      <p>Докладывал ${escapeHtml(reporterName || "____________________")} – член Профсоюза.</p>
+      <p>Докладывал ${escapeHtml(reporterName || "____________________")}.</p>
       <p><strong>ПОСТАНОВИЛИ:</strong> ${escapeHtml(resolvedText)}</p>
       <p>Голосовали:</p>
       <p class="vote-line">«За» – ${vF}; &nbsp; «Против» – ${vA}; &nbsp; «Воздержались» – ${vAbs}</p>
@@ -706,7 +733,7 @@ function generateProtocolHTML(meeting: any, data: any): string {
     <div style="padding-left: 20px; margin: 4px 0;">${absentMemberLines}</div>
     ` : ""}
 
-    ${data.invitedGuests ? `<p><strong>Присутствовали гости:</strong> ${escapeHtml(data.invitedGuests)}</p>` : ""}
+    ${data.invitedGuests ? `<p><strong>Присутствовали приглашённые:</strong> ${escapeHtml(data.invitedGuests)}</p>` : ""}
   </div>
 
   <p class="quorum-statement">В соответствии с п.&nbsp;3 ст.&nbsp;18 Устава Профсоюза заседание профсоюзного комитета считается правомочным (имеет кворум) и объявляется открытым.</p>

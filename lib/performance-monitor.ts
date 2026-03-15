@@ -15,9 +15,9 @@ const MAX_METRICS = 1000; // Храним последние 1000 метрик
 const SLOW_QUERY_THRESHOLD = 500; // 500ms
 
 /**
- * Логирование метрики производительности
+ * Логирование метрики производительности (внутреннее, не экспортируется наружу).
  */
-export async function logPerformanceMetric(metric: PerformanceMetric) {
+async function logPerformanceMetric(metric: PerformanceMetric) {
   try {
     // Логируем медленные запросы
     if (metric.duration > SLOW_QUERY_THRESHOLD) {
@@ -127,54 +127,5 @@ export async function getPerformanceStats() {
     cacheHitRate: Math.round(cacheHitRate * 100) / 100,
     byEndpoint,
   };
-}
-
-/**
- * Обертка для измерения производительности API endpoint
- */
-export function withPerformanceMonitoring<T>(
-  endpoint: string,
-  method: string,
-  handler: (cacheHit: boolean) => Promise<T>,
-  userId?: string
-): Promise<T> {
-  const startTime = Date.now();
-  let cacheHit = false;
-  let statusCode = 200;
-
-  return handler(cacheHit)
-    .then(async (result) => {
-      const duration = Date.now() - startTime;
-
-      // Логируем метрику асинхронно (не блокируем ответ)
-      logPerformanceMetric({
-        endpoint,
-        method,
-        duration,
-        timestamp: Date.now(),
-        statusCode,
-        cacheHit,
-        userId,
-      }).catch(() => {}); // Игнорируем ошибки логирования
-
-      return result;
-    })
-    .catch(async (error) => {
-      const duration = Date.now() - startTime;
-      statusCode = error.statusCode || 500;
-
-      // Логируем ошибку
-      logPerformanceMetric({
-        endpoint,
-        method,
-        duration,
-        timestamp: Date.now(),
-        statusCode,
-        cacheHit,
-        userId,
-      }).catch(() => {});
-
-      throw error;
-    });
 }
 

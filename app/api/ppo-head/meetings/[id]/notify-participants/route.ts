@@ -55,7 +55,7 @@ export async function POST(
           select: { id: true, filePath: true, regNumber: true },
         },
         protocolDocument: {
-          select: { id: true, filePath: true, regNumber: true },
+          select: { id: true, filePath: true, signedFilePath: true, regNumber: true },
         },
         organization: {
           select: { name: true },
@@ -115,25 +115,31 @@ export async function POST(
         data: { status: "SCHEDULED" },
       });
     } else if (type === "protocol_review") {
+      const signedPath = meeting.protocolDocument
+        ? (meeting.protocolDocument as { signedFilePath?: string | null }).signedFilePath
+        : null;
+      if (!meeting.protocolDocument || !signedPath) {
+        return NextResponse.json(
+          { error: "Рассылать можно только подписанный протокол. Сначала нажмите «Подписать» и загрузите подписанный скан." },
+          { status: 400 }
+        );
+      }
+
       notificationTitle = `Протокол заседания №${meeting.number}`;
-      notificationBody = `Протокол заседания от ${meetingDate} готов для ознакомления.`;
-      
-      // Назначаем протокол всем участникам для ознакомления (если еще не назначен)
-      if (meeting.protocolDocument) {
-        // Используем тех же участников, которым отправляем уведомления
+      notificationBody = `Подписанный протокол заседания от ${meetingDate} доступен во вкладке «Входящие».`;
+
+      {
         const participantsWithUserId = finalParticipantUserIds;
         
         if (participantsWithUserId.length > 0) {
-          // Проверяем, какие участники еще не имеют назначенного протокола
-          // Ищем документы, которые являются копиями этого протокола и назначены участникам
           const existingAssigned = await prisma.document.findMany({
             where: {
               OR: [
-                { id: meeting.protocolDocument.id }, // Оригинальный документ
+                { id: meeting.protocolDocument!.id },
                 {
                   metadata: {
                     path: ["originalDocumentId"],
-                    equals: meeting.protocolDocument.id,
+                    equals: meeting.protocolDocument!.id,
                   },
                 },
               ],
@@ -146,7 +152,7 @@ export async function POST(
           const usersToAssign = participantsWithUserId.filter(userId => !assignedUserIds.has(userId));
           
           if (usersToAssign.length > 0) {
-            // Создаем копии протокола для участников, которым он еще не назначен
+            const protocolFileName = signedPath.split("/").pop() || null;
             await Promise.all(
               usersToAssign.map(userId =>
                 prisma.document.create({
@@ -161,8 +167,8 @@ export async function POST(
                       ? `${meeting.protocolDocument.regNumber}-${userId.slice(0, 4)}`
                       : null,
                     regDate: new Date(),
-                    filePath: meeting.protocolDocument.filePath,
-                    fileName: meeting.protocolDocument.filePath?.split("/").pop() || null,
+                    filePath: signedPath,
+                    fileName: protocolFileName,
                     userId: session.user.id,
                     organizationId: meeting.organizationId,
                     assignedToId: userId,
@@ -179,8 +185,19 @@ export async function POST(
               )
             );
             
-            console.log(`[notify-participants] Протокол назначен ${usersToAssign.length} участникам`);
+            console.log(`[notify-participants] Протокол (подписанный) назначен ${usersToAssign.length} участникам`);
           }
+
+          await prisma.document.updateMany({
+            where: {
+              type: "PROTOCOL",
+              metadata: { path: ["originalDocumentId"], equals: meeting.protocolDocument!.id },
+            },
+            data: {
+              filePath: signedPath,
+              fileName: signedPath.split("/").pop() || null,
+            },
+          });
         }
       }
     } else if (type === "meeting_reminder") {
@@ -204,11 +221,15 @@ export async function POST(
       });
     }
 
+    const message =
+      type === "agenda_review"
+        ? `Повестка назначена участникам, уведомления отправлены ${finalParticipantUserIds.length} участникам`
+        : type === "protocol_review"
+          ? `Протокол разослан во Входящие ${finalParticipantUserIds.length} участникам`
+          : `Уведомления отправлены ${finalParticipantUserIds.length} участникам`;
     return NextResponse.json({
       success: true,
-      message: type === "agenda_review"
-        ? `Повестка назначена участникам, уведомления отправлены ${finalParticipantUserIds.length} участникам`
-        : `Уведомления отправлены ${finalParticipantUserIds.length} участникам`,
+      message,
       sentCount: finalParticipantUserIds.length,
     });
   } catch (error: any) {

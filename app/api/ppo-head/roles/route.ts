@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     // Синхронизируем предустановленные роли (добавляет недостающие, например «Член профкома»)
     await createDefaultRolesForOrganization(organizationId);
 
-    // Получаем роли организации
+    // Получаем роли организации (исключаем дубликат "Член профкома." с точкой)
     const roles = await prisma.staffRole.findMany({
       where: {
         organizationId,
@@ -81,9 +81,11 @@ export async function GET(request: NextRequest) {
       orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     });
 
+    const filteredRoles = roles.filter((r) => r.name !== "Член профкома.");
+
     return NextResponse.json({
       readOnly: isRpoRoleTemplatesEnabled(),
-      roles: roles.map((r) => ({
+      roles: filteredRoles.map((r) => ({
         ...r,
         permissions: normalizeStaffPermissions(r.permissions),
         staffCount: r._count.staff,

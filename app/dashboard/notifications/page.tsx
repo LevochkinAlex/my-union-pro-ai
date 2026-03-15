@@ -14,6 +14,8 @@ interface Notification {
   metadata: any;
   readAt: string | null;
   createdAt: string;
+  /** Статус документа (от API); кнопки «Согласовать»/«Отклонить» только при PENDING_APPROVAL */
+  documentStatus?: string | null;
 }
 
 const DOC_APPROVAL_TYPES = ["meeting_agenda_review", "meeting_document_approval"];
@@ -120,12 +122,21 @@ export default function NotificationsPage() {
     }
   };
 
+  const getNotificationTargetUrl = (notification: Notification): string | null => {
+    const meta = notification.metadata as { meetingId?: string } | null;
+    if (meta?.meetingId && (notification.type === "meeting_agenda_review" || notification.type === "meeting_agenda_approved")) {
+      return `/dashboard/documents/meetings/${meta.meetingId}`;
+    }
+    return notification.url || null;
+  };
+
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.readAt) {
       markAsRead(notification.id);
     }
-    if (notification.url) {
-      router.push(notification.url);
+    const targetUrl = getNotificationTargetUrl(notification);
+    if (targetUrl) {
+      router.push(targetUrl);
     }
   };
 
@@ -335,16 +346,19 @@ export default function NotificationsPage() {
                     {formatDate(notification.createdAt)}
                   </p>
                   {DOC_APPROVAL_TYPES.includes(notification.type) &&
-                    (notification.metadata as { meetingId?: string; documentId?: string })?.meetingId &&
-                    (notification.metadata as { meetingId?: string; documentId?: string })?.documentId && (
+                    (notification.metadata as { meetingId?: string; documentId?: string; approvedWithoutReview?: boolean })?.meetingId &&
+                    (notification.metadata as { meetingId?: string; documentId?: string; approvedWithoutReview?: boolean })?.documentId &&
+                    !(notification.metadata as { approvedWithoutReview?: boolean })?.approvedWithoutReview &&
+                    notification.documentStatus === "PENDING_APPROVAL" && (
                     <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (notification.url) {
+                          const targetUrl = getNotificationTargetUrl(notification);
+                          if (targetUrl) {
                             if (!notification.readAt) markAsRead(notification.id);
-                            router.push(notification.url);
+                            router.push(targetUrl);
                           }
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"

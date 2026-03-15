@@ -159,16 +159,18 @@ export async function POST(
     if (isAgenda) {
       await assignAgendaToParticipantsAndNotify(meetingId, session.user.id, chairmanName);
     } else {
-      // Протокол: приглашённым отправляем push и email с просьбой согласовать/ознакомиться
+      // Протокол: не рассылаем во «Входящие» до подписания; рассылка только по кнопке «Разослать протокол во Входящие» (подписанный)
       const participantIds = participantsWithUserId.map((p) => p.user!.id);
-      await sendMassNotification({
-        userIds: participantIds,
-        title: `${docLabel} на согласование`,
-        body: `Просьба согласовать или ознакомиться с документом от ${chairmanName}. Документ во вкладке «Входящие».`,
-        url: inboxUrl,
-        type: "meeting_document_approval",
-        metadata: { meetingId, documentId },
-      });
+      if (participantIds.length > 0) {
+        await sendMassNotification({
+          userIds: participantIds,
+          title: `${docLabel} на согласование`,
+          body: `Просьба согласовать протокол от ${chairmanName} на странице заседания.`,
+          url: `/dashboard/documents/meetings/${meetingId}`,
+          type: "meeting_document_approval",
+          metadata: { meetingId, documentId },
+        });
+      }
     }
 
     const chatResult = await ensureMeetingGroupChat(meetingId);
@@ -181,7 +183,7 @@ export async function POST(
 
     return NextResponse.json({
       document: updatedDocument,
-      message: `Документ отправлен на согласование ${participantsWithUserId.length} участникам${isAgenda ? ". Участники получат документ во входящие, push и email" : ""}`,
+      message: `Документ отправлен на согласование ${participantsWithUserId.length} участникам. Участники получат документ во входящие, push и email`,
     });
   } catch (error: any) {
     console.error("[send-for-approval] POST error:", error);

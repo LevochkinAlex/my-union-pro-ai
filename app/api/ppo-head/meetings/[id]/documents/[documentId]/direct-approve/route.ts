@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentStatus } from "@prisma/client";
+import { assignAgendaToParticipantsAndNotify } from "@/lib/meeting-agenda-notify";
+import { ensureMeetingGroupChat, postMeetingChatSystemMessage } from "@/lib/meeting-chat";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/direct-approve
@@ -111,6 +113,26 @@ export async function POST(
         comment: "Повестка утверждена председателем (без согласования участниками)",
       },
     });
+
+    // Рассылка участникам: повестка во входящие, push и email (без кнопок «Согласовать»/«Отклонить» в уведомлениях)
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { lastName: true, firstName: true },
+    });
+    const chairmanName = [currentUser?.lastName, currentUser?.firstName].filter(Boolean).join(" ") || "Председатель";
+    try {
+      await assignAgendaToParticipantsAndNotify(meetingId, session.user.id, chairmanName, { approvalRequired: false });
+      const chatResult = await ensureMeetingGroupChat(meetingId);
+      if (chatResult) {
+        await postMeetingChatSystemMessage(
+          meetingId,
+          "Повестка дня утверждена председателем. Ознакомьтесь во вкладке «Входящие»."
+        );
+      }
+    } catch (notifyErr) {
+      console.error("[direct-approve] Ошибка рассылки повестки участникам:", notifyErr);
+      // Не откатываем утверждение — рассылку можно повторить через «Отправить уведомления»
+    }
 
     return NextResponse.json({
       document: updatedDocument,

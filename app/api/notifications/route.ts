@@ -73,8 +73,30 @@ export async function GET(request: NextRequest) {
     
     const unreadCount = unreadCountResult;
 
+    const DOC_APPROVAL_TYPES = ["meeting_agenda_review", "meeting_document_approval"];
+    const documentIds = new Set<string>();
+    for (const n of notifications) {
+      if (DOC_APPROVAL_TYPES.includes(n.type) && n.metadata && typeof n.metadata === "object" && "documentId" in n.metadata && typeof (n.metadata as { documentId?: string }).documentId === "string") {
+        documentIds.add((n.metadata as { documentId: string }).documentId);
+      }
+    }
+    let documentStatusMap: Record<string, string> = {};
+    if (documentIds.size > 0) {
+      const docs = await prisma.document.findMany({
+        where: { id: { in: [...documentIds] } },
+        select: { id: true, status: true },
+      });
+      documentStatusMap = Object.fromEntries(docs.map((d) => [d.id, d.status]));
+    }
+    const notificationsWithStatus = notifications.map((n) => {
+      const meta = n.metadata as { documentId?: string } | null;
+      const docId = meta?.documentId;
+      const documentStatus = docId ? documentStatusMap[docId] ?? null : null;
+      return { ...n, documentStatus };
+    });
+
     return NextResponse.json({
-      notifications,
+      notifications: notificationsWithStatus,
       pagination: {
         page,
         limit,

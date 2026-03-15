@@ -4,6 +4,19 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 
+/** При изменении повестки сбрасываем согласования: все «согласовал» → «ожидает» */
+async function resetAgendaDocumentApprovals(meetingId: string): Promise<void> {
+  const meeting = await prisma.meeting.findUnique({
+    where: { id: meetingId },
+    select: { agendaDocumentId: true, agendaDocument: { select: { status: true } } },
+  });
+  if (!meeting?.agendaDocumentId || meeting.agendaDocument?.status !== "PENDING_APPROVAL") return;
+  await prisma.documentApproval.updateMany({
+    where: { documentId: meeting.agendaDocumentId },
+    data: { status: "PENDING", comment: null, approvedAt: null },
+  });
+}
+
 /**
  * GET /api/ppo-head/meetings/[id]/agenda
  * Получение пунктов повестки заседания
@@ -80,20 +93,23 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const perm = await checkUserPermissions(session.user.id, "documents_edit");
-    if (!perm.hasAccess || !perm.organizationId) {
-      return NextResponse.json({ error: "Нет прав на редактирование повестки" }, { status: 403 });
-    }
-
     const { id } = await params;
 
     const meeting = await prisma.meeting.findUnique({
       where: { id },
-      select: { organizationId: true, status: true },
+      select: { organizationId: true, status: true, participants: { where: { userId: { not: null } }, select: { userId: true } } },
     });
 
-    if (!meeting || meeting.organizationId !== perm.organizationId) {
+    if (!meeting) {
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
+    }
+
+    const perm = await checkUserPermissions(session.user.id, "documents_edit");
+    const hasEditPermission = perm.hasAccess && perm.organizationId === meeting.organizationId;
+    const isInternalParticipant = meeting.participants.some((p) => p.userId === session.user.id);
+
+    if (!hasEditPermission && !isInternalParticipant) {
+      return NextResponse.json({ error: "Нет прав на добавление пунктов повестки" }, { status: 403 });
     }
 
     if (meeting.status !== "DRAFT" && meeting.status !== "SCHEDULED") {
@@ -143,6 +159,17 @@ export async function POST(
       },
     });
 
+    await resetAgendaDocumentApprovals(id);
+
+    try {
+      await prisma.meeting.update({
+        where: { id },
+        data: { agendaModifiedAt: new Date() },
+      });
+    } catch (e) {
+      console.warn("[ppo-head/meetings/[id]/agenda] POST: не удалось обновить agendaModifiedAt:", e);
+    }
+
     return NextResponse.json({ agendaItem }, { status: 201 });
   } catch (error: any) {
     console.error("[ppo-head/meetings/[id]/agenda] POST error:", error);
@@ -171,11 +198,6 @@ export async function PATCH(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const perm = await checkUserPermissions(session.user.id, "documents_edit");
-    if (!perm.hasAccess || !perm.organizationId) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-    }
-
     const { id } = await params;
 
     const meeting = await prisma.meeting.findUnique({
@@ -183,8 +205,18 @@ export async function PATCH(
       select: { organizationId: true, status: true },
     });
 
-    if (!meeting || meeting.organizationId !== perm.organizationId) {
+    if (!meeting) {
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
+    }
+
+    const perm = await checkUserPermissions(session.user.id, "documents_view");
+    const canEditAgendaItems =
+      perm.hasAccess &&
+      perm.organizationId === meeting.organizationId &&
+      (perm.isChairman || (!!perm.roleName && /зам|заместитель/i.test(perm.roleName)));
+
+    if (!canEditAgendaItems) {
+      return NextResponse.json({ error: "Редактировать пункты повестки могут только председатель и заместитель председателя" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -227,6 +259,17 @@ export async function PATCH(
         });
       })
     );
+
+    await resetAgendaDocumentApprovals(id);
+
+    try {
+      await prisma.meeting.update({
+        where: { id },
+        data: { agendaModifiedAt: new Date() },
+      });
+    } catch (e) {
+      console.warn("[ppo-head/meetings/[id]/agenda] PATCH: не удалось обновить agendaModifiedAt:", e);
+    }
 
     return NextResponse.json({ items: updatedItems.filter(Boolean) });
   } catch (error: any) {

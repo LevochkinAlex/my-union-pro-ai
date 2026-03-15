@@ -209,9 +209,10 @@ export async function GET(request: NextRequest) {
       if (meetingId && !validMeetingOriginalIds.has(`${meetingId}:${originalId}`)) return false;
       // Не показывать председателю копии своих заседаний — утверждает на странице заседания
       if (meetingId && meetingIdsWhereIAmChairman.has(meetingId)) return false;
-      // Любая копия (с originalDocumentId): показываем только если оригинал на согласовании (не черновик, не исполнен)
+      // Копии показываем, если оригинал на согласовании (PENDING_APPROVAL) или уже утверждён/подписан (COMPLETED, SIGNED) — для ознакомления
       const origStatus = originalStatusMap[originalId];
-      if (origStatus && origStatus !== "PENDING_APPROVAL") return false;
+      const allowedOriginalStatuses = ["PENDING_APPROVAL", "COMPLETED", "SIGNED"];
+      if (origStatus && !allowedOriginalStatuses.includes(origStatus)) return false;
       return true;
     });
     const approvalMap: Record<string, { status: string; comment: string | null; approvedAt: Date | null }> = {};
@@ -326,11 +327,8 @@ export async function GET(request: NextRequest) {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    // В режиме «Член участник»: входящие — только устав и не связанные с заседаниями; исходящие — только заявления
-    const finalIncoming =
-      viewMode === "MEMBER"
-        ? incomingWithApproval.filter((d: { meetingId?: string }) => !d.meetingId)
-        : incomingWithApproval;
+    // В режиме «Член участник»: исходящие — только заявления; входящие показываем все (устав, повестки и протоколы назначенные пользователю)
+    const finalIncoming = incomingWithApproval;
     const finalOutgoing =
       viewMode === "MEMBER"
         ? sortedOutgoingDocuments.filter(

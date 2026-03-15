@@ -93,6 +93,7 @@ export default function MeetingsPage() {
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isOrgHead, setIsOrgHead] = useState<boolean>(true);
+  const [canDeleteMeetings, setCanDeleteMeetings] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -253,6 +254,7 @@ export default function MeetingsPage() {
       if (response.ok) {
         setMeetings(data.meetings || []);
         setIsOrgHead(data.isOrgHead !== false);
+        setCanDeleteMeetings(data.canDeleteMeetings === true);
       } else {
         const msg = data.error || "Ошибка загрузки заседаний";
         const details = data.details ? ` ${data.details}` : "";
@@ -323,7 +325,7 @@ export default function MeetingsPage() {
           type: formData.type,
           format: formData.format,
           title: formData.title,
-          scheduledDate: formData.scheduledDate,
+          scheduledDate: normalizeDateInputValue(formData.scheduledDate) || formData.scheduledDate,
           scheduledTime: formData.scheduledTime || null,
           location: formData.location || null,
           onlineLink: formData.onlineLink || null,
@@ -547,7 +549,10 @@ export default function MeetingsPage() {
           </button>
         ) : (
           <button
-            onClick={() => setShowCreateForm(true)}
+            onClick={() => {
+              setShowCreateForm(true);
+              setFormData(prev => ({ ...prev, scheduledDate: new Date().toISOString().slice(0, 10) }));
+            }}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -822,7 +827,7 @@ export default function MeetingsPage() {
                 min={DATE_INPUT_MIN}
                 max={DATE_INPUT_MAX}
                 value={formData.scheduledDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: normalizeDateInputValue(e.target.value) }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               />
             </div>
@@ -1091,7 +1096,7 @@ export default function MeetingsPage() {
                           type="text"
                           value={item.title}
                           onChange={(e) => updateAgendaItem(index, "title", e.target.value)}
-                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400"
                           placeholder="О чём будет обсуждение..."
                         />
                       </div>
@@ -1105,7 +1110,7 @@ export default function MeetingsPage() {
                           aria-label={`Докладывает по вопросу ${index + 1}`}
                           value={item.speakerId ? `user:${item.speakerId}` : ""}
                           onChange={(e) => setSpeakerFromSelect(index, e.target.value)}
-                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                          className={`block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 ${item.speakerId ? "dark:text-white" : "dark:text-gray-400"}`}
                         >
                           <option value="">Выберите докладчика...</option>
                           {electedBodyMembers.length > 0 && (
@@ -1373,7 +1378,10 @@ export default function MeetingsPage() {
               </p>
               {isAllTab && isOrgHead && (
                 <button
-                  onClick={() => setShowCreateForm(true)}
+                  onClick={() => {
+              setShowCreateForm(true);
+              setFormData(prev => ({ ...prev, scheduledDate: new Date().toISOString().slice(0, 10) }));
+            }}
                   className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 >
                   Создать заседание
@@ -1498,7 +1506,7 @@ export default function MeetingsPage() {
                             <span className="hidden sm:inline">{primaryLabel}</span>
                           </Link>
                         )}
-                        {isOrgHead && (
+                        {canDeleteMeetings && (
                           <button
                             type="button"
                             onClick={async () => {

@@ -20,13 +20,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const perm = await checkUserPermissions(session.user.id, "documents_edit");
-    if (!perm.hasAccess || !perm.organizationId) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-    }
-
     const { id: meetingId, participantId } = await params;
-    const body = await request.json();
+    if (!participantId) {
+      return NextResponse.json({ error: "Не указан участник" }, { status: 400 });
+    }
+    let body: { attendance?: string } = {};
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Некорректное тело запроса" }, { status: 400 });
+    }
     const { attendance } = body;
 
     if (!attendance || !Object.values(MeetingAttendanceStatus).includes(attendance)) {
@@ -41,11 +44,30 @@ export async function PATCH(
       select: { organizationId: true },
     });
 
-    if (!meeting || meeting.organizationId !== perm.organizationId) {
+    if (!meeting) {
+      return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
+    }
+
+    const permEdit = await checkUserPermissions(session.user.id, "documents_edit");
+    const permView = await checkUserPermissions(session.user.id, "documents_view");
+    const canEditByEdit = permEdit.hasAccess && permEdit.organizationId && meeting.organizationId === permEdit.organizationId;
+    const canEditByView = permView.hasAccess && permView.organizationId && meeting.organizationId === permView.organizationId;
+    const myParticipation = await prisma.meetingParticipant.findFirst({
+      where: { meetingId, userId: session.user.id },
+      select: { role: true },
+    });
+    const canEditByRole = !!myParticipation && ["CHAIRMAN", "SECRETARY"].includes(myParticipation.role);
+    if (!canEditByEdit && !canEditByView && !canEditByRole) {
       return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
     }
 
-    // Обновляем статус присутствия
+    const existing = await prisma.meetingParticipant.findFirst({
+      where: { id: participantId, meetingId },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Участник не найден" }, { status: 404 });
+    }
+
     const participant = await prisma.meetingParticipant.update({
       where: { id: participantId },
       data: { attendance: attendance as MeetingAttendanceStatus },
@@ -59,6 +81,12 @@ export async function PATCH(
     return NextResponse.json({ participant });
   } catch (error: any) {
     console.error("[ppo-head/meetings/[id]/participants/[participantId]] PATCH error:", error);
+    if (error?.code === "P2025") {
+      return NextResponse.json(
+        { error: "Участник не найден" },
+        { status: 404 }
+      );
+    }
     return NextResponse.json(
       {
         error: "Ошибка при обновлении статуса участника",
