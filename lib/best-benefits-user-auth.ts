@@ -128,19 +128,4 @@ export async function getUserBestBenefitsToken(
     : new Error("Failed to authenticate user in BestBenefits");
 }
 
-/**
- * Clear cached token for a user (useful for testing or force refresh)
- */
-export function clearUserToken(email: string): void {
-  userTokenCache.delete(email);
-  debugUserAuth(`[UserAuth] Cleared token for ${email}`);
-}
-
-/**
- * Clear all cached user tokens
- */
-export function clearAllUserTokens(): void {
-  userTokenCache.clear();
-  debugUserAuth(`[UserAuth] Cleared all user tokens`);
-}
 

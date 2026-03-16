@@ -95,11 +95,19 @@ export async function POST(request: NextRequest) {
       fileType: file.type,
     });
 
-    // Документ: владелец (userId) или протокол заседания, где текущий пользователь — председатель
+    // Документ: владелец (userId), протокол заседания или постановление заседания, где текущий пользователь — председатель
     const document = await prisma.document.findUnique({
       where: { id: documentId },
       include: {
         meetingAsProtocol: {
+          include: {
+            participants: {
+              where: { role: "CHAIRMAN", userId: session.user.id },
+              select: { id: true },
+            },
+          },
+        },
+        meetingResolution: {
           include: {
             participants: {
               where: { role: "CHAIRMAN", userId: session.user.id },
@@ -121,8 +129,11 @@ export async function POST(request: NextRequest) {
     const isChairmanOfProtocol =
       document.meetingAsProtocol &&
       document.meetingAsProtocol.participants.some((p) => p.id);
+    const isChairmanOfResolutionMeeting =
+      document.meetingResolution &&
+      document.meetingResolution.participants.some((p) => p.id);
 
-    if (!isOwner && !isChairmanOfProtocol) {
+    if (!isOwner && !isChairmanOfProtocol && !isChairmanOfResolutionMeeting) {
       return NextResponse.json(
         { error: "Нет прав на загрузку подписанного документа" },
         { status: 403 }
@@ -187,13 +198,14 @@ export async function POST(request: NextRequest) {
 
     console.log("[upload-signed] File saved:", publicPath);
 
-    // Для протокола заседания статус SIGNED выставляется только по кнопке «Подписать», не при загрузке скана
+    // Для протокола и постановления заседания статус SIGNED выставляется только по кнопке «Подписать», не при загрузке скана
     const isProtocol = !!document.meetingAsProtocol;
+    const isResolution = !!document.meetingResolution;
     const updatedDoc = await prisma.document.update({
       where: { id: documentId },
       data: {
         signedFilePath: publicPath,
-        ...(isProtocol ? {} : { status: "SIGNED" }),
+        ...(isProtocol || isResolution ? {} : { status: "SIGNED" }),
         verificationStatus: "VERIFYING",
         verificationMessage: null,
         verifiedAt: null,

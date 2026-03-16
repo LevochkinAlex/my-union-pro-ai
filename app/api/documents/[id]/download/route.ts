@@ -215,6 +215,21 @@ export async function GET(
       }
     }
 
+    // Участник заседания может просматривать постановления и выписки этого заседания
+    if (!hasAccess && (document.type === "RESOLUTION" || document.type === "PROTOCOL_EXTRACT")) {
+      const docWithMeeting = document as { meetingResolutionId?: string | null; meetingExtractId?: string | null };
+      const meetingId = docWithMeeting.meetingResolutionId ?? docWithMeeting.meetingExtractId;
+      if (meetingId) {
+        const participant = await prisma.meetingParticipant.findFirst({
+          where: { meetingId, userId: session.user.id },
+          select: { id: true },
+        });
+        if (participant) {
+          hasAccess = true;
+        }
+      }
+    }
+
     if (!hasAccess) {
       console.log("[documents/download] Access denied:", {
         userId: session.user.id,

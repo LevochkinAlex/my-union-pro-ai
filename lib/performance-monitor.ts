@@ -49,9 +49,9 @@ async function logPerformanceMetric(metric: PerformanceMetric) {
 }
 
 /**
- * Получить метрики производительности
+ * Получить метрики производительности (внутреннее, используется getPerformanceStats).
  */
-export async function getMetrics(): Promise<PerformanceMetric[]> {
+async function getMetrics(): Promise<PerformanceMetric[]> {
   try {
     const metrics = await cacheGet<PerformanceMetric[]>(METRICS_KEY);
     return metrics || [];

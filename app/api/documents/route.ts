@@ -199,12 +199,18 @@ export async function GET(request: NextRequest) {
       const originalId = meta?.originalDocumentId;
       const meetingId = meta?.meetingId;
       const isAgendaOrProtocol = (d.type || "").toUpperCase() === "AGENDA" || (d.type || "").toUpperCase() === "PROTOCOL";
+      const isResolutionCopy = (d.type || "").toUpperCase() === "RESOLUTION";
       if (!originalId) {
         if (isAgendaOrProtocol) return false; // повестки/протоколы без привязки к оригиналу не показываем (устаревшие копии)
         return true; // не копия заседания
       }
       if (!existingOriginalIds.has(originalId)) return false; // оригинал удалён
       if (meetingId && !existingMeetingIds.has(meetingId)) return false; // заседание удалено
+      // Копии постановлений: показываем участникам (не председателю), оригинал и заседание существуют
+      if (isResolutionCopy && meetingId) {
+        if (meetingIdsWhereIAmChairman.has(meetingId)) return false;
+        return true;
+      }
       // Показывать только копии текущей повестки/протокола заседания (не старые, пересозданные документы)
       if (meetingId && !validMeetingOriginalIds.has(`${meetingId}:${originalId}`)) return false;
       // Не показывать председателю копии своих заседаний — утверждает на странице заседания

@@ -7,6 +7,7 @@
     "rebuild-appeal-statuses": "dotenv -e .env.local -- tsx scripts/rebuild-appeal-statuses.ts",
     "rebuild-meeting-chats": "dotenv -e .env.local -- tsx scripts/rebuild-meeting-chats-for-user.ts",
     "cleanup:orphan-incoming-copies": "dotenv -e .env.local -- tsx scripts/cleanup-orphan-incoming-meeting-copies.ts",
+    "delete:resolution-copies-inbox": "dotenv -e .env.local -- tsx scripts/delete-resolution-copies-inbox.ts",
     "rebuild-all-meeting-chats": "dotenv -e .env.local -- tsx scripts/rebuild-all-meeting-chats.ts",
     "dev": "dotenv -e .env.local -- next dev -p 3004",
     "prebuild": "pnpm prisma:generate",

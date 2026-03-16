@@ -909,7 +909,7 @@ export default function DocumentsPage() {
                       ) : doc.approvalStatus ? (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {doc.approvalStatus.status === "APPROVED" ? (
-                            <span className="text-green-600 dark:text-green-400">Документ согласован и утверждён председателем.</span>
+                            <span className="text-green-600 dark:text-green-400">Документ утверждён председателем.</span>
                           ) : (
                             <span className="text-red-600 dark:text-red-400">Отклонено</span>
                           )}
@@ -917,7 +917,7 @@ export default function DocumentsPage() {
                         </p>
                       ) : doc.originalDocumentStatus !== "PENDING_APPROVAL" ? (
                         <p className="text-sm text-green-600 dark:text-green-400">
-                          Документ согласован и утверждён председателем.
+                          Документ утверждён председателем.
                         </p>
                       ) : null}
                     </div>

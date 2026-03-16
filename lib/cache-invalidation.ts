@@ -13,14 +13,6 @@ export async function invalidateUsersCache() {
 }
 
 /**
- * Инвалидировать кеш списка организаций
- */
-export async function invalidateOrganizationsCache() {
-  await cacheDeletePattern("organizations:list:*");
-  console.log("[Cache] Invalidated organizations cache");
-}
-
-/**
  * Инвалидировать кеш списка постов
  */
 export async function invalidatePostsCache(userId?: string) {
@@ -50,18 +42,5 @@ export async function invalidateChatCache(chatId: string) {
 export async function invalidateUserChatsCache(userId: string) {
   await cacheDeletePattern(`user:chats:${userId}:*`);
   console.log("[Cache] Invalidated user chats cache for user", userId);
-}
-
-/**
- * Инвалидировать весь кеш (использовать осторожно!)
- */
-export async function invalidateAllCache() {
-  await Promise.all([
-    invalidateUsersCache(),
-    invalidateOrganizationsCache(),
-    invalidatePostsCache(),
-    invalidateNewsCache(),
-  ]);
-  console.log("[Cache] Invalidated all cache");
 }
 

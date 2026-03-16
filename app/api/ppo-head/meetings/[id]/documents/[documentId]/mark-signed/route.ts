@@ -7,7 +7,7 @@ import { DocumentStatus } from "@prisma/client";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/mark-signed
- * Отметить протокол как подписанный (статус SIGNED) после нажатия кнопки «Подписать».
+ * Отметить протокол или постановление заседания как подписанный (статус SIGNED) после нажатия кнопки «Подписать».
  */
 export async function POST(
   request: NextRequest,
@@ -63,6 +63,7 @@ export async function POST(
       where: { id: documentId },
       include: {
         meetingAsProtocol: { select: { id: true } },
+        meetingResolution: { select: { id: true } },
       },
     });
 
@@ -70,16 +71,26 @@ export async function POST(
       return NextResponse.json({ error: "Документ не найден" }, { status: 404 });
     }
 
-    if (!document.meetingAsProtocol || document.meetingAsProtocol.id !== meetingId) {
+    const isProtocol = document.meetingAsProtocol?.id === meetingId;
+    const isResolution = document.meetingResolution?.id === meetingId;
+
+    if (!isProtocol && !isResolution) {
       return NextResponse.json(
-        { error: "Документ не является протоколом этого заседания" },
+        { error: "Документ не относится к этому заседанию" },
         { status: 400 }
       );
     }
 
-    if (document.status !== DocumentStatus.COMPLETED) {
+    if (isProtocol && document.status !== DocumentStatus.COMPLETED) {
       return NextResponse.json(
         { error: "Отметить как подписанный можно только утверждённый протокол" },
+        { status: 400 }
+      );
+    }
+
+    if (isResolution && !document.signedFilePath) {
+      return NextResponse.json(
+        { error: "Сначала загрузите подписанное постановление (скан)" },
         { status: 400 }
       );
     }
@@ -94,7 +105,7 @@ export async function POST(
 
     return NextResponse.json({
       document: updatedDocument,
-      message: "Протокол отмечен как подписанный",
+      message: isResolution ? "Постановление отмечено как подписанное" : "Протокол отмечен как подписанный",
     });
   } catch (error: unknown) {
     console.error("[mark-signed] POST error:", error);
