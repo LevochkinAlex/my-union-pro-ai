@@ -3,6 +3,7 @@ import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { IconsHead } from "@/components/IconsHead";
+import { AnalyticsScripts } from "@/components/AnalyticsScripts";
 import { getIconUrl } from "@/lib/cdn";
 
 // Получаем CDN URL для иконок
@@ -223,7 +224,10 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans" suppressHydrationWarning>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <AnalyticsScripts />
+        </Providers>
         {/* Яндекс Партнёрка: копирайт zbrq7qg64z2qsesl (временно, потом удалить) */}
         <span data-yandex-partner="zbrq7qg64z2qsesl" style={{ position: 'absolute', left: 0, top: 0, fontSize: '1px', opacity: 0.01, pointerEvents: 'none' }}>copyright zbrq7qg64z2qsesl</span>
       </body>

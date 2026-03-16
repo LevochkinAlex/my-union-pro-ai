@@ -99,6 +99,12 @@ if [ -n "$TBANK_TERMINAL_KEY" ] || [ -n "$TBANK_TERMINAL_PASSWORD" ]; then
   echo "✅ T-Bank env проверен/прописан на проде"
 fi
 
+# VK Pixel (аналитика) — на проде должен быть NEXT_PUBLIC_VK_PIXEL_ID
+NEXT_PUBLIC_VK_PIXEL_ID="${NEXT_PUBLIC_VK_PIXEL_ID:-$(read_env_value "$SCRIPT_DIR/.env.local" "NEXT_PUBLIC_VK_PIXEL_ID")}"
+NEXT_PUBLIC_VK_PIXEL_ID="${NEXT_PUBLIC_VK_PIXEL_ID:-$(read_env_value "$SCRIPT_DIR/.env" "NEXT_PUBLIC_VK_PIXEL_ID")}"
+NEXT_PUBLIC_VK_PIXEL_ID="${NEXT_PUBLIC_VK_PIXEL_ID:-3749973}"
+sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 "grep -q '^NEXT_PUBLIC_VK_PIXEL_ID=' /opt/my-union-pro/.env.local 2>/dev/null || echo 'NEXT_PUBLIC_VK_PIXEL_ID=$NEXT_PUBLIC_VK_PIXEL_ID' >> /opt/my-union-pro/.env.local" && echo "✅ NEXT_PUBLIC_VK_PIXEL_ID проверен на проде"
+
 sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'EOF'
 cd /opt/my-union-pro
 echo "--- Pulling code ---"

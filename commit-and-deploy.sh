@@ -33,6 +33,10 @@ else
 fi
 echo ""
 
+echo "📝 Step 2.6: Ensuring NEXT_PUBLIC_VK_PIXEL_ID on prod..."
+sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 "grep -q '^NEXT_PUBLIC_VK_PIXEL_ID=' /opt/my-union-pro/.env.local 2>/dev/null || echo 'NEXT_PUBLIC_VK_PIXEL_ID=3749973' >> /opt/my-union-pro/.env.local" && echo "✅ NEXT_PUBLIC_VK_PIXEL_ID проверен на проде"
+echo ""
+
 echo "📥 Step 3: Deploying to server..."
 sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 << 'EOF'
 cd /opt/my-union-pro

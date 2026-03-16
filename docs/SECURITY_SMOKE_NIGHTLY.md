@@ -22,7 +22,8 @@ SEC_SMOKE_STRICT=1 pnpm test:security:runtime
 
 ## Required secrets for GitHub Actions
 
-Set these repository secrets:
+If `SEC_SMOKE_BASE_URL` is not set, the nightly job is **skipped** (no failed run).  
+To run the smoke, set these repository secrets:
 
 - `SEC_SMOKE_BASE_URL` (for example: `https://myunion.pro`)
 - `SEC_SMOKE_COOKIE_REPORTS_ALLOW`

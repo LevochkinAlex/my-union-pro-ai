@@ -7,6 +7,8 @@ on:
 
 jobs:
   security-role-runtime-smoke:
+    # Skip when smoke secrets are not configured (no daily failure emails)
+    if: ${{ secrets.SEC_SMOKE_BASE_URL != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
