@@ -211,6 +211,9 @@ export default function MeetingDetailPage({
   const [sendingProtocolToInbox, setSendingProtocolToInbox] = useState(false);
   const [protocolSentToInbox, setProtocolSentToInbox] = useState(false);
   const protocolSignedFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingSignedResolutionId, setUploadingSignedResolutionId] = useState<string | null>(null);
+  const [resolutionIdForSignedUpload, setResolutionIdForSignedUpload] = useState<string | null>(null);
+  const resolutionSignedFileInputRef = useRef<HTMLInputElement>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [editingAgendaId, setEditingAgendaId] = useState<string | null>(null);
   const [agendaEditForm, setAgendaEditForm] = useState<Record<string, { title: string; description: string; speakerId: string; speakerName: string; speakerPosition: string; coSpeakers: AgendaCoSpeakerEntry[]; attachments: AgendaAttachment[] }>>({});
@@ -435,6 +438,9 @@ export default function MeetingDetailPage({
     !!meeting &&
     (meeting.status === "DRAFT" || meeting.status === "SCHEDULED") &&
     (!readOnly || isInternalParticipant);
+
+  /** После утверждения протокола скрываем «Пересоздать документ» и «Добавить пункт» у всех */
+  const protocolApproved = !!meeting?.protocolDocument && (meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED");
 
   const parseAgendaAttachments = (item: AgendaItem): AgendaAttachment[] => {
     const raw = item.attachments;
@@ -1307,7 +1313,7 @@ export default function MeetingDetailPage({
               <div className="flex flex-wrap gap-2">
                 {meeting.agendaDocument && (
                   <>
-                    {(agendaDataChangedSinceLoad || agendaNeedsRegenerate) && canEditAgenda && canDeleteMeeting ? (
+                    {(agendaDataChangedSinceLoad || agendaNeedsRegenerate) && canEditAgenda && canDeleteMeeting && !protocolApproved ? (
                       <button
                         type="button"
                         onClick={() => handleGenerateDocument("AGENDA", meeting.agendaDocument!.regNumber ?? undefined)}
@@ -1506,7 +1512,7 @@ export default function MeetingDetailPage({
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Пункты повестки дня ({meeting.agendaItems.length})
               </h3>
-              {canAddAgendaItems && !showAddAgendaForm && (
+              {canAddAgendaItems && !protocolApproved && !showAddAgendaForm && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1535,7 +1541,7 @@ export default function MeetingDetailPage({
             </div>
             {meeting.agendaItems.length === 0 && !showAddAgendaForm ? (
               <div className="py-8 text-center text-gray-500 dark:text-gray-400">
-                Нет пунктов в повестке. {canAddAgendaItems && "Нажмите «Добавить пункт»."}
+                Нет пунктов в повестке. {canAddAgendaItems && !protocolApproved && "Нажмите «Добавить пункт»."}
               </div>
             ) : (
               <div className="space-y-3">
@@ -1626,7 +1632,7 @@ export default function MeetingDetailPage({
                             <ul className="mt-1.5 space-y-1">
                               {(agendaEditForm[item.id]?.attachments ?? parseAgendaAttachments(item)).map((att, i) => (
                                 <li key={i} className="flex items-center gap-2 text-sm">
-                                  <button type="button" onClick={() => setPdfPreviewUrl(att.url)} className="text-left text-blue-600 hover:underline dark:text-blue-400 truncate max-w-[200px]" title={att.name}>{att.name}</button>
+                                  <button type="button" onClick={() => setPdfPreviewUrl(att.url)} className="min-w-0 flex-1 text-left break-words text-blue-600 hover:underline dark:text-blue-400" title={att.name}>{att.name}</button>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1813,17 +1819,6 @@ export default function MeetingDetailPage({
                             {item.description && (
                               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{item.description}</p>
                             )}
-                            {parseAgendaAttachments(item).length > 0 && (
-                              <ul className="mt-2 space-y-1">
-                                {parseAgendaAttachments(item).map((att, i) => (
-                                  <li key={i} className="text-sm">
-                                    <button type="button" onClick={() => setPdfPreviewUrl(att.url)} className="text-blue-600 hover:underline dark:text-blue-400 truncate max-w-[200px] inline-block text-left" title={att.name}>
-                                      {att.name}
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
                             {(item.speakerName || item.speaker) && (
                               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                                 <strong>Докладчик:</strong>{" "}
@@ -1835,6 +1830,20 @@ export default function MeetingDetailPage({
                               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                 <strong>Со-докладчик:</strong> {item.coSpeakerName}
                               </p>
+                            )}
+                            {parseAgendaAttachments(item).length > 0 && (
+                              <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800/50">
+                                <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Прикреплённые к вопросу документы:</p>
+                                <ul className="mt-1 space-y-1 min-w-0">
+                                  {parseAgendaAttachments(item).map((att, i) => (
+                                    <li key={i} className="text-sm min-w-0">
+                                      <button type="button" onClick={() => setPdfPreviewUrl(att.url)} className="w-full text-left break-words text-blue-600 hover:underline dark:text-blue-400" title={att.name}>
+                                        {att.name}
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1943,7 +1952,7 @@ export default function MeetingDetailPage({
                             <ul className="mt-1.5 space-y-1">
                               {(newAgendaForm.attachments || []).map((att, i) => (
                                 <li key={i} className="flex items-center gap-2 text-sm">
-                                  <button type="button" onClick={() => setPdfPreviewUrl(att.url)} className="text-left text-blue-600 hover:underline dark:text-blue-400 truncate max-w-[200px]" title={att.name}>{att.name}</button>
+                                  <button type="button" onClick={() => setPdfPreviewUrl(att.url)} className="min-w-0 flex-1 text-left break-words text-blue-600 hover:underline dark:text-blue-400" title={att.name}>{att.name}</button>
                                   <button
                                     type="button"
                                     onClick={() => setNewAgendaForm((prev) => ({ ...prev, attachments: (prev.attachments || []).filter((_, j) => j !== i) }))}
@@ -2364,13 +2373,13 @@ export default function MeetingDetailPage({
               {protocolAttachmentsList.length > 0 && (
                 <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800/50">
                   <p className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">Прикреплённые к протоколу документы:</p>
-                  <ul className="space-y-1.5 text-xs">
+                  <ul className="space-y-1.5 text-xs min-w-0">
                     {protocolAttachmentsList.map((att, idx) => (
-                      <li key={idx}>
+                      <li key={idx} className="min-w-0">
                         <button
                           type="button"
                           onClick={() => setPdfPreviewUrl(att.url)}
-                          className="text-left text-blue-600 hover:underline dark:text-blue-400"
+                          className="w-full text-left break-words text-blue-600 hover:underline dark:text-blue-400"
                         >
                           {att.name}
                         </button>
@@ -3041,13 +3050,15 @@ export default function MeetingDetailPage({
                       )}
                     </button>
                     {((protocolData[item.id]?.attachments || []) as AgendaAttachment[]).length > 0 && (
-                      <ul className="mt-1 flex flex-wrap gap-2">
-                        {((protocolData[item.id]?.attachments || []) as AgendaAttachment[]).map((att, i) => (
-                          <li key={i} className="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800">
+                      <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800/50">
+                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Прикреплённые к вопросу документы:</p>
+                        <ul className="mt-1 flex flex-wrap gap-2 min-w-0">
+                          {((protocolData[item.id]?.attachments || []) as AgendaAttachment[]).map((att, i) => (
+                          <li key={i} className="flex items-center gap-1.5 min-w-0 flex-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800">
                             <button
                               type="button"
                               onClick={() => setPdfPreviewUrl(att.url)}
-                              className="max-w-[180px] truncate text-left text-blue-600 hover:underline dark:text-blue-400"
+                              className="min-w-0 flex-1 text-left break-words text-blue-600 hover:underline dark:text-blue-400"
                               title={att.name}
                             >
                               {att.name}
@@ -3068,7 +3079,8 @@ export default function MeetingDetailPage({
                             </button>
                           </li>
                         ))}
-                      </ul>
+                        </ul>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3351,86 +3363,195 @@ export default function MeetingDetailPage({
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Постановления ({meeting.resolutions.length})
             </h3>
-            {!readOnly && meeting.protocolDocument && meeting.protocolDocument.status === "SIGNED" && (
-              <button
-                onClick={() => {
-                  // TODO: Добавить функционал создания постановления
-                  alertError("Функция создания постановления будет добавлена");
-                }}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Создать постановление
-              </button>
+            {!readOnly && canDeleteMeeting && meeting.protocolDocument && (meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED") && (
+              <div className="flex items-center gap-2">
+                {meeting.agendaItems.length > 0 && !meeting.resolutions.some((r: { status?: string }) => r.status === "SIGNED") && (
+                  <button
+                    onClick={async () => {
+                      const approvedIds = protocolProcedural.agendaApprovedItemIds ?? meeting.agendaItems.map((i: { id: string }) => i.id);
+                      try {
+                        const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/resolutions/create`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ agendaApprovedItemIds: approvedIds }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Ошибка создания постановлений");
+                        if (data.meeting) setMeeting(data.meeting);
+                        alertSuccess(data.message || "Постановления созданы");
+                      } catch (e: any) {
+                        alertError(e.message || "Не удалось создать постановления");
+                      }
+                    }}
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Создать постановление
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
-          {meeting.resolutions.length === 0 ? (
+          {meeting.agendaItems.length > 0 ? (() => {
+            const approvedIds = protocolProcedural.agendaApprovedItemIds ?? meeting.agendaItems.map((i: { id: string }) => i.id);
+            const approvedItems = meeting.agendaItems.filter((item: { id: string }) => approvedIds.includes(item.id));
+            const getResolutionForItem = (itemId: string) =>
+              meeting.resolutions.find((r: any) => (r.metadata as { agendaItemId?: string } | null)?.agendaItemId === itemId);
+            if (approvedItems.length === 0) return null;
+            return (
+              <div className="space-y-4">
+                <input
+                  ref={resolutionSignedFileInputRef}
+                  type="file"
+                  accept=".pdf,image/jpeg,image/jpg,image/png"
+                  className="hidden"
+                  aria-label="Загрузить подписанное постановление"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    const docId = resolutionIdForSignedUpload;
+                    if (!file || !docId) return;
+                    setUploadingSignedResolutionId(docId);
+                    setResolutionIdForSignedUpload(null);
+                    try {
+                      const fd = new FormData();
+                      fd.append("file", file);
+                      fd.append("documentId", docId);
+                      const res = await fetch("/api/documents/upload-signed", { method: "POST", body: fd });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+                      alertSuccess(data.message || "Подписанное постановление загружено");
+                      loadMeeting();
+                    } catch (err) {
+                      alertError(err instanceof Error ? err.message : "Не удалось загрузить скан");
+                    } finally {
+                      setUploadingSignedResolutionId(null);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                {approvedItems.map((item: { id: string; orderNumber: number; title: string }) => {
+                  const resolution = getResolutionForItem(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        Вопрос {item.orderNumber}. {item.title}
+                      </h4>
+                      {resolution ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {resolution.regNumber && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">№ {resolution.regNumber}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setPdfPreviewUrl(getDocumentViewUrl(resolution.id))}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Постановление PDF
+                          </button>
+                          {!readOnly && canDeleteMeeting && resolution.status !== "SIGNED" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResolutionIdForSignedUpload(resolution.id);
+                                resolutionSignedFileInputRef.current?.click();
+                              }}
+                              disabled={uploadingSignedResolutionId === resolution.id}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                              title="Загрузить скан подписанного постановления"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              {uploadingSignedResolutionId === resolution.id ? "Загрузка…" : "Загрузить подписанное постановление"}
+                            </button>
+                          )}
+                          {(resolution as { signedFilePath?: string | null }).signedFilePath && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setPdfPreviewUrl(`${getDocumentViewUrl(resolution.id)}&signed=true`)}
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                                title="Просмотр загруженного подписанного постановления (скан)"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Подписанное постановление
+                              </button>
+                              {!readOnly && canDeleteMeeting && (
+                                <button
+                                  type="button"
+                                  disabled={resolution.status === "SIGNED"}
+                                  onClick={async () => {
+                                    if (resolution.status === "SIGNED") return;
+                                    try {
+                                      const res = await fetch(
+                                        `/api/ppo-head/meetings/${resolvedParams.id}/documents/${resolution.id}/mark-signed`,
+                                        { method: "POST" }
+                                      );
+                                      if (!res.ok) {
+                                        const err = await res.json().catch(() => ({}));
+                                        throw new Error(err.error || "Ошибка");
+                                      }
+                                      const data = await res.json();
+                                      alertSuccess(data.message || "Постановление отмечено как подписанное");
+                                      loadMeeting();
+                                    } catch (e) {
+                                      alertError(e instanceof Error ? e.message : "Не удалось отметить постановление как подписанное");
+                                    }
+                                  }}
+                                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-red-50 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 dark:disabled:hover:bg-red-900/30"
+                                  title={resolution.status === "SIGNED" ? "Постановление подписано" : "Отметить постановление как подписанное"}
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                  {resolution.status === "SIGNED" ? "Подписано" : "Подписать"}
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          Постановление по этому вопросу ещё не создано. Нажмите «Создать постановление» выше.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })() : (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white">Нет пунктов повестки</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Добавьте вопросы в повестку дня заседания, затем сформируйте протокол и создайте постановления.
+              </p>
+            </div>
+          )}
+
+          {meeting.agendaItems.length === 0 && meeting.resolutions.length === 0 && (
             <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет постановлений</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED"
-                  ? "Создайте постановление на основании протокола"
+                {meeting.protocolDocument && (meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED")
+                  ? "Добавьте пункты в повестку и нажмите «Создать постановление»"
                   : "Сначала нужно утвердить протокол заседания"}
               </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {meeting.resolutions.map((resolution: any) => (
-                <div
-                  key={resolution.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {resolution.title || `Постановление ${resolution.regNumber || ""}`}
-                        </h4>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[resolution.status] || DOC_STATUS_COLORS.DRAFT}`}>
-                          {DOC_STATUS_LABELS[resolution.status] || "Черновик"}
-                        </span>
-                      </div>
-                      {resolution.regNumber && (
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          № {resolution.regNumber}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      {resolution.id && (
-                        <>
-                          <button
-                            onClick={() => setPdfPreviewUrl(getDocumentViewUrl(resolution.id))}
-                            className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                          >
-                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            Просмотр
-                          </button>
-                          <a
-                            href={getDocumentDownloadUrl(resolution.id)}
-                            download
-                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                          >
-                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Скачать
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>

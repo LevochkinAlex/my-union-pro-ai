@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { DocumentType } from "@prisma/client";
 
 /**
  * GET /api/ppo-head/meetings/[id]
@@ -69,7 +70,7 @@ export async function GET(
           select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, createdAt: true },
         },
         resolutions: {
-          select: { id: true, regNumber: true, status: true, filePath: true, title: true },
+          select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, metadata: true },
         },
         extracts: {
           select: { id: true, regNumber: true, status: true, filePath: true, title: true },
@@ -113,6 +114,30 @@ export async function GET(
 
     if (!meeting) {
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
+    }
+
+    // По одному постановлению на вопрос повестки: удаляем дубликаты в БД и в ответе
+    const resolutions = (meeting.resolutions || []) as Array<{ id: string; metadata?: { agendaItemId?: string } | null; createdAt?: Date; [k: string]: unknown }>;
+    const byAgendaItem = new Map<string, typeof resolutions>();
+    for (const r of resolutions) {
+      const agendaItemId = r.metadata?.agendaItemId;
+      if (!agendaItemId) continue;
+      if (!byAgendaItem.has(agendaItemId)) byAgendaItem.set(agendaItemId, []);
+      byAgendaItem.get(agendaItemId)!.push(r);
+    }
+    const idsToDelete: string[] = [];
+    const uniqueResolutions: typeof resolutions = [];
+    for (const [, group] of byAgendaItem) {
+      group.sort((a, b) => (a.createdAt && b.createdAt ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : 0));
+      uniqueResolutions.push(group[0]);
+      for (let i = 1; i < group.length; i++) idsToDelete.push(group[i].id);
+    }
+    const resolutionsWithoutAgendaId = resolutions.filter((r) => !(r.metadata as { agendaItemId?: string } | null)?.agendaItemId);
+    (meeting as { resolutions: unknown }).resolutions = [...resolutionsWithoutAgendaId, ...uniqueResolutions];
+    if (idsToDelete.length > 0) {
+      await prisma.document.deleteMany({
+        where: { id: { in: idsToDelete }, type: DocumentType.RESOLUTION, meetingResolutionId: meeting.id },
+      });
     }
 
     const perm = await checkUserPermissions(session.user.id, "documents_view");
@@ -249,7 +274,7 @@ export async function PATCH(
         createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
         agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
-        resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+        resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, metadata: true } },
         extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
         participants: {
           include: {

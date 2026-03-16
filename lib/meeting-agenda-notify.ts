@@ -387,3 +387,126 @@ export async function assignProtocolToParticipantsAndNotify(
 
   return { assignedCount: usersToAssign.length };
 }
+
+export interface AssignResolutionsResult {
+  assignedCount: number;
+}
+
+/**
+ * Назначает постановления заседания всем участникам (создаёт копии во «Входящие»).
+ * Вызывается после создания или обновления постановлений.
+ */
+export async function assignResolutionsToParticipantsAndNotify(
+  meetingId: string,
+  resolutionDocumentIds: string[],
+  createdByUserId: string
+): Promise<AssignResolutionsResult> {
+  if (resolutionDocumentIds.length === 0) return { assignedCount: 0 };
+
+  const meeting = await prisma.meeting.findUnique({
+    where: { id: meetingId },
+    include: {
+      participants: {
+        where: { userId: { not: null } },
+        include: { user: { select: { id: true } } },
+      },
+    },
+  });
+
+  const resolutionDocs = await prisma.document.findMany({
+    where: { id: { in: resolutionDocumentIds }, type: "RESOLUTION", meetingResolutionId: meetingId },
+    select: { id: true, title: true, regNumber: true, filePath: true, fileName: true, metadata: true },
+  });
+
+  if (!meeting || resolutionDocs.length === 0) return { assignedCount: 0 };
+
+  const participantUserIds = meeting.participants
+    .filter((p): p is typeof p & { user: { id: string } } => p.user != null && p.role !== "CHAIRMAN")
+    .map((p) => p.user.id);
+
+  if (participantUserIds.length === 0) return { assignedCount: 0 };
+
+  const meetingDate = new Date(meeting.scheduledDate).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  let assignedTotal = 0;
+  for (const doc of resolutionDocs) {
+    const existing = await prisma.document.findMany({
+      where: {
+        type: "RESOLUTION",
+        metadata: { path: ["originalDocumentId"], equals: doc.id },
+        assignedToId: { in: participantUserIds },
+      },
+      select: { assignedToId: true },
+    });
+    const assignedIds = new Set((existing.map((d) => d.assignedToId).filter(Boolean) as string[]));
+    const toAssign = participantUserIds.filter((id) => !assignedIds.has(id));
+    if (toAssign.length === 0) continue;
+
+    const meta = doc.metadata as { meetingId?: string; meetingNumber?: number; agendaItemId?: string } | null;
+    await Promise.all(
+      toAssign.map((userId) =>
+        prisma.document.create({
+          data: {
+            type: "RESOLUTION",
+            status: "GENERATED",
+            category: "INTERNAL",
+            title: doc.title,
+            regNumber: doc.regNumber ? `${doc.regNumber}-${userId.slice(0, 4)}` : null,
+            regDate: new Date(),
+            filePath: doc.filePath,
+            fileName: doc.fileName,
+            userId: createdByUserId,
+            organizationId: meeting.organizationId,
+            assignedToId: userId,
+            assignedAt: new Date(),
+            metadata: {
+              meetingId: meeting.id,
+              meetingNumber: meeting.number,
+              meetingDate: meeting.scheduledDate.toISOString(),
+              isCopy: true,
+              originalDocumentId: doc.id,
+              agendaItemId: meta?.agendaItemId ?? undefined,
+            },
+          },
+        })
+      )
+    );
+    assignedTotal += toAssign.length;
+  }
+
+  if (assignedTotal > 0) {
+    await sendMassNotification({
+      userIds: participantUserIds,
+      title: "Постановления заседания",
+      body: `Постановления заседания от ${meetingDate} доступны во вкладке «Входящие».`,
+      url: "/dashboard/documents?tab=incoming",
+      type: "meeting_resolutions",
+      metadata: { meetingId },
+    });
+  }
+
+  return { assignedCount: assignedTotal };
+}
+
+/**
+ * Обновляет копии постановлений во «Входящих» при обновлении оригиналов (новый filePath/fileName).
+ * @param resolutionUpdates массив { id, filePath, fileName } по каждому обновлённому постановлению
+ */
+export async function updateResolutionCopiesInInbox(
+  resolutionUpdates: Array<{ id: string; filePath: string; fileName: string | null }>
+): Promise<void> {
+  for (const { id, filePath, fileName } of resolutionUpdates) {
+    await prisma.document.updateMany({
+      where: {
+        type: "RESOLUTION",
+        metadata: { path: ["originalDocumentId"], equals: id },
+      },
+      data: { filePath, fileName },
+    });
+  }
+}
+
