@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     const chairman = organization?.ppoChairman;
     const chairmanInList = chairman && staffUserIds.has(chairman.id);
 
-    let resultStaff = staff.map((item) => ({
+    let resultStaff: any[] = staff.map((item) => ({
       ...item,
       role: {
         ...item.role,

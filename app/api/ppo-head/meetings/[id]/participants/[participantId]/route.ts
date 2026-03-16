@@ -24,7 +24,7 @@ export async function PATCH(
     if (!participantId) {
       return NextResponse.json({ error: "Не указан участник" }, { status: 400 });
     }
-    let body: { attendance?: string } = {};
+    let body: { attendance?: string | MeetingAttendanceStatus } = {};
     try {
       body = await request.json();
     } catch {
@@ -32,7 +32,7 @@ export async function PATCH(
     }
     const { attendance } = body;
 
-    if (!attendance || !Object.values(MeetingAttendanceStatus).includes(attendance)) {
+    if (!attendance || !Object.values(MeetingAttendanceStatus).includes(attendance as MeetingAttendanceStatus)) {
       return NextResponse.json(
         { error: "Некорректный статус присутствия" },
         { status: 400 }
