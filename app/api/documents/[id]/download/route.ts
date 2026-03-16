@@ -260,16 +260,29 @@ export async function GET(
       }
     }
 
+    // Для копий во «Входящих» (metadata.originalDocumentId) всегда отдаём актуальный файл оригинала
+    let docToServe = document;
+    const meta = document.metadata as { originalDocumentId?: string } | null;
+    if (!downloadSigned && meta?.originalDocumentId && document.assignedToId) {
+      const original = await prisma.document.findUnique({
+        where: { id: meta.originalDocumentId },
+        select: { id: true, filePath: true, content: true, type: true },
+      });
+      if (original?.filePath) {
+        docToServe = { ...document, filePath: original.filePath, content: original.content, type: original.type } as typeof document;
+      }
+    }
+
     // Определяем, какой файл скачивать: подписанный или обычный
-    let filePathToDownload = downloadSigned && document.signedFilePath 
-      ? document.signedFilePath 
-      : document.filePath;
+    let filePathToDownload = downloadSigned && docToServe.signedFilePath 
+      ? docToServe.signedFilePath 
+      : docToServe.filePath;
     
     console.log("[documents/download] File selection:", {
       downloadSigned,
-      hasSignedFilePath: !!document.signedFilePath,
-      signedFilePath: document.signedFilePath,
-      filePath: document.filePath,
+      hasSignedFilePath: !!docToServe.signedFilePath,
+      signedFilePath: docToServe.signedFilePath,
+      filePath: docToServe.filePath,
       selectedPath: filePathToDownload
     });
     
@@ -285,10 +298,10 @@ export async function GET(
     let fileBuffer: Buffer | null = null;
 
     // Для повестки/протокола content — это HTML, не base64; для остальных — base64
-    const isMeetingDoc = document.type === DocumentType.AGENDA || document.type === DocumentType.PROTOCOL;
-    if (document.content && !downloadSigned && !isMeetingDoc) {
+    const isMeetingDoc = docToServe.type === DocumentType.AGENDA || docToServe.type === DocumentType.PROTOCOL;
+    if (docToServe.content && !downloadSigned && !isMeetingDoc) {
       // Документ хранится в базе данных как base64 (только для обычного файла)
-      fileBuffer = Buffer.from(document.content, "base64");
+      fileBuffer = Buffer.from(docToServe.content, "base64");
       console.log("[documents/download] Загружен из базы данных (base64), размер:", fileBuffer.length);
     } else if (filePathToDownload) {
       // Документ хранится как файл на диске или VDS
@@ -400,7 +413,7 @@ export async function GET(
             }
             
             // Для повестки/протокола с HTML в БД не возвращаем 404 — ниже сгенерируем PDF из content
-            if (isMeetingDoc && document.content) {
+            if (isMeetingDoc && docToServe.content) {
               // не возвращаем 404, выходим из блока — сработает fallback генерации из HTML
             } else if (downloadSigned) {
               console.error("[documents/download] Подписанный документ не найден:");
@@ -439,7 +452,7 @@ export async function GET(
                   { status: 404 }
                 );
               }
-            } else if (!(isMeetingDoc && document.content)) {
+            } else if (!(isMeetingDoc && docToServe.content)) {
               return NextResponse.json(
                 { error: `Файл не найден: ${filePathToDownload}` },
                 { status: 404 }
@@ -465,9 +478,9 @@ export async function GET(
     }
 
     // На проде файл может отсутствовать (эфемерная ФС): для повестки/протокола генерируем PDF из HTML
-    if (!fileBuffer && document.content && isMeetingDoc) {
+    if (!fileBuffer && docToServe.content && isMeetingDoc) {
       try {
-        fileBuffer = await generatePDFFromHTML(document.content);
+        fileBuffer = await generatePDFFromHTML(docToServe.content);
         console.log("[documents/download] PDF сгенерирован из HTML (fallback для прода), размер:", fileBuffer.length);
       } catch (pdfErr) {
         console.error("[documents/download] Ошибка генерации PDF из HTML:", pdfErr);
@@ -479,7 +492,7 @@ export async function GET(
     }
 
     if (!fileBuffer) {
-      console.error("[documents/download] Содержимое документа не найдено. filePath:", document.filePath, "content:", document.content ? "есть" : "нет");
+      console.error("[documents/download] Содержимое документа не найдено. filePath:", docToServe.filePath, "content:", docToServe.content ? "есть" : "нет");
       return NextResponse.json(
         { error: "Содержимое документа не найдено" },
         { status: 404 }

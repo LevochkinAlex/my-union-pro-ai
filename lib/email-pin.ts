@@ -288,23 +288,3 @@ export async function verifyEmailPin(
   }
 }
 
-// Очистка истекших PIN-кодов (вызывается периодически)
-export async function cleanupExpiredEmailPins(): Promise<number> {
-  try {
-    const result = await prisma.emailPinCode.deleteMany({
-      where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { used: true, usedAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } }, // Удаляем использованные коды старше 24 часов
-        ],
-      },
-    });
-
-    console.log(`[Email PIN] 🧹 Удалено ${result.count} истекших PIN-кодов`);
-    return result.count;
-  } catch (error) {
-    console.error("[Email PIN] ❌ Ошибка очистки:", error);
-    return 0;
-  }
-}
-

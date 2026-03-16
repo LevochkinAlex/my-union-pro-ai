@@ -38,6 +38,9 @@ export async function GET(request: NextRequest) {
     const perm = await checkUserPermissions(session.user.id, "documents_view");
     const organizationId = perm.hasAccess ? perm.organizationId : null;
     const isOrgHead = perm.isChairman;
+    const canDeleteMeetings =
+      perm.isChairman ||
+      (!!perm.roleName && /зам|заместитель/i.test(perm.roleName));
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") as MeetingStatus | null;
@@ -98,7 +101,7 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    return NextResponse.json({ meetings, isOrgHead });
+    return NextResponse.json({ meetings, isOrgHead, canDeleteMeetings });
   } catch (error: any) {
     const errMsg = error?.message ?? String(error);
     const errStack = error?.stack;

@@ -197,9 +197,5 @@ export const buttonStyles = {
 // УТИЛИТЫ
 // ============================================================================
 
-/**
- * Объединяет классы стилей
- */
-export function cn(...classes: (string | undefined | false | null)[]): string {
-  return classes.filter(Boolean).join(' ');
-}
+/** Объединяет классы (clsx + tailwind-merge). Реэкспорт из @/lib/utils для единообразия. */
+export { cn } from "@/lib/utils";

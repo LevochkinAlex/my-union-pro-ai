@@ -19,11 +19,6 @@ export async function DELETE(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const perm = await checkUserPermissions(session.user.id, "documents_edit");
-    if (!perm.hasAccess || !perm.organizationId) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-    }
-
     const { id: meetingId, itemId } = await params;
 
     const meeting = await prisma.meeting.findUnique({
@@ -31,8 +26,18 @@ export async function DELETE(
       select: { organizationId: true, status: true },
     });
 
-    if (!meeting || meeting.organizationId !== perm.organizationId) {
+    if (!meeting) {
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
+    }
+
+    const perm = await checkUserPermissions(session.user.id, "documents_view");
+    const canDeleteAgenda =
+      perm.hasAccess &&
+      perm.organizationId === meeting.organizationId &&
+      (perm.isChairman || (!!perm.roleName && /зам|заместитель/i.test(perm.roleName)));
+
+    if (!canDeleteAgenda) {
+      return NextResponse.json({ error: "Удалять пункты повестки могут только председатель и заместитель председателя" }, { status: 403 });
     }
 
     if (meeting.status !== "DRAFT" && meeting.status !== "SCHEDULED") {
@@ -53,6 +58,26 @@ export async function DELETE(
     await prisma.meetingAgendaItem.delete({
       where: { id: itemId },
     });
+
+    const meetingAfter = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { agendaDocumentId: true, agendaDocument: { select: { status: true } } },
+    });
+    if (meetingAfter?.agendaDocumentId && meetingAfter.agendaDocument?.status === "PENDING_APPROVAL") {
+      await prisma.documentApproval.updateMany({
+        where: { documentId: meetingAfter.agendaDocumentId },
+        data: { status: "PENDING", comment: null, approvedAt: null },
+      });
+    }
+
+    try {
+      await prisma.meeting.update({
+        where: { id: meetingId },
+        data: { agendaModifiedAt: new Date() },
+      });
+    } catch (e) {
+      console.warn("[ppo-head/meetings/[id]/agenda/[itemId]] DELETE: не удалось обновить agendaModifiedAt:", e);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

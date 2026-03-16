@@ -10,6 +10,7 @@ export const DATE_INPUT_MAX = "2100-12-31";
  * Нормализует значение поля type="date" (YYYY-MM-DD): приводит год к диапазону 1900–2100.
  * Учитывает случай, когда в год попало больше 4 цифр (например 275760).
  * Если значение пустое или невалидное — возвращает как есть.
+ * Год не трогаем, пока пользователь не ввёл 4 цифры (иначе промежуточные "2", "20", "202" сбрасываются в 1900 и ввод года с клавиатуры ломается).
  */
 export function normalizeDateInputValue(value: string): string {
   if (!value || typeof value !== "string") return value;
@@ -18,7 +19,8 @@ export function normalizeDateInputValue(value: string): string {
   const match = trimmed.match(/^(\d+)-(\d{1,2})-(\d{1,2})$/);
   if (!match) return value;
   const [, yStr, m, d] = match;
-  let y = parseInt(yStr!, 10);
+  if (yStr!.length < 4) return value;
+  let y = parseInt(yStr!.slice(0, 4), 10);
   if (Number.isNaN(y)) return value;
   if (y < 1900) y = 1900;
   if (y > 2100) y = 2100;

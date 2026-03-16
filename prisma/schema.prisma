@@ -1018,6 +1018,9 @@ model Meeting {
   // Групповой чат заседания (создаётся при отправке на согласование; председатель — админ)
   groupChat Chat? @relation("MeetingGroupChat")
 
+  // Повестка изменялась после последней генерации PDF (для кнопки «Пересоздать документ»)
+  agendaModifiedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

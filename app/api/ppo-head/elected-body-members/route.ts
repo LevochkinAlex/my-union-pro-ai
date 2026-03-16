@@ -27,7 +27,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const perm = await checkUserPermissions(session.user.id, "staff_view");
+    // Доступ: staff_view или documents_view (участники заседания должны видеть список для выбора докладчика/со-докладчиков)
+    let perm = await checkUserPermissions(session.user.id, "staff_view");
+    if (!perm.hasAccess || !perm.organizationId) {
+      perm = await checkUserPermissions(session.user.id, "documents_view");
+    }
     if (!perm.hasAccess || !perm.organizationId) {
       return NextResponse.json(
         { error: "Доступ запрещён или организация не назначена" },

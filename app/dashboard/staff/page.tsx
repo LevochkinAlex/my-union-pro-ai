@@ -494,7 +494,12 @@ export default function StaffManagementPage() {
       key: "actions",
       header: "Действия",
       className: "text-right",
-      render: (member: StaffMember) => (
+      render: (member: StaffMember) => {
+        const isChairmanRow = typeof member.id === "string" && member.id.startsWith("chairman-");
+        if (isChairmanRow) {
+          return <span className="text-sm text-gray-500 dark:text-gray-400">Председатель организации</span>;
+        }
+        return (
         <div className="flex items-center justify-end gap-2 flex-wrap">
           <button
             onClick={() => handleEditStaff(member)}
@@ -553,7 +558,8 @@ export default function StaffManagementPage() {
             </svg>
           </button>
         </div>
-      ),
+        );
+      },
     },
   ];
 
