@@ -73,6 +73,13 @@ export async function POST(request: NextRequest) {
           lastSyncAt: new Date(),
         },
       });
+      // Оставляем только одну подписку на пользователя — убираем дубли (другая вкладка/браузер), чтобы не приходило два одинаковых пуша
+      await prisma.pushSubscription.deleteMany({
+        where: {
+          userId: session.user.id,
+          id: { not: subscription.id },
+        },
+      });
     } else {
       // Create new subscription
       try {
@@ -110,6 +117,13 @@ export async function POST(request: NextRequest) {
           throw createError;
         }
       }
+      // Оставляем только одну подписку на пользователя
+      await prisma.pushSubscription.deleteMany({
+        where: {
+          userId: session.user.id,
+          id: { not: subscription.id },
+        },
+      });
     }
 
     console.log("[push/subscribe] ✅ Subscription saved:", {

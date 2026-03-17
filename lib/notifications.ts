@@ -166,13 +166,18 @@ export async function sendUserNotification(data: NotificationData) {
                   notificationId: notificationRecord?.id || "",
                   ...(data.metadata || {}), // Передаем chatId, messageId и другие данные
                 },
+                // Уникальный tag для чата: одно сообщение = один слот уведомления (не дублируем при двух подписках/двойной отправке)
+                const pushTag =
+                  data.type === "chat_message" && data.metadata?.chatId && data.metadata?.messageId
+                    ? `chat_${data.metadata.chatId}_${data.metadata.messageId}`
+                    : data.type;
                 webpush: {
                   notification: {
                     icon: "/icon-192x192.png",
                     badge: "/badge-96x96.png",
                     sound: user.pushSoundEnabled ? "default" : undefined,
                     requireInteraction: true,
-                    tag: data.type,
+                    tag: pushTag,
                     data: {
                       url: notificationUrl,
                       type: data.type,
