@@ -264,6 +264,15 @@ io.on("connection", (socket) => {
         return;
       }
 
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        select: { archivedAt: true },
+      });
+      if (chat?.archivedAt) {
+        callback({ success: false, error: "Чат в архиве. Отправка сообщений недоступна." });
+        return;
+      }
+
       // Исключённый не может писать тем, кто в ППО, из которого его исключили
       const currentUser = await prisma.user.findUnique({
         where: { id: userId },

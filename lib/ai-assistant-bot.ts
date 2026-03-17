@@ -14,14 +14,19 @@ export async function getOrCreateAIBotUser() {
     botUser = await prisma.user.create({
       data: {
         email: BOT_EMAIL,
-        firstName: "AI",
-        lastName: "Помощник",
+        firstName: "ИИ",
+        lastName: "Ассистент",
         phone: "+70000000000", // Фиктивный телефон
         role: "MEMBER", // Используем допустимое значение из enum UserRole
         membershipStatus: "APPROVED",
         emailVerified: new Date(),
         // Создаем пользователя без пароля (он не будет использоваться для входа)
       },
+    });
+  } else if (botUser.firstName !== "ИИ" || botUser.lastName !== "Ассистент") {
+    botUser = await prisma.user.update({
+      where: { id: botUser.id },
+      data: { firstName: "ИИ", lastName: "Ассистент" },
     });
   }
 

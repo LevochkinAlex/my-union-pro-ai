@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
+import { postMeetingChatSystemMessage } from "@/lib/meeting-chat";
 import { MeetingStatus, DocumentStatus } from "@prisma/client";
 
 // Допустимые переходы статусов заседания
@@ -153,12 +155,31 @@ export async function POST(
         },
       });
       
-      // Архивируем групповой чат заседания, если он есть
+      // Архивируем групповой чат заседания и публикуем сообщение от ИИ Ассистента
       try {
+        const meetingChats = await prisma.chat.findMany({
+          where: { meetingId: id },
+          select: { id: true },
+        });
         await prisma.chat.updateMany({
           where: { meetingId: id },
           data: { archivedAt: new Date() },
         });
+        const botUser = await getOrCreateAIBotUser();
+        await postMeetingChatSystemMessage(
+          id,
+          "Чат закрыт. Переведен в архив.",
+          botUser.id
+        );
+        // Сбрасываем кэш списка чатов у всех участников, чтобы чат сразу появился во вкладке «Архив»
+        const { invalidateUserChatsCache } = await import("@/lib/cache-invalidation");
+        for (const c of meetingChats) {
+          const participants = await prisma.chatParticipant.findMany({
+            where: { chatId: c.id, leftAt: null },
+            select: { userId: true },
+          });
+          await Promise.allSettled(participants.map((p) => invalidateUserChatsCache(p.userId)));
+        }
       } catch (err) {
         console.warn("[meetings/status] Error archiving meeting chat:", err);
       }

@@ -118,10 +118,11 @@ export function useChat(options: UseChatOptions = {}) {
     return () => clearInterval(interval);
   }, [session?.user?.id]);
 
-  // Загрузка списка чатов
-  const loadChats = useCallback(async () => {
+  // Загрузка списка чатов (forceRefresh — обход кэша, чтобы в «Архив» попали актуальные чаты)
+  const loadChats = useCallback(async (forceRefresh?: boolean) => {
     try {
-      const data = await fetchJsonWithRetry<{ chats: Chat[] }>("/api/chat", {
+      const url = forceRefresh ? "/api/chat?bypassCache=1" : "/api/chat";
+      const data = await fetchJsonWithRetry<{ chats: Chat[] }>(url, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       }, { timeoutMs: 60000 });
@@ -717,6 +718,17 @@ export function useChat(options: UseChatOptions = {}) {
       loadMessages(chat.id);
     }
   }, [loadMessages]);
+
+  // При посещении чата заседания помечаем уведомления о согласовании по этому заседанию как прочитанные
+  useEffect(() => {
+    const meetingId = (selectedChat as Chat & { meetingId?: string | null })?.meetingId;
+    if (!meetingId) return;
+    fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markMeetingNotificationsRead: meetingId }),
+    }).catch((err) => console.warn("[useChat] markMeetingNotificationsRead:", err));
+  }, [selectedChat?.id]);
 
   // ИИ-чат главный: при первой загрузке без выбранного чата открываем его по умолчанию (виджеты и раздел «Чаты» — одна история)
   useEffect(() => {
@@ -1449,7 +1461,16 @@ export function useChat(options: UseChatOptions = {}) {
       if (!chat || !chat.id) {
         return { success: false, error: "Чат не найден" };
       }
-      setChats((prev) => (prev.some((c) => c.id === chat.id) ? prev : [...prev, chat]));
+      // Обновляем чат в списке данными из API (в т.ч. archivedAt), чтобы он корректно отображался во вкладке «Архив»
+      setChats((prev) => {
+        const idx = prev.findIndex((c) => c.id === chat.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...chat };
+          return next;
+        }
+        return [...prev, chat];
+      });
       selectChat(chat);
       return { success: true };
     } catch (e) {

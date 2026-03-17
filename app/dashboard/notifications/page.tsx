@@ -16,6 +16,8 @@ interface Notification {
   createdAt: string;
   /** Статус документа (от API); кнопки «Согласовать»/«Отклонить» только при PENDING_APPROVAL */
   documentStatus?: string | null;
+  /** true, если текущий пользователь уже согласовал/отклонил — кнопки не показываем */
+  approvedByCurrentUser?: boolean;
 }
 
 const DOC_APPROVAL_TYPES = ["meeting_agenda_review", "meeting_document_approval"];
@@ -124,7 +126,13 @@ export default function NotificationsPage() {
 
   const getNotificationTargetUrl = (notification: Notification): string | null => {
     const meta = notification.metadata as { meetingId?: string } | null;
-    if (meta?.meetingId && (notification.type === "meeting_agenda_review" || notification.type === "meeting_agenda_approved")) {
+    if (
+      meta?.meetingId &&
+      (notification.type === "meeting_agenda_review" ||
+        notification.type === "meeting_agenda_approved" ||
+        notification.type === "meeting_protocol_approved" ||
+        notification.type === "meeting_agenda_updated")
+    ) {
       return `/dashboard/documents/meetings/${meta.meetingId}`;
     }
     return notification.url || null;
@@ -156,7 +164,7 @@ export default function NotificationsPage() {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Ошибка");
-      if (!notification.readAt) markAsRead(notification.id);
+      await markAsRead(notification.id);
       setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
       setUnreadCount((c) => Math.max(0, c - 1));
       if (action === "approve") {
@@ -199,6 +207,8 @@ export default function NotificationsPage() {
         );
       case "meeting_agenda_review":
       case "meeting_document_approval":
+      case "meeting_protocol_approved":
+      case "meeting_agenda_updated":
         return (
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -349,7 +359,8 @@ export default function NotificationsPage() {
                     (notification.metadata as { meetingId?: string; documentId?: string; approvedWithoutReview?: boolean })?.meetingId &&
                     (notification.metadata as { meetingId?: string; documentId?: string; approvedWithoutReview?: boolean })?.documentId &&
                     !(notification.metadata as { approvedWithoutReview?: boolean })?.approvedWithoutReview &&
-                    notification.documentStatus === "PENDING_APPROVAL" && (
+                    notification.documentStatus === "PENDING_APPROVAL" &&
+                    !notification.approvedByCurrentUser && (
                     <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"

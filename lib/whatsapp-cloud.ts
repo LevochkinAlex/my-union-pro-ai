@@ -138,33 +138,3 @@ export async function sendPINViaWhatsApp(
   return sendAuthenticationTemplate(phone, pinCode, "authentication_template_");
 }
 
-/**
- * Проверка статуса WhatsApp Business Account
- */
-export async function getWhatsAppAccountInfo(): Promise<unknown> {
-  if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_BUSINESS_ACCOUNT_ID) {
-    return {
-      success: false,
-      error: "WhatsApp credentials не настроены",
-    };
-  }
-
-  try {
-    const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_BUSINESS_ACCOUNT_ID}`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
-      },
-    });
-
-    return await response.json();
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-

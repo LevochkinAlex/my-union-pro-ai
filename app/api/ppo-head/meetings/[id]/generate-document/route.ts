@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentType, DocumentStatus, DocumentCategory } from "@prisma/client";
 import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
+import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
+import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
+import { clearAllMeetingNotifications, notifyParticipantsAboutProtocolApproval } from "@/lib/notifications";
 
 // Форматирование даты в русском формате
 function formatDate(date: Date): string {
@@ -464,12 +467,53 @@ export async function POST(
       }
     }
 
-    // При утверждении протокола — статус заседания «Завершено»
+    // При утверждении протокола — статус заседания «Завершено», архив чата, сообщение от ИИ
     if (documentType === "PROTOCOL" && approve === true) {
+      try {
+        await ensureMeetingGroupChat(meeting.id);
+        const meetingWithChat = await prisma.meeting.findUnique({
+          where: { id: meeting.id },
+          include: { groupChat: { select: { id: true } } },
+        });
+        if (meetingWithChat?.groupChat) {
+          const chatId = meetingWithChat.groupChat.id;
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { archivedAt: new Date() },
+          });
+          const botUser = await getOrCreateAIBotUser();
+          const msg = await prisma.chatMessage.create({
+            data: {
+              chatId,
+              senderId: botUser.id,
+              content: "Чат закрыт. Переведен в архив.",
+              messageType: "system",
+            },
+          });
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { lastMessageId: msg.id, lastMessageAt: new Date() },
+          });
+          const participants = await prisma.chatParticipant.findMany({
+            where: { chatId, leftAt: null },
+            select: { userId: true },
+          });
+          const { invalidateUserChatsCache } = await import("@/lib/cache-invalidation");
+          await Promise.allSettled(participants.map((p) => invalidateUserChatsCache(p.userId)));
+        }
+      } catch (err) {
+        console.warn("[generate-document] Error archiving chat / AI message:", err);
+      }
       await prisma.meeting.update({
         where: { id: meeting.id },
-        data: { status: "COMPLETED" },
+        data: { status: "COMPLETED", actualEndAt: new Date() },
       });
+      await clearAllMeetingNotifications(meeting.id).catch((err) =>
+        console.warn("[generate-document] clearAllMeetingNotifications:", err)
+      );
+      await notifyParticipantsAboutProtocolApproval(meeting.id).catch((err) =>
+        console.warn("[generate-document] notifyParticipantsAboutProtocolApproval:", err)
+      );
     }
 
     const message = existingAgendaDoc
@@ -486,6 +530,7 @@ export async function POST(
       include: {
         organization: { select: { id: true, name: true, chairmanName: true, chairmanJobTitle: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+        groupChat: { select: { id: true, archivedAt: true } },
         agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },

@@ -1105,6 +1105,7 @@ export default function SlackStyleChat({
               setShowGroupModal(true);
             }}
             onOpenAIChat={handleOpenAIChat}
+            onArchiveTabFocus={() => loadChats(true)}
           />
         </div>
 

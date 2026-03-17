@@ -3,8 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
-import { DocumentStatus } from "@prisma/client";
-import { postMeetingChatSystemMessage } from "@/lib/meeting-chat";
+import { DocumentStatus, MeetingStatus } from "@prisma/client";
+import { postMeetingChatSystemMessage, ensureMeetingGroupChat } from "@/lib/meeting-chat";
+import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
+import { clearAllMeetingNotifications, notifyParticipantsAboutProtocolApproval } from "@/lib/notifications";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/final-approve
@@ -152,9 +154,63 @@ export async function POST(
     const msg = document.meetingAsAgenda
       ? "Повестка дня утверждена председателем."
       : "Протокол утверждён председателем.";
-    postMeetingChatSystemMessage(meetingId, msg).catch((err) =>
+    await postMeetingChatSystemMessage(meetingId, msg).catch((err) =>
       console.warn("[final-approve] postMeetingChatSystemMessage:", err)
     );
+
+    // При утверждении протокола завершаем заседание: статус COMPLETED, архив чата, сообщение от ИИ
+    if (document.meetingAsProtocol) {
+      try {
+        await ensureMeetingGroupChat(meetingId);
+
+        const meetingWithChat = await prisma.meeting.findUnique({
+          where: { id: meetingId },
+          include: { groupChat: { select: { id: true } } },
+        });
+
+        if (meetingWithChat?.groupChat) {
+          const chatId = meetingWithChat.groupChat.id;
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { archivedAt: new Date() },
+          });
+          const botUser = await getOrCreateAIBotUser();
+          const msg = await prisma.chatMessage.create({
+            data: {
+              chatId,
+              senderId: botUser.id,
+              content: "Чат закрыт. Переведен в архив.",
+              messageType: "system",
+            },
+          });
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { lastMessageId: msg.id, lastMessageAt: new Date() },
+          });
+          const participants = await prisma.chatParticipant.findMany({
+            where: { chatId, leftAt: null },
+            select: { userId: true },
+          });
+          const { invalidateUserChatsCache } = await import("@/lib/cache-invalidation");
+          await Promise.allSettled(participants.map((p) => invalidateUserChatsCache(p.userId)));
+        } else {
+          console.warn("[final-approve] No groupChat for meeting", meetingId, "- archive/message skipped");
+        }
+
+        await prisma.meeting.update({
+          where: { id: meetingId },
+          data: { status: MeetingStatus.COMPLETED, actualEndAt: new Date() },
+        });
+        await clearAllMeetingNotifications(meetingId).catch((err) =>
+          console.warn("[final-approve] clearAllMeetingNotifications:", err)
+        );
+        await notifyParticipantsAboutProtocolApproval(meetingId).catch((err) =>
+          console.warn("[final-approve] notifyParticipantsAboutProtocolApproval:", err)
+        );
+      } catch (err) {
+        console.warn("[final-approve] Error completing meeting / archiving chat:", err);
+      }
+    }
 
     return NextResponse.json({
       document: updatedDocument,

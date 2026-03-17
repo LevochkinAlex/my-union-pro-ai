@@ -162,6 +162,10 @@ export async function POST(
       // Протокол: не рассылаем во «Входящие» до подписания; рассылка только по кнопке «Разослать протокол во Входящие» (подписанный)
       const participantIds = participantsWithUserId.map((p) => p.user!.id);
       if (participantIds.length > 0) {
+        const { clearAllMeetingNotifications } = await import("@/lib/notifications");
+        await clearAllMeetingNotifications(meetingId).catch((err) =>
+          console.warn("[send-for-approval] clearAllMeetingNotifications:", err)
+        );
         await sendMassNotification({
           userIds: participantIds,
           title: `${docLabel} на согласование`,
