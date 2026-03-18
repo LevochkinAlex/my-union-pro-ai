@@ -10,8 +10,3 @@ export async function getBestBenefitsToken(): Promise<string> {
   return token;
 }
 
-/**
- * Совместимость с существующими импортами в старом коде/скриптах.
- */
-export function clearBestBenefitsToken(): void {}
-

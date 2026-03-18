@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { sendMassNotification } from "@/lib/notifications";
+import { clearAllMeetingNotifications, sendMassNotification } from "@/lib/notifications";
 
 export interface AssignAgendaResult {
   assignedCount: number;
@@ -140,6 +140,7 @@ export async function assignAgendaToParticipantsAndNotify(
 
   const approvalRequired = options?.approvalRequired !== false;
   try {
+    await clearAllMeetingNotifications(meeting.id);
     await sendMassNotification({
       userIds: participantUserIds,
       title: approvalRequired
@@ -259,6 +260,7 @@ export async function assignAgendaToUserIds(
       month: "long",
       year: "numeric",
     });
+    await clearAllMeetingNotifications(meeting.id);
     await sendMassNotification({
       userIds: usersToAssign,
       title: `Повестка дня: Заседание №${meeting.number}`,

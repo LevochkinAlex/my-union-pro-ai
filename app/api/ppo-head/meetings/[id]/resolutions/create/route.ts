@@ -11,6 +11,7 @@ import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentType, DocumentStatus, DocumentCategory } from "@prisma/client";
 import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
 import { updateResolutionCopiesInInbox } from "@/lib/meeting-agenda-notify";
+import { clearAllMeetingNotifications } from "@/lib/notifications";
 
 function escapeHtml(s: string | null | undefined): string {
   if (s == null || s === "") return "";
@@ -347,6 +348,10 @@ export async function POST(
 
     // Рассылка копий постановлений во «Входящие» участникам не выполняется (по требованию).
     // Не вызывать assignResolutionsToParticipantsAndNotify.
+
+    await clearAllMeetingNotifications(meetingId).catch((err) =>
+      console.warn("[resolutions/create] clearAllMeetingNotifications:", err)
+    );
 
     const updatedMeeting = await prisma.meeting.findUnique({
       where: { id: meetingId },

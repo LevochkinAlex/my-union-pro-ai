@@ -67,6 +67,117 @@ function toAbsoluteUrl(url: string): string {
   return `${base}${raw.startsWith("/") ? raw : `/${raw}`}`;
 }
 
+/** Типы уведомлений о повестках и согласовании по заседанию — удаляются при утверждении протокола и заменяются одним уведомлением «Протокол утверждён» */
+const MEETING_APPROVAL_NOTIFICATION_TYPES = [
+  "meeting_agenda_review",
+  "meeting_agenda_approved",
+  "meeting_document_approval",
+] as const;
+
+/**
+ * Удаляет из раздела «Уведомления» все уведомления о повестке и согласовании по данному заседанию.
+ * Вызывать перед отправкой уведомления «Протокол утверждён», чтобы у участника осталось только оно.
+ */
+export async function clearMeetingApprovalNotifications(meetingId: string): Promise<number> {
+  const result = await prisma.userNotification.deleteMany({
+    where: {
+      type: { in: [...MEETING_APPROVAL_NOTIFICATION_TYPES] },
+      metadata: { path: ["meetingId"], equals: meetingId },
+    },
+  });
+  return result.count;
+}
+
+/**
+ * Удаляет у всех пользователей все уведомления, связанные с данным заседанием (любой тип).
+ * Вызывать, например, после «Создать постановление», чтобы очистить раздел «Уведомления» от уведомлений по этому заседанию.
+ */
+export async function clearAllMeetingNotifications(meetingId: string): Promise<number> {
+  const result = await prisma.userNotification.deleteMany({
+    where: {
+      metadata: { path: ["meetingId"], equals: meetingId },
+    },
+  });
+  return result.count;
+}
+
+/**
+ * Отправляет всем участникам заседания уведомление об изменении повестки дня (добавлен/изменён/удалён пункт).
+ * Предварительно удаляет старые уведомления по заседанию, чтобы новое заменило их в разделе «Уведомления».
+ */
+export async function notifyParticipantsAboutAgendaChange(
+  meetingId: string,
+  changeType: "added" | "updated" | "deleted"
+): Promise<void> {
+  const meeting = await prisma.meeting.findUnique({
+    where: { id: meetingId },
+    select: {
+      number: true,
+      participants: {
+        where: { userId: { not: null } },
+        select: { userId: true },
+      },
+    },
+  });
+  if (!meeting || meeting.participants.length === 0) return;
+  const userIds = [...new Set(meeting.participants.map((p) => p.userId!))];
+  const numberLabel = meeting.number ? ` №${meeting.number}` : "";
+  const [title, body] =
+    changeType === "added"
+      ? [
+          "Добавлен пункт в повестку",
+          `В повестку дня заседания${numberLabel} добавлен новый пункт. Ознакомьтесь на странице заседания.`,
+        ]
+      : changeType === "updated"
+        ? [
+            "Изменён пункт повестки",
+            `В повестке дня заседания${numberLabel} изменён пункт. Ознакомьтесь на странице заседания.`,
+          ]
+        : [
+            "Удалён пункт из повестки",
+            `Из повестки дня заседания${numberLabel} удалён пункт. Ознакомьтесь на странице заседания.`,
+          ];
+  await clearAllMeetingNotifications(meetingId);
+  await sendMassNotification({
+    userIds,
+    title,
+    body,
+    url: `/dashboard/documents/meetings/${meetingId}`,
+    type: "meeting_agenda_updated",
+    metadata: { meetingId },
+  });
+}
+
+/**
+ * Отправляет всем участникам заседания уведомление об утверждении протокола.
+ * Вызывать после clearMeetingApprovalNotifications при утверждении протокола.
+ */
+export async function notifyParticipantsAboutProtocolApproval(meetingId: string): Promise<void> {
+  const meeting = await prisma.meeting.findUnique({
+    where: { id: meetingId },
+    select: {
+      number: true,
+      participants: {
+        where: { userId: { not: null } },
+        select: { userId: true },
+      },
+    },
+  });
+  if (!meeting || meeting.participants.length === 0) return;
+  const userIds = [...new Set(meeting.participants.map((p) => p.userId!))];
+  const numberLabel = meeting.number ? `№${meeting.number}` : "";
+  await sendMassNotification({
+    userIds,
+    title: "Протокол утверждён",
+    body: numberLabel
+      ? `Протокол заседания ${numberLabel} утверждён председателем.`
+      : "Протокол заседания утверждён председателем.",
+    url: `/dashboard/documents/meetings/${meetingId}`,
+    type: "meeting_protocol_approved",
+    metadata: { meetingId },
+  });
+}
+
 /**
  * Отправляет уведомление пользователю с учетом его настроек
  */

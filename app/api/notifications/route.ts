@@ -81,18 +81,31 @@ export async function GET(request: NextRequest) {
       }
     }
     let documentStatusMap: Record<string, string> = {};
+    let approvedByCurrentUserDocIds = new Set<string>();
     if (documentIds.size > 0) {
-      const docs = await prisma.document.findMany({
-        where: { id: { in: [...documentIds] } },
-        select: { id: true, status: true },
-      });
+      const [docs, myApprovals] = await Promise.all([
+        prisma.document.findMany({
+          where: { id: { in: [...documentIds] } },
+          select: { id: true, status: true },
+        }),
+        prisma.documentApproval.findMany({
+          where: {
+            documentId: { in: [...documentIds] },
+            userId: session.user.id,
+            status: { in: ["APPROVED", "REJECTED"] },
+          },
+          select: { documentId: true },
+        }),
+      ]);
       documentStatusMap = Object.fromEntries(docs.map((d) => [d.id, d.status]));
+      approvedByCurrentUserDocIds = new Set(myApprovals.map((a) => a.documentId));
     }
     const notificationsWithStatus = notifications.map((n) => {
       const meta = n.metadata as { documentId?: string } | null;
       const docId = meta?.documentId;
       const documentStatus = docId ? documentStatusMap[docId] ?? null : null;
-      return { ...n, documentStatus };
+      const approvedByCurrentUser = !!docId && approvedByCurrentUserDocIds.has(docId);
+      return { ...n, documentStatus, approvedByCurrentUser };
     });
 
     return NextResponse.json({
@@ -123,7 +136,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { notificationIds, markAllAsRead } = body;
+    const { notificationIds, markAllAsRead, markMeetingNotificationsRead } = body;
 
     if (markAllAsRead) {
       // Помечаем все непрочитанные уведомления как прочитанные
@@ -131,6 +144,18 @@ export async function PATCH(request: NextRequest) {
         where: {
           userId: session.user.id,
           readAt: null,
+        },
+        data: {
+          readAt: new Date(),
+        },
+      });
+    } else if (markMeetingNotificationsRead && typeof markMeetingNotificationsRead === "string") {
+      // Помечаем как прочитанные все уведомления данного заседания при открытии страницы заседания
+      await prisma.userNotification.updateMany({
+        where: {
+          userId: session.user.id,
+          readAt: null,
+          metadata: { path: ["meetingId"], equals: markMeetingNotificationsRead },
         },
         data: {
           readAt: new Date(),

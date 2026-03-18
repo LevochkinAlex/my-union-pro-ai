@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { notifyParticipantsAboutAgendaChange } from "@/lib/notifications";
 
 /** При изменении повестки сбрасываем согласования: все «согласовал» → «ожидает» */
 async function resetAgendaDocumentApprovals(meetingId: string): Promise<void> {
@@ -170,6 +171,10 @@ export async function POST(
       console.warn("[ppo-head/meetings/[id]/agenda] POST: не удалось обновить agendaModifiedAt:", e);
     }
 
+    await notifyParticipantsAboutAgendaChange(id, "added").catch((err) =>
+      console.warn("[ppo-head/meetings/[id]/agenda] notifyParticipantsAboutAgendaChange:", err)
+    );
+
     return NextResponse.json({ agendaItem }, { status: 201 });
   } catch (error: any) {
     console.error("[ppo-head/meetings/[id]/agenda] POST error:", error);
@@ -270,6 +275,10 @@ export async function PATCH(
     } catch (e) {
       console.warn("[ppo-head/meetings/[id]/agenda] PATCH: не удалось обновить agendaModifiedAt:", e);
     }
+
+    await notifyParticipantsAboutAgendaChange(id, "updated").catch((err) =>
+      console.warn("[ppo-head/meetings/[id]/agenda] notifyParticipantsAboutAgendaChange:", err)
+    );
 
     return NextResponse.json({ items: updatedItems.filter(Boolean) });
   } catch (error: any) {

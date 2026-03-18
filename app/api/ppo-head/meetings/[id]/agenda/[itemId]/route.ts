@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { notifyParticipantsAboutAgendaChange } from "@/lib/notifications";
 
 /**
  * DELETE /api/ppo-head/meetings/[id]/agenda/[itemId]
@@ -78,6 +79,10 @@ export async function DELETE(
     } catch (e) {
       console.warn("[ppo-head/meetings/[id]/agenda/[itemId]] DELETE: не удалось обновить agendaModifiedAt:", e);
     }
+
+    await notifyParticipantsAboutAgendaChange(meetingId, "deleted").catch((err) =>
+      console.warn("[ppo-head/meetings/[id]/agenda/[itemId]] notifyParticipantsAboutAgendaChange:", err)
+    );
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

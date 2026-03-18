@@ -290,6 +290,7 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id;
     const { searchParams } = new URL(request.url);
+    const bypassCache = searchParams.get("bypassCache") === "1";
 
     // Демо-режим: мок-чаты без БД
     if (userId === DEMO_MEMBER_USER_ID) {
@@ -508,7 +509,7 @@ export async function GET(request: NextRequest) {
     let chats: any[] = [];
     try {
       const cacheKey = getCacheKey(`user:chats:${userId}`, filter);
-      const bypassCacheForRequest = didSyncMeetingChats;
+      const bypassCacheForRequest = didSyncMeetingChats || bypassCache;
       
       const result = await Sentry.startSpan(
         {
@@ -526,7 +527,7 @@ export async function GET(request: NextRequest) {
             return await getUserChats(userId, filter, true); // bypassCache = true
           }
           
-          // После синхронизации чатов заседаний обходим кэш, чтобы новые чаты попали в список
+          // После синхронизации чатов заседаний или при явном bypassCache (вкладка «Архив») обходим кэш
           if (bypassCacheForRequest) {
             return await getUserChats(userId, filter, true);
           }

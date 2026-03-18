@@ -127,6 +127,8 @@ export interface SlackStyleSidebarProps {
   onCreateGroup?: () => void;
   onCreateChannel?: () => void;
   onOpenAIChat?: () => void;
+  /** Вызывается при переходе на вкладку «Архив» — обновить список без кэша */
+  onArchiveTabFocus?: () => void;
 }
 
 interface UserSearchResult {
@@ -703,9 +705,15 @@ export default function SlackStyleSidebar({
   onCreateGroup,
   onCreateChannel,
   onOpenAIChat,
+  onArchiveTabFocus,
 }: SlackStyleSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "work" | "personal" | "archived">("all");
+
+  const handleTabChange = useCallback((key: "all" | "work" | "personal" | "archived") => {
+    setActiveTab(key);
+    if (key === "archived") onArchiveTabFocus?.();
+  }, [onArchiveTabFocus]);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   
   // Состояния для папок
@@ -899,7 +907,8 @@ export default function SlackStyleSidebar({
       case "archived":
         return { work: [], personal: [], channels: [], archived: archivedChats, ai: aiChat, support: supportChat };
       default:
-        return { work: workChats, personal: personalChats, channels: channels, archived: [], ai: aiChat, support: supportChat };
+        // На вкладке «Все» показываем и архив, чтобы завершённые чаты заседаний были видны в блоке «Архив»
+        return { work: workChats, personal: personalChats, channels: channels, archived: archivedChats, ai: aiChat, support: supportChat };
     }
   }, [activeTab, workChats, personalChats, channels, archivedChats, aiChat, supportChat]);
 
@@ -1016,7 +1025,7 @@ export default function SlackStyleSidebar({
           ).map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setActiveTab(key as any)}
+              onClick={() => handleTabChange(key as "all" | "work" | "personal" | "archived")}
               className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
                 activeTab === key
                   ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"

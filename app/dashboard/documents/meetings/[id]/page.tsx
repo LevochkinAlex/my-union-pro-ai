@@ -207,6 +207,7 @@ export default function MeetingDetailPage({
   const [protocolGeneralCollapsed, setProtocolGeneralCollapsed] = useState(false);
   const [isSendingForApproval, setIsSendingForApproval] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [agendaParticipantApprovalSubmitting, setAgendaParticipantApprovalSubmitting] = useState(false);
   const [uploadingSignedProtocol, setUploadingSignedProtocol] = useState(false);
   const [sendingProtocolToInbox, setSendingProtocolToInbox] = useState(false);
   const [protocolSentToInbox, setProtocolSentToInbox] = useState(false);
@@ -298,6 +299,17 @@ export default function MeetingDetailPage({
     loadElectedBody();
   }, [resolvedParams.id]);
 
+  // При посещении страницы заседания помечаем уведомления о согласовании по этому заседанию как прочитанные
+  useEffect(() => {
+    const meetingId = resolvedParams.id;
+    if (!meetingId) return;
+    fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markMeetingNotificationsRead: meetingId }),
+    }).catch((err) => console.warn("[meetings/[id]] markMeetingNotificationsRead:", err));
+  }, [resolvedParams.id]);
+
   useEffect(() => {
     const t = searchParams.get("tab");
     if (t === "agenda" || t === "protocol" || t === "resolutions" || t === "extracts") setActiveTab(t);
@@ -336,13 +348,18 @@ export default function MeetingDetailPage({
     });
   }, [meeting?.agendaItems?.map((i) => i.id).join(",")]);
 
-  const loadMeeting = async () => {
+  const loadMeeting = async (bypassCache = false) => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}`);
+      const url = `/api/ppo-head/meetings/${resolvedParams.id}` + (bypassCache ? `?_=${Date.now()}` : "");
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        setMeeting(data.meeting);
+        setMeeting((prev) => {
+          const m = data.meeting;
+          if (!m) return prev;
+          return { ...m, groupChat: m.groupChat ?? prev?.groupChat };
+        });
         setReadOnly(data.readOnly === true);
         setCanDeleteMeeting(data.canDeleteMeeting === true);
         setAgendaNeedsRegenerate(data.agendaNeedsRegenerate === true);
@@ -430,14 +447,27 @@ export default function MeetingDetailPage({
 
   const canEditAgenda = meeting && !readOnly && (meeting.status === "DRAFT" || meeting.status === "SCHEDULED");
 
+  /** Текущий пользователь — председатель этого заседания (кнопки «Согласовать»/«Отклонить» для него не показываем) */
+  const isChairman = !!meeting?.participants?.some(
+    (p: { user?: { id?: string }; role: string }) => p.user?.id === session?.user?.id && p.role === "CHAIRMAN"
+  );
+
+  /** Участник уже нажал «Согласовать» или «Отклонить» по повестке — скрываем у него кнопки «Добавить пункт», «Редактировать», «Удалить» */
+  const participantHasApprovedAgenda =
+    !!meeting?.agendaDocument?.approvals?.some(
+      (a: { user?: { id?: string }; status: string }) =>
+        (a.user as { id?: string })?.id === session?.user?.id && (a.status === "APPROVED" || a.status === "REJECTED")
+    );
+
   /** Внутренний участник заседания (не приглашённый гость) — может добавлять пункты повестки */
   const isInternalParticipant =
     !!meeting?.participants?.some((p) => p.user?.id === session?.user?.id);
-  /** Добавлять пункты могут: те, у кого есть редактирование, или все внутренние участники */
+  /** Добавлять пункты могут: те, у кого есть редактирование, или все внутренние участники (но не если уже согласовал) */
   const canAddAgendaItems =
     !!meeting &&
     (meeting.status === "DRAFT" || meeting.status === "SCHEDULED") &&
-    (!readOnly || isInternalParticipant);
+    (!readOnly || isInternalParticipant) &&
+    !participantHasApprovedAgenda;
 
   /** После утверждения протокола скрываем «Пересоздать документ» и «Добавить пункт» у всех */
   const protocolApproved = !!meeting?.protocolDocument && (meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED");
@@ -668,6 +698,50 @@ export default function MeetingDetailPage({
   const totalEligible = meeting?.participants?.filter(p => p.canVote).length || 0;
   const maxVotes = meeting?.participants?.filter(p => p.canVote && PRESENT_STATUSES.includes(p.attendance)).length || 0;
   const hasQuorum = totalEligible > 0 && maxVotes >= Math.floor(totalEligible / 2) + 1;
+
+  /** Кнопка «Утвердить» активна только когда: все выборы в процедурных блоках сделаны, все «Всего: X / Y» совпадают (X === Y), все обязательные поля (*) заполнены */
+  const canApproveProtocol = useMemo(() => {
+    if (!hasQuorum || !meeting?.agendaItems?.length) return false;
+    const p = protocolProcedural;
+    const chairmanTotal = (p.chairmanVotesFor ?? 0) + (p.chairmanVotesAgainst ?? 0) + (p.chairmanVotesAbstained ?? 0);
+    const secretaryTotal = (p.secretaryVotesFor ?? 0) + (p.secretaryVotesAgainst ?? 0) + (p.secretaryVotesAbstained ?? 0);
+    const voteCounterTotal = (p.voteCounterVotesFor ?? 0) + (p.voteCounterVotesAgainst ?? 0) + (p.voteCounterVotesAbstained ?? 0);
+    const agendaApprovalTotal = (p.agendaApprovalVotesFor ?? 0) + (p.agendaApprovalVotesAgainst ?? 0) + (p.agendaApprovalVotesAbstained ?? 0);
+    const proceduralVotesComplete =
+      maxVotes > 0 &&
+      chairmanTotal === maxVotes &&
+      secretaryTotal === maxVotes &&
+      voteCounterTotal === maxVotes &&
+      agendaApprovalTotal === maxVotes;
+    const proceduralSelectsFilled =
+      !!presidingOfficerUserId &&
+      !!p.chairmanReportUserId &&
+      !!p.secretaryReportUserId &&
+      !!secretaryUserId &&
+      !!p.voteCounterReportUserId;
+    // Учитываем только активные пункты (отмеченные в блоке 5). Пункты «не актуально» (не отмеченные) не влияют на условие для «Утвердить».
+    const approvedIds = p.agendaApprovedItemIds ?? meeting.agendaItems.map((i: AgendaItem) => i.id);
+    const approvedItems = meeting.agendaItems.filter((item: AgendaItem) => approvedIds.includes(item.id));
+    const agendaItemsComplete = approvedItems.every((item: AgendaItem) => {
+      const d = protocolData[item.id];
+      const speakerId = d?.speakerId ?? item.speakerId;
+      const resolutionText = (d?.resolutionText ?? "").trim();
+      const vf = d?.votesFor ?? 0;
+      const va = d?.votesAgainst ?? 0;
+      const vab = d?.votesAbstained ?? 0;
+      const voteTotal = vf + va + vab;
+      return !!speakerId && !!resolutionText && voteTotal === maxVotes;
+    });
+    return proceduralSelectsFilled && proceduralVotesComplete && agendaItemsComplete;
+  }, [
+    hasQuorum,
+    meeting?.agendaItems,
+    maxVotes,
+    protocolProcedural,
+    presidingOfficerUserId,
+    secretaryUserId,
+    protocolData,
+  ]);
 
   const protocolBlocksLocked =
     meeting?.protocolDocument?.status === "COMPLETED" || meeting?.protocolDocument?.status === "SIGNED";
@@ -1338,6 +1412,68 @@ export default function MeetingDetailPage({
                         Повестка дня PDF
                       </button>
                     )}
+                    {meeting.agendaDocument.status === "PENDING_APPROVAL" && !participantHasApprovedAgenda && !isChairman && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setAgendaParticipantApprovalSubmitting(true);
+                              const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/approve`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ action: "approve" }),
+                              });
+                              const data = await res.json().catch(() => ({}));
+                              if (!res.ok) throw new Error(data.error || "Ошибка согласования");
+                              alertSuccess("Повестка согласована");
+                              loadMeeting();
+                            } catch (e) {
+                              alertError(e instanceof Error ? e.message : "Не удалось согласовать");
+                            } finally {
+                              setAgendaParticipantApprovalSubmitting(false);
+                            }
+                          }}
+                          disabled={agendaParticipantApprovalSubmitting}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50 dark:bg-green-600 dark:hover:bg-green-700"
+                          title="Согласовать повестку дня"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {agendaParticipantApprovalSubmitting ? "…" : "Согласовать"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setAgendaParticipantApprovalSubmitting(true);
+                              const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/approve`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ action: "reject" }),
+                              });
+                              const data = await res.json().catch(() => ({}));
+                              if (!res.ok) throw new Error(data.error || "Ошибка отклонения");
+                              alertSuccess("Повестка отклонена");
+                              loadMeeting();
+                            } catch (e) {
+                              alertError(e instanceof Error ? e.message : "Не удалось отклонить");
+                            } finally {
+                              setAgendaParticipantApprovalSubmitting(false);
+                            }
+                          }}
+                          disabled={agendaParticipantApprovalSubmitting}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                          title="Отклонить повестку с примечаниями"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Отклонить
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
                 {meeting.agendaDocument.status !== "COMPLETED" && (
@@ -1550,7 +1686,7 @@ export default function MeetingDetailPage({
                     key={item.id}
                     className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
                   >
-                    {editingAgendaId === item.id && canDeleteMeeting ? (
+                    {editingAgendaId === item.id && canDeleteMeeting && !participantHasApprovedAgenda ? (
                       <div className="space-y-3">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Слушали (тема вопроса) *
@@ -1847,7 +1983,7 @@ export default function MeetingDetailPage({
                             )}
                           </div>
                         </div>
-                        {canEditAgenda && canDeleteMeeting && (
+                        {canEditAgenda && canDeleteMeeting && !participantHasApprovedAgenda && (
                           <div className="flex shrink-0 items-center gap-1">
                             <button
                               type="button"
@@ -2211,7 +2347,7 @@ export default function MeetingDetailPage({
                 </button>
                 {(meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED") && (
                       <>
-                        {!readOnly && meeting.protocolDocument.status !== "SIGNED" && (
+                        {!readOnly && canDeleteMeeting && meeting.protocolDocument.status !== "SIGNED" && (
                           <>
                             <input
                               ref={protocolSignedFileInputRef}
@@ -2256,6 +2392,7 @@ export default function MeetingDetailPage({
                         )}
                         {(meeting.protocolDocument as { signedFilePath?: string | null }).signedFilePath && (
                           <>
+                            {(canDeleteMeeting || meeting.protocolDocument.status === "SIGNED") && (
                             <button
                               type="button"
                               onClick={() => setPdfPreviewUrl(`${getDocumentViewUrl(meeting.protocolDocument.id)}&signed=true`)}
@@ -2267,6 +2404,8 @@ export default function MeetingDetailPage({
                               </svg>
                               Подписанный протокол
                             </button>
+                            )}
+                            {canDeleteMeeting && (
                             <button
                               type="button"
                               disabled={meeting.protocolDocument.status === "SIGNED"}
@@ -2296,11 +2435,12 @@ export default function MeetingDetailPage({
                               </svg>
                               {meeting.protocolDocument.status === "SIGNED" ? "Подписано" : "Подписать"}
                             </button>
+                            )}
                           </>
                         )}
                       </>
                     )}
-                {!readOnly && meeting.protocolDocument.status === "SIGNED" && (
+                {!readOnly && canDeleteMeeting && meeting.protocolDocument.status === "SIGNED" && (
                   <button
                     type="button"
                     disabled={sendingProtocolToInbox || protocolSentToInbox}
@@ -2348,7 +2488,7 @@ export default function MeetingDetailPage({
                             }
                             const data = await response.json();
                             alertSuccess(data.message || "Протокол утверждён");
-                            loadMeeting();
+                            await loadMeeting(true);
                           } catch (error) {
                             alertError(error instanceof Error ? error.message : "Не удалось утвердить документ");
                           } finally {
@@ -3332,7 +3472,7 @@ export default function MeetingDetailPage({
                           setIsGenerating(false);
                         }
                       }}
-                      disabled={isSaving || isGenerating || !hasQuorum}
+                      disabled={isSaving || isGenerating || !canApproveProtocol}
                       className="inline-flex items-center gap-2 rounded-lg border border-green-600 bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

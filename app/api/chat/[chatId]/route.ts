@@ -324,8 +324,9 @@ export async function GET(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
 
+      const archivedRow = await prisma.chat.findUnique({ where: { id: chatId }, select: { archivedAt: true } });
       return NextResponse.json({
-        chat,
+        chat: { ...chat, archivedAt: archivedRow?.archivedAt ?? null },
         messages: allMessages,
         pagination: {
           hasMore: false, // Из кэша не знаем hasMore
@@ -1231,8 +1232,9 @@ export async function GET(
       //   console.warn('[chat] Cache error:', err)
       // );
 
+      const archivedRow = await prisma.chat.findUnique({ where: { id: chatId }, select: { archivedAt: true } });
       return NextResponse.json({
-        chat,
+        chat: { ...chat, archivedAt: archivedRow?.archivedAt ?? null },
         messages: allMessages,
         pagination: {
           hasMore,
@@ -1295,8 +1297,9 @@ export async function GET(
       }
     }
 
+    const archivedRow = await prisma.chat.findUnique({ where: { id: chatId }, select: { archivedAt: true } });
     return NextResponse.json({
-      chat,
+      chat: { ...chat, archivedAt: archivedRow?.archivedAt ?? null },
       messages: allMessages,
       pagination: {
         hasMore,
