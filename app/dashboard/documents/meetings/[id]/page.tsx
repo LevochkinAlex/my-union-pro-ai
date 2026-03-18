@@ -85,7 +85,7 @@ interface Meeting {
       status: string;
       comment: string | null;
       approvedAt: string | null;
-      user: { firstName: string | null; lastName: string | null; middleName: string | null };
+      user: { id?: string; firstName: string | null; lastName: string | null; middleName: string | null };
     }>;
   } | null;
   protocolDocument: {
@@ -99,7 +99,7 @@ interface Meeting {
       status: string;
       comment: string | null;
       approvedAt: string | null;
-      user: { firstName: string | null; lastName: string | null; middleName: string | null };
+      user: { id?: string; firstName: string | null; lastName: string | null; middleName: string | null };
     }>;
   } | null;
   participants: Participant[];
