@@ -467,6 +467,29 @@ export async function POST(
       }
     }
 
+    // При формировании протокола сохраняем в заседании процедурные данные и данные с формы (место, время, приглашённые), чтобы выписка и другие документы их видели
+    if (documentType === "PROTOCOL") {
+      const meetingUpdateData: { protocolProceduralData?: object; location?: string; scheduledTime?: string; invitedGuests?: string | null } = {};
+      if (procedural && typeof procedural === "object") {
+        meetingUpdateData.protocolProceduralData = procedural as object;
+      }
+      if (bodyMeetingPlace !== undefined && bodyMeetingPlace !== null) {
+        meetingUpdateData.location = String(bodyMeetingPlace).trim() || null;
+      }
+      if (typeof bodyMeetingTime === "string" && bodyMeetingTime.trim() !== "") {
+        meetingUpdateData.scheduledTime = bodyMeetingTime.trim();
+      }
+      if (bodyInvitedGuests !== undefined && bodyInvitedGuests !== null) {
+        meetingUpdateData.invitedGuests = String(bodyInvitedGuests).trim() || null;
+      }
+      if (Object.keys(meetingUpdateData).length > 0) {
+        await prisma.meeting.update({
+          where: { id: meeting.id },
+          data: meetingUpdateData,
+        });
+      }
+    }
+
     // При утверждении протокола — статус заседания «Завершено», архив чата, сообщение от ИИ
     if (documentType === "PROTOCOL" && approve === true) {
       try {
@@ -534,7 +557,7 @@ export async function POST(
         agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
-        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, metadata: true } },
         participants: {
           include: { user: { select: { id: true, firstName: true, lastName: true, middleName: true, jobTitle: true, email: true } } },
           orderBy: [{ role: "asc" }, { createdAt: "asc" }],
@@ -574,7 +597,8 @@ function escapeHtml(s: string | null | undefined): string {
 
 // Генерация HTML для Повестки дня
 function generateAgendaHTML(meeting: any, data: any): string {
-  const agendaItemsHtml = meeting.agendaItems
+  const items = meeting.agendaItems ?? [];
+  const agendaItemsHtml = items
     .map((item: any) => {
       const speakerText = item.speakerName || (item.speaker ? [item.speaker.lastName, item.speaker.firstName, item.speaker.middleName].filter(Boolean).join(" ") : "");
       const speakerPosition = (item.speakerPosition || (item.speaker?.jobTitle ?? "")).trim();

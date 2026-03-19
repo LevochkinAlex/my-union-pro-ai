@@ -7,7 +7,7 @@ import { DocumentStatus } from "@prisma/client";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/mark-signed
- * Отметить протокол или постановление заседания как подписанный (статус SIGNED) после нажатия кнопки «Подписать».
+ * Отметить протокол, постановление или выписку заседания как подписанный (статус SIGNED) после нажатия кнопки «Подписать».
  */
 export async function POST(
   request: NextRequest,
@@ -51,19 +51,18 @@ export async function POST(
     const isChairman = meeting.participants.some(
       (p) => p.user?.id === session.user.id && p.role === "CHAIRMAN"
     );
-
-    if (!isChairman) {
-      return NextResponse.json(
-        { error: "Только председатель может отметить протокол как подписанный" },
-        { status: 403 }
-      );
-    }
+    const canDeleteMeeting =
+      perm.isChairman || (!!perm.roleName && /зам|заместитель/i.test(perm.roleName ?? ""));
+    const isChairmanOrDeputyParticipant =
+      canDeleteMeeting &&
+      meeting.participants.some((p) => p.user?.id === session.user.id);
 
     const document = await prisma.document.findUnique({
       where: { id: documentId },
       include: {
         meetingAsProtocol: { select: { id: true } },
         meetingResolution: { select: { id: true } },
+        meetingExtract: { select: { id: true } },
       },
     });
 
@@ -73,26 +72,43 @@ export async function POST(
 
     const isProtocol = document.meetingAsProtocol?.id === meetingId;
     const isResolution = document.meetingResolution?.id === meetingId;
+    const isExtract = document.meetingExtract?.id === meetingId;
 
-    if (!isProtocol && !isResolution) {
+    if (!isProtocol && !isResolution && !isExtract) {
       return NextResponse.json(
         { error: "Документ не относится к этому заседанию" },
         { status: 400 }
       );
     }
 
-    if (isProtocol && document.status !== DocumentStatus.COMPLETED) {
-      return NextResponse.json(
-        { error: "Отметить как подписанный можно только утверждённый протокол" },
-        { status: 400 }
-      );
+    if (isProtocol) {
+      if (!isChairman) {
+        return NextResponse.json(
+          { error: "Только председатель может отметить протокол как подписанный" },
+          { status: 403 }
+        );
+      }
+      if (document.status !== DocumentStatus.COMPLETED) {
+        return NextResponse.json(
+          { error: "Отметить как подписанный можно только утверждённый протокол" },
+          { status: 400 }
+        );
+      }
     }
 
-    if (isResolution && !document.signedFilePath) {
-      return NextResponse.json(
-        { error: "Сначала загрузите подписанное постановление (скан)" },
-        { status: 400 }
-      );
+    if (isResolution || isExtract) {
+      if (!isChairman && !isChairmanOrDeputyParticipant) {
+        return NextResponse.json(
+          { error: "Только председатель или заместитель могут отметить документ как подписанный" },
+          { status: 403 }
+        );
+      }
+      if (!document.signedFilePath) {
+        return NextResponse.json(
+          { error: isExtract ? "Сначала загрузите подписанную выписку (скан)" : "Сначала загрузите подписанное постановление (скан)" },
+          { status: 400 }
+        );
+      }
     }
 
     const updatedDocument = await prisma.document.update({
@@ -103,9 +119,15 @@ export async function POST(
       },
     });
 
+    const message = isExtract
+      ? "Выписка отмечена как подписанная"
+      : isResolution
+        ? "Постановление отмечено как подписанное"
+        : "Протокол отмечен как подписанный";
+
     return NextResponse.json({
       document: updatedDocument,
-      message: isResolution ? "Постановление отмечено как подписанное" : "Протокол отмечен как подписанный",
+      message,
     });
   } catch (error: unknown) {
     console.error("[mark-signed] POST error:", error);

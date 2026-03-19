@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
       fileType: file.type,
     });
 
-    // Документ: владелец (userId), протокол заседания или постановление заседания, где текущий пользователь — председатель
+    // Документ: владелец (userId), протокол, постановление или выписка заседания, где текущий пользователь — председатель
     const document = await prisma.document.findUnique({
       where: { id: documentId },
       include: {
@@ -115,6 +116,11 @@ export async function POST(request: NextRequest) {
             },
           },
         },
+        meetingExtract: {
+          include: {
+            participants: { select: { id: true, userId: true, role: true } },
+          },
+        },
       },
     });
 
@@ -132,8 +138,24 @@ export async function POST(request: NextRequest) {
     const isChairmanOfResolutionMeeting =
       document.meetingResolution &&
       document.meetingResolution.participants.some((p) => p.id);
+    const isChairmanOfExtractMeeting =
+      document.meetingExtract &&
+      document.meetingExtract.participants.some(
+        (p: { userId: string; role: string }) => p.userId === session.user.id && p.role === "CHAIRMAN"
+      );
+    const isParticipantOfExtractMeeting =
+      document.meetingExtract &&
+      document.meetingExtract.participants.some((p: { userId: string }) => p.userId === session.user.id);
+    const perm = document.meetingExtract
+      ? await checkUserPermissions(session.user.id, "documents_view")
+      : null;
+    const isChairmanOrDeputyOfOrg = perm
+      ? perm.isChairman || (!!perm.roleName && /зам|заместитель/i.test(perm.roleName))
+      : false;
+    const isChairmanOrDeputyOfExtractMeeting =
+      isChairmanOfExtractMeeting || (!!isParticipantOfExtractMeeting && isChairmanOrDeputyOfOrg);
 
-    if (!isOwner && !isChairmanOfProtocol && !isChairmanOfResolutionMeeting) {
+    if (!isOwner && !isChairmanOfProtocol && !isChairmanOfResolutionMeeting && !isChairmanOrDeputyOfExtractMeeting) {
       return NextResponse.json(
         { error: "Нет прав на загрузку подписанного документа" },
         { status: 403 }
@@ -198,14 +220,15 @@ export async function POST(request: NextRequest) {
 
     console.log("[upload-signed] File saved:", publicPath);
 
-    // Для протокола и постановления заседания статус SIGNED выставляется только по кнопке «Подписать», не при загрузке скана
+    // Для протокола, постановления и выписки заседания статус SIGNED выставляется только по кнопке «Подписать», не при загрузке скана
     const isProtocol = !!document.meetingAsProtocol;
     const isResolution = !!document.meetingResolution;
+    const isExtract = !!document.meetingExtract;
     const updatedDoc = await prisma.document.update({
       where: { id: documentId },
       data: {
         signedFilePath: publicPath,
-        ...(isProtocol || isResolution ? {} : { status: "SIGNED" }),
+        ...(isProtocol || isResolution || isExtract ? {} : { status: "SIGNED" }),
         verificationStatus: "VERIFYING",
         verificationMessage: null,
         verifiedAt: null,

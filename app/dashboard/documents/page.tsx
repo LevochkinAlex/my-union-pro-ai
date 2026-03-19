@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { useMembershipAccess } from "@/hooks/useMembershipAccess";
@@ -62,6 +63,7 @@ export default function DocumentsPage() {
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [approvalComment, setApprovalComment] = useState<Record<string, string>>({});
   const [approvalSubmitting, setApprovalSubmitting] = useState<string | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   /** Модалка просмотра во входящих: { id, useSigned?, fileName? } */
   const [previewDoc, setPreviewDoc] = useState<{ id: string; useSigned?: boolean; fileName?: string | null } | null>(null);
   /** Blob URL для превью в модалке */
@@ -532,6 +534,19 @@ export default function DocumentsPage() {
                 ? "Входящие: устав, повестки и протоколы на согласование, прочие документы"
                 : "Входящие: устав и документы, назначенные вам")
             : "Исходящие: ваши заявления (вступление, перечисление взносов)"
+        }
+        actions={
+          isElectedBody ? (
+            <Link
+              href="/dashboard/documents/ppo-head"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Создать документ
+            </Link>
+          ) : undefined
         }
       />
 
@@ -1017,6 +1032,39 @@ export default function DocumentsPage() {
                       <span className="hidden sm:inline">Моё заявление</span>
                       <span className="sm:hidden">Моё</span>
                     </a>
+                  )}
+                  {/* Кнопка «Удалить» для всех пользователей (входящие и исходящие), кроме системного устава */}
+                  {doc.id !== "charter-system" && (
+                    <button
+                      type="button"
+                      disabled={deletingDocId === doc.id}
+                      onClick={async () => {
+                        const ok = await confirm(
+                          "Удалить этот документ из списка? Действие нельзя отменить.",
+                          "Удаление документа"
+                        );
+                        if (!ok) return;
+                        setDeletingDocId(doc.id);
+                        try {
+                          const res = await fetch(`/api/documents/${encodeURIComponent(doc.id)}`, { method: "DELETE" });
+                          const data = await res.json().catch(() => ({}));
+                          if (!res.ok) throw new Error(data.error || "Ошибка удаления");
+                          alertSuccess(data.message || "Документ удалён");
+                          loadDocuments();
+                        } catch (e) {
+                          alertError(e instanceof Error ? e.message : "Не удалось удалить документ");
+                        } finally {
+                          setDeletingDocId(null);
+                        }
+                      }}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
+                      title="Удалить документ из списка"
+                    >
+                      <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>{deletingDocId === doc.id ? "Удаление…" : "Удалить"}</span>
+                    </button>
                   )}
                 </div>
               </div>

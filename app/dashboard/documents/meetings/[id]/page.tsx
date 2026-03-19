@@ -214,7 +214,21 @@ export default function MeetingDetailPage({
   const protocolSignedFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingSignedResolutionId, setUploadingSignedResolutionId] = useState<string | null>(null);
   const [resolutionIdForSignedUpload, setResolutionIdForSignedUpload] = useState<string | null>(null);
+  const [isCreatingResolutions, setIsCreatingResolutions] = useState(false);
+  const [isCreatingExtract, setIsCreatingExtract] = useState(false);
+  /** Выбранные пункты повестки для выписки (галочки во вкладке «Выписки») */
+  const [extractSelectedItemIds, setExtractSelectedItemIds] = useState<string[]>([]);
   const resolutionSignedFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingSignedExtractId, setUploadingSignedExtractId] = useState<string | null>(null);
+  const [extractIdForSignedUpload, setExtractIdForSignedUpload] = useState<string | null>(null);
+  const [deletingExtractId, setDeletingExtractId] = useState<string | null>(null);
+  const [sendingExtractId, setSendingExtractId] = useState<string | null>(null);
+  /** Модалка «Разослать выписку»: id выписки и выбранные получатели (userId[]) */
+  const [extractIdForSendModal, setExtractIdForSendModal] = useState<string | null>(null);
+  const [selectedUserIdsForExtract, setSelectedUserIdsForExtract] = useState<string[]>([]);
+  /** Кому уже разослана текущая выписка (для пометки в модалке) */
+  const [extractAlreadySentToUserIds, setExtractAlreadySentToUserIds] = useState<string[]>([]);
+  const extractSignedFileInputRef = useRef<HTMLInputElement>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [editingAgendaId, setEditingAgendaId] = useState<string | null>(null);
   const [agendaEditForm, setAgendaEditForm] = useState<Record<string, { title: string; description: string; speakerId: string; speakerName: string; speakerPosition: string; coSpeakers: AgendaCoSpeakerEntry[]; attachments: AgendaAttachment[] }>>({});
@@ -289,9 +303,9 @@ export default function MeetingDetailPage({
     { id: "info" as const, label: "Информация", icon: <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, badge: null as string | null },
     { id: "agenda" as const, label: "Повестка", icon: <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, badge: meeting?.agendaDocument?.regNumber ?? agendaDisplayStatus ?? null },
     { id: "protocol" as const, label: "Протокол", icon: <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>, badge: meeting?.protocolDocument?.regNumber ?? (meeting?.protocolDocument ? DOC_STATUS_LABELS[meeting.protocolDocument.status] : null) ?? null },
-    { id: "resolutions" as const, label: "Постановления", icon: <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>, badge: meeting?.resolutions?.length ? `${meeting.resolutions.length}` : null },
-    { id: "extracts" as const, label: "Выписки", icon: <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, badge: meeting?.extracts?.length ? `${meeting.extracts.length}` : null },
-  ], [meeting?.agendaDocument, meeting?.protocolDocument, meeting?.resolutions?.length, meeting?.extracts?.length, agendaDisplayStatus]);
+    { id: "resolutions" as const, label: "Постановления", icon: <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>, badge: null },
+    { id: "extracts" as const, label: "Выписки", icon: <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, badge: null },
+  ], [meeting?.agendaDocument, meeting?.protocolDocument, meeting?.resolutions?.length, agendaDisplayStatus]);
 
   useEffect(() => {
     loadMeeting();
@@ -314,6 +328,24 @@ export default function MeetingDetailPage({
     const t = searchParams.get("tab");
     if (t === "agenda" || t === "protocol" || t === "resolutions" || t === "extracts") setActiveTab(t);
   }, [searchParams]);
+
+  // При открытии модалки «Разослать выписку» загружаем список тех, кому уже разослана эта выписка
+  useEffect(() => {
+    if (!extractIdForSendModal || !resolvedParams.id) {
+      setExtractAlreadySentToUserIds([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/ppo-head/meetings/${resolvedParams.id}/extracts/${encodeURIComponent(extractIdForSendModal)}`)
+      .then((res) => (res.ok ? res.json() : { userIds: [] }))
+      .then((data: { userIds?: string[] }) => {
+        if (!cancelled && Array.isArray(data.userIds)) setExtractAlreadySentToUserIds(data.userIds);
+      })
+      .catch(() => {
+        if (!cancelled) setExtractAlreadySentToUserIds([]);
+      });
+    return () => { cancelled = true; };
+  }, [extractIdForSendModal, resolvedParams.id]);
 
   useEffect(() => {
     updateTabsScrollHint();
@@ -347,6 +379,13 @@ export default function MeetingDetailPage({
       return { ...p, agendaApprovedItemIds: [...current, ...added] };
     });
   }, [meeting?.agendaItems?.map((i) => i.id).join(",")]);
+
+  // Выбранные для выписки: только из утверждённых в протоколе (блок 5); по умолчанию галочки не установлены
+  useEffect(() => {
+    if (!meeting?.agendaItems?.length) return;
+    const approvedIds = protocolProcedural.agendaApprovedItemIds ?? meeting.agendaItems.map((i) => i.id);
+    setExtractSelectedItemIds((prev) => prev.filter((id) => approvedIds.includes(id)));
+  }, [meeting?.agendaItems, protocolProcedural.agendaApprovedItemIds]);
 
   const loadMeeting = async (bypassCache = false) => {
     try {
@@ -462,6 +501,11 @@ export default function MeetingDetailPage({
   /** Внутренний участник заседания (не приглашённый гость) — может добавлять пункты повестки */
   const isInternalParticipant =
     !!meeting?.participants?.some((p) => p.user?.id === session?.user?.id);
+
+  /** Председатель или заместитель — участник заседания с правами председателя/зама (для кнопок загрузки подписанных выписок и т.п.) */
+  const isChairmanOrDeputyParticipant =
+    canDeleteMeeting &&
+    !!meeting?.participants?.some((p: { user?: { id?: string }; userId?: string }) => (p.user?.id ?? p.userId) === session?.user?.id);
   /** Добавлять пункты могут: те, у кого есть редактирование, или все внутренние участники (но не если уже согласовал) */
   const canAddAgendaItems =
     !!meeting &&
@@ -3497,52 +3541,77 @@ export default function MeetingDetailPage({
         </div>
       )}
 
-      {effectiveTab === "resolutions" && (
+      {effectiveTab === "resolutions" && (() => {
+        const protocolSigned = meeting.protocolDocument?.status === "SIGNED";
+        const resolutionApprovedIds = protocolProcedural.agendaApprovedItemIds ?? meeting.agendaItems.map((i: { id: string }) => i.id);
+        const resolutionApprovedItems = protocolSigned
+          ? meeting.agendaItems.filter((item: { id: string }) => resolutionApprovedIds.includes(item.id))
+          : [];
+        return (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Постановления ({meeting.resolutions.length})
-            </h3>
-            {!readOnly && canDeleteMeeting && meeting.protocolDocument && (meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED") && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Постановления ({meeting.resolutions.length})
+              </h3>
+            </div>
+            {protocolSigned && !readOnly && canDeleteMeeting && meeting.protocolDocument && resolutionApprovedItems.length > 0 && meeting.resolutions.length === 0 && (
               <div className="flex items-center gap-2">
-                {meeting.agendaItems.length > 0 && !meeting.resolutions.some((r: { status?: string }) => r.status === "SIGNED") && (
-                  <button
-                    onClick={async () => {
-                      const approvedIds = protocolProcedural.agendaApprovedItemIds ?? meeting.agendaItems.map((i: { id: string }) => i.id);
-                      try {
-                        const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/resolutions/create`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ agendaApprovedItemIds: approvedIds }),
-                        });
-                        const data = await res.json();
-                        if (!res.ok) throw new Error(data.error || "Ошибка создания постановлений");
-                        if (data.meeting) setMeeting(data.meeting);
-                        alertSuccess(data.message || "Постановления созданы");
-                      } catch (e: any) {
-                        alertError(e.message || "Не удалось создать постановления");
-                      }
-                    }}
-                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Создать постановление
-                  </button>
-                )}
+                <button
+                  onClick={async () => {
+                    try {
+                      setIsCreatingResolutions(true);
+                      const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/resolutions/create`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ agendaApprovedItemIds: resolutionApprovedIds }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || "Ошибка создания постановлений");
+                      if (data.meeting) setMeeting(data.meeting);
+                      alertSuccess(data.message || "Постановления созданы");
+                    } catch (e: any) {
+                      alertError(e.message || "Не удалось создать постановления");
+                    } finally {
+                      setIsCreatingResolutions(false);
+                    }
+                  }}
+                  disabled={isCreatingResolutions}
+                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  {isCreatingResolutions ? "Создание…" : "Создать постановление"}
+                </button>
               </div>
             )}
           </div>
 
-          {meeting.agendaItems.length > 0 ? (() => {
-            const approvedIds = protocolProcedural.agendaApprovedItemIds ?? meeting.agendaItems.map((i: { id: string }) => i.id);
-            const approvedItems = meeting.agendaItems.filter((item: { id: string }) => approvedIds.includes(item.id));
-            const getResolutionForItem = (itemId: string) =>
-              meeting.resolutions.find((r: any) => (r.metadata as { agendaItemId?: string } | null)?.agendaItemId === itemId);
-            if (approvedItems.length === 0) return null;
-            return (
+          {!protocolSigned ? (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет постановлений</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Список вопросов для постановлений формируется только после подписания протокола заседания.
+              </p>
+            </div>
+          ) : meeting.agendaItems.length > 0 ? (
+            resolutionApprovedItems.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-6 text-center dark:border-gray-700 dark:bg-gray-800">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Утвердите пункты повестки в протоколе (блок 5 «Утверждение повестки дня»), чтобы здесь отображались вопросы для постановлений.
+                </p>
+              </div>
+            ) : (
               <div className="space-y-4">
+                {(() => {
+                  const getResolutionForItem = (itemId: string) =>
+                    meeting.resolutions.find((r: any) => (r.metadata as { agendaItemId?: string } | null)?.agendaItemId === itemId);
+                  return (
+                <>
                 <input
                   ref={resolutionSignedFileInputRef}
                   type="file"
@@ -3572,7 +3641,7 @@ export default function MeetingDetailPage({
                     }
                   }}
                 />
-                {approvedItems.map((item: { id: string; orderNumber: number; title: string }) => {
+                {resolutionApprovedItems.map((item: { id: string; orderNumber: number; title: string }) => {
                   const resolution = getResolutionForItem(item.id);
                   return (
                     <div
@@ -3587,17 +3656,23 @@ export default function MeetingDetailPage({
                           {resolution.regNumber && (
                             <span className="text-xs text-gray-500 dark:text-gray-400">№ {resolution.regNumber}</span>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => setPdfPreviewUrl(getDocumentViewUrl(resolution.id))}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            Постановление PDF
-                          </button>
+                          {!readOnly && canDeleteMeeting ? (
+                            <button
+                              type="button"
+                              onClick={() => setPdfPreviewUrl(getDocumentViewUrl(resolution.id))}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                              Постановление PDF
+                            </button>
+                          ) : resolution.status !== "SIGNED" ? (
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              Постановление по этому вопросу ещё не подписано.
+                            </p>
+                          ) : null}
                           {!readOnly && canDeleteMeeting && resolution.status !== "SIGNED" && (
                             <button
                               type="button"
@@ -3664,15 +3739,19 @@ export default function MeetingDetailPage({
                         </div>
                       ) : (
                         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                          Постановление по этому вопросу ещё не создано. Нажмите «Создать постановление» выше.
+                          Постановление по этому вопросу ещё не создано.
+                          {!readOnly && canDeleteMeeting && " Нажмите «Создать постановление» выше."}
                         </p>
                       )}
                     </div>
                   );
                 })}
+                </>
+                  );
+                })()}
               </div>
-            );
-          })() : (
+            )
+          ) : (
             <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
               <h3 className="text-sm font-medium text-gray-900 dark:text-white">Нет пунктов повестки</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -3688,105 +3767,474 @@ export default function MeetingDetailPage({
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет постановлений</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {meeting.protocolDocument && (meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED")
-                  ? "Добавьте пункты в повестку и нажмите «Создать постановление»"
-                  : "Сначала нужно утвердить протокол заседания"}
+                {!protocolSigned
+                  ? "Список вопросов формируется только после подписания протокола."
+                  : "Добавьте вопросы в повестку дня заседания, затем сформируйте протокол и создайте постановления."}
               </p>
             </div>
           )}
         </div>
-      )}
+      );
+    })()}
 
-      {effectiveTab === "extracts" && (
+      {effectiveTab === "extracts" && (() => {
+        const protocolSignedExtract = meeting.protocolDocument?.status === "SIGNED";
+        const pd = meeting.protocolProceduralData as { agendaApprovedItemIds?: string[] } | null | undefined;
+        const extractApprovedIds = (Array.isArray(pd?.agendaApprovedItemIds) ? pd.agendaApprovedItemIds : null) ?? protocolProcedural.agendaApprovedItemIds ?? meeting.agendaItems.map((i: AgendaItem) => i.id);
+        const extractApprovedItems = protocolSignedExtract
+          ? meeting.agendaItems.filter((item: AgendaItem) => extractApprovedIds.includes(item.id))
+          : [];
+        return (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Выписки из протокола ({meeting.extracts.length})
-            </h3>
-            {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED" && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Выписки ({meeting.extracts.length})
+              </h3>
+            </div>
+            {protocolSignedExtract && !readOnly && canDeleteMeeting && meeting.protocolDocument && extractApprovedItems.length > 0 && (
               <button
-                onClick={() => {
-                  // TODO: Добавить функционал создания выписки
-                  alertError("Функция создания выписки будет добавлена");
+                onClick={async () => {
+                  if (extractSelectedItemIds.length === 0) {
+                    alertError("Выберите вопросы для выписки.");
+                    return;
+                  }
+                  try {
+                    setIsCreatingExtract(true);
+                    const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/extracts/create`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        agendaItemIds: extractSelectedItemIds,
+                        location: meeting.location ?? null,
+                        meetingTime: meeting.scheduledTime ?? null,
+                        invitedGuests: meeting.invitedGuests ?? null,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Ошибка создания выписки");
+                    alertSuccess(data.message || "Выписка создана");
+                    setExtractSelectedItemIds([]);
+                    await loadMeeting(true);
+                  } catch (e: unknown) {
+                    alertError(e instanceof Error ? e.message : "Не удалось создать выписку");
+                  } finally {
+                    setIsCreatingExtract(false);
+                  }
                 }}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                disabled={isCreatingExtract}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Создать выписку
+                {isCreatingExtract ? "Создание…" : "Создать выписку"}
               </button>
             )}
           </div>
 
-          {meeting.extracts.length === 0 ? (
+          {!protocolSignedExtract ? (
             <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет выписок</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED"
-                  ? "Создайте выписку из протокола при необходимости"
-                  : "Сначала нужно утвердить протокол заседания"}
+                Список вопросов для выписки формируется только после подписания протокола заседания.
               </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {meeting.extracts.map((extract: any) => (
-                <div
-                  key={extract.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {extract.title || `Выписка ${extract.regNumber || ""}`}
-                        </h4>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[extract.status] || DOC_STATUS_COLORS.DRAFT}`}>
-                          {DOC_STATUS_LABELS[extract.status] || "Черновик"}
-                        </span>
-                      </div>
-                      {extract.regNumber && (
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          № {extract.regNumber}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      {extract.id && (
-                        <>
-                          <button
-                            onClick={() => setPdfPreviewUrl(getDocumentViewUrl(extract.id))}
-                            className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+          ) : meeting.agendaItems.length > 0 ? (
+            extractApprovedItems.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-6 text-center dark:border-gray-700 dark:bg-gray-800">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Утвердите пункты повестки в протоколе (блок 5 «Утверждение повестки дня»), чтобы здесь отображались вопросы для выписок.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(!readOnly && canDeleteMeeting) && (
+                  <div className="rounded-xl border-2 border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                    <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+                      Утверждённые вопросы повестки для выписки
+                    </h4>
+                    <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                      Список формируется из пунктов, утверждённых в протоколе (блок 5). Отметьте галочкой пункты, которые войдут в выписку.
+                    </p>
+                    <div className="space-y-1">
+                      {extractApprovedItems.map((item: AgendaItem) => {
+                        const checked = extractSelectedItemIds.includes(item.id);
+                        return (
+                          <label
+                            key={item.id}
+                            className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors cursor-pointer ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700/50"}`}
                           >
-                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            Просмотр
-                          </button>
-                          <a
-                            href={getDocumentDownloadUrl(extract.id)}
-                            download
-                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                          >
-                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Скачать
-                          </a>
-                        </>
-                      )}
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                if (checked) {
+                                  setExtractSelectedItemIds((prev) => prev.filter((id) => id !== item.id));
+                                } else {
+                                  setExtractSelectedItemIds((prev) => [...prev, item.id]);
+                                }
+                              }}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
+                            />
+                            <span className="text-gray-900 dark:text-white font-medium">
+                              Вопрос {item.orderNumber}. {item.title}
+                            </span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
-              ))}
+                )}
+                {meeting.extracts.length > 0 && (
+                  <>
+                    <input
+                      ref={extractSignedFileInputRef}
+                      type="file"
+                      accept=".pdf,image/jpeg,image/jpg,image/png"
+                      className="hidden"
+                      aria-label="Загрузить подписанную выписку"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        const docId = extractIdForSignedUpload;
+                        if (!file || !docId) return;
+                        setUploadingSignedExtractId(docId);
+                        setExtractIdForSignedUpload(null);
+                        try {
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          fd.append("documentId", docId);
+                          const res = await fetch("/api/documents/upload-signed", { method: "POST", body: fd });
+                          const data = await res.json().catch(() => ({}));
+                          if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+                          alertSuccess(data.message || "Подписанная выписка загружена");
+                          loadMeeting();
+                        } catch (err) {
+                          alertError(err instanceof Error ? err.message : "Не удалось загрузить скан");
+                        } finally {
+                          setUploadingSignedExtractId(null);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                    <div className="flex flex-col items-stretch gap-2">
+                      {([...(meeting.extracts || [])] as { id: string; regNumber?: string; title?: string; status?: string; signedFilePath?: string | null; metadata?: { agendaItemIds?: string[] } | null; createdAt?: string }[])
+                        .sort((a, b) => {
+                          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                          return ta - tb;
+                        })
+                        .map((extract) => {
+                          const agendaIds = extract.metadata?.agendaItemIds;
+                          const items = Array.isArray(agendaIds)
+                            ? (agendaIds as string[])
+                                .map((id: string) => meeting.agendaItems.find((a: AgendaItem) => a.id === id))
+                                .filter((a): a is AgendaItem => !!a)
+                                .sort((a, b) => a.orderNumber - b.orderNumber)
+                            : [];
+                          const questionLabels = items.map((a: AgendaItem) => `Вопрос ${a.orderNumber}`).join(", ");
+                          const buttonLabel = questionLabels ? `Выписка: ${questionLabels}` : "Выписка";
+                          const hasSigned = !!(extract as { signedFilePath?: string | null }).signedFilePath;
+                          const extractStatus = (extract as { status?: string }).status;
+                          const isExtractSigned = extractStatus === "SIGNED";
+                          return (
+                            <div key={extract.id} className="flex flex-wrap items-center gap-2">
+                              {isChairmanOrDeputyParticipant && !isExtractSigned && (
+                              <button
+                                type="button"
+                                onClick={() => setPdfPreviewUrl(getDocumentViewUrl(extract.id))}
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                              >
+                                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                {buttonLabel}
+                              </button>
+                              )}
+                              {!readOnly && isChairmanOrDeputyParticipant && !isExtractSigned && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExtractIdForSignedUpload(extract.id);
+                                    extractSignedFileInputRef.current?.click();
+                                  }}
+                                  disabled={uploadingSignedExtractId === extract.id}
+                                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                                  title="Загрузить скан подписанной выписки"
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                  </svg>
+                                  {uploadingSignedExtractId === extract.id ? "Загрузка…" : "Загрузить подписанную выписку"}
+                                </button>
+                              )}
+                              {hasSigned && isChairmanOrDeputyParticipant && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPdfPreviewUrl(`${getDocumentViewUrl(extract.id)}&signed=true`)}
+                                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                                  title="Просмотр загруженной подписанной выписки (скан)"
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  {questionLabels ? `Подписанная выписка: ${questionLabels}` : "Подписанная выписка"}
+                                </button>
+                              )}
+                              {hasSigned && !readOnly && isChairmanOrDeputyParticipant && (
+                                <button
+                                  type="button"
+                                  disabled={isExtractSigned}
+                                  onClick={async () => {
+                                    if (isExtractSigned) return;
+                                    try {
+                                      const res = await fetch(
+                                        `/api/ppo-head/meetings/${resolvedParams.id}/documents/${extract.id}/mark-signed`,
+                                        { method: "POST" }
+                                      );
+                                      if (!res.ok) {
+                                        const err = await res.json().catch(() => ({}));
+                                        throw new Error(err.error || "Ошибка");
+                                      }
+                                      const data = await res.json();
+                                      alertSuccess(data.message || "Выписка отмечена как подписанная");
+                                      loadMeeting();
+                                    } catch (e) {
+                                      alertError(e instanceof Error ? e.message : "Не удалось отметить выписку как подписанную");
+                                    }
+                                  }}
+                                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-red-50 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 dark:disabled:hover:bg-red-900/30"
+                                  title={isExtractSigned ? "Выписка подписана" : "Отметить выписку как подписанную"}
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                  {isExtractSigned ? "Подписано" : "Подписать"}
+                                </button>
+                              )}
+                              {isExtractSigned && !readOnly && isChairmanOrDeputyParticipant && (
+                                <button
+                                  type="button"
+                                  disabled={sendingExtractId === extract.id}
+                                  onClick={() => {
+                                    setExtractIdForSendModal(extract.id);
+                                    setSelectedUserIdsForExtract([]);
+                                  }}
+                                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                                  title="Разослать выписку участникам во Входящие"
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                  {sendingExtractId === extract.id ? "Отправка…" : "Разослать выписку"}
+                                </button>
+                              )}
+                              {!readOnly && isChairmanOrDeputyParticipant && (
+                                <button
+                                  type="button"
+                                  disabled={deletingExtractId === extract.id}
+                                  onClick={async () => {
+                                    const ok = await confirm(
+                                      "Удалить эту выписку? Действие нельзя отменить.",
+                                      "Удаление выписки"
+                                    );
+                                    if (!ok) return;
+                                    setDeletingExtractId(extract.id);
+                                    try {
+                                      const res = await fetch(
+                                        `/api/ppo-head/meetings/${resolvedParams.id}/extracts/${extract.id}`,
+                                        { method: "DELETE" }
+                                      );
+                                      const data = await res.json().catch(() => ({}));
+                                      if (!res.ok) throw new Error(data.error || "Ошибка удаления");
+                                      alertSuccess(data.message || "Выписка удалена");
+                                      loadMeeting();
+                                    } catch (e) {
+                                      alertError(e instanceof Error ? e.message : "Не удалось удалить выписку");
+                                    } finally {
+                                      setDeletingExtractId(null);
+                                    }
+                                  }}
+                                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                  title="Удалить выписку"
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  {deletingExtractId === extract.id ? "Удаление…" : "Удалить"}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          ) : (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white">Нет пунктов повестки</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Добавьте вопросы в повестку дня заседания, затем сформируйте протокол и создайте выписки.
+              </p>
+            </div>
+          )}
+
+          {meeting.agendaItems.length === 0 && meeting.extracts.length === 0 && (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет выписок</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {!protocolSignedExtract
+                  ? "Список вопросов формируется только после подписания протокола."
+                  : "Добавьте вопросы в повестку дня заседания, затем сформируйте протокол и создайте выписки."}
+              </p>
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
+
+      {/* Модальное окно выбора получателя выписки */}
+      <Modal
+        isOpen={!!extractIdForSendModal}
+        onClose={() => {
+          setExtractIdForSendModal(null);
+          setSelectedUserIdsForExtract([]);
+        }}
+        className="max-w-md w-full"
+        isFullscreen={false}
+      >
+        <ModalHeader>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Разослать выписку
+          </h3>
+        </ModalHeader>
+        <ModalBody className="p-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            Выберите одного или нескольких членов профсоюза — выписка будет отправлена им во Входящие. Список формируется из раздела «Члены профсоюза».
+          </p>
+          {members.length > 0 && (
+            <div className="flex items-center justify-between gap-2 mb-2">
+              {selectedUserIdsForExtract.length > 0 && (
+                <span className="text-sm text-blue-600 dark:text-blue-400">
+                  Выбрано: {selectedUserIdsForExtract.length}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const allSelected = selectedUserIdsForExtract.length === members.length;
+                  setSelectedUserIdsForExtract(allSelected ? [] : members.map((m: { id: string }) => m.id));
+                }}
+                className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                {selectedUserIdsForExtract.length === members.length ? "Снять выбор" : "Выбрать всех"}
+              </button>
+            </div>
+          )}
+          <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+            {members.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                Список членов пуст. Добавьте членов профсоюза в разделе «Члены профсоюза».
+              </div>
+            ) : (
+              members.map((m: { id: string; lastName?: string | null; firstName?: string | null; middleName?: string | null }) => {
+                const isSelected = selectedUserIdsForExtract.includes(m.id);
+                const alreadySent = extractAlreadySentToUserIds.includes(m.id);
+                const name = [m.lastName, m.firstName, m.middleName].filter(Boolean).join(" ") || "—";
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedUserIdsForExtract((prev) =>
+                        isSelected ? prev.filter((id) => id !== m.id) : [...prev, m.id]
+                      );
+                    }}
+                    className={`w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                      isSelected
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    }`}
+                  >
+                    <span
+                      className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center ${
+                        isSelected
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "border-gray-400 dark:border-gray-500"
+                      }`}
+                    >
+                      {isSelected && (
+                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      {name}
+                      {alreadySent && (
+                        <span className="ml-1 text-red-600 dark:text-red-400 whitespace-nowrap">(отправлено)</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </ModalBody>
+        <ModalFooter className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setExtractIdForSendModal(null);
+              setSelectedUserIdsForExtract([]);
+            }}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            disabled={selectedUserIdsForExtract.length === 0 || sendingExtractId === extractIdForSendModal}
+            onClick={async () => {
+              if (!extractIdForSendModal || selectedUserIdsForExtract.length === 0) return;
+              setSendingExtractId(extractIdForSendModal);
+              try {
+                const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/notify-participants`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    type: "extract_review",
+                    documentId: extractIdForSendModal,
+                    recipientUserIds: selectedUserIdsForExtract,
+                  }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || "Ошибка рассылки");
+                alertSuccess(data.message || "Выписка разослана во Входящие");
+                setExtractIdForSendModal(null);
+                setSelectedUserIdsForExtract([]);
+                loadMeeting();
+              } catch (e) {
+                alertError(e instanceof Error ? e.message : "Не удалось разослать выписку");
+              } finally {
+                setSendingExtractId(null);
+              }
+            }}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {sendingExtractId === extractIdForSendModal ? "Отправка…" : "Разослать"}
+          </button>
+        </ModalFooter>
+      </Modal>
 
       {/* Модальное окно для превью PDF */}
       <Modal

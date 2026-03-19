@@ -773,17 +773,13 @@ export default function MeetingsPage() {
               <label htmlFor="meeting-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Тип заседания
               </label>
-              <select
+              <div
                 id="meeting-type"
                 aria-label="Тип заседания"
-                value={formData.type}
-                onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                {Object.entries(MEETING_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
+                Заседание профкома
+              </div>
             </div>
 
             <div>
