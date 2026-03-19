@@ -1,5 +1,7 @@
 # Nightly Security Smoke (RBAC)
 
+**Расписание отключено:** автоматический ночной запуск в workflow закомментирован (smoke стабильно падал из-за cookie/секретов). Запуск только вручную: GitHub Actions → Nightly Security Smoke → Run workflow.
+
 Runtime regression checks for critical role guards:
 
 - `GET /api/ppo-head/reports` -> `200/403`

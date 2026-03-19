@@ -110,6 +110,8 @@ interface Meeting {
   secretaryUserId?: string | null;
   voteCounterUserIds?: string | null; // JSON array of userId
   groupChat?: { id: string; archivedAt?: string | Date | null } | null;
+  invitedGuests?: unknown[] | null;
+  protocolProceduralData?: { agendaApprovedItemIds?: string[] } | null;
   /** Повестка изменялась после последней генерации PDF */
   agendaModifiedAt?: string | null;
 }
