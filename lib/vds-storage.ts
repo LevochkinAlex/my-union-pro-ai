@@ -73,9 +73,9 @@ export function initVDSStorage(config: VDSStorageConfig) {
 }
 
 /**
- * Получает конфигурацию из переменных окружения
+ * Получает конфигурацию из переменных окружения (внутреннее, используется initVDSStorageFromEnv).
  */
-export function getVDSConfigFromEnv(): VDSStorageConfig | null {
+function getVDSConfigFromEnv(): VDSStorageConfig | null {
   const host = process.env.VDS_STORAGE_HOST || process.env.VDS_HOST;
   if (!host) {
     // В production выбрасываем ошибку, в development возвращаем null для более мягкой обработки

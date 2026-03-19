@@ -61,20 +61,6 @@ export function getDocumentQueue(): BullQueue {
 }
 
 /**
- * Close queue connection
- */
-export async function closeQueues() {
-  if (documentQueue) {
-    await documentQueue.close();
-    documentQueue = null;
-  }
-  if (documentQueueEvents) {
-    await documentQueueEvents.close();
-    documentQueueEvents = null;
-  }
-}
-
-/**
  * Job data type for document processing
  */
 export interface DocumentProcessingJob {

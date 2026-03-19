@@ -211,6 +211,14 @@ export async function GET(request: NextRequest) {
         if (meetingIdsWhereIAmChairman.has(meetingId)) return false;
         return true;
       }
+      // Копии выписок: показываем во Входящих, если оригинал и заседание существуют (оригинал — выписка, не повестка/протокол)
+      const isExtractCopy = (d.type || "").toUpperCase() === "PROTOCOL_EXTRACT";
+      if (isExtractCopy && meetingId && existingMeetingIds.has(meetingId)) {
+        const origStatus = originalStatusMap[originalId];
+        const allowedOriginalStatuses = ["PENDING_APPROVAL", "COMPLETED", "SIGNED"];
+        if (origStatus && !allowedOriginalStatuses.includes(origStatus)) return false;
+        return true;
+      }
       // Показывать только копии текущей повестки/протокола заседания (не старые, пересозданные документы)
       if (meetingId && !validMeetingOriginalIds.has(`${meetingId}:${originalId}`)) return false;
       // Не показывать председателю копии своих заседаний — утверждает на странице заседания

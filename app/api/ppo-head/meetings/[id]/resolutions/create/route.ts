@@ -169,6 +169,14 @@ export async function POST(
     if (meeting.organizationId !== perm.organizationId) {
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
     }
+    const canDeleteMeeting =
+      perm.isChairman || (!!perm.roleName && /зам|заместитель/i.test(perm.roleName));
+    if (!canDeleteMeeting) {
+      return NextResponse.json(
+        { error: "Создавать постановления могут только председатель и заместитель председателя" },
+        { status: 403 }
+      );
+    }
     if (!meeting.protocolDocument?.id) {
       return NextResponse.json({ error: "Сначала сформируйте протокол заседания" }, { status: 400 });
     }
@@ -237,7 +245,7 @@ export async function POST(
           agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
           protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, createdAt: true } },
           resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, metadata: true } },
-          extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+          extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, metadata: true } },
           participants: { include: { user: { select: { id: true, firstName: true, lastName: true, middleName: true, jobTitle: true, email: true } } }, orderBy: [{ role: "asc" }, { createdAt: "asc" }] },
           agendaItems: { include: { speaker: { select: { id: true, firstName: true, lastName: true, middleName: true } }, votes: { include: { user: { select: { id: true, firstName: true, lastName: true } } } } }, orderBy: { orderNumber: "asc" } },
           groupChat: { select: { id: true, archivedAt: true } },
@@ -361,7 +369,7 @@ export async function POST(
         agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, createdAt: true } },
         resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, metadata: true } },
-        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, metadata: true } },
         participants: {
           include: { user: { select: { id: true, firstName: true, lastName: true, middleName: true, jobTitle: true, email: true } } },
           orderBy: [{ role: "asc" }, { createdAt: "asc" }],

@@ -221,7 +221,9 @@ export async function generatePDFFromHTML(html: string): Promise<Buffer> {
   
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    page.setDefaultNavigationTimeout(60000);
+    page.setDefaultTimeout(60000);
+    await page.setContent(html, { waitUntil: "load", timeout: 30000 });
     
     const pdfBuffer = await page.pdf({
       format: "A4",

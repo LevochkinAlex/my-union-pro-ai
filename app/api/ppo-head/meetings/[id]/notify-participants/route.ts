@@ -28,7 +28,10 @@ export async function POST(
 
     const resolvedParams = await params;
     const meetingId = resolvedParams.id;
-    const { type } = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const type = body.type as string | undefined;
+    const documentId = body.documentId as string | undefined;
+    const recipientUserIds = body.recipientUserIds as string[] | undefined;
 
     const meeting = await prisma.meeting.findFirst({
       where: {
@@ -84,7 +87,10 @@ export async function POST(
       ? participantUserIds 
       : allParticipantUserIds;
 
-    if (finalParticipantUserIds.length === 0) {
+    const isExtractToSpecificUsers = type === "extract_review" && Array.isArray(recipientUserIds) && recipientUserIds.length > 0;
+    /** Для ответа и уведомлений: при рассылке выписки выбранным — только они, иначе участники заседания */
+    let notificationRecipientIds: string[] = finalParticipantUserIds;
+    if (!isExtractToSpecificUsers && finalParticipantUserIds.length === 0) {
       return NextResponse.json({
         error: "Нет участников для уведомления",
       }, { status: 400 });
@@ -200,6 +206,87 @@ export async function POST(
           });
         }
       }
+    } else if (type === "extract_review") {
+      if (!documentId) {
+        return NextResponse.json({ error: "Укажите выписку для рассылки (documentId)" }, { status: 400 });
+      }
+      const extractDoc = await prisma.document.findFirst({
+        where: {
+          id: documentId,
+          meetingExtractId: meetingId,
+          type: "PROTOCOL_EXTRACT",
+        },
+        select: { id: true, regNumber: true, title: true, status: true, filePath: true, signedFilePath: true },
+      });
+      if (!extractDoc) {
+        return NextResponse.json({ error: "Выписка не найдена или не относится к этому заседанию" }, { status: 404 });
+      }
+      if (extractDoc.status !== "SIGNED") {
+        return NextResponse.json(
+          { error: "Разослать можно только подписанную выписку. Сначала нажмите «Подписать»." },
+          { status: 400 }
+        );
+      }
+      const extractFilePath = (extractDoc as { signedFilePath?: string | null }).signedFilePath ?? extractDoc.filePath;
+      if (!extractFilePath) {
+        return NextResponse.json(
+          { error: "У выписки нет файла для рассылки. Загрузите подписанную выписку или сформируйте PDF." },
+          { status: 400 }
+        );
+      }
+      const extractFileName = extractFilePath.split("/").pop() || null;
+      notificationTitle = `Выписка из протокола: Заседание №${meeting.number}`;
+      notificationBody = `Выписка из протокола заседания от ${meetingDate} доступна во вкладке «Входящие».`;
+
+      const participantsWithUserId = isExtractToSpecificUsers ? recipientUserIds! : finalParticipantUserIds;
+      notificationRecipientIds = participantsWithUserId;
+      if (participantsWithUserId.length > 0) {
+        const existingAssigned = await prisma.document.findMany({
+          where: {
+            metadata: {
+              path: ["originalDocumentId"],
+              equals: documentId,
+            },
+            assignedToId: { in: participantsWithUserId },
+          },
+          select: { assignedToId: true },
+        });
+        const assignedUserIds = new Set(existingAssigned.map((d) => d.assignedToId).filter(Boolean));
+        const usersToAssign = participantsWithUserId.filter((userId) => !assignedUserIds.has(userId));
+
+        if (usersToAssign.length > 0) {
+          await Promise.all(
+            usersToAssign.map((userId) =>
+              prisma.document.create({
+                data: {
+                  type: "PROTOCOL_EXTRACT",
+                  status: "GENERATED",
+                  category: "INTERNAL",
+                  title: extractDoc.regNumber
+                    ? `Выписка ${extractDoc.regNumber} от ${meetingDate}`
+                    : `Выписка из протокола заседания №${meeting.number}`,
+                  regNumber: extractDoc.regNumber ? `${extractDoc.regNumber}-${userId.slice(0, 4)}` : null,
+                  regDate: new Date(),
+                  filePath: extractFilePath,
+                  fileName: extractFileName,
+                  userId: session.user.id,
+                  organizationId: meeting.organizationId,
+                  assignedToId: userId,
+                  assignedAt: new Date(),
+                  metadata: {
+                    meetingId,
+                    meetingNumber: meeting.number,
+                    meetingDate: meeting.scheduledDate.toISOString(),
+                    isCopy: true,
+                    originalDocumentId: documentId,
+                  },
+                },
+              })
+            )
+          );
+          console.log(`[notify-participants] Выписка назначена ${usersToAssign.length} участникам`);
+        }
+      }
     } else if (type === "meeting_reminder") {
       notificationTitle = `Напоминание: Заседание №${meeting.number}`;
       notificationBody = `Заседание состоится ${meetingDate}${meeting.scheduledTime ? ` в ${meeting.scheduledTime}` : ""}.`;
@@ -211,9 +298,9 @@ export async function POST(
     }
 
     // Отправляем уведомления (для agenda_review уже отправлено в assignAgendaToParticipantsAndNotify)
-    if (type !== "agenda_review") {
+    if (type !== "agenda_review" && notificationRecipientIds.length > 0) {
       await sendMassNotification({
-        userIds: finalParticipantUserIds,
+        userIds: notificationRecipientIds,
         title: notificationTitle,
         body: notificationBody,
         url: notificationUrl,
@@ -221,16 +308,19 @@ export async function POST(
       });
     }
 
+    const sentCount = notificationRecipientIds.length;
     const message =
       type === "agenda_review"
         ? `Повестка назначена участникам, уведомления отправлены ${finalParticipantUserIds.length} участникам`
         : type === "protocol_review"
           ? `Протокол разослан во Входящие ${finalParticipantUserIds.length} участникам`
-          : `Уведомления отправлены ${finalParticipantUserIds.length} участникам`;
+          : type === "extract_review"
+            ? `Выписка разослана во Входящие ${sentCount} участникам`
+            : `Уведомления отправлены ${finalParticipantUserIds.length} участникам`;
     return NextResponse.json({
       success: true,
       message,
-      sentCount: finalParticipantUserIds.length,
+      sentCount,
     });
   } catch (error: any) {
     console.error("[meetings/notify-participants] POST error:", error);

@@ -73,7 +73,8 @@ export async function GET(
           select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, metadata: true },
         },
         extracts: {
-          select: { id: true, regNumber: true, status: true, filePath: true, title: true },
+          select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, metadata: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
         },
         participants: {
           include: {
@@ -275,7 +276,7 @@ export async function PATCH(
         agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
         resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, metadata: true } },
-        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, metadata: true, createdAt: true }, orderBy: { createdAt: "asc" } },
         participants: {
           include: {
             user: {
@@ -380,23 +381,35 @@ export async function DELETE(
       });
     }
 
-    // Удаляем копии документов заседания во входящих (повестка, протокол, постановления, выписки)
-    if (allDocumentIds.length > 0) {
-      const copyDocs = await prisma.document.findMany({
-        where: {
-          assignedToId: { not: null },
-          OR: allDocumentIds.map((originalId) => ({
-            metadata: { path: ["originalDocumentId"], equals: originalId },
-          })),
-        },
-        select: { id: true },
+    // Удаляем все разосланные копии: по originalDocumentId и по metadata.meetingId (на случай любых копий по заседанию)
+    const copyByOriginal =
+      allDocumentIds.length > 0
+        ? await prisma.document.findMany({
+            where: {
+              assignedToId: { not: null },
+              OR: allDocumentIds.map((originalId) => ({
+                metadata: { path: ["originalDocumentId"], equals: originalId },
+              })),
+            },
+            select: { id: true },
+          })
+        : [];
+    const copyByMeetingId = await prisma.document.findMany({
+      where: {
+        assignedToId: { not: null },
+        metadata: { path: ["meetingId"], equals: id },
+      },
+      select: { id: true },
+    });
+    const allCopyIds = [...new Set([...copyByOriginal.map((d) => d.id), ...copyByMeetingId.map((d) => d.id)])];
+    if (allCopyIds.length > 0) {
+      await prisma.document.deleteMany({
+        where: { id: { in: allCopyIds } },
       });
-      const copyIds = copyDocs.map((d) => d.id);
-      if (copyIds.length > 0) {
-        await prisma.document.deleteMany({
-          where: { id: { in: copyIds } },
-        });
-      }
+    }
+
+    // Удаляем оригиналы документов заседания (повестка, протокол, постановления, выписки) и их согласования/историю
+    if (allDocumentIds.length > 0) {
       await prisma.documentApproval.deleteMany({
         where: { documentId: { in: allDocumentIds } },
       });

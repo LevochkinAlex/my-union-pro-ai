@@ -67,31 +67,6 @@ export function getInitials(user: ChatUser | any | null | undefined): string {
 }
 
 /**
- * Получить инициалы из названия (для групп и каналов)
- * Берёт первые буквы первых двух слов, или первые 2 буквы если слово одно
- */
-export function getNameInitials(name: string | null | undefined): string {
-  if (!name || !name.trim()) return "Г";
-  
-  const words = name.trim().split(/\s+/).filter(w => w.length > 0);
-  
-  if (words.length >= 2) {
-    // Берём первые буквы первых двух слов
-    return (words[0][0] + words[1][0]).toUpperCase();
-  }
-  
-  if (words.length === 1) {
-    const word = words[0];
-    // Берём первые 2 буквы или 1 если слово короткое
-    return word.length >= 2 
-      ? (word[0] + word[1]).toUpperCase() 
-      : word[0].toUpperCase();
-  }
-  
-  return "Г";
-}
-
-/**
  * Форматировать время сообщения
  */
 export function formatTime(dateString: string | Date): string {
@@ -104,30 +79,6 @@ export function formatTime(dateString: string | Date): string {
   if (minutes < 60) return `${minutes} мин назад`;
   if (minutes < 1440) return `${Math.floor(minutes / 60)} ч назад`;
   return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-}
-
-/**
- * Форматировать дату для группировки сообщений
- */
-export function formatMessageDate(dateString: string | Date): string {
-  const date = typeof dateString === "string" ? new Date(dateString) : dateString;
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    return "Сегодня";
-  } else if (diffDays === 1) {
-    return "Вчера";
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString("ru-RU", { weekday: "long" });
-  } else {
-    return date.toLocaleDateString("ru-RU", {
-      day: "numeric",
-      month: "long",
-      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
-    });
-  }
 }
 
 /**
