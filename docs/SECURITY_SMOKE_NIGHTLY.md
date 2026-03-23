@@ -1,6 +1,8 @@
 # Nightly Security Smoke (RBAC)
 
-**Расписание отключено:** автоматический ночной запуск в workflow закомментирован (smoke стабильно падал из-за cookie/секретов). Запуск только вручную: GitHub Actions → Nightly Security Smoke → Run workflow.
+**Расписание отключено:** автоматический ночной запуск в workflow закомментирован (cookie-секреты протухают). Запуск только вручную: GitHub Actions → Nightly Security Smoke → Run workflow.
+
+**GitHub Actions:** в workflow **не** выставляется `SEC_SMOKE_STRICT` — незаполненные пары cookie пропускаются, job не падает из‑за одного пустого секрета. Для жёсткой проверки всех env локально: `SEC_SMOKE_STRICT=1 pnpm test:security:runtime`.
 
 Runtime regression checks for critical role guards:
 

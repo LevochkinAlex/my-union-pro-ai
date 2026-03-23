@@ -39,6 +39,19 @@ function jsonHeaders(cookie: string) {
   };
 }
 
+function assertApiStatus(
+  actual: number,
+  expected: number,
+  label: string,
+): void {
+  if (actual === expected) return;
+  const hint =
+    actual === 401 || actual === 403
+      ? " (401/403 often = expired smoke cookies — refresh repo secrets)"
+      : "";
+  assert.fail(`${label}: expected ${expected}, got ${actual}${hint}`);
+}
+
 describe("Runtime security smoke: role guards", () => {
   it("reports access matrix: allow -> 200, deny -> 403", async () => {
     const allow = getEnv("SEC_SMOKE_COOKIE_REPORTS_ALLOW");
@@ -49,13 +62,13 @@ describe("Runtime security smoke: role guards", () => {
       method: "GET",
       headers: jsonHeaders(allow),
     });
-    assert.strictEqual(okRes.status, 200, "reports allow-cookie must return 200");
+    assertApiStatus(okRes.status, 200, "reports allow-cookie");
 
     const denyRes = await fetch(`${baseUrl}/api/ppo-head/reports`, {
       method: "GET",
       headers: jsonHeaders(deny),
     });
-    assert.strictEqual(denyRes.status, 403, "reports deny-cookie must return 403");
+    assertApiStatus(denyRes.status, 403, "reports deny-cookie");
   });
 
   it("appeals access matrix: allow -> 200, deny -> 403", async () => {
@@ -67,13 +80,13 @@ describe("Runtime security smoke: role guards", () => {
       method: "GET",
       headers: jsonHeaders(allow),
     });
-    assert.strictEqual(okRes.status, 200, "appeals allow-cookie must return 200");
+    assertApiStatus(okRes.status, 200, "appeals allow-cookie");
 
     const denyRes = await fetch(`${baseUrl}/api/ppo-head/appeals`, {
       method: "GET",
       headers: jsonHeaders(deny),
     });
-    assert.strictEqual(denyRes.status, 403, "appeals deny-cookie must return 403");
+    assertApiStatus(denyRes.status, 403, "appeals deny-cookie");
   });
 
   it("chats access matrix: allow -> 200, deny -> 403", async () => {
@@ -85,13 +98,13 @@ describe("Runtime security smoke: role guards", () => {
       method: "GET",
       headers: jsonHeaders(allow),
     });
-    assert.strictEqual(okRes.status, 200, "chats allow-cookie must return 200");
+    assertApiStatus(okRes.status, 200, "chats allow-cookie");
 
     const denyRes = await fetch(`${baseUrl}/api/ppo-head/chats`, {
       method: "GET",
       headers: jsonHeaders(deny),
     });
-    assert.strictEqual(denyRes.status, 403, "chats deny-cookie must return 403");
+    assertApiStatus(denyRes.status, 403, "chats deny-cookie");
   });
 
   it("meetings create guard: allow -> 201, deny -> 403", async () => {
@@ -115,13 +128,13 @@ describe("Runtime security smoke: role guards", () => {
       headers: jsonHeaders(allow),
       body: JSON.stringify(payload),
     });
-    assert.strictEqual(okRes.status, 201, "meetings allow-cookie must return 201");
+    assertApiStatus(okRes.status, 201, "meetings allow-cookie POST");
 
     const denyRes = await fetch(`${baseUrl}/api/ppo-head/meetings`, {
       method: "POST",
       headers: jsonHeaders(deny),
       body: JSON.stringify(payload),
     });
-    assert.strictEqual(denyRes.status, 403, "meetings deny-cookie must return 403");
+    assertApiStatus(denyRes.status, 403, "meetings deny-cookie POST");
   });
 });
