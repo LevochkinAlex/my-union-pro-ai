@@ -1,7 +1,7 @@
 name: Nightly Security Smoke
 
-# Только workflow_dispatch. Без pnpm install — гоняем чистый Node (scripts/security-role-runtime-smoke.mjs),
-# иначе CI часто падает на lockfile / ignored build scripts, а не на сами проверки.
+# workflow_dispatch only. Smoke never fails the workflow (exit 0 always) — only annotations in log.
+# Реальные проверки: node --test scripts/security-role-runtime-smoke.mjs
 on:
   workflow_dispatch:
 
@@ -21,9 +21,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Run runtime role smoke checks
-        id: smoke
-        continue-on-error: true
+      # Явно exit 0: иначе в UI/уведомлениях "failed" даже при continue-on-error в некоторых сценариях.
+      - name: Run runtime role smoke checks (non-failing)
         env:
           SEC_SMOKE_SKIP_MEETINGS_POST: "1"
           SEC_SMOKE_BASE_URL: ${{ secrets.SEC_SMOKE_BASE_URL }}
@@ -35,9 +34,14 @@ jobs:
           SEC_SMOKE_COOKIE_CHATS_DENY: ${{ secrets.SEC_SMOKE_COOKIE_CHATS_DENY }}
           SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE: ${{ secrets.SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE }}
           SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE: ${{ secrets.SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE }}
-        run: node --test scripts/security-role-runtime-smoke.mjs
-
-      - name: Report smoke outcome
-        if: steps.smoke.outcome == 'failure'
         run: |
-          echo "::warning::Security smoke failed. Refresh SEC_SMOKE_COOKIE_* secrets. See docs/SECURITY_SMOKE_NIGHTLY.md"
+          set +e
+          node --test scripts/security-role-runtime-smoke.mjs
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "::warning::Security smoke failed (exit $code). Refresh SEC_SMOKE_COOKIE_* — docs/SECURITY_SMOKE_NIGHTLY.md"
+          else
+            echo "Security smoke finished OK"
+          fi
+          exit 0
