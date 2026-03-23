@@ -243,6 +243,19 @@ CDN_URL=https://cdn.myunion.pro
 
 **Что сделать:** для затронутого пользователя выровнять пароль: суперадмин — `POST /api/admin/reset-and-sync-bb` с телом `{ "email": "..." }` (после фикса сохраняется и `bestBenefitsPassword`, и создаётся/обновляется пользователь в BB), либо скрипты в `scripts/` (`fix-bb-user-password`, `reset-and-sync-bb`).
 
+### Массовый сброс паролей BB (все пользователи)
+
+Скрипт `scripts/reset-all-bb-user-passwords.ts` для каждого пользователя с подтверждённым email и заполненным ФИО генерирует новый пароль, вызывает `POST .../myunion/create_user` и сохраняет `bestBenefitsPassword` в БД.
+
+```bash
+pnpm dotenv -e .env.local -- tsx scripts/reset-all-bb-user-passwords.ts --dry-run
+pnpm dotenv -e .env.local -- tsx scripts/reset-all-bb-user-passwords.ts --execute
+# только уже «привязанные» к BB (есть bestBenefitsUserId):
+pnpm bb:reset-all-passwords -- --execute --only-with-bb-id
+```
+
+Если пользователь **уже** был в BestBenefits, API может вернуть «уже существует» — пароль на стороне BB тогда **не** меняется; email попадёт в отчёт `tmp/bb-reset-all-skipped-*.json`. Для них — `pnpm dotenv -e .env.local -- tsx scripts/fix-bb-user-password.ts EMAIL` (код из письма).
+
 ## Известные ограничения
 
 1. **Rate Limiting BestBenefits** - API ограничивает частоту запросов. При массовых операциях нужны задержки 3+ сек.
