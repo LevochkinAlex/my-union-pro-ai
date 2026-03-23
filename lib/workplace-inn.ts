@@ -56,3 +56,36 @@ export function workplaceNameSearchTokens(name: string | null | undefined): stri
   const uniq = [...new Set(tokens)].sort((a, b) => b.length - a.length);
   return uniq.slice(0, 4);
 }
+
+function normalizeWorkplaceNameForMatch(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/["'`«»]/g, " ")
+    .replace(/[.,()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Совпадение названия из профиля/DaData с строкой в справочнике привязок.
+ * Учитывает случай: пользователь ввёл короткое имя («Воскресенская больница»),
+ * а в админке — полное юр. наименование (между словами есть «районная» и т.д.).
+ */
+export function workplaceNamesMatchForMapping(
+  userWorkplaceLabel: string,
+  mappingWorkplaceName: string
+): boolean {
+  const a = normalizeWorkplaceNameForMatch(userWorkplaceLabel);
+  const b = normalizeWorkplaceNameForMatch(mappingWorkplaceName);
+  if (!a || !b) return false;
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+
+  const tokens = workplaceNameSearchTokens(userWorkplaceLabel);
+  if (tokens.length >= 2) {
+    return tokens.every((t) => b.includes(t));
+  }
+  if (tokens.length === 1 && tokens[0].length >= 6) {
+    return b.includes(tokens[0]);
+  }
+  return false;
+}

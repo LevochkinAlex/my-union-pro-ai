@@ -4,6 +4,7 @@ import {
   workplaceInnDigits,
   workplaceInnSearchVariants,
   workplaceNameSearchTokens,
+  workplaceNamesMatchForMapping,
 } from "../lib/workplace-inn";
 
 describe("workplace-inn", () => {
@@ -24,5 +25,18 @@ describe("workplace-inn", () => {
     );
     assert.ok(t.some((w) => w.includes("воскресенск")));
     assert.ok(!t.includes("гбуз"));
+  });
+
+  it("workplaceNamesMatchForMapping: short user label vs full legal mapping name", () => {
+    const user = "Воскресенская больница";
+    const mapped =
+      'ГБУЗ "Воскресенская районная больница имени Ф.И. Овсянникова" Московской области';
+    assert.strictEqual(workplaceNamesMatchForMapping(user, mapped), true);
+  });
+
+  it("workplaceNamesMatchForMapping: rejects unrelated names on same generic token", () => {
+    const user = "Тестовая поликлиника";
+    const mapped = "ГБУЗ Иная городская больница №1";
+    assert.strictEqual(workplaceNamesMatchForMapping(user, mapped), false);
   });
 });

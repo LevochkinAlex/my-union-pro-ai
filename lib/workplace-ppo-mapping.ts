@@ -8,23 +8,8 @@ import {
   workplaceInnDigits,
   workplaceInnSearchVariants,
   workplaceNameSearchTokens,
+  workplaceNamesMatchForMapping,
 } from "@/lib/workplace-inn";
-
-function normalizeWorkplaceName(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/["'`«»]/g, " ")
-    .replace(/[.,()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isStrongNameMatch(inputName: string, mappedName: string): boolean {
-  const a = normalizeWorkplaceName(inputName);
-  const b = normalizeWorkplaceName(mappedName);
-  if (!a || !b) return false;
-  return a === b || a.includes(b) || b.includes(a);
-}
 
 export interface WorkplacePPOMapping {
   id: string;
@@ -140,7 +125,7 @@ export async function findPPOsByWorkplace(
       include: mappingInclude,
       orderBy,
     });
-    mappings = byInn.filter((m) => isStrongNameMatch(name, m.workplaceName));
+    mappings = byInn.filter((m) => workplaceNamesMatchForMapping(name, m.workplaceName));
   }
 
   // 3) ИНН в БД с маской/пробелами — сравнение только по цифрам
@@ -157,7 +142,7 @@ export async function findPPOsByWorkplace(
         include: mappingInclude,
         orderBy,
       });
-      mappings = byInn.filter((m) => isStrongNameMatch(name, m.workplaceName));
+      mappings = byInn.filter((m) => workplaceNamesMatchForMapping(name, m.workplaceName));
     }
   }
 
