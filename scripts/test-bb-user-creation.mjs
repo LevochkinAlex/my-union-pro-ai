@@ -7,7 +7,7 @@
 import 'dotenv/config';
 
 const BB_PROFSOYUZY_TOKEN = process.env.BB_PROFSOYUZY_TOKEN;
-const CREATE_USER_URL = "https://bestbenefits.ru/api/profsoyuzy/create_user";
+const CREATE_USER_URL = "https://bestbenefits.ru/api/myunion/create_user";
 
 console.log("🧪 Testing BestBenefits user creation...\n");
 

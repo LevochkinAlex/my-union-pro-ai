@@ -2,7 +2,7 @@
  * BestBenefits Organization API User Management
  *
  * Manages user creation and status updates in BestBenefits platform.
- * Supports both legacy `/api/profsoyuzy/*` and current `/api/myunion/*` paths.
+ * Актуальные эндпоинты: `/api/myunion/*`. Legacy `/api/profsoyuzy/*` — только при BB_ORG_API_USE_LEGACY_PROFSOYUZY=1.
  */
 
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
@@ -10,7 +10,9 @@ import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 const ORG_API_BASES = [
   process.env.BB_ORG_API_BASE?.trim(),
   "https://bestbenefits.ru/api/myunion",
-  "https://bestbenefits.ru/api/profsoyuzy",
+  ...(process.env.BB_ORG_API_USE_LEGACY_PROFSOYUZY === "1"
+    ? (["https://bestbenefits.ru/api/profsoyuzy"] as const)
+    : []),
 ].filter(Boolean) as string[];
 
 const ORG_TOKEN = process.env.BB_PROFSOYUZY_TOKEN;

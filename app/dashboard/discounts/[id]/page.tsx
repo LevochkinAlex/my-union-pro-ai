@@ -671,6 +671,14 @@ export default function DiscountDetailPage() {
   // Вычисляем displayPromoCode каждый раз при рендере, чтобы он обновлялся после активации
   const displayPromoCode = activatedPromoCode || discount?.promoCode;
   const hasPartnerUrl = !!discount?.partnerUrl;
+
+  const descTrim = discount.description?.trim() ?? "";
+  const shortTrim = discount.shortDescription?.trim() ?? "";
+  /** Полный блок «Условия»: description; если пусто — длинный short (часто BB кладёт условия туда) */
+  const useShortOnlyAsConditions = !descTrim && shortTrim.length > 80;
+  const conditionsHtml = descTrim || (useShortOnlyAsConditions ? shortTrim : "");
+  const showShortTeaserBox =
+    Boolean(shortTrim) && !useShortOnlyAsConditions && shortTrim !== descTrim;
   
   // Логируем только когда модалка открыта
   if (showPromoModal) {
@@ -797,13 +805,13 @@ export default function DiscountDetailPage() {
               )}
             </div>
 
-            {/* Short Description - краткое описание вверху */}
-            {discount.shortDescription && discount.shortDescription.trim().length > 0 && (
+            {/* Short Description - краткое описание вверху (не дублируем длинные условия снизу) */}
+            {showShortTeaserBox && (
               <div className="mt-4 sm:mt-6">
                 <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
                   <div 
                     className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 sm:text-base"
-                    dangerouslySetInnerHTML={{ __html: sanitizeDescription(discount.shortDescription) }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeDescription(shortTrim) }}
                   />
                 </div>
               </div>
@@ -901,8 +909,8 @@ export default function DiscountDetailPage() {
               </div>
             )}
 
-            {/* Full Description - полное описание внизу */}
-            {discount.description && discount.description.trim().length > 0 && (
+            {/* Полные условия (description или длинный short_description) */}
+            {conditionsHtml.length > 0 && (
               <div className="mt-6 sm:mt-8">
                 <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white sm:text-xl">
                   Условия использования
@@ -919,7 +927,7 @@ export default function DiscountDetailPage() {
                       [&_a:hover]:text-blue-700
                       [&_a]:dark:text-blue-400 [&_a:hover]:dark:text-blue-300"
                     dangerouslySetInnerHTML={{ 
-                      __html: sanitizeDescription(discount.description)
+                      __html: sanitizeDescription(conditionsHtml)
                     }}
                   />
                 </div>

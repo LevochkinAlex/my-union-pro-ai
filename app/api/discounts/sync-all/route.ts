@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import crypto from "crypto";
+import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
 
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
 
@@ -325,9 +326,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
           }
         }
 
-        // Очищаем описания
-        const cleanedDescription = cleanDescription(bbDiscount.description);
-        const cleanedShortDescription = cleanDescription(bbDiscount.short_description);
+        const { description: rawDesc, shortDescription: rawShort } =
+          coalesceBestBenefitsDescriptions(bbDiscount as Record<string, unknown>);
+        const cleanedDescription = cleanDescription(rawDesc);
+        const cleanedShortDescription = cleanDescription(rawShort);
 
         // ===== КОМПЛИМЕНТАРНАЯ СИНХРОНИЗАЦИЯ =====
         // 🔒 СОХРАНЯЕМ (не перезаписываем если уже есть): title, imageUrl

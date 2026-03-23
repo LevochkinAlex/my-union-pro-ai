@@ -219,7 +219,16 @@ BB_PASSWORD_ENCRYPTION_KEY=your-32-char-key
 
 # CDN для изображений
 CDN_URL=https://cdn.myunion.pro
+
+# Organization API (создание/статус пользователя в BB) — актуально:
+# POST https://bestbenefits.ru/api/myunion/create_user
+# POST https://bestbenefits.ru/api/myunion/change_status
+# BB_PROFSOYUZY_TOKEN — Bearer для этих вызовов (имя историческое).
+# BB_ORG_API_BASE — переопределить базу (по умолчанию /api/myunion).
+# BB_ORG_API_USE_LEGACY_PROFSOYUZY=1 — дополнительно пробовать /api/profsoyuzy (legacy).
 ```
+
+Тексты скидок (`description` / `short_description` / отдельные поля условий) нормализуются в `lib/best-benefits-description.ts` при синхронизации и в API `/api/discounts`, чтобы блок «Условия использования» не терялся при смене схемы ответа BB.
 
 ## Известные ограничения
 

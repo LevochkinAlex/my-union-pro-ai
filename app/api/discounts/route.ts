@@ -8,6 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { getValidActivatedDiscounts, needsSync } from "@/lib/discount-activation";
 import { decryptPassword } from "@/lib/best-benefits-password";
 import { getUserBestBenefitsToken } from "@/lib/best-benefits-user-auth";
+import {
+  coalesceBestBenefitsDescriptions,
+  mergeDiscountTextWithLocal,
+} from "@/lib/best-benefits-description";
 
 export async function GET(request: NextRequest) {
   try {
@@ -148,18 +152,27 @@ export async function GET(request: NextRequest) {
             if (response.ok) {
               const data = await response.json();
               const bbDiscount = data.data || data;
-              
-              if (bbDiscount.options && bbDiscount.options.length > 0) {
-                const options: DiscountOption[] = bbDiscount.options.map((opt: any) => ({
-                  id: opt.id,
-                  name: opt.name,
-                }));
-                
-                payload.discounts[0] = {
-                  ...discount,
-                  options,
-                };
-              }
+              const { description: bbDesc, shortDescription: bbShort } =
+                coalesceBestBenefitsDescriptions(bbDiscount as Record<string, unknown>);
+
+              const options: DiscountOption[] | undefined =
+                bbDiscount.options?.length > 0
+                  ? bbDiscount.options.map((opt: { id: number; name: string }) => ({
+                      id: opt.id,
+                      name: opt.name,
+                    }))
+                  : undefined;
+
+              payload.discounts[0] = {
+                ...discount,
+                ...(options ? { options } : {}),
+                ...(bbDesc || bbShort
+                  ? {
+                      description: bbDesc ?? discount.description,
+                      shortDescription: bbShort ?? discount.shortDescription,
+                    }
+                  : {}),
+              };
             }
           }
         } catch (error) {

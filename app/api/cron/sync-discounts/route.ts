@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { cleanupExpiredDiscounts } from "@/lib/discount-activation";
+import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
 import crypto from "crypto";
 
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
@@ -280,10 +281,13 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        const { description: rawDesc, shortDescription: rawShort } =
+          coalesceBestBenefitsDescriptions(bbDiscount as Record<string, unknown>);
+
         const discountData = {
           title: bbDiscount.name ?? "Без названия",
-          description: cleanDescription(bbDiscount.description),
-          shortDescription: cleanDescription(bbDiscount.short_description),
+          description: cleanDescription(rawDesc),
+          shortDescription: cleanDescription(rawShort),
           discountValue: bbDiscount.discount_value ?? null,
           imageUrl: imageUrl ?? existing?.imageUrl ?? null,
           originalImageUrl: originalImage?.slice(0, 100) ?? null,

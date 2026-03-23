@@ -14,6 +14,7 @@ import { attachCoordinatesToCities, calculateDistanceKm, getCityCoordinates } fr
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 import { getAllRussianCities } from "@/lib/constants/russian-regions";
 import { getDiscountsFromLocalDB } from "@/lib/fetch-discounts-from-db";
+import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
 
 const SAMPLE_FILE = path.join(process.cwd(), "public", "best_benefits", "sample-discounts.json");
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
@@ -719,10 +720,10 @@ function normalizeDiscount(discount: BestBenefitsDiscount): DiscountItem {
       coordinates: getCityCoordinates(city.name),
     }));
 
-  // Используем description и shortDescription как есть из API
-  // НЕ удаляем их - пусть отображаются в блоке "Города" отдельно
-  const description = discount.description || null;
-  const shortDescription = discount.short_description || null;
+  const { description: coalescedDesc, shortDescription: coalescedShort } =
+    coalesceBestBenefitsDescriptions(discount as unknown as Record<string, unknown>);
+  const description = coalescedDesc;
+  const shortDescription = coalescedShort;
   
   // Нормализуем варианты скидки (options)
   const options: DiscountOption[] | undefined = discount.options?.length 

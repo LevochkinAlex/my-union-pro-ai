@@ -24,6 +24,13 @@ export interface BestBenefitsDiscount {
   name: string;
   short_description?: string | null;
   description?: string | null;
+  /** Иногда условия приходят отдельным полем (BB API) */
+  conditions?: string | null;
+  usage_conditions?: string | null;
+  terms_of_use?: string | null;
+  terms?: string | null;
+  instruction?: string | null;
+  rules?: string | null;
   image_url?: string | null;
   image?: string | null;
   cta_url?: string | null;
