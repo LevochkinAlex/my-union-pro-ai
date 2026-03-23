@@ -1559,6 +1559,7 @@ export default function MeetingDetailPage({
                           </svg>
                           {isSendingForApproval ? "Отправка…" : "Разослать на согласование"}
                         </button>
+                        {canDeleteMeeting && (
                         <button
                           onClick={async () => {
                             try {
@@ -1588,6 +1589,7 @@ export default function MeetingDetailPage({
                           </svg>
                           {isApproving ? "Утверждение…" : "Утвердить без согласования"}
                         </button>
+                        )}
                       </>
                     )}
                     {meeting.agendaDocument.status === "PENDING_APPROVAL" && (
@@ -1610,7 +1612,7 @@ export default function MeetingDetailPage({
                             </ul>
                           </div>
                         )}
-                        {meeting.agendaDocument.approvals?.every((a: { status: string }) => a.status === "APPROVED") && (
+                        {canDeleteMeeting && meeting.agendaDocument.approvals?.every((a: { status: string }) => a.status === "APPROVED") && (
                           <button
                             onClick={async () => {
                               try {
