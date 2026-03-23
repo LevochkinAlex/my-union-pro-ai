@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
-import { createOrUpdateWorkplacePPOMapping, findPPOByWorkplace } from "@/lib/workplace-ppo-mapping";
+import { createOrUpdateWorkplacePPOMapping } from "@/lib/workplace-ppo-mapping";
 
 /**
  * GET /api/admin/workplace-ppo-mapping

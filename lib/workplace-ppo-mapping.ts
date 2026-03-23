@@ -4,6 +4,11 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import {
+  workplaceInnDigits,
+  workplaceInnSearchVariants,
+  workplaceNameSearchTokens,
+} from "@/lib/workplace-inn";
 
 function normalizeWorkplaceName(value: string): string {
   return value
@@ -56,36 +61,19 @@ export async function findPPOByWorkplace(
     chairmanJobTitle: string | null;
   };
 } | null> {
-  if (!workplaceName || !workplaceInn) {
-    return null;
-  }
-
-  const inn = workplaceInn.trim();
-  const mappings = await prisma.workplacePPOMapping.findMany({
-    where: { workplaceInn: inn },
-    include: {
-      ppoOrganization: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          chairmanName: true,
-          chairmanJobTitle: true,
-        },
-      },
+  const options = await findPPOsByWorkplace(workplaceName, workplaceInn);
+  const first = options[0];
+  if (!first) return null;
+  return {
+    ppoOrganizationId: first.id,
+    ppoOrganization: {
+      id: first.id,
+      name: first.name,
+      type: first.organizationType,
+      chairmanName: first.chairmanName,
+      chairmanJobTitle: first.chairmanJobTitle,
     },
-    orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
-  });
-
-  const mapping = mappings.find((m) => isStrongNameMatch(workplaceName, m.workplaceName));
-  if (mapping) {
-    return {
-      ppoOrganizationId: mapping.ppoOrganizationId,
-      ppoOrganization: mapping.ppoOrganization,
-    };
-  }
-
-  return null;
+  };
 }
 
 /** Элемент списка ППО по месту работы */
@@ -94,12 +82,18 @@ export interface PPOOption {
   name: string;
   chairmanName: string | null;
   chairmanJobTitle: string | null;
+  /** Тип записи в справочнике организаций (PRIMARY / REGIONAL / LOCAL) */
+  organizationType: string;
 }
+
+type MappingRow = Awaited<
+  ReturnType<typeof prisma.workplacePPOMapping.findMany>
+>[number];
 
 /**
  * Найти все ППО, привязанные к месту работы (по названию и ИНН).
- * Сначала отбираем записи по ИНН, затем строго матчим название (нормализация + contains).
- * Важно: не делаем безусловный fallback "только по ИНН", чтобы не подставлять чужую ППО.
+ * Не подставляем «чужую» ППО: при нескольких записях на ИНН оставляем только сильное совпадение названия;
+ * плюс нормализация ИНН и fallback по токенам, если юр. название в справочнике и DaData различаются.
  */
 export async function findPPOsByWorkplace(
   workplaceName: string,
@@ -109,30 +103,100 @@ export async function findPPOsByWorkplace(
     return [];
   }
 
-  const inn = workplaceInn.trim();
   const name = workplaceName.trim();
+  const innVariants = workplaceInnSearchVariants(workplaceInn);
+  const innDigits = workplaceInnDigits(workplaceInn);
 
-  // Берём все записи по ИНН и затем строго фильтруем по названию.
-  const mappingsByInn = await prisma.workplacePPOMapping.findMany({
-    where: {
-      workplaceInn: inn,
-    },
-    include: {
-      ppoOrganization: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          chairmanName: true,
-          chairmanJobTitle: true,
-        },
+  const mappingInclude = {
+    ppoOrganization: {
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        chairmanName: true,
+        chairmanJobTitle: true,
       },
     },
-    orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
+  } as const;
+
+  const orderBy = [{ verified: "desc" as const }, { workplaceName: "asc" as const }];
+
+  let mappings: MappingRow[] = [];
+
+  // 1) Точное совпадение: варианты ИНН + название без учёта регистра
+  mappings = await prisma.workplacePPOMapping.findMany({
+    where: {
+      workplaceInn: { in: innVariants },
+      workplaceName: { equals: name, mode: "insensitive" },
+    },
+    include: mappingInclude,
+    orderBy,
   });
 
-  const mappings = mappingsByInn.filter((m) => isStrongNameMatch(name, m.workplaceName));
-  if (mappings.length === 0) return [];
+  // 2) Все строки по вариантам ИНН → только сильное совпадение названия
+  if (mappings.length === 0) {
+    const byInn = await prisma.workplacePPOMapping.findMany({
+      where: { workplaceInn: { in: innVariants } },
+      include: mappingInclude,
+      orderBy,
+    });
+    mappings = byInn.filter((m) => isStrongNameMatch(name, m.workplaceName));
+  }
+
+  // 3) ИНН в БД с маской/пробелами — сравнение только по цифрам
+  if (mappings.length === 0 && innDigits.length >= 10) {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT m.id
+      FROM "WorkplacePPOMapping" m
+      WHERE regexp_replace(COALESCE(m."workplaceInn", ''), '[^0-9]', '', 'g') = ${innDigits}
+    `;
+    const ids = rows.map((r) => r.id).filter(Boolean);
+    if (ids.length > 0) {
+      const byInn = await prisma.workplacePPOMapping.findMany({
+        where: { id: { in: ids } },
+        include: mappingInclude,
+        orderBy,
+      });
+      mappings = byInn.filter((m) => isStrongNameMatch(name, m.workplaceName));
+    }
+  }
+
+  // 4) Разное юр. имя в справочнике vs DaData — по значимым словам, сузить по ИНН
+  if (mappings.length === 0) {
+    const tokens = workplaceNameSearchTokens(name);
+    let tokenMappings: MappingRow[] = [];
+    if (tokens.length >= 2) {
+      tokenMappings = await prisma.workplacePPOMapping.findMany({
+        where: {
+          AND: tokens.slice(0, 2).map((t) => ({
+            workplaceName: { contains: t, mode: "insensitive" as const },
+          })),
+        },
+        include: mappingInclude,
+        orderBy,
+        take: 40,
+      });
+    } else if (tokens.length === 1) {
+      tokenMappings = await prisma.workplacePPOMapping.findMany({
+        where: {
+          workplaceName: { contains: tokens[0], mode: "insensitive" },
+        },
+        include: mappingInclude,
+        orderBy,
+        take: 40,
+      });
+    }
+
+    const innMatched = tokenMappings.filter((m) => {
+      const md = workplaceInnDigits(m.workplaceInn);
+      return md === innDigits || innVariants.includes(m.workplaceInn.trim());
+    });
+    if (innMatched.length > 0) {
+      mappings = innMatched;
+    } else if (tokenMappings.length === 1) {
+      mappings = tokenMappings;
+    }
+  }
 
   const seen = new Set<string>();
   const result: PPOOption[] = [];
@@ -147,10 +211,10 @@ export async function findPPOsByWorkplace(
         name: org.name,
         chairmanName: org.chairmanName,
         chairmanJobTitle: org.chairmanJobTitle,
+        organizationType: org.type,
       });
       continue;
     }
-    // Региональная или местная организация: подставляем её первички (ППО), например «ППО аппарата МООП РЗ»
     if (org.type === "REGIONAL" || org.type === "LOCAL") {
       const primaryChildren = await prisma.organization.findMany({
         where: { parentId: org.id, type: "PRIMARY" },
@@ -169,6 +233,7 @@ export async function findPPOsByWorkplace(
           name: child.name,
           chairmanName: child.chairmanName,
           chairmanJobTitle: child.chairmanJobTitle,
+          organizationType: "PRIMARY",
         });
       }
     }
@@ -262,7 +327,7 @@ export async function searchPPOByWorkplaceName(
       },
     },
     orderBy: {
-      verified: "desc", // Сначала проверенные
+      verified: "desc",
     },
   });
 

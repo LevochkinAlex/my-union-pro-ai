@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { CompanySuggestion } from "@/lib/dadata";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { CompanyData, CompanySuggestion } from "@/lib/dadata";
 
 // Хук для определения размера экрана
 function useMediaQuery(query: string): boolean {
@@ -142,25 +142,74 @@ export default function WorkplaceSearch({
     return () => clearTimeout(timeoutId);
   }, [query, value, isFocused]);
 
-  const handleSelect = (suggestion: CompanySuggestion) => {
-    const { data } = suggestion;
-    
-    // Формируем данные о месте работы
-    const workplace = {
-      name: data.name.short || data.name.full,
-      inn: data.inn,
-      directorName: data.management?.name || "",
-      directorPosition: data.management?.post || "",
-    };
+  const handleSelect = useCallback(
+    (suggestion: CompanySuggestion) => {
+      const { data } = suggestion;
 
-    setQuery(workplace.name);
-    onChange(workplace);
-    setIsOpen(false);
-    setSuggestions([]);
-    setIsFocused(false);
-    // Убираем фокус с инпута после выбора
-    inputRef.current?.blur();
-  };
+      const workplace = {
+        name: data.name.short || data.name.full,
+        inn: data.inn,
+        directorName: data.management?.name || "",
+        directorPosition: data.management?.post || "",
+      };
+
+      setQuery(workplace.name);
+      onChange(workplace);
+      setIsOpen(false);
+      setSuggestions([]);
+      setIsFocused(false);
+      inputRef.current?.blur();
+    },
+    [onChange]
+  );
+
+  /**
+   * Если пользователь ввёл текст и ушёл с поля, не кликнув по подсказке:
+   * — при вводе только ИНН (10/12 цифр) подтягиваем юрлицо по ИНН;
+   * — иначе, если DaData вернул ровно одну компанию — подставляем её (как при выборе из списка).
+   * Так место работы и ИНН попадают в профиль, и срабатывает справочник «место работы → ППО».
+   */
+  const tryResolveWithoutExplicitSelect = useCallback(async () => {
+    const q = query.trim();
+    if (!q) return;
+    if (value && q === value.name) return;
+
+    const digitsOnly = q.replace(/\D/g, "");
+    const looksLikeInn =
+      (digitsOnly.length === 10 || digitsOnly.length === 12) &&
+      /^[\d\s-]+$/.test(q.trim());
+
+    try {
+      if (looksLikeInn) {
+        const response = await fetch(`/api/dadata/companies?inn=${encodeURIComponent(digitsOnly)}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const cd = data.company as CompanyData | undefined;
+        if (cd?.inn) {
+          handleSelect({
+            value: cd.name.short || cd.name.full,
+            unrestricted_value: cd.name.full,
+            data: cd,
+          });
+        }
+        return;
+      }
+
+      if (q.length < 2) return;
+
+      const response = await fetch(
+        `/api/dadata/companies?query=${encodeURIComponent(q)}&workplaceOnly=1`
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const list = (data.suggestions || []) as CompanySuggestion[];
+      if (list.length === 1) {
+        handleSelect(list[0]);
+      }
+    } catch (e) {
+      console.error("[WorkplaceSearch] resolve on blur:", e);
+    }
+  }, [query, value, handleSelect]);
 
   const handleClear = () => {
     setQuery("");
@@ -224,6 +273,7 @@ export default function WorkplaceSearch({
             setTimeout(() => {
               if (document.activeElement !== inputRef.current && !wrapperRef.current?.contains(document.activeElement)) {
                 setIsFocused(false);
+                void tryResolveWithoutExplicitSelect();
               }
             }, 200);
           }}

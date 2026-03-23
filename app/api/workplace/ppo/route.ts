@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workplaceName = searchParams.get("workplaceName");
-    const workplaceInn = searchParams.get("workplaceInn");
+    const workplaceName = searchParams.get("workplaceName")?.trim() ?? "";
+    const workplaceInn = searchParams.get("workplaceInn")?.trim() ?? "";
 
     if (!workplaceName || !workplaceInn) {
       return NextResponse.json(

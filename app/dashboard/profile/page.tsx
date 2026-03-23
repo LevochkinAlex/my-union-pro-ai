@@ -550,7 +550,7 @@ export default function ProfilePage() {
         email: user.email,
         preferredDiscountCity: user.preferredDiscountCity ?? "",
         avatarUrl: user.avatarUrl ?? null,
-        organizationId: user.organization?.id || null,
+        organizationId: user.organizationId || user.organization?.id || null,
         organization: user.organization,
       });
       setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
@@ -634,8 +634,23 @@ export default function ProfilePage() {
         const data = await res.json();
         if (cancelled) return;
         const list = data.ppoOrganizations || (data.ppoOrganization ? [data.ppoOrganization] : []);
-        setPpoOptionsForWorkplace(Array.isArray(list) ? list : []);
-        setPpoAutoFilled(list.length === 1);
+        const normalizedList = Array.isArray(list) ? list : [];
+        setPpoOptionsForWorkplace(normalizedList);
+        setPpoAutoFilled(normalizedList.length === 1);
+
+        // Если по месту работы найдено ровно одно ППО — подставляем его автоматически.
+        // Это особенно важно при загрузке уже заполненного профиля, когда workplace/workplaceInn есть,
+        // а organizationId еще не установлен у пользователя.
+        if (
+          normalizedList.length === 1 &&
+          normalizedList[0]?.id &&
+          profileData.organizationId !== normalizedList[0].id
+        ) {
+          const nextOrgId = normalizedList[0].id;
+          setProfileData((prev) => ({ ...prev, organizationId: nextOrgId }));
+          // Синхронизируем с БД без ожидания blur/submit, чтобы подстановка была устойчивой.
+          handleFieldBlur("organizationId", nextOrgId);
+        }
       } catch {
         if (!cancelled) setPpoOptionsForWorkplace([]);
       }
