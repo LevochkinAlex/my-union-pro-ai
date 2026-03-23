@@ -113,6 +113,13 @@ export default function UserDetailsForm({
     }));
   };
 
+  const handlePhoneChange = (phone: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      phone,
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -311,7 +318,7 @@ export default function UserDetailsForm({
               <PhoneInput
                 name="phone"
                 value={formData.phone}
-                onChange={handleChange}
+                onChange={handlePhoneChange}
                 className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>

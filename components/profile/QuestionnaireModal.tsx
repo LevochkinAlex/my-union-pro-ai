@@ -14,6 +14,8 @@ import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { useAlert } from "@/components/ui/Alert";
 import { ProgressBarFill } from "@/components/ui/ProgressBarFill";
 import { DOCUMENT_ON_REVIEW_STATUSES, type DocumentOnReviewStatus } from "@/lib/documents-status";
+import { fetchWorkplacePpoOptions } from "@/lib/workplace-ppo-client";
+import { workplaceInnDigits } from "@/lib/workplace-inn";
 import { Download, Upload, Check, X, Edit2, Printer } from "lucide-react";
 
 interface QuestionnaireModalProps {
@@ -126,8 +128,9 @@ export default function QuestionnaireModal({
   }, [isOpen]);
 
   // Загрузка ППО по месту работы из справочника (один — автоподстановка, несколько — выбор из дропдауна)
+  // Поддерживает fallback только по названию (для старых профилей без ИНН).
   useEffect(() => {
-    if (!formData.workplace?.trim() || !formData.workplaceInn?.trim()) {
+    if (!formData.workplace?.trim()) {
       setPpoOptionsForWorkplace([]);
       setPpoAutoFilled(false);
       return;
@@ -135,23 +138,21 @@ export default function QuestionnaireModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/workplace/ppo?workplaceName=${encodeURIComponent(formData.workplace)}&workplaceInn=${encodeURIComponent(formData.workplaceInn)}`
-        );
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
+        const list = await fetchWorkplacePpoOptions({
+          workplaceName: formData.workplace,
+          workplaceInn: formData.workplaceInn,
+        });
         if (cancelled) return;
-        const list = data.ppoOrganizations || (data.ppoOrganization ? [data.ppoOrganization] : []);
         setPpoOptionsForWorkplace(Array.isArray(list) ? list : []);
-        if (list.length === 1 && list[0]?.id) {
+        const hasReliableInn = workplaceInnDigits(formData.workplaceInn).length >= 10;
+        if (list.length === 1 && list[0]?.id && hasReliableInn) {
           setFormData((prev) => ({ ...prev, organizationId: list[0].id }));
           setPpoAutoFilled(true);
           setShowManualPpo(false);
         } else {
           setPpoAutoFilled(false);
-          if (list.length > 1 && !formData.organizationId) {
-            setFormData((prev) => ({ ...prev, organizationId: list[0]?.id || "" }));
-          }
+          // Не выбираем «первый попавшийся» вариант автоматически.
+          // При нескольких ППО пользователь должен выбрать вручную.
         }
       } catch {
         if (!cancelled) setPpoOptionsForWorkplace([]);
@@ -159,7 +160,7 @@ export default function QuestionnaireModal({
       }
     })();
     return () => { cancelled = true; };
-  }, [formData.workplace, formData.workplaceInn, formData.organizationId]);
+  }, [formData.workplace, formData.workplaceInn]);
 
   const loadData = async () => {
     try {
@@ -855,7 +856,10 @@ export default function QuestionnaireModal({
                           workplaceInn: workplace.inn,
                           directorName: workplace.directorName,
                           directorPosition: workplace.directorPosition,
+                          organizationId: "",
                         });
+                        setPpoOptionsForWorkplace([]);
+                        setPpoAutoFilled(false);
                       } else {
                         setFormData({
                           ...formData,
@@ -863,7 +867,9 @@ export default function QuestionnaireModal({
                           workplaceInn: "",
                           directorName: "",
                           directorPosition: "",
+                          organizationId: "",
                         });
+                        setPpoOptionsForWorkplace([]);
                         setPpoAutoFilled(false);
                       }
                     }}
@@ -898,9 +904,9 @@ export default function QuestionnaireModal({
                 <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
                   Членом можно быть только первичной организации (ППО). После выбора места работы ППО подставится по справочнику или можно выбрать из привязанных к вашему месту работы.
                 </p>
-                {!formData.workplace?.trim() || !formData.workplaceInn?.trim() ? (
+                {!formData.workplace?.trim() ? (
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                    Сначала укажите место работы (с ИНН) — тогда подставится ППО по справочнику или откроется выбор
+                    Сначала укажите место работы — тогда подставится ППО по справочнику или откроется выбор
                   </div>
                 ) : ppoAutoFilled && formData.organizationId && ppoOptionsForWorkplace.length === 1 ? (
                   <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-200">

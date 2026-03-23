@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { findPPOsByWorkplace } from "@/lib/workplace-ppo-mapping";
+import {
+  findPPOsByWorkplace,
+  findPPOsByWorkplaceNameOnly,
+} from "@/lib/workplace-ppo-mapping";
 
 /**
  * GET /api/workplace/ppo?workplaceName=...&workplaceInn=...
@@ -9,6 +12,9 @@ import { findPPOsByWorkplace } from "@/lib/workplace-ppo-mapping";
  * Справочник заполняется в админке: Организации → редактирование ППО/региональной/местной → блок
  * «Привязанные места работы (юр. лица)». Анкета и профиль по ИНН и названию места работы
  * вызывают этот API и получают список ППО для выбора (или автоподстановку при одном результате).
+ *
+ * Дополнительно поддерживаем fallback только по workplaceName — это нужно для старых профилей,
+ * где место работы уже заполнено, а ИНН отсутствует.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,14 +28,16 @@ export async function GET(request: NextRequest) {
     const workplaceName = searchParams.get("workplaceName")?.trim() ?? "";
     const workplaceInn = searchParams.get("workplaceInn")?.trim() ?? "";
 
-    if (!workplaceName || !workplaceInn) {
+    if (!workplaceName) {
       return NextResponse.json(
-        { error: "Необходимо указать название и ИНН места работы" },
+        { error: "Необходимо указать название места работы" },
         { status: 400 }
       );
     }
 
-    const ppoOptions = await findPPOsByWorkplace(workplaceName, workplaceInn);
+    const ppoOptions = workplaceInn
+      ? await findPPOsByWorkplace(workplaceName, workplaceInn)
+      : await findPPOsByWorkplaceNameOnly(workplaceName);
 
     return NextResponse.json({
       success: true,

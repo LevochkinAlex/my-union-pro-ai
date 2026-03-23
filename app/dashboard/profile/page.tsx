@@ -11,6 +11,8 @@ import Autocomplete from "@/components/form/Autocomplete";
 import OrganizationAutocomplete from "@/components/form/OrganizationAutocomplete";
 import EmailValidationField from "@/components/form/EmailValidationField";
 import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
+import { fetchWorkplacePpoOptions } from "@/lib/workplace-ppo-client";
+import { workplaceInnDigits } from "@/lib/workplace-inn";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
@@ -618,25 +620,26 @@ export default function ProfilePage() {
     loadDictionaries();
   }, []);
 
-  // Загрузка ППО по месту работы из справочника (при уже указанном месте работы, напр. после loadProfile)
+  // Загрузка ППО по месту работы из справочника (при уже указанном месте работы, напр. после loadProfile).
+  // Поддерживает fallback только по названию (если у старого профиля не сохранён ИНН места работы).
   useEffect(() => {
-    if (!profileData.workplace?.trim() || !profileData.workplaceInn?.trim()) {
+    if (!profileData.workplace?.trim()) {
       setPpoOptionsForWorkplace([]);
+      setPpoAutoFilled(false);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/workplace/ppo?workplaceName=${encodeURIComponent(profileData.workplace)}&workplaceInn=${encodeURIComponent(profileData.workplaceInn)}`
-        );
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
+        const list = await fetchWorkplacePpoOptions({
+          workplaceName: profileData.workplace,
+          workplaceInn: profileData.workplaceInn,
+        });
         if (cancelled) return;
-        const list = data.ppoOrganizations || (data.ppoOrganization ? [data.ppoOrganization] : []);
         const normalizedList = Array.isArray(list) ? list : [];
         setPpoOptionsForWorkplace(normalizedList);
-        setPpoAutoFilled(normalizedList.length === 1);
+        const hasReliableInn = workplaceInnDigits(profileData.workplaceInn).length >= 10;
+        setPpoAutoFilled(normalizedList.length === 1 && hasReliableInn);
 
         // Если по месту работы найдено ровно одно ППО — подставляем его автоматически.
         // Это особенно важно при загрузке уже заполненного профиля, когда workplace/workplaceInn есть,
@@ -644,6 +647,7 @@ export default function ProfilePage() {
         if (
           normalizedList.length === 1 &&
           normalizedList[0]?.id &&
+          hasReliableInn &&
           profileData.organizationId !== normalizedList[0].id
         ) {
           const nextOrgId = normalizedList[0].id;
@@ -1228,7 +1232,7 @@ export default function ProfilePage() {
                   directorName: profileData.directorName,
                   directorPosition: profileData.directorPosition,
                 } : null}
-                onChange={async (workplace) => {
+                onChange={(workplace) => {
                   if (workplace) {
                     setProfileData(prev => ({
                       ...prev,
@@ -1236,38 +1240,10 @@ export default function ProfilePage() {
                       workplaceInn: workplace.inn,
                       directorName: workplace.directorName,
                       directorPosition: workplace.directorPosition,
+                      organizationId: null,
                     }));
-                    try {
-                      const response = await fetch(
-                        `/api/workplace/ppo?workplaceName=${encodeURIComponent(workplace.name)}&workplaceInn=${encodeURIComponent(workplace.inn)}`
-                      );
-                      if (response.ok) {
-                        const data = await response.json();
-                        const list = data.ppoOrganizations || (data.ppoOrganization ? [data.ppoOrganization] : []);
-                        setPpoOptionsForWorkplace(Array.isArray(list) ? list : []);
-                        if (list.length === 1 && list[0]?.id) {
-                          setProfileData(prev => ({ ...prev, organizationId: list[0].id }));
-                          setPpoAutoFilled(true);
-                          setShowManualPpo(false);
-                          setMessage({ type: "success", text: `По справочнику определена ППО: ${list[0].name}` });
-                          setTimeout(() => setMessage(null), 5000);
-                        } else if (list.length > 1) {
-                          setPpoAutoFilled(false);
-                          setProfileData(prev => ({ ...prev, organizationId: list[0]?.id || null }));
-                          setMessage({ type: "success", text: "Выберите ваше ППО из привязанных к месту работы." });
-                          setTimeout(() => setMessage(null), 5000);
-                        } else {
-                          setProfileData(prev => ({ ...prev, organizationId: null }));
-                          setPpoAutoFilled(false);
-                          setMessage({ type: "error", text: "ППО для данного места работы не найдено. Выберите ППО вручную или отправьте заявку «Моего ППО нет в списке»." });
-                          setTimeout(() => setMessage(null), 8000);
-                        }
-                      }
-                    } catch (error) {
-                      console.error("Error finding PPO by workplace:", error);
-                      setPpoOptionsForWorkplace([]);
-                      setPpoAutoFilled(false);
-                    }
+                    setPpoAutoFilled(false);
+                    // Дальше отрабатывает единый useEffect автоподбора ППО по месту работы.
                   } else {
                     setProfileData(prev => ({
                       ...prev,
@@ -1312,9 +1288,9 @@ export default function ProfilePage() {
             <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
               Членом можно быть только первичной организации (ППО). После выбора места работы ППО подставится по справочнику или можно выбрать из привязанных к вашему месту работы.
             </p>
-            {!profileData.workplace?.trim() || !profileData.workplaceInn?.trim() ? (
+            {!profileData.workplace?.trim() ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                Сначала укажите место работы (с ИНН) — тогда подставится ППО по справочнику или откроется выбор
+                Сначала укажите место работы — тогда подставится ППО по справочнику или откроется выбор
               </div>
             ) : ppoAutoFilled && profileData.organizationId && ppoOptionsForWorkplace.length === 1 ? (
               <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-200">
@@ -1473,7 +1449,9 @@ export default function ProfilePage() {
               <PhoneInput
                 name="phone"
                 value={profileData.phone}
-                onChange={handleProfileChange}
+                onChange={(value) => {
+                  setProfileData((prev) => ({ ...prev, phone: value }));
+                }}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>

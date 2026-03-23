@@ -71,112 +71,33 @@ export interface PPOOption {
   organizationType: string;
 }
 
-/**
- * Найти все ППО, привязанные к месту работы (по названию и ИНН).
- * Не подставляем «чужую» ППО: при нескольких записях на ИНН оставляем только сильное совпадение названия;
- * плюс нормализация ИНН и fallback по токенам, если юр. название в справочнике и DaData различаются.
- */
-export async function findPPOsByWorkplace(
-  workplaceName: string,
-  workplaceInn: string
-): Promise<PPOOption[]> {
-  if (!workplaceName?.trim() || !workplaceInn?.trim()) {
-    return [];
-  }
-
-  const name = workplaceName.trim();
-  const innVariants = workplaceInnSearchVariants(workplaceInn);
-  const innDigits = workplaceInnDigits(workplaceInn);
-
-  const mappingInclude = {
-    ppoOrganization: {
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        chairmanName: true,
-        chairmanJobTitle: true,
-      },
+const MAPPING_INCLUDE = {
+  ppoOrganization: {
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      chairmanName: true,
+      chairmanJobTitle: true,
     },
-  } as const;
+  },
+} as const;
 
-  const orderBy = [{ verified: "desc" as const }, { workplaceName: "asc" as const }];
+const MAPPING_ORDER_BY = [{ verified: "desc" as const }, { workplaceName: "asc" as const }];
 
-  // 1) Точное совпадение: варианты ИНН + название без учёта регистра
-  let mappings = await prisma.workplacePPOMapping.findMany({
-    where: {
-      workplaceInn: { in: innVariants },
-      workplaceName: { equals: name, mode: "insensitive" },
-    },
-    include: mappingInclude,
-    orderBy,
-  });
+type MappingWithOrganization = {
+  workplaceName: string;
+  workplaceInn: string;
+  ppoOrganization: {
+    id: string;
+    name: string;
+    type: string;
+    chairmanName: string | null;
+    chairmanJobTitle: string | null;
+  };
+};
 
-  // 2) Все строки по вариантам ИНН → только сильное совпадение названия
-  if (mappings.length === 0) {
-    const byInn = await prisma.workplacePPOMapping.findMany({
-      where: { workplaceInn: { in: innVariants } },
-      include: mappingInclude,
-      orderBy,
-    });
-    mappings = byInn.filter((m) => workplaceNamesMatchForMapping(name, m.workplaceName));
-  }
-
-  // 3) ИНН в БД с маской/пробелами — сравнение только по цифрам
-  if (mappings.length === 0 && innDigits.length >= 10) {
-    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT m.id
-      FROM "WorkplacePPOMapping" m
-      WHERE regexp_replace(COALESCE(m."workplaceInn", ''), '[^0-9]', '', 'g') = ${innDigits}
-    `;
-    const ids = rows.map((r) => r.id).filter(Boolean);
-    if (ids.length > 0) {
-      const byInn = await prisma.workplacePPOMapping.findMany({
-        where: { id: { in: ids } },
-        include: mappingInclude,
-        orderBy,
-      });
-      mappings = byInn.filter((m) => workplaceNamesMatchForMapping(name, m.workplaceName));
-    }
-  }
-
-  // 4) Разное юр. имя в справочнике vs DaData — по значимым словам, сузить по ИНН
-  if (mappings.length === 0) {
-    const tokens = workplaceNameSearchTokens(name);
-    let tokenMappings: typeof mappings = [];
-    if (tokens.length >= 2) {
-      tokenMappings = await prisma.workplacePPOMapping.findMany({
-        where: {
-          AND: tokens.slice(0, 2).map((t) => ({
-            workplaceName: { contains: t, mode: "insensitive" as const },
-          })),
-        },
-        include: mappingInclude,
-        orderBy,
-        take: 40,
-      });
-    } else if (tokens.length === 1) {
-      tokenMappings = await prisma.workplacePPOMapping.findMany({
-        where: {
-          workplaceName: { contains: tokens[0], mode: "insensitive" },
-        },
-        include: mappingInclude,
-        orderBy,
-        take: 40,
-      });
-    }
-
-    const innMatched = tokenMappings.filter((m) => {
-      const md = workplaceInnDigits(m.workplaceInn);
-      return md === innDigits || innVariants.includes(m.workplaceInn.trim());
-    });
-    if (innMatched.length > 0) {
-      mappings = innMatched;
-    } else if (tokenMappings.length === 1) {
-      mappings = tokenMappings;
-    }
-  }
-
+async function toPPOOptions(mappings: MappingWithOrganization[]): Promise<PPOOption[]> {
   const seen = new Set<string>();
   const result: PPOOption[] = [];
 
@@ -218,6 +139,150 @@ export async function findPPOsByWorkplace(
     }
   }
   return result;
+}
+
+/**
+ * Найти все ППО, привязанные к месту работы (по названию и ИНН).
+ * Не подставляем «чужую» ППО: при нескольких записях на ИНН оставляем только сильное совпадение названия;
+ * плюс нормализация ИНН и fallback по токенам, если юр. название в справочнике и DaData различаются.
+ */
+export async function findPPOsByWorkplace(
+  workplaceName: string,
+  workplaceInn: string
+): Promise<PPOOption[]> {
+  if (!workplaceName?.trim() || !workplaceInn?.trim()) {
+    return [];
+  }
+
+  const name = workplaceName.trim();
+  const innVariants = workplaceInnSearchVariants(workplaceInn);
+  const innDigits = workplaceInnDigits(workplaceInn);
+
+  // Сначала поднимаем все записи по ИНН (строгий ключ привязки).
+  // Если по ИНН ровно одна запись — это однозначный match из справочника супер-админа.
+  const mappingsByInn = await prisma.workplacePPOMapping.findMany({
+    where: { workplaceInn: { in: innVariants } },
+    include: MAPPING_INCLUDE,
+    orderBy: MAPPING_ORDER_BY,
+  });
+  if (mappingsByInn.length === 1) {
+    return toPPOOptions(mappingsByInn);
+  }
+
+  // 1) Точное совпадение: варианты ИНН + название без учёта регистра
+  let mappings = await prisma.workplacePPOMapping.findMany({
+    where: {
+      workplaceInn: { in: innVariants },
+      workplaceName: { equals: name, mode: "insensitive" },
+    },
+    include: MAPPING_INCLUDE,
+    orderBy: MAPPING_ORDER_BY,
+  });
+
+  // 2) Все строки по вариантам ИНН → только сильное совпадение названия
+  if (mappings.length === 0) {
+    mappings = mappingsByInn.filter((m) =>
+      workplaceNamesMatchForMapping(name, m.workplaceName)
+    );
+  }
+
+  // 3) ИНН в БД с маской/пробелами — сравнение только по цифрам
+  if (mappings.length === 0 && innDigits.length >= 10) {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT m.id
+      FROM "WorkplacePPOMapping" m
+      WHERE regexp_replace(COALESCE(m."workplaceInn", ''), '[^0-9]', '', 'g') = ${innDigits}
+    `;
+    const ids = rows.map((r) => r.id).filter(Boolean);
+    if (ids.length > 0) {
+      const byInn = await prisma.workplacePPOMapping.findMany({
+        where: { id: { in: ids } },
+        include: MAPPING_INCLUDE,
+        orderBy: MAPPING_ORDER_BY,
+      });
+      if (byInn.length === 1) {
+        return toPPOOptions(byInn);
+      }
+      mappings = byInn.filter((m) => workplaceNamesMatchForMapping(name, m.workplaceName));
+    }
+  }
+
+  // 4) Разное юр. имя в справочнике vs DaData — по значимым словам, сузить по ИНН
+  if (mappings.length === 0) {
+    const tokens = workplaceNameSearchTokens(name);
+    let tokenMappings: typeof mappings = [];
+    if (tokens.length >= 2) {
+      tokenMappings = await prisma.workplacePPOMapping.findMany({
+        where: {
+          AND: tokens.slice(0, 2).map((t) => ({
+            workplaceName: { contains: t, mode: "insensitive" as const },
+          })),
+        },
+        include: MAPPING_INCLUDE,
+        orderBy: MAPPING_ORDER_BY,
+        take: 40,
+      });
+    } else if (tokens.length === 1) {
+      tokenMappings = await prisma.workplacePPOMapping.findMany({
+        where: {
+          workplaceName: { contains: tokens[0], mode: "insensitive" },
+        },
+        include: MAPPING_INCLUDE,
+        orderBy: MAPPING_ORDER_BY,
+        take: 40,
+      });
+    }
+
+    const innMatched = tokenMappings.filter((m) => {
+      const md = workplaceInnDigits(m.workplaceInn);
+      return md === innDigits || innVariants.includes(m.workplaceInn.trim());
+    });
+    if (innMatched.length > 0) {
+      mappings = innMatched;
+    }
+  }
+
+  return toPPOOptions(mappings);
+}
+
+/**
+ * Fallback: поиск ППО только по названию места работы.
+ * Используется для старых профилей, где workplace есть, а workplaceInn пустой.
+ * Возвращает результат только если сопоставление по названию уверенное.
+ */
+export async function findPPOsByWorkplaceNameOnly(
+  workplaceName: string
+): Promise<PPOOption[]> {
+  const name = workplaceName.trim();
+  if (!name) return [];
+
+  const tokens = workplaceNameSearchTokens(name);
+  if (tokens.length === 0) return [];
+
+  const tokenWhere =
+    tokens.length >= 2
+      ? {
+          AND: tokens.slice(0, 2).map((t) => ({
+            workplaceName: { contains: t, mode: "insensitive" as const },
+          })),
+        }
+      : {
+          workplaceName: { contains: tokens[0], mode: "insensitive" as const },
+        };
+
+  const mappings = await prisma.workplacePPOMapping.findMany({
+    where: tokenWhere,
+    include: MAPPING_INCLUDE,
+    orderBy: MAPPING_ORDER_BY,
+    take: 40,
+  });
+
+  const strongByName = mappings.filter((m) =>
+    workplaceNamesMatchForMapping(name, m.workplaceName)
+  );
+  if (strongByName.length === 0) return [];
+
+  return toPPOOptions(strongByName);
 }
 
 /**
