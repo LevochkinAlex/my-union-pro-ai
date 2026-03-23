@@ -59,7 +59,8 @@ export default async function DiscountsPage() {
       getDiscountPreferenceSafe(userId),
       prisma.user.findUnique({
         where: { id: userId },
-        select: { address: true, region: true, preferredDiscountCity: true },
+        // В схеме User нет поля region — только address + preferredDiscountCity
+        select: { address: true, preferredDiscountCity: true },
       }).catch((error) => {
         console.error("[discounts] Error fetching user:", error);
         return null;
@@ -97,8 +98,8 @@ export default async function DiscountsPage() {
   }
   
   // 2. Fallback: пытаемся извлечь из адреса/региона (если preferredDiscountCity не установлен)
-  if (!autoCityId && (user?.address || user?.region)) {
-    const cityName = extractCityFromAddress(user.address, user.region);
+  if (!autoCityId && user?.address) {
+    const cityName = extractCityFromAddress(user.address, null);
     if (cityName && initialData.cities?.length) {
       const city = pickBestCityMatch(initialData.cities, cityName);
       if (city) {
