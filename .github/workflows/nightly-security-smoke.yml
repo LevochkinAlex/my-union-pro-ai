@@ -34,8 +34,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Smoke бьёт прод и зависит от живых cookie — не валим весь job (уведомления/статус репо).
       - name: Run runtime role smoke checks
+        id: smoke
+        continue-on-error: true
         env:
+          # Не создаём заседания в проде из CI (POST часто 400/422 при смене схемы + мусор в БД).
+          SEC_SMOKE_SKIP_MEETINGS_POST: "1"
           SEC_SMOKE_BASE_URL: ${{ secrets.SEC_SMOKE_BASE_URL }}
           SEC_SMOKE_COOKIE_REPORTS_ALLOW: ${{ secrets.SEC_SMOKE_COOKIE_REPORTS_ALLOW }}
           SEC_SMOKE_COOKIE_REPORTS_DENY: ${{ secrets.SEC_SMOKE_COOKIE_REPORTS_DENY }}
@@ -46,3 +51,8 @@ jobs:
           SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE: ${{ secrets.SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE }}
           SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE: ${{ secrets.SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE }}
         run: pnpm test:security:runtime
+
+      - name: Report smoke outcome
+        if: steps.smoke.outcome == 'failure'
+        run: |
+          echo "::warning::Security smoke failed (протухшие Cookie в secrets или смена API). Обнови SEC_SMOKE_COOKIE_* — см. docs/SECURITY_SMOKE_NIGHTLY.md"

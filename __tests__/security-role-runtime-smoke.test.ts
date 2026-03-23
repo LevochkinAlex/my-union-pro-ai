@@ -15,6 +15,9 @@
  * - SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE
  *
  * In non-strict mode missing envs will skip corresponding checks.
+ *
+ * SEC_SMOKE_SKIP_MEETINGS_POST=1 — skip POST /meetings (creates real rows on prod;
+ *   use in GitHub Actions to avoid flaky writes).
  */
 
 import { describe, it } from "node:test";
@@ -108,6 +111,8 @@ describe("Runtime security smoke: role guards", () => {
   });
 
   it("meetings create guard: allow -> 201, deny -> 403", async () => {
+    if (process.env.SEC_SMOKE_SKIP_MEETINGS_POST === "1") return;
+
     const allow = getEnv("SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE");
     const deny = getEnv("SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE");
     if (!allow || !deny) return;

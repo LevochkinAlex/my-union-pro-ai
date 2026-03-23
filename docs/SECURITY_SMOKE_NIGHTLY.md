@@ -2,7 +2,14 @@
 
 **Расписание отключено:** автоматический ночной запуск в workflow закомментирован (cookie-секреты протухают). Запуск только вручную: GitHub Actions → Nightly Security Smoke → Run workflow.
 
-**GitHub Actions:** в workflow **не** выставляется `SEC_SMOKE_STRICT` — незаполненные пары cookie пропускаются, job не падает из‑за одного пустого секрета. Для жёсткой проверки всех env локально: `SEC_SMOKE_STRICT=1 pnpm test:security:runtime`.
+**GitHub Actions:** в workflow **не** выставляется `SEC_SMOKE_STRICT` — незаполненные пары cookie пропускаются. Шаг smoke с **`continue-on-error: true`**: при падении проверок workflow остаётся зелёным, в логах будет warning (cookie часто протухают). POST заседаний в CI отключён: `SEC_SMOKE_SKIP_MEETINGS_POST=1` (не плодим записи в проде).
+
+Локально полный прогон, включая POST meetings (осторожно, создаёт заседание):
+
+```bash
+# без skip — нужны все cookie-секреты
+pnpm test:security:runtime
+```
 
 Runtime regression checks for critical role guards:
 
