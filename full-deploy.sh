@@ -23,7 +23,9 @@ PROJECT_DIR="${DEPLOY_PROJECT_DIR:-/opt/my-union-pro}"
 echo "🚀 Starting full deployment..."
 echo ""
 
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER" 'set -e
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no \
+  -o ServerAliveInterval=30 -o ServerAliveCountMax=120 \
+  "$SERVER" 'set -e
 cd /opt/my-union-pro
 
 echo "=== Step 1: Git Pull ==="
