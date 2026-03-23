@@ -649,7 +649,13 @@ export default function ProfilePage() {
           const nextOrgId = normalizedList[0].id;
           setProfileData((prev) => ({ ...prev, organizationId: nextOrgId }));
           // Синхронизируем с БД без ожидания blur/submit, чтобы подстановка была устойчивой.
-          handleFieldBlur("organizationId", nextOrgId);
+          void fetch("/api/profile", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ organizationId: nextOrgId }),
+          }).catch(() => {
+            // Фоновая синхронизация; UI и основное сохранение продолжат работать.
+          });
         }
       } catch {
         if (!cancelled) setPpoOptionsForWorkplace([]);
