@@ -1,45 +1,30 @@
 name: Nightly Security Smoke
 
-# Расписание отключено: cookie-секреты протухают — строгий CI давал ложные падения.
-# Запуск только вручную: Actions → Nightly Security Smoke → Run workflow.
-# Без SEC_SMOKE_STRICT: пары allow/deny без секретов просто пропускаются (как локально).
+# Только workflow_dispatch. Без pnpm install — гоняем чистый Node (scripts/security-role-runtime-smoke.mjs),
+# иначе CI часто падает на lockfile / ignored build scripts, а не на сами проверки.
 on:
-  # schedule:
-  #   - cron: "30 1 * * *"
   workflow_dispatch:
 
 jobs:
   security-role-runtime-smoke:
-    # Не запускаем job вообще, пока не настроен base URL — иначе тесты бьют прод по дефолту.
     if: ${{ secrets.SEC_SMOKE_BASE_URL != '' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Smoke бьёт прод и зависит от живых cookie — не валим весь job (уведомления/статус репо).
       - name: Run runtime role smoke checks
         id: smoke
         continue-on-error: true
         env:
-          # Не создаём заседания в проде из CI (POST часто 400/422 при смене схемы + мусор в БД).
           SEC_SMOKE_SKIP_MEETINGS_POST: "1"
           SEC_SMOKE_BASE_URL: ${{ secrets.SEC_SMOKE_BASE_URL }}
           SEC_SMOKE_COOKIE_REPORTS_ALLOW: ${{ secrets.SEC_SMOKE_COOKIE_REPORTS_ALLOW }}
@@ -50,9 +35,9 @@ jobs:
           SEC_SMOKE_COOKIE_CHATS_DENY: ${{ secrets.SEC_SMOKE_COOKIE_CHATS_DENY }}
           SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE: ${{ secrets.SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE }}
           SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE: ${{ secrets.SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE }}
-        run: pnpm test:security:runtime
+        run: node --test scripts/security-role-runtime-smoke.mjs
 
       - name: Report smoke outcome
         if: steps.smoke.outcome == 'failure'
         run: |
-          echo "::warning::Security smoke failed (протухшие Cookie в secrets или смена API). Обнови SEC_SMOKE_COOKIE_* — см. docs/SECURITY_SMOKE_NIGHTLY.md"
+          echo "::warning::Security smoke failed. Refresh SEC_SMOKE_COOKIE_* secrets. See docs/SECURITY_SMOKE_NIGHTLY.md"

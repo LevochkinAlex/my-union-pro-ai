@@ -2,7 +2,7 @@
 
 **Расписание отключено:** автоматический ночной запуск в workflow закомментирован (cookie-секреты протухают). Запуск только вручную: GitHub Actions → Nightly Security Smoke → Run workflow.
 
-**GitHub Actions:** в workflow **не** выставляется `SEC_SMOKE_STRICT` — незаполненные пары cookie пропускаются. Шаг smoke с **`continue-on-error: true`**: при падении проверок workflow остаётся зелёным, в логах будет warning (cookie часто протухают). POST заседаний в CI отключён: `SEC_SMOKE_SKIP_MEETINGS_POST=1` (не плодим записи в проде).
+**GitHub Actions:** `pnpm install` **не** выполняется — только Node 20 и `node --test scripts/security-role-runtime-smoke.mjs` (нет зависимости от lockfile / ignored build scripts). `SEC_SMOKE_STRICT` не задаётся — пустые пары cookie пропускаются. Шаг smoke с **`continue-on-error: true`**: при падении проверок job остаётся успешным, в логах — warning. POST заседаний в CI отключён: `SEC_SMOKE_SKIP_MEETINGS_POST=1`.
 
 Локально полный прогон, включая POST meetings (осторожно, создаёт заседание):
 
@@ -10,6 +10,8 @@
 # без skip — нужны все cookie-секреты
 pnpm test:security:runtime
 ```
+
+Исходник проверок: `scripts/security-role-runtime-smoke.mjs`.
 
 Runtime regression checks for critical role guards:
 

@@ -20,7 +20,7 @@
     "test:chat": "node --import tsx --test __tests__/chat-flows.test.ts",
     "test:news": "node --import tsx --test __tests__/news-publication.test.ts",
     "test:api": "dotenv -e .env.local -- node scripts/test-tickets-api.mjs",
-    "test:security:runtime": "node --import tsx --test __tests__/security-role-runtime-smoke.test.ts",
+    "test:security:runtime": "node --test scripts/security-role-runtime-smoke.mjs",
     "test:ticket-flow": "dotenv -e .env.local -- node scripts/test-ticket-creation-flow.mjs",
     "pre-deploy": "dotenv -e .env.local -- node scripts/pre-deploy-check.mjs",
     "prisma:migrate": "dotenv -e .env.local -- pnpm prisma migrate dev",

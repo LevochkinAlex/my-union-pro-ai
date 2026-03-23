@@ -1,23 +1,8 @@
 /**
- * Runtime security smoke for role-based access (nightly/prod).
+ * Runtime security smoke for role-based access (prod).
+ * Plain Node — GitHub Actions runs this without pnpm install (avoids lockfile/script flakes).
  *
- * Goal: catch permission regressions on key guarded endpoints.
- *
- * Required envs in strict mode (SEC_SMOKE_STRICT=1):
- * - SEC_SMOKE_BASE_URL
- * - SEC_SMOKE_COOKIE_REPORTS_ALLOW
- * - SEC_SMOKE_COOKIE_REPORTS_DENY
- * - SEC_SMOKE_COOKIE_APPEALS_ALLOW
- * - SEC_SMOKE_COOKIE_APPEALS_DENY
- * - SEC_SMOKE_COOKIE_CHATS_ALLOW
- * - SEC_SMOKE_COOKIE_CHATS_DENY
- * - SEC_SMOKE_COOKIE_MEETINGS_ALLOW_CREATE
- * - SEC_SMOKE_COOKIE_MEETINGS_DENY_CREATE
- *
- * In non-strict mode missing envs will skip corresponding checks.
- *
- * SEC_SMOKE_SKIP_MEETINGS_POST=1 — skip POST /meetings (creates real rows on prod;
- *   use in GitHub Actions to avoid flaky writes).
+ * @see docs/SECURITY_SMOKE_NIGHTLY.md
  */
 
 import { describe, it } from "node:test";
@@ -26,7 +11,7 @@ import assert from "node:assert/strict";
 const baseUrl = process.env.SEC_SMOKE_BASE_URL || "https://myunion.pro";
 const strictMode = process.env.SEC_SMOKE_STRICT === "1";
 
-function getEnv(name: string): string | null {
+function getEnv(name) {
   const value = process.env[name]?.trim();
   if (value) return value;
   if (strictMode) {
@@ -35,18 +20,14 @@ function getEnv(name: string): string | null {
   return null;
 }
 
-function jsonHeaders(cookie: string) {
+function jsonHeaders(cookie) {
   return {
     Cookie: cookie,
     "Content-Type": "application/json",
   };
 }
 
-function assertApiStatus(
-  actual: number,
-  expected: number,
-  label: string,
-): void {
+function assertApiStatus(actual, expected, label) {
   if (actual === expected) return;
   const hint =
     actual === 401 || actual === 403
