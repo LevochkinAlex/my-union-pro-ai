@@ -7,9 +7,10 @@
 import 'dotenv/config';
 
 const BB_PROFSOYUZY_TOKEN = process.env.BB_PROFSOYUZY_TOKEN;
+/** Актуальный org API MyUnion (не /api/profsoyuzy) */
 const CREATE_USER_URL = "https://bestbenefits.ru/api/myunion/create_user";
 
-console.log("🧪 Testing BestBenefits user creation...\n");
+console.log("🧪 BestBenefits org API:", CREATE_USER_URL, "\n");
 
 // Check token
 if (!BB_PROFSOYUZY_TOKEN) {
@@ -17,7 +18,7 @@ if (!BB_PROFSOYUZY_TOKEN) {
   process.exit(1);
 }
 
-console.log(`🎫 Using Profsoyuzy Token: ${BB_PROFSOYUZY_TOKEN.substring(0, 20)}...\n`);
+console.log(`🎫 Bearer (BB_PROFSOYUZY_TOKEN): ${BB_PROFSOYUZY_TOKEN.substring(0, 20)}...\n`);
 
 try {
 
