@@ -23,9 +23,6 @@ config({ path: path.join(root, ".env.local"), override: true });
 const prisma = new PrismaClient();
 
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
-const BB_AUTH_URL = "https://bestbenefits.ru/api/auth";
-const BB_EMAIL = process.env.BB_LOGIN;
-const BB_PASSWORD = process.env.BB_PASSWORD;
 
 const VDS_HOST = process.env.VDS_STORAGE_HOST;
 const VDS_USER = process.env.VDS_STORAGE_USER ?? "root";
@@ -37,26 +34,17 @@ console.log("=== Синхронизация скидок BestBenefits ===");
 console.log(`Время: ${new Date().toISOString()}`);
 
 /**
- * Получает токен авторизации BestBenefits
+ * Bearer для каталога BB — как getBestBenefitsToken() в lib/best-benefits-auth.ts
  */
-async function getBBToken() {
-  if (!BB_EMAIL || !BB_PASSWORD) {
-    throw new Error("BB_LOGIN и BB_PASSWORD не настроены в .env");
+function getBBToken() {
+  const token =
+    process.env.BB_PROFSOYUZY_TOKEN?.trim() || process.env.BB_API_TOKEN?.trim();
+  if (token) {
+    return token;
   }
-
-  const response = await fetch(BB_AUTH_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: BB_EMAIL, password: BB_PASSWORD }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`BB Auth failed: ${response.status} - ${text}`);
-  }
-
-  const data = await response.json();
-  return data.access_token || data.token;
+  throw new Error(
+    "Задайте BB_PROFSOYUZY_TOKEN (или BB_API_TOKEN) в .env / .env.local — тот же Bearer, что для приложения.",
+  );
 }
 
 /**
@@ -234,10 +222,9 @@ async function syncDiscounts() {
   const errors = [];
 
   try {
-    // Получаем токен BB
-    console.log("\n🔐 Авторизация в BestBenefits...");
-    const token = await getBBToken();
-    console.log("  ✅ Токен получен");
+    console.log("\n🔐 Токен BestBenefits (BB_PROFSOYUZY_TOKEN)...");
+    const token = getBBToken();
+    console.log("  ✅ Готово");
 
     // Загружаем скидки
     console.log("\n📦 Загрузка скидок из BestBenefits...");

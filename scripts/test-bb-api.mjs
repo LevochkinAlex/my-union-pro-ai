@@ -4,59 +4,62 @@
  * Usage: node scripts/test-bb-api.mjs
  */
 
-import 'dotenv/config';
+import { config } from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const BB_LOGIN = process.env.BB_LOGIN;
-const BB_PASSWORD = process.env.BB_PASSWORD;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(__dirname, "..");
+config({ path: path.join(root, ".env") });
+config({ path: path.join(root, ".env.local"), override: true });
+
 const AUTH_URL = "https://bestbenefits.ru/api/auth";
 const PRODUCTS_URL = "https://bestbenefits.ru/api/products";
 
+const staticToken =
+  process.env.BB_PROFSOYUZY_TOKEN?.trim() || process.env.BB_API_TOKEN?.trim();
+const BB_LOGIN = process.env.BB_LOGIN;
+const BB_PASSWORD = process.env.BB_PASSWORD;
+
 console.log("🧪 Testing BestBenefits API connection...\n");
 
-// Check credentials
-if (!BB_LOGIN || !BB_PASSWORD) {
-  console.error("❌ Error: BB_LOGIN and BB_PASSWORD not set in environment");
+async function getBearer() {
+  if (staticToken) {
+    console.log("🔑 Using BB_PROFSOYUZY_TOKEN / BB_API_TOKEN\n");
+    return staticToken;
+  }
+  if (BB_LOGIN && BB_PASSWORD) {
+    console.log("🔑 Authenticating (legacy BB_LOGIN/BB_PASSWORD)...\n");
+    const authResponse = await fetch(AUTH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: BB_LOGIN, password: BB_PASSWORD }),
+    });
+    if (!authResponse.ok) {
+      const errorText = await authResponse.text();
+      throw new Error(`Authentication failed: ${authResponse.status} - ${errorText}`);
+    }
+    const authData = await authResponse.json();
+    const t = authData.access_token || authData.token;
+    console.log(`✅ Token: ${t.substring(0, 20)}...\n`);
+    return t;
+  }
+  console.error(
+    "❌ Задайте BB_PROFSOYUZY_TOKEN (или BB_API_TOKEN), либо legacy BB_LOGIN + BB_PASSWORD",
+  );
   process.exit(1);
 }
 
-console.log(`📧 Login: ${BB_LOGIN}`);
-console.log(`🔐 Password: ${"*".repeat(BB_PASSWORD.length)}\n`);
-
 try {
-  // Step 1: Authenticate
-  console.log("🔑 Step 1: Authenticating...");
-  const authResponse = await fetch(AUTH_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email: BB_LOGIN,
-      password: BB_PASSWORD,
-    }),
-  });
+  const accessToken = await getBearer();
 
-  if (!authResponse.ok) {
-    const errorText = await authResponse.text();
-    console.error(`❌ Authentication failed: ${authResponse.status}`);
-    console.error(`Response: ${errorText}`);
-    process.exit(1);
-  }
-
-  const authData = await authResponse.json();
-  console.log("✅ Authentication successful!");
-  console.log(`🎫 Token type: ${authData.token_type}`);
-  console.log(`⏰ Expires in: ${authData.expires_in || "N/A"} seconds`);
-  console.log(`🔑 Token: ${authData.access_token.substring(0, 20)}...\n`);
-
-  // Step 2: Fetch products
-  console.log("📦 Step 2: Fetching products...");
+  console.log("📦 Fetching products...");
   const productsResponse = await fetch(`${PRODUCTS_URL}?per_page=5`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${authData.access_token}`,
-      "Accept": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
     },
   });
 
@@ -69,10 +72,10 @@ try {
 
   const productsData = await productsResponse.json();
   const products = productsData.data || [];
-  
-  console.log(`✅ Products fetch successful!`);
-  console.log(`📊 Total products: ${products.length}`);
-  
+
+  console.log(`✅ Products OK`);
+  console.log(`📊 Sample count: ${products.length}`);
+
   if (products.length > 0) {
     console.log(`\n🎁 Sample products:`);
     products.slice(0, 3).forEach((product, index) => {
@@ -80,15 +83,15 @@ try {
       console.log(`     ID: ${product.id}`);
       console.log(`     Category: ${product.main_category?.name || "N/A"}`);
       console.log(`     Discount: ${product.discount_value || "N/A"}`);
-      console.log(`     Cities: ${product.cities?.map(c => c.name).join(", ") || "N/A"}`);
+      console.log(
+        `     Cities: ${product.cities?.map((c) => c.name).join(", ") || "N/A"}`,
+      );
     });
   }
 
-  console.log("\n✅ All tests passed! BestBenefits API is working correctly.");
-  
+  console.log("\n✅ All tests passed!");
 } catch (error) {
   console.error("\n❌ Error:", error.message);
   console.error(error);
   process.exit(1);
 }
-

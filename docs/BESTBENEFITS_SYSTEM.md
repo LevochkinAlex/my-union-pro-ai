@@ -209,12 +209,14 @@ pnpm tsx scripts/sync-user-discounts-direct.mjs user@example.com
 ## Переменные окружения
 
 ```env
-# BestBenefits API
-BB_LOGIN=email@example.com
-BB_PASSWORD=password
+# BestBenefits: Bearer для каталога / org API (как выдаёт BB; BB_LOGIN/BB_PASSWORD не нужны)
+BB_PROFSOYUZY_TOKEN=...
+# опционально то же под другим именем:
+# BB_API_TOKEN=...
+
 BB_API_URL=https://bestbenefits.ru/api
 
-# Шифрование паролей пользователей
+# Шифрование паролей пользователей (храним пароли BB пользователей в нашей БД)
 BB_PASSWORD_ENCRYPTION_KEY=your-32-char-key
 
 # CDN для изображений
