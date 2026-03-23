@@ -22,6 +22,15 @@ function debugUserAuth(...args: unknown[]) {
 // Cache user tokens (user email -> {token, expiry})
 const userTokenCache = new Map<string, { token: string; expiry: number }>();
 
+/** Сброс кэша токена после смены bestBenefitsPassword / починки аккаунта BB */
+export function clearBestBenefitsUserTokenCache(loginOrEmail?: string) {
+  if (!loginOrEmail) {
+    userTokenCache.clear();
+    return;
+  }
+  userTokenCache.delete(loginOrEmail);
+}
+
 async function resolveBestBenefitsEmailByUserId(userId: string): Promise<string | null> {
   if (userId.includes("@")) {
     return userId;
@@ -123,6 +132,10 @@ export async function getUserBestBenefitsToken(
     }
   }
 
+  console.warn(
+    "[UserAuth] BB user 401: пароль в нашей БД не подходит к bestbenefits.ru (пользователь мог сменить пароль на BB, или пароль не сохранили при создании). " +
+      "Починка: админ POST /api/admin/reset-and-sync-bb { email } или scripts/fix-bb-user-password / reset-and-sync-bb.",
+  );
   throw lastError instanceof Error
     ? lastError
     : new Error("Failed to authenticate user in BestBenefits");

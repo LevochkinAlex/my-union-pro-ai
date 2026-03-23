@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { createBestBenefitsUser } from "@/lib/best-benefits-users";
+import { encryptPassword } from "@/lib/best-benefits-password";
+import { clearBestBenefitsUserTokenCache } from "@/lib/best-benefits-user-auth";
 
 // Генерируем случайный пароль
 function generatePassword(length = 12) {
@@ -91,15 +93,20 @@ export async function POST(request: NextRequest) {
 
       const bbUserId = result.data?.id?.toString() || user.email;
 
-      // Обновляем данные пользователя в БД
+      const encryptedBb = encryptPassword(newPassword);
       await prisma.user.update({
         where: { id: user.id },
         data: {
           bestBenefitsUserId: bbUserId,
           bestBenefitsStatus: result.data?.status || result.status || "active",
           bestBenefitsCreatedAt: new Date(),
+          bestBenefitsPassword: encryptedBb,
         },
       });
+      clearBestBenefitsUserTokenCache(user.email);
+      if (user.bestBenefitsUserId && user.bestBenefitsUserId !== user.email) {
+        clearBestBenefitsUserTokenCache(user.bestBenefitsUserId);
+      }
 
       bbResult = {
         userId: bbUserId,

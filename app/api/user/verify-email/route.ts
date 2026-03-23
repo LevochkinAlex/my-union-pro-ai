@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncUserToBestBenefits } from "@/lib/best-benefits-users";
-import { decryptPassword } from "@/lib/best-benefits-password";
+import { decryptPassword, encryptPassword } from "@/lib/best-benefits-password";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -76,10 +76,18 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             console.error("[verify-email] Failed to decrypt password, generating new:", error);
             bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
+            await prisma.user.update({
+              where: { id: updatedUser.id },
+              data: { bestBenefitsPassword: encryptPassword(bbPassword) },
+            });
           }
         } else {
           console.log("[verify-email] Generating new password for BestBenefits");
           bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
+          await prisma.user.update({
+            where: { id: updatedUser.id },
+            data: { bestBenefitsPassword: encryptPassword(bbPassword) },
+          });
         }
 
         // Создаем аккаунт в BB (асинхронно, не блокируем ответ)

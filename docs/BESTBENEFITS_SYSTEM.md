@@ -231,6 +231,18 @@ CDN_URL=https://cdn.myunion.pro
 
 Тексты скидок (`description` / `short_description` / отдельные поля условий) нормализуются в `lib/best-benefits-description.ts` при синхронизации и в API `/api/discounts`, чтобы блок «Условия использования» не терялся при смене схемы ответа BB.
 
+### Ошибка `401` / «Неверный email или пароль» при запросах от имени пользователя
+
+Это **не** org-токен (`BB_PROFSOYUZY_TOKEN`), а **личный** вход в BB: `POST https://bestbenefits.ru/api/auth` с `email` + паролем из поля `User.bestBenefitsPassword` (расшифрованным).
+
+Типичные причины:
+
+1. Пользователь сменил пароль на bestbenefits.ru — в нашей БД остался старый.
+2. Раньше при создании аккаунта в BB пароль **не сохраняли** в `bestBenefitsPassword` (исправлено для `/api/user/verify-email` и для `/api/admin/reset-and-sync-bb`).
+3. Расхождение после миграции/ручных правок.
+
+**Что сделать:** для затронутого пользователя выровнять пароль: суперадмин — `POST /api/admin/reset-and-sync-bb` с телом `{ "email": "..." }` (после фикса сохраняется и `bestBenefitsPassword`, и создаётся/обновляется пользователь в BB), либо скрипты в `scripts/` (`fix-bb-user-password`, `reset-and-sync-bb`).
+
 ## Известные ограничения
 
 1. **Rate Limiting BestBenefits** - API ограничивает частоту запросов. При массовых операциях нужны задержки 3+ сек.
