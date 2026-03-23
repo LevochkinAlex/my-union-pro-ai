@@ -15,8 +15,10 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Загружаем .env из корня проекта
-config({ path: path.join(__dirname, "..", ".env") });
+// Как у Next: сначала .env, затем .env.local (секреты часто только там)
+const root = path.join(__dirname, "..");
+config({ path: path.join(root, ".env") });
+config({ path: path.join(root, ".env.local"), override: true });
 
 const prisma = new PrismaClient();
 
