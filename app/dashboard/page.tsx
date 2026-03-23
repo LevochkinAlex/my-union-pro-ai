@@ -368,6 +368,7 @@ export default async function DashboardPage() {
       awards: null,
     };
     const profileProgress = 85;
+    const profileReadyForApplication = true;
     const hasDocuments = true;
     const hasAdditionalInfo = true;
     const hasAwards = false;
@@ -385,6 +386,7 @@ export default async function DashboardPage() {
         {currentUser && (
           <MembershipBanner
             profileProgress={profileProgress}
+            profileReadyForApplication={profileReadyForApplication}
             hasDocuments={hasDocuments}
             membershipStatus={membershipStatus}
             hasAdditionalInfo={hasAdditionalInfo}
@@ -689,6 +691,7 @@ export default async function DashboardPage() {
 
   // Вычисляем прогресс заполнения профиля
   let profileProgress = 0;
+  let profileReadyForApplication = false;
   let hasDocuments = false;
   let membershipStatus: "PENDING" | "APPROVED" | "REJECTED" | "PENDING_VERIFICATION" = "PENDING";
   let hasAdditionalInfo = false;
@@ -698,6 +701,7 @@ export default async function DashboardPage() {
     membershipStatus = currentUser.membershipStatus;
     const progressResult = calculateProfileProgress(currentUser);
     profileProgress = progressResult.total;
+    profileReadyForApplication = progressResult.isReadyForApplication;
     hasDocuments = hasBothApplicationsSubmitted(currentUser.documents);
     
     // Проверяем заполнение дополнительной информации
@@ -743,6 +747,7 @@ export default async function DashboardPage() {
       {currentUser && (
         <MembershipBanner
           profileProgress={profileProgress}
+          profileReadyForApplication={profileReadyForApplication}
           hasDocuments={hasDocuments}
           membershipStatus={membershipStatus}
           hasAdditionalInfo={hasAdditionalInfo}

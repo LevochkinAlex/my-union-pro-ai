@@ -12,6 +12,7 @@ import { hasBothApplicationsSubmitted } from "@/lib/documents-status";
 
 interface MembershipBannerProps {
   profileProgress: number; // 0-100
+  profileReadyForApplication?: boolean; // Готов ли профиль к подаче заявления
   hasDocuments: boolean;
   membershipStatus: string;
   hasAdditionalInfo?: boolean; // Заполнена ли дополнительная информация
@@ -20,6 +21,7 @@ interface MembershipBannerProps {
 
 export default function MembershipBanner({
   profileProgress: initialProfileProgress,
+  profileReadyForApplication: initialProfileReadyForApplication = false,
   hasDocuments: initialHasDocuments,
   membershipStatus: initialMembershipStatus,
   hasAdditionalInfo: initialHasAdditionalInfo = false,
@@ -54,6 +56,7 @@ export default function MembershipBanner({
   
   // Локальное состояние для обновления данных
   const [profileProgress, setProfileProgress] = useState(initialProfileProgress);
+  const [profileReadyForApplication, setProfileReadyForApplication] = useState(initialProfileReadyForApplication);
   const [hasDocuments, setHasDocuments] = useState(initialHasDocuments);
   const [membershipStatus, setMembershipStatus] = useState(initialMembershipStatus);
   const [hasAdditionalInfo, setHasAdditionalInfo] = useState(initialHasAdditionalInfo);
@@ -62,11 +65,12 @@ export default function MembershipBanner({
   // Обновляем данные при изменении пропсов
   useEffect(() => {
     setProfileProgress(initialProfileProgress);
+    setProfileReadyForApplication(initialProfileReadyForApplication);
     setHasDocuments(initialHasDocuments);
     setMembershipStatus(initialMembershipStatus);
     setHasAdditionalInfo(initialHasAdditionalInfo);
     setHasAwards(initialHasAwards);
-  }, [initialProfileProgress, initialHasDocuments, initialMembershipStatus, initialHasAdditionalInfo, initialHasAwards]);
+  }, [initialProfileProgress, initialProfileReadyForApplication, initialHasDocuments, initialMembershipStatus, initialHasAdditionalInfo, initialHasAwards]);
 
   // Периодически обновляем данные (каждые 30 секунд, если документы еще не отправлены)
   // ИСПРАВЛЕНО: Увеличен интервал и убран router.refresh() для предотвращения бесконечного цикла
@@ -102,7 +106,9 @@ export default function MembershipBanner({
         const documents = docsData.outgoingDocuments || docsData.documents || [];
         const newHasDocuments = hasBothApplicationsSubmitted(documents);
         const newMembershipStatus = user?.membershipStatus || membershipStatus;
-        const newProfileProgress = user ? calculateProfileProgress(user).total : profileProgress;
+        const progressResult = user ? calculateProfileProgress(user) : null;
+        const newProfileProgress = progressResult?.total ?? profileProgress;
+        const newProfileReadyForApplication = progressResult?.isReadyForApplication ?? profileReadyForApplication;
         
         // Проверяем заполнение дополнительной информации
         const newHasAdditionalInfo = !!(
@@ -139,6 +145,10 @@ export default function MembershipBanner({
         if (newProfileProgress !== profileProgress) {
           setProfileProgress(newProfileProgress);
         }
+
+        if (newProfileReadyForApplication !== profileReadyForApplication) {
+          setProfileReadyForApplication(newProfileReadyForApplication);
+        }
         
         if (newHasAdditionalInfo !== hasAdditionalInfo) {
           setHasAdditionalInfo(newHasAdditionalInfo);
@@ -164,7 +174,7 @@ export default function MembershipBanner({
       mounted = false;
       clearInterval(interval);
     };
-  }, [membershipStatus]); // Упрощены зависимости для предотвращения лишних перезапусков
+  }, [membershipStatus, profileReadyForApplication, profileProgress, hasDocuments, hasAdditionalInfo, hasAwards]); // Держим зависимости актуальными для корректных обновлений
 
   // Если пользователь APPROVED и заполнил все доп. информацию и награды - скрываем баннер
   if (membershipStatus === "APPROVED" && hasAdditionalInfo && hasAwards) {
@@ -314,10 +324,19 @@ export default function MembershipBanner({
   // Определяем текст и статус
   const getStatusInfo = () => {
     const isDocumentsInReview = membershipStatus === "DOCUMENTS_PENDING";
+    const hasSubmittedFlow =
+      hasDocuments &&
+      (isDocumentsInReview || membershipStatus === "PENDING_VERIFICATION" || membershipStatus === "PENDING");
+    const canStartOrRestartApplication =
+      profileReadyForApplication &&
+      (membershipStatus === "PROFILE_INCOMPLETE" ||
+        membershipStatus === "REJECTED" ||
+        membershipStatus === "EXCLUDED" ||
+        !hasDocuments);
 
     // Важен приоритет стадии: если заявления уже отправлены, не откатываем пользователя
     // обратно к шагу "Заполнить анкету" из-за процентов профиля.
-    if (hasDocuments || isDocumentsInReview) {
+    if (hasSubmittedFlow) {
       return {
         title: "Вас должны одобрить — ожидайте",
         description: "Ваши документы отправлены на проверку. Председатель должен одобрить заявку — ожидайте, как при первой подаче. После одобрения вы станете полноправным членом профсоюза.",
@@ -326,7 +345,7 @@ export default function MembershipBanner({
       };
     }
 
-    if (profileProgress < 100) {
+    if (!profileReadyForApplication) {
       return {
         title: "Заполните анкету, чтобы стать членом профсоюза",
         description: "Заполните все обязательные поля профиля для подачи заявления",
@@ -338,12 +357,19 @@ export default function MembershipBanner({
           setIsQuestionnaireOpen(true);
         },
       };
-    } else if (!hasDocuments) {
+    }
+
+    if (canStartOrRestartApplication) {
       return {
-        title: "Сгенерируйте документы для вступления",
-        description: "Ваш профиль заполнен. Теперь нужно сгенерировать и отправить документы",
-        buttonText: "Перейти к документам",
-        buttonAction: () => router.push("/dashboard/documents"),
+        title: "Профиль заполнен — можно подать заявление",
+        description: "Откройте анкету и отправьте заявления на вступление в профсоюз",
+        buttonText: "Подать заявление о вступлении",
+        buttonAction: () => {
+          if (typeof window !== "undefined" && window.sessionStorage) {
+            window.sessionStorage.setItem(QUESTIONNAIRE_MODAL_KEY, "1");
+          }
+          setIsQuestionnaireOpen(true);
+        },
       };
     } else {
       return {
@@ -433,12 +459,12 @@ export default function MembershipBanner({
         <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div
             className={`flex items-center gap-2 rounded-lg p-2 ${
-              profileProgress >= 100 || hasDocuments || membershipStatus === "APPROVED"
+              profileReadyForApplication || hasDocuments || membershipStatus === "APPROVED"
                 ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
                 : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
             }`}
           >
-            {profileProgress >= 100 || hasDocuments || membershipStatus === "APPROVED" ? (
+            {profileReadyForApplication || hasDocuments || membershipStatus === "APPROVED" ? (
               <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
@@ -455,7 +481,7 @@ export default function MembershipBanner({
             className={`flex items-center gap-2 rounded-lg p-2 ${
               hasDocuments || membershipStatus === "DOCUMENTS_PENDING"
                 ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                : profileProgress >= 100
+                : profileReadyForApplication
                 ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
                 : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
             }`}

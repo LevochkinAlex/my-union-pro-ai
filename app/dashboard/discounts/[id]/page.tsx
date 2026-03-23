@@ -251,7 +251,14 @@ export default function DiscountDetailPage() {
 
   const loadDiscount = async () => {
     try {
-      const response = await fetch(`/api/discounts?ids=${discountId}`);
+      const response = await fetch(`/api/discounts?ids=${encodeURIComponent(discountId)}`);
+      if (response.status === 401) {
+        const qs = searchParams.toString();
+        router.push(
+          `/login?callbackUrl=${encodeURIComponent(`/dashboard/discounts/${discountId}${qs ? `?${qs}` : ""}`)}`
+        );
+        return;
+      }
       const data = await response.json();
       
       if (data.discounts && data.discounts.length > 0) {

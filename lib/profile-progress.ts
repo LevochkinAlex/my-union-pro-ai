@@ -40,6 +40,7 @@ interface ProfileProgressResult {
   total: number; // Общий прогресс 0-100
   required: number; // Прогресс обязательных полей 0-100
   optional: number; // Прогресс дополнительных полей 0-100
+  isReadyForApplication: boolean; // Все обязательные поля заполнены
   requiredFields: {
     filled: number;
     total: number;
@@ -60,6 +61,7 @@ export function calculateProfileProgress(user: UserProfile | null): ProfileProgr
       total: 0,
       required: 0,
       optional: 0,
+      isReadyForApplication: false,
       requiredFields: { filled: 0, total: 0 },
       optionalFields: { filled: 0, total: 0 },
     };
@@ -119,16 +121,15 @@ export function calculateProfileProgress(user: UserProfile | null): ProfileProgr
   const optionalProgress = Math.round((filledOptional / optionalFields.length) * 100);
 
   // Общий прогресс: 70% обязательные + 30% дополнительные.
-  // Если все обязательные поля заполнены — считаем профиль готовым к документам (100%).
-  const totalProgress =
-    requiredProgress >= 100
-      ? 100
-      : Math.round(requiredProgress * 0.7 + optionalProgress * 0.3);
+  // Готовность к подаче документов считаем отдельным флагом, без искажения общей шкалы.
+  const totalProgress = Math.round(requiredProgress * 0.7 + optionalProgress * 0.3);
+  const isReadyForApplication = requiredProgress >= 100;
 
   return {
     total: totalProgress,
     required: requiredProgress,
     optional: optionalProgress,
+    isReadyForApplication,
     requiredFields: {
       filled: filledRequired,
       total: requiredFields.length,

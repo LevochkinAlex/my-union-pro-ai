@@ -218,6 +218,37 @@ export async function fetchBestBenefitsDiscounts(
   return await normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
 }
 
+/** Преобразует запись из локальной БД в сырой объект BB для normalizeDiscount */
+function localDiscountItemToBbRaw(d: DiscountItem): BestBenefitsDiscount {
+  return {
+    id: d.id,
+    name: d.title,
+    description: d.description ?? undefined,
+    short_description: d.shortDescription ?? undefined,
+    discount_value: d.discountValue ?? undefined,
+    promo_code: d.promoCode ?? undefined,
+    cta_url: d.partnerUrl ?? undefined,
+    image_url: d.imageUrl ?? undefined,
+    tags: d.tags?.length ? d.tags : undefined,
+    isPremium: d.isPremium,
+    categories: d.categories?.length
+      ? d.categories.map((c) => ({ id: c.id, name: c.name, order: c.order ?? undefined }))
+      : undefined,
+    main_category: d.mainCategory
+      ? { id: d.mainCategory.id, name: d.mainCategory.name, order: d.mainCategory.order ?? undefined }
+      : undefined,
+    cities:
+      d.cities?.filter((c) => c.id !== 0 && c.name?.trim()).map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug ?? undefined,
+      })) ?? undefined,
+    updated_at: d.updatedAt ?? undefined,
+    end: d.validUntil ?? undefined,
+    options: d.options?.length ? d.options : undefined,
+  };
+}
+
 async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefitsResponse> {
   if (!API_BASE_URL) {
     throw new Error("BestBenefits API url is not defined");
@@ -249,20 +280,50 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
         if (singleResponse.ok) {
           const singleData = await singleResponse.json();
           const discount = singleData.data || singleData;
-          if (discount) {
+          const list = Array.isArray(discount) ? discount : discount ? [discount] : [];
+          if (list.length > 0) {
             return {
-              data: Array.isArray(discount) ? discount : [discount],
+              data: list,
               meta: {
-                total: 1,
-                per_page: 1,
+                total: list.length,
+                per_page: list.length,
                 current_page: 1,
                 last_page: 1,
               },
             } as BestBenefitsResponse;
           }
+        } else {
+          console.warn(
+            `[best-benefits] Single product ${idList[0]} → HTTP ${singleResponse.status}, trying local DB`
+          );
         }
       } catch (error) {
         console.warn("[best-benefits] Error fetching single discount:", error);
+      }
+
+      // BB часто не отдаёт /products/{id} сервисному токену; общий /products может не содержать id на первой странице.
+      try {
+        const local = await getDiscountsFromLocalDB({
+          ids: String(idList[0]),
+          page: 1,
+          limit: 5,
+        });
+        if (local?.discounts?.length) {
+          console.log(
+            `[best-benefits] Single id ${idList[0]} loaded from local DB (${local.discounts.length} row(s))`
+          );
+          return {
+            data: local.discounts.map(localDiscountItemToBbRaw),
+            meta: {
+              total: local.discounts.length,
+              per_page: local.discounts.length,
+              current_page: 1,
+              last_page: 1,
+            },
+          } as BestBenefitsResponse;
+        }
+      } catch (locErr) {
+        console.warn("[best-benefits] Local DB fallback for single product id failed:", locErr);
       }
     }
     
@@ -512,7 +573,14 @@ async function normalizeResponse(
   // Filter by city (fallback): применяем локально ТОЛЬКО когда не удалось передать cityName в BB API.
   // Если cityName уже есть, сервер BB сам фильтрует корректно и возвращает согласованную pagination/meta.
   // ⚠️ НЕ фильтруем по городу при поиске - показываем все результаты поиска.
-  if (params.cityId && !params.search && !params.cityName) {
+  // ⚠️ НЕ фильтруем по городу при запросе конкретных ids (карточка детали / избранное) — иначе скидка «пропадает».
+  const hasIdLookup =
+    typeof params.ids === "string" &&
+    params.ids
+      .split(",")
+      .map((s) => s.trim())
+      .some((s) => s.length > 0);
+  if (params.cityId && !params.search && !params.cityName && !hasIdLookup) {
     // Находим название выбранного города для логирования
     const selectedCityName = discounts
       .flatMap(d => d.cities)

@@ -59,7 +59,7 @@ export default async function DiscountsPage() {
       getDiscountPreferenceSafe(userId),
       prisma.user.findUnique({
         where: { id: userId },
-        select: { address: true, preferredDiscountCity: true }
+        select: { address: true, region: true, preferredDiscountCity: true },
       }).catch((error) => {
         console.error("[discounts] Error fetching user:", error);
         return null;
@@ -88,11 +88,8 @@ export default async function DiscountsPage() {
   let autoCityId: number | null = null;
   
   // 1. Приоритет: preferredDiscountCity (явно установленный пользователем)
-  if (user?.preferredDiscountCity) {
-    const city = initialData.cities?.find(c => 
-      c.name.toLowerCase().includes(user.preferredDiscountCity!.toLowerCase()) ||
-      user.preferredDiscountCity!.toLowerCase().includes(c.name.toLowerCase())
-    );
+  if (user?.preferredDiscountCity && initialData.cities?.length) {
+    const city = pickBestCityMatch(initialData.cities, user.preferredDiscountCity);
     if (city) {
       autoCityId = city.id;
       console.log(`[discounts] Using preferred city from profile: ${city.name} (ID: ${city.id})`);
@@ -102,11 +99,8 @@ export default async function DiscountsPage() {
   // 2. Fallback: пытаемся извлечь из адреса/региона (если preferredDiscountCity не установлен)
   if (!autoCityId && (user?.address || user?.region)) {
     const cityName = extractCityFromAddress(user.address, user.region);
-    if (cityName && initialData.cities) {
-      const city = initialData.cities.find(c => 
-        c.name.toLowerCase().includes(cityName.toLowerCase()) ||
-        cityName.toLowerCase().includes(c.name.toLowerCase())
-      );
+    if (cityName && initialData.cities?.length) {
+      const city = pickBestCityMatch(initialData.cities, cityName);
       if (city) {
         autoCityId = city.id;
         console.log(`[discounts] Auto-detected city from address: ${city.name} (ID: ${city.id})`);
@@ -153,6 +147,56 @@ export default async function DiscountsPage() {
       />
     </div>
   );
+}
+
+/**
+ * Подбор города из справочника BB по строке из профиля/адреса.
+ *
+ * Раньше использовался наивный `includes()`: для «Москва» первым совпадением часто оказывался
+ * «Климовск (Москва)», т.к. в названии есть подстрока «москва».
+ */
+function pickBestCityMatch(
+  cities: { id: number; name: string }[],
+  userCity: string
+): { id: number; name: string } | null {
+  const u = userCity.trim().toLowerCase();
+  if (!u || !cities.length) return null;
+
+  const scoreCity = (cityName: string): number => {
+    const n = cityName.trim().toLowerCase();
+    if (!n) return 0;
+    if (n === u) return 100;
+
+    const base = n.replace(/\s*\([^)]*\)\s*/g, "").trim();
+    const parenMatch = n.match(/\(([^)]+)\)/);
+    const paren = parenMatch ? parenMatch[1].trim().toLowerCase() : "";
+
+    if (base === u) return 92;
+    if (n.startsWith(u + " ") || n.startsWith(u + "(")) return 88;
+    if (base.startsWith(u + " ")) return 82;
+    // «Зеленоград (Москва)» при запросе «Москва» — только регион в скобках, не основной город
+    if (paren === u && base !== u) return 35;
+    if (n.includes(u)) return 55;
+    if (u.includes(n)) return 48;
+    return 0;
+  };
+
+  const MIN_SCORE = 50;
+  let best: { id: number; name: string } | null = null;
+  let bestScore = 0;
+
+  for (const c of cities) {
+    const s = scoreCity(c.name);
+    if (s < MIN_SCORE) continue;
+    if (s > bestScore) {
+      bestScore = s;
+      best = c;
+    } else if (s === bestScore && best) {
+      if (c.name.length < best.name.length) best = c;
+    }
+  }
+
+  return best;
 }
 
 async function getDiscountPreferenceSafe(userId: string) {
