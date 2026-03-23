@@ -71,10 +71,6 @@ export interface PPOOption {
   organizationType: string;
 }
 
-type MappingRow = Awaited<
-  ReturnType<typeof prisma.workplacePPOMapping.findMany>
->[number];
-
 /**
  * Найти все ППО, привязанные к месту работы (по названию и ИНН).
  * Не подставляем «чужую» ППО: при нескольких записях на ИНН оставляем только сильное совпадение названия;
@@ -106,10 +102,8 @@ export async function findPPOsByWorkplace(
 
   const orderBy = [{ verified: "desc" as const }, { workplaceName: "asc" as const }];
 
-  let mappings: MappingRow[] = [];
-
   // 1) Точное совпадение: варианты ИНН + название без учёта регистра
-  mappings = await prisma.workplacePPOMapping.findMany({
+  let mappings = await prisma.workplacePPOMapping.findMany({
     where: {
       workplaceInn: { in: innVariants },
       workplaceName: { equals: name, mode: "insensitive" },
@@ -149,7 +143,7 @@ export async function findPPOsByWorkplace(
   // 4) Разное юр. имя в справочнике vs DaData — по значимым словам, сузить по ИНН
   if (mappings.length === 0) {
     const tokens = workplaceNameSearchTokens(name);
-    let tokenMappings: MappingRow[] = [];
+    let tokenMappings: typeof mappings = [];
     if (tokens.length >= 2) {
       tokenMappings = await prisma.workplacePPOMapping.findMany({
         where: {
