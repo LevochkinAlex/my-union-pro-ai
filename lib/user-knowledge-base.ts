@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { generateEmbedding } from "@/lib/knowledge/embeddings";
-import { User, Organization } from "@prisma/client";
+import { User, Organization, type Prisma } from "@prisma/client";
 
 interface UserWithOrganization extends User {
   organization?: Organization | null;
@@ -163,7 +163,7 @@ export async function saveUserProfileToKnowledgeBase(
         content,
         embedding,
         source: "profile_update",
-        metadata: profileMeta,
+        metadata: profileMeta as Prisma.InputJsonValue,
         tokens: Math.ceil(content.length / 4), // Примерная оценка токенов
       },
     });
@@ -221,7 +221,7 @@ export async function saveUserInteractionToKnowledgeBase(
         metadata: {
           ...metadata,
           ...extraMeta,
-        },
+        } as Prisma.InputJsonValue,
         tokens: Math.ceil(content.length / 4),
       },
     });
