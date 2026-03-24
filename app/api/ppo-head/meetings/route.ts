@@ -208,6 +208,15 @@ export async function POST(request: NextRequest) {
       });
     });
 
+    const invitedGuestsFromExternal = (externalParticipants as Array<{ name?: string; position?: string }>)
+      .filter((ext) => ext.name?.trim())
+      .map((ext) => {
+        const n = ext.name!.trim();
+        const pos = typeof ext.position === "string" ? ext.position.trim() : "";
+        return pos ? `${n} (${pos})` : n;
+      })
+      .join(", ");
+
     // Создание заседания с участниками и пунктами повестки
     const meeting = await prisma.meeting.create({
       data: {
@@ -221,6 +230,7 @@ export async function POST(request: NextRequest) {
         scheduledTime,
         location,
         onlineLink,
+        invitedGuests: invitedGuestsFromExternal || undefined,
         createdById: session.user.id,
         // Добавление участников
         participants: {

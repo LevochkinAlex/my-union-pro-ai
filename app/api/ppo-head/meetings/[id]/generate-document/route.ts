@@ -8,6 +8,7 @@ import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
 import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { clearAllMeetingNotifications, notifyParticipantsAboutProtocolApproval } from "@/lib/notifications";
+import { mergeInvitedGuestParts } from "@/lib/meeting-invited-guests";
 
 // Форматирование даты в русском формате
 function formatDate(date: Date): string {
@@ -236,9 +237,11 @@ export async function POST(
     const presentVotersCount = presentMembers.filter((p: any) => p.canVote).length;
     const quorumRequired = Math.floor(totalEligible / 2) + 1;
 
-    const presentMembersList = presentMembers.map(p =>
-      p.user ? formatUserName(p.user) : p.externalName || ""
-    ).filter(Boolean);
+    // В «Присутствовали на заседании» только члены профкома с правом голоса (приглашённые — во «Присутствовали приглашённые»)
+    const presentMembersList = presentMembers
+      .filter((p: { canVote?: boolean }) => p.canVote)
+      .map((p) => (p.user ? formatUserName(p.user) : p.externalName || ""))
+      .filter(Boolean);
     const absentMembersList = absentMembers.map(p =>
       p.user ? formatUserName(p.user) : p.externalName || ""
     ).filter(Boolean);
@@ -286,10 +289,12 @@ export async function POST(
       documentType === "PROTOCOL" && bodyMeetingPlace !== undefined && bodyMeetingPlace !== null
         ? String(bodyMeetingPlace).trim()
         : meeting.location || "";
-    const invitedGuestsValue =
+    const invitedGuestsStored =
       documentType === "PROTOCOL" && bodyInvitedGuests !== undefined && bodyInvitedGuests !== null
-        ? String(bodyInvitedGuests).trim()
+        ? String(bodyInvitedGuests)
         : (meeting as any).invitedGuests || "";
+    const invitedGuestsList = mergeInvitedGuestParts(invitedGuestsStored, meeting.participants);
+    const invitedGuestsValue = invitedGuestsList.join(", ");
 
     const templateData = {
       organizationName: meeting.organization.name,
@@ -314,6 +319,7 @@ export async function POST(
       absentCount: absentMembersList.length,
       allMembersList,
       invitedGuests: invitedGuestsValue,
+      invitedGuestsList,
 
       totalMembers: totalEligible,
       presentCount: presentVotersCount,
@@ -479,9 +485,7 @@ export async function POST(
       if (typeof bodyMeetingTime === "string" && bodyMeetingTime.trim() !== "") {
         meetingUpdateData.scheduledTime = bodyMeetingTime.trim();
       }
-      if (bodyInvitedGuests !== undefined && bodyInvitedGuests !== null) {
-        meetingUpdateData.invitedGuests = String(bodyInvitedGuests).trim() || null;
-      }
+      meetingUpdateData.invitedGuests = invitedGuestsValue.trim() || null;
       if (Object.keys(meetingUpdateData).length > 0) {
         await prisma.meeting.update({
           where: { id: meeting.id },
@@ -743,6 +747,10 @@ function generateProtocolHTML(meeting: any, data: any): string {
     `${i + 1}. ${escapeHtml(name)}`
   ).join("<br>");
 
+  const invitedGuestLines = (data.invitedGuestsList || []).map((name: string, i: number) =>
+    `${i + 1}. ${escapeHtml(name)}`
+  ).join("<br>");
+
   return `
 <!DOCTYPE html>
 <html>
@@ -802,7 +810,10 @@ function generateProtocolHTML(meeting: any, data: any): string {
     <div style="padding-left: 20px; margin: 4px 0;">${absentMemberLines}</div>
     ` : ""}
 
-    ${data.invitedGuests ? `<p><strong>Присутствовали приглашённые:</strong> ${escapeHtml(data.invitedGuests)}</p>` : ""}
+    ${invitedGuestLines ? `
+    <p><strong>Присутствовали приглашённые:</strong> ${data.invitedGuestsList.length} чел.</p>
+    <div style="padding-left: 20px; margin: 4px 0;">${invitedGuestLines}</div>
+    ` : ""}
   </div>
 
   <p class="quorum-statement">В соответствии с п.&nbsp;3 ст.&nbsp;18 Устава Профсоюза заседание профсоюзного комитета считается правомочным (имеет кворум) и объявляется открытым.</p>

@@ -67,21 +67,6 @@ export function getInitials(user: ChatUser | any | null | undefined): string {
 }
 
 /**
- * Форматировать время сообщения
- */
-export function formatTime(dateString: string | Date): string {
-  const date = typeof dateString === "string" ? new Date(dateString) : dateString;
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const minutes = Math.floor(diffMs / 60000);
-
-  if (minutes < 1) return "только что";
-  if (minutes < 60) return `${minutes} мин назад`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)} ч назад`;
-  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-}
-
-/**
  * Получить URL файла с CDN
  */
 export function getFileUrl(filePath: string | null | undefined): string {

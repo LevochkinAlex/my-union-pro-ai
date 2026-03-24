@@ -49,13 +49,12 @@ export async function POST(
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
     }
 
-    const isChairman = meeting.participants.some(
-      (p) => p.user?.id === session.user.id && p.role === "CHAIRMAN"
-    );
+    const canApproveAgenda =
+      perm.isChairman || (!!perm.roleName && /зам|заместитель/i.test(perm.roleName));
 
-    if (!isChairman) {
+    if (!canApproveAgenda) {
       return NextResponse.json(
-        { error: "Только председатель может утвердить документ" },
+        { error: "Утвердить повестку могут только председатель или заместитель председателя" },
         { status: 403 }
       );
     }
