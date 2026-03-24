@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentType, DocumentStatus, DocumentCategory } from "@prisma/client";
 import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
+import { mergeInvitedGuestParts } from "@/lib/meeting-invited-guests";
 
 function escapeHtml(s: string | null | undefined): string {
   if (s == null || s === "") return "";
@@ -135,7 +136,7 @@ function buildExtractHTML(params: {
   <div class="meta-list">${allNumbered.split("\n").map((line) => `<p class="meta-row" style="margin: 2px 0; padding-left: 20px;">${line}</p>`).join("")}</div>
   <p class="meta-row">Присутствовали на заседании: ${presentCount} чел.</p>
   <div class="meta-list">${presentNumbered.split("\n").map((line) => `<p class="meta-row" style="margin: 2px 0; padding-left: 20px;">${line}</p>`).join("")}</div>
-  ${invitedNumbered ? `<p class="meta-row">Присутствовали приглашенные:</p><div class="meta-list">${invitedNumbered.split("\n").map((line) => `<p class="meta-row" style="margin: 2px 0; padding-left: 20px;">${line}</p>`).join("")}</div>` : ""}
+  ${invitedNumbered ? `<p class="meta-row">Присутствовали приглашенные: ${invitedGuestsList.length} чел.</p><div class="meta-list">${invitedNumbered.split("\n").map((line) => `<p class="meta-row" style="margin: 2px 0; padding-left: 20px;">${line}</p>`).join("")}</div>` : ""}
   <p class="meta-row">В соответствии с п.3 ст. 18 Устава Профсоюза заседание профсоюзного комитета считается правомочным (имеет кворум) и объявляется открытым.</p>
   ${blocksHtml}
   <div style="margin-top: 50px; page-break-inside: avoid; break-inside: avoid;">
@@ -215,8 +216,9 @@ export async function POST(
 
     const protocolNumber = meeting.protocolDocument.regNumber || meeting.number || "—";
     const meetingDate = formatDate(meeting.scheduledDate);
-    const presentParticipants = meeting.participants.filter((p: { attendance: string }) =>
-      ["PRESENT", "PRESENT_OFFLINE", "PRESENT_ONLINE"].includes(p.attendance)
+    const presentParticipants = meeting.participants.filter(
+      (p: { attendance: string; canVote?: boolean }) =>
+        ["PRESENT", "PRESENT_OFFLINE", "PRESENT_ONLINE"].includes(p.attendance) && p.canVote
     );
     const presentMembersList = presentParticipants
       .map((p: { user?: { lastName: string; firstName: string; middleName?: string | null } | null; externalName?: string }) =>
@@ -231,13 +233,11 @@ export async function POST(
       .filter(Boolean) as string[];
     const location = body.location !== undefined && body.location !== null ? String(body.location).trim() : (meeting.location ?? "");
     const meetingTime = body.meetingTime !== undefined && body.meetingTime !== null ? String(body.meetingTime).trim() : (meeting.scheduledTime ?? "");
-    const invitedGuestsRaw = body.invitedGuests !== undefined && body.invitedGuests !== null ? String(body.invitedGuests).trim() : (meeting.invitedGuests ?? "");
-    const invitedGuestsList = invitedGuestsRaw
-      ? invitedGuestsRaw
-          .split(/[,;]/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+    const invitedGuestsRaw =
+      body.invitedGuests !== undefined && body.invitedGuests !== null
+        ? String(body.invitedGuests).trim()
+        : (meeting.invitedGuests ?? "");
+    const invitedGuestsList = mergeInvitedGuestParts(invitedGuestsRaw, meeting.participants);
     const organizationChairmanName = meeting.organization.chairmanName || "";
 
     const secretaryParticipant = await prisma.meetingParticipant.findFirst({

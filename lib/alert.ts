@@ -5,18 +5,6 @@
 import { showAlert, showConfirm } from "@/components/ui/Alert";
 
 /**
- * Показывает информационное сообщение
- */
-export function alert(message: string, title?: string) {
-  showAlert({
-    message,
-    title: title || "Уведомление",
-    type: "info",
-    confirmText: "OK",
-  });
-}
-
-/**
  * Показывает сообщение об успехе
  */
 export function alertSuccess(message: string, title?: string) {
@@ -67,31 +55,6 @@ export function confirm(
     type: "warning",
     confirmText,
     cancelText,
-  });
-}
-
-/**
- * Показывает диалог с кастомными кнопками
- */
-export function alertCustom(options: {
-  message: string;
-  title?: string;
-  type?: "info" | "success" | "warning" | "error";
-  confirmText?: string;
-  cancelText?: string;
-  onConfirm?: () => void;
-  onCancel?: () => void;
-  autoClose?: number;
-}) {
-  showAlert({
-    message: options.message,
-    title: options.title,
-    type: options.type || "info",
-    confirmText: options.confirmText || "OK",
-    cancelText: options.cancelText,
-    onConfirm: options.onConfirm,
-    onCancel: options.onCancel,
-    autoClose: options.autoClose,
   });
 }
 

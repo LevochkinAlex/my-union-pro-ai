@@ -349,10 +349,3 @@ export class Logger {
   }
 }
 
-// Helper function for Express-like middleware
-export function createLoggerMiddleware() {
-  return async (error: Error, source: string) => {
-    await Logger.error(source, error.message, error);
-  };
-}
-

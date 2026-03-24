@@ -72,22 +72,6 @@ export const RUSSIAN_REGIONS: RussianRegion[] = [
   }
 ];
 
-// Функция для получения региона по названию города
-export function getRegionByCity(cityName: string): RussianRegion | null {
-  for (const region of RUSSIAN_REGIONS) {
-    if (region.cities.some(city => city.toLowerCase() === cityName.toLowerCase())) {
-      return region;
-    }
-  }
-  return null;
-}
-
-// Функция для получения всех городов региона
-export function getCitiesByRegion(regionId: string): string[] {
-  const region = RUSSIAN_REGIONS.find(r => r.id === regionId);
-  return region ? region.cities : [];
-}
-
 // Функция для получения всех городов всех регионов
 export function getAllRussianCities(): string[] {
   return RUSSIAN_REGIONS.flatMap(region => region.cities);
