@@ -123,11 +123,28 @@ export async function saveUserProfileToKnowledgeBase(
       return;
     }
 
-    // Генерируем embedding
-    const embedding = await generateEmbedding(content);
-    if (!embedding || embedding.length === 0) {
-      console.warn("[user-knowledge-base] Не удалось сгенерировать embedding");
-      return;
+    let embedding: number[] = [];
+    const profileMeta: Record<string, unknown> = {
+      updatedAt: new Date().toISOString(),
+      hasOrganization: !!user.organization,
+      hasChildren: user.hasChildren,
+    };
+    try {
+      const emb = await generateEmbedding(content);
+      if (emb?.length) {
+        embedding = emb;
+      } else {
+        profileMeta.embeddingSkipped = true;
+        profileMeta.embeddingReason = "empty_vector";
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        "[user-knowledge-base] Embedding для профиля недоступен, сохраняем текст без вектора:",
+        msg,
+      );
+      profileMeta.embeddingSkipped = true;
+      profileMeta.embeddingError = msg;
     }
 
     // Удаляем старые chunks с данными профиля
@@ -146,11 +163,7 @@ export async function saveUserProfileToKnowledgeBase(
         content,
         embedding,
         source: "profile_update",
-        metadata: {
-          updatedAt: new Date().toISOString(),
-          hasOrganization: !!user.organization,
-          hasChildren: user.hasChildren,
-        },
+        metadata: profileMeta,
         tokens: Math.ceil(content.length / 4), // Примерная оценка токенов
       },
     });
@@ -175,11 +188,27 @@ export async function saveUserInteractionToKnowledgeBase(
     const userKB = await getOrCreateUserKnowledgeBase(userId);
 
     const content = `Пользователь: ${userMessage}\nИИ: ${aiResponse}`;
-    const embedding = await generateEmbedding(content);
 
-    if (!embedding || embedding.length === 0) {
-      console.warn("[user-knowledge-base] Не удалось сгенерировать embedding для взаимодействия");
-      return;
+    let embedding: number[] = [];
+    const extraMeta: Record<string, unknown> = {
+      timestamp: new Date().toISOString(),
+    };
+    try {
+      const emb = await generateEmbedding(content);
+      if (emb?.length) {
+        embedding = emb;
+      } else {
+        extraMeta.embeddingSkipped = true;
+        extraMeta.embeddingReason = "empty_vector";
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        "[user-knowledge-base] Embedding для взаимодействия недоступен, сохраняем запись для админки:",
+        msg,
+      );
+      extraMeta.embeddingSkipped = true;
+      extraMeta.embeddingError = msg;
     }
 
     await prisma.userKnowledgeChunk.create({
@@ -191,7 +220,7 @@ export async function saveUserInteractionToKnowledgeBase(
         source: "ai_interaction",
         metadata: {
           ...metadata,
-          timestamp: new Date().toISOString(),
+          ...extraMeta,
         },
         tokens: Math.ceil(content.length / 4),
       },

@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
+import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhanced-search";
+import { callAI, buildAssistantSystemPrompt } from "@/lib/ai-call";
 import * as Sentry from "@sentry/nextjs";
 import { isDemoUserId } from "@/lib/demo";
 
@@ -318,97 +320,76 @@ export async function POST(request: NextRequest) {
     let aiResponse: string;
 
     try {
-      console.log(`[chat/ai] ========== CALLING AI API ==========`);
+      console.log(`[chat/ai] ========== CALLING AI DIRECTLY ==========`);
       console.log(`[chat/ai] Chat ID: ${chat.id}, User ID: ${userId}`);
-      
-      // Получаем историю сообщений для контекста
+
+      // Загрузка бота
+      const bot = await prisma.chatBot.findFirst({
+        where: { isActive: true },
+        include: { apiProvider: true },
+      });
+      if (!bot) {
+        throw new Error("Бот не настроен. Обратитесь к администратору.");
+      }
+      const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
+      if (!apiKey) {
+        throw new Error("API ключ не настроен. Обратитесь к администратору.");
+      }
+
+      // Загрузка пользователя для системного промпта
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { organization: true },
+      });
+
+      // Расширенный поиск по базе знаний
+      let formattedSearchInfo = "";
+      try {
+        const searchResults = await enhancedSearch(content.trim(), bot.id, userId);
+        formattedSearchInfo = formatSearchResultsForPrompt(searchResults);
+        console.log(`[chat/ai] Enhanced search: knowledge=${searchResults.knowledgeBaseChunks.length}, orgs=${searchResults.organizationInfo.length}`);
+      } catch (searchErr) {
+        console.warn("[chat/ai] Enhanced search failed (continuing):", searchErr);
+      }
+
+      const systemPrompt = buildAssistantSystemPrompt(
+        user || { firstName: null, email: null, organization: null },
+        formattedSearchInfo,
+      );
+
+      // История сообщений для контекста
       const history = await prisma.chatMessage.findMany({
         where: { chatId: chat.id },
         orderBy: { createdAt: "desc" },
         take: 20,
-        select: {
-          content: true,
-          senderId: true,
-          messageType: true,
-        },
+        select: { content: true, senderId: true, messageType: true },
       });
-
-      console.log(`[chat/ai] History loaded: ${history.length} messages`);
 
       const messagesForAI = history
         .reverse()
-        .filter(m => m.messageType !== "system")
-        .map(m => ({
+        .filter((m) => m.messageType !== "system")
+        .map((m) => ({
           role: m.senderId === userId ? "user" : "assistant",
           content: m.content,
         }));
 
-      console.log(`[chat/ai] Messages for AI: ${messagesForAI.length} (filtered from ${history.length})`);
+      console.log(`[chat/ai] Messages for AI: ${messagesForAI.length}`);
 
-      const apiUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/api/assistant/chat`;
-      console.log(`[chat/ai] Calling AI API: ${apiUrl}`);
+      const messages = [
+        { role: "system", content: systemPrompt },
+        ...messagesForAI.slice(-10),
+      ];
 
-      // Вызываем ИИ API
-      // ВАЖНО: /api/assistant/chat ожидает { message: string }, а не { messages: array }
-      const aiApiResponse = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: request.headers.get("cookie") || "",
-        },
-        body: JSON.stringify({
-          message: content.trim(), // Отправляем текущее сообщение пользователя
-        }),
-      });
+      aiResponse = await callAI(bot, messages);
 
-      console.log(`[chat/ai] AI API response status: ${aiApiResponse.status}`);
-
-      if (aiApiResponse.ok) {
-        const aiData = await aiApiResponse.json();
-        console.log(`[chat/ai] AI API response keys:`, Object.keys(aiData));
-        console.log(`[chat/ai] AI API response data:`, JSON.stringify(aiData, null, 2).substring(0, 500));
-        
-        // Извлекаем ответ из разных возможных полей (всегда строка для markdown)
-        let raw = aiData.message ?? aiData.response ?? aiData.content ?? "";
-        if (typeof raw !== "string") {
-          raw = (raw && (raw.text ?? raw.content) != null)
-            ? String(raw.text ?? raw.content)
-            : (raw != null ? JSON.stringify(raw) : "");
-        }
-        aiResponse = typeof raw === "string" ? raw : "";
-
-        if (!aiResponse || aiResponse.trim().length === 0) {
-          console.error(`[chat/ai] ❌ CRITICAL: AI returned empty response!`);
-          console.error(`[chat/ai] Full response data:`, JSON.stringify(aiData, null, 2));
-          throw new Error("ИИ вернул пустой ответ");
-        }
-        
-        console.log(`[chat/ai] ✅ AI response received, length: ${aiResponse.length}, isString: ${typeof aiResponse === "string"}`);
-      } else {
-        const errorText = await aiApiResponse.text();
-        console.error(`[chat/ai] ❌ AI API HTTP error: ${aiApiResponse.status} ${aiApiResponse.statusText}`);
-        console.error(`[chat/ai] Error response body:`, errorText.substring(0, 500));
-        
-        // Пробуем распарсить JSON ошибки
-        let errorMessage = `Ошибка API: ${aiApiResponse.status}`;
-        try {
-          const errorData = JSON.parse(errorText);
-          console.error(`[chat/ai] Error details:`, errorData);
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch {
-          // Не JSON, используем текст
-          errorMessage = errorText.substring(0, 200) || errorMessage;
-        }
-        
-        throw new Error(errorMessage);
+      if (!aiResponse || aiResponse.trim().length === 0) {
+        throw new Error("ИИ вернул пустой ответ");
       }
+
+      console.log(`[chat/ai] ✅ AI response received, length: ${aiResponse.length}`);
     } catch (aiError: any) {
-      console.error("[chat/ai] ❌ ========== AI API EXCEPTION ==========");
-      console.error("[chat/ai] Error type:", aiError?.name);
-      console.error("[chat/ai] Error message:", aiError?.message);
-      console.error("[chat/ai] Error stack:", aiError?.stack?.substring(0, 1000));
-      
-      // НЕ используем дефолтное сообщение - пробрасываем ошибку дальше
+      console.error("[chat/ai] ❌ ========== AI EXCEPTION ==========");
+      console.error("[chat/ai] Error:", aiError?.message);
       throw aiError;
     }
 
