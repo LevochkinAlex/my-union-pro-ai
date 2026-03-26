@@ -492,7 +492,7 @@ export default function LicensePage() {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- статичный файл из public, нужен для html2canvas/PDF */}
                 <img
-                  src="/%D0%9F%D0%B5%D1%87%D0%B0%D1%82%D1%8C.png"
+                  src="/license-stamp.png"
                   alt=""
                   className="h-auto max-h-40 w-auto max-w-[min(260px,52%)] object-contain object-bottom sm:max-h-48 sm:max-w-[min(300px,48%)]"
                 />

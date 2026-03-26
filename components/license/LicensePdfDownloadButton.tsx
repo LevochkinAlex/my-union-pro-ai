@@ -19,6 +19,24 @@ export function LicensePdfDownloadButton() {
 
     setLoading(true);
     try {
+      // Дождаться загрузки картинок (печать в public), иначе html2canvas на проде даёт пустой слой
+      const imgs = el.querySelectorAll("img");
+      await Promise.all(
+        [...imgs].map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete && img.naturalHeight > 0) {
+                resolve();
+                return;
+              }
+              const done = () => resolve();
+              img.addEventListener("load", done, { once: true });
+              img.addEventListener("error", done, { once: true });
+              setTimeout(done, 4000);
+            }),
+        ),
+      );
+
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
