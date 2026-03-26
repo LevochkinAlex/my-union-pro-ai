@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LicensePdfDownloadButton } from "@/components/license/LicensePdfDownloadButton";
 
 export const metadata: Metadata = {
   title: "Публичная оферта | МойСоюз",
@@ -44,25 +45,32 @@ export default function LicensePage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 print:bg-white">
       <div className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
-        <Link
-          href="/"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white mb-8 print:hidden"
-        >
-          ← На главную
-        </Link>
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
+          <Link
+            href="/"
+            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          >
+            ← На главную
+          </Link>
+          <LicensePdfDownloadButton />
+        </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+        <div
+          id="license-offer-pdf"
+          className="rounded-xl bg-white p-1 text-gray-900 shadow-sm ring-1 ring-gray-200/80 dark:bg-gray-950 dark:text-gray-100 dark:ring-gray-800 sm:p-2"
+        >
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1 px-3 pt-2 sm:px-4 sm:pt-3">
           Публичная оферта
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 px-3 sm:px-4">
           на заключение лицензионного договора о предоставлении права использования
           программного обеспечения «МойСоюз» (myunion.pro)
         </p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mb-8">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-6 px-3 sm:px-4">
           Редакция от 25 февраля 2026 г. &nbsp;|&nbsp; г.&nbsp;Москва
         </p>
 
-        <div className="prose prose-gray dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 text-[15px] leading-relaxed space-y-1">
+        <div className="prose prose-gray dark:prose-invert max-w-none px-3 pb-4 text-gray-700 dark:text-gray-300 text-[15px] leading-relaxed space-y-1 sm:px-4 sm:pb-6">
 
           <p>
             Настоящий документ является официальным предложением (публичной офертой)
@@ -510,6 +518,7 @@ export default function LicensePage() {
               </table>
             </div>
           </S>
+        </div>
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-4 text-sm print:hidden">

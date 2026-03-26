@@ -98,6 +98,9 @@ importers:
       heic2any:
         specifier: ^0.0.4
         version: 0.0.4
+      html2canvas:
+        specifier: ^1.4.1
+        version: 1.4.1
       ioredis:
         specifier: ^5.9.3
         version: 5.9.3
@@ -13649,8 +13652,7 @@ snapshots:
       bare-path: 3.0.0
     optional: true
 
-  base64-arraybuffer@1.0.2:
-    optional: true
+  base64-arraybuffer@1.0.2: {}
 
   base64-js@0.0.8: {}
 
@@ -14039,7 +14041,6 @@ snapshots:
   css-line-break@2.1.0:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   css-select@5.2.2:
     dependencies:
@@ -15258,7 +15259,6 @@ snapshots:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
-    optional: true
 
   http-parser-js@0.5.10: {}
 
@@ -15565,7 +15565,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 20.19.33
+      '@types/node': 25.3.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
@@ -17747,7 +17747,6 @@ snapshots:
   text-segmentation@1.0.3:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   three@0.183.0: {}
 
@@ -18026,7 +18025,6 @@ snapshots:
   utrie@1.0.2:
     dependencies:
       base64-arraybuffer: 1.0.2
-    optional: true
 
   uuid@11.1.0: {}
 
