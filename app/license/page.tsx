@@ -484,38 +484,52 @@ export default function LicensePage() {
 
           {/* 14 */}
           <S num="14" title="Реквизиты Лицензиара">
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 not-prose">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {([
-                    ["Полное наименование", "Общество с ограниченной ответственностью «ЯППИКС»"],
-                    ["Сокращённое наименование", "ООО «ЯППИКС»"],
-                    ["ОГРН", "1267700040684"],
-                    ["ИНН", "9707055804"],
-                    ["КПП", "770701001"],
-                    [
-                      "Юридический адрес",
-                      "127055, г. Москва, вн.тер.г. муниципальный округ Тверской, ул. Палиха, д. 7–9, к. 4, пом. 1/1",
-                    ],
-                    ["Расчётный счёт", "40702810910002055576"],
-                    ["Банк", "АО «Тинькофф Банк»"],
-                    ["БИК", "044525974"],
-                    ["Корреспондентский счёт", "30101810145250000974"],
-                    ["Система налогообложения", "УСН (доходы, 6%)"],
-                    ["Генеральный директор", "Усманов Ренат Рушанович"],
-                    ["Телефон", "+7 995 095 55 93"],
-                    ["Сайт", "yappix.ru"],
-                    ["Электронная почта", "sales@yappix.ru, ceo@yappix.ru"],
-                  ] as const).map(([label, value]) => (
-                    <tr key={label}>
-                      <td className="px-4 py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap align-top w-52">
-                        {label}
-                      </td>
-                      <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="relative not-prose">
+              {/* Печать на фоне за таблицей (видна на странице и в PDF) */}
+              <div
+                className="license-offer-stamp pointer-events-none absolute inset-x-0 bottom-0 z-0 flex justify-end px-1 pb-1 pt-10 opacity-[0.42] dark:opacity-[0.36] sm:px-2 sm:pb-2"
+                aria-hidden
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- статичный файл из public, нужен для html2canvas/PDF */}
+                <img
+                  src="/%D0%9F%D0%B5%D1%87%D0%B0%D1%82%D1%8C.png"
+                  alt=""
+                  className="h-auto max-h-40 w-auto max-w-[min(260px,52%)] object-contain object-bottom sm:max-h-48 sm:max-w-[min(300px,48%)]"
+                />
+              </div>
+              <div className="relative z-10 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="license-requisites-table w-full text-sm">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {([
+                      ["Полное наименование", "Общество с ограниченной ответственностью «ЯППИКС»"],
+                      ["Сокращённое наименование", "ООО «ЯППИКС»"],
+                      ["ОГРН", "1267700040684"],
+                      ["ИНН", "9707055804"],
+                      ["КПП", "770701001"],
+                      [
+                        "Юридический адрес",
+                        "127055, г. Москва, вн.тер.г. муниципальный округ Тверской, ул. Палиха, д. 7–9, к. 4, пом. 1/1",
+                      ],
+                      ["Расчётный счёт", "40702810910002055576"],
+                      ["Банк", "АО «Тинькофф Банк»"],
+                      ["БИК", "044525974"],
+                      ["Корреспондентский счёт", "30101810145250000974"],
+                      ["Система налогообложения", "УСН (доходы, 6%)"],
+                      ["Генеральный директор", "Усманов Ренат Рушанович"],
+                      ["Телефон", "+7 995 095 55 93"],
+                      ["Сайт", "yappix.ru"],
+                      ["Электронная почта", "sales@yappix.ru, ceo@yappix.ru"],
+                    ] as const).map(([label, value]) => (
+                      <tr key={label}>
+                        <td className="px-4 py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap align-top w-52">
+                          {label}
+                        </td>
+                        <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </S>
         </div>

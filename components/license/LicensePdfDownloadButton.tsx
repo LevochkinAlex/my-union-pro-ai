@@ -39,6 +39,14 @@ export function LicensePdfDownloadButton() {
           node.querySelectorAll("table, th, td").forEach((el) => {
             (el as HTMLElement).style.borderColor = "#e5e7eb";
           });
+          node.querySelectorAll(".license-offer-stamp").forEach((stampEl) => {
+            (stampEl as HTMLElement).style.opacity = "0.44";
+          });
+          node.querySelectorAll(".license-requisites-table td").forEach((cell) => {
+            const c = cell as HTMLElement;
+            c.style.textShadow =
+              "0 0 1px #fff, 0 0 3px #fff, 0 1px 2px rgba(255,255,255,0.9)";
+          });
         },
       });
 
