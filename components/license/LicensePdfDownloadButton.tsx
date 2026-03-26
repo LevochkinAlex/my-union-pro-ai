@@ -43,7 +43,8 @@ export function LicensePdfDownloadButton() {
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
-        windowWidth: el.scrollWidth,
+        // Не раздувать ширину захвата на широких экранах (влияет на масштаб текста в PNG/PDF)
+        windowWidth: Math.min(el.scrollWidth, 768),
         onclone: (doc) => {
           const node = doc.getElementById(PDF_ROOT_ID);
           if (!node) return;
