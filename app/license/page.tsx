@@ -484,9 +484,10 @@ export default function LicensePage() {
 
           {/* 14 */}
           <S num="14" title="Реквизиты Лицензиара">
-            <div className="relative not-prose">
+            <div className="relative not-prose" data-pdf-relative-wrapper>
               {/* Печать на фоне за таблицей (видна на странице и в PDF) */}
               <div
+                data-license-stamp
                 className="license-offer-stamp pointer-events-none absolute inset-x-0 bottom-0 z-0 flex justify-end px-1 pb-1 pt-10 opacity-[0.42] dark:opacity-[0.36] sm:px-2 sm:pb-2"
                 aria-hidden
               >
@@ -497,7 +498,10 @@ export default function LicensePage() {
                   className="h-auto max-h-40 w-auto max-w-[min(260px,52%)] object-contain object-bottom sm:max-h-48 sm:max-w-[min(300px,48%)]"
                 />
               </div>
-              <div className="relative z-10 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <div
+                data-pdf-table-layer
+                className="relative z-10 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700"
+              >
                 <table className="license-requisites-table w-full text-sm">
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {([

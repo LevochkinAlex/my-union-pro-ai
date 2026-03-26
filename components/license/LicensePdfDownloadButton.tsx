@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { FileDown, Loader2 } from "lucide-react";
+import { sanitizeClonedNodeForHtml2Canvas } from "@/components/license/sanitize-for-html2canvas";
 
 const PDF_ROOT_ID = "license-offer-pdf";
 
@@ -46,25 +47,8 @@ export function LicensePdfDownloadButton() {
         onclone: (doc) => {
           const node = doc.getElementById(PDF_ROOT_ID);
           if (!node) return;
-          node.style.backgroundColor = "#ffffff";
-          node.style.color = "#111827";
-          node.querySelectorAll("h1, h2, p, li, td, th, strong, span").forEach((el) => {
-            (el as HTMLElement).style.color = "#111827";
-          });
-          node.querySelectorAll("a").forEach((el) => {
-            (el as HTMLElement).style.color = "#1d4ed8";
-          });
-          node.querySelectorAll("table, th, td").forEach((el) => {
-            (el as HTMLElement).style.borderColor = "#e5e7eb";
-          });
-          node.querySelectorAll(".license-offer-stamp").forEach((stampEl) => {
-            (stampEl as HTMLElement).style.opacity = "0.44";
-          });
-          node.querySelectorAll(".license-requisites-table td").forEach((cell) => {
-            const c = cell as HTMLElement;
-            c.style.textShadow =
-              "0 0 1px #fff, 0 0 3px #fff, 0 1px 2px rgba(255,255,255,0.9)";
-          });
+          // Tailwind v4 → lab()/oklch в computed styles; html2canvas падает с "unsupported color function lab"
+          sanitizeClonedNodeForHtml2Canvas(node);
         },
       });
 
