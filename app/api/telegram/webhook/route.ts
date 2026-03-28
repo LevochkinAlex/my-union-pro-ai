@@ -789,7 +789,9 @@ ${loginUrl}
     // /start app_<sessionKey>[_<base64url(expoHost)>] — вход из мобильного приложения
     if (trimmedText.startsWith("/start app_")) {
       const payload = trimmedText.replace("/start app_", "").trim();
-      const [sessionKey, encodedExpoHost] = payload.split("_");
+      const firstUnderscore = payload.indexOf("_");
+      const sessionKey = firstUnderscore === -1 ? payload : payload.slice(0, firstUnderscore);
+      const encodedExpoHost = firstUnderscore === -1 ? null : payload.slice(firstUnderscore + 1);
       let expoHost: string | null = null;
       if (encodedExpoHost) {
         try {
@@ -808,11 +810,51 @@ ${loginUrl}
       });
 
       if (!session || session.consumed || session.expiresAt < new Date()) {
+        // UX-fallback: если сессия уже использована/истекла, пытаемся выдать новую кнопку входа.
+        // Это спасает сценарий, когда Telegram повторно отправил /start app_* или пользователь нажал старую кнопку.
+        let user = await prisma.user.findUnique({
+          where: { telegramChatId: chatId },
+        });
+
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              telegramChatId: chatId,
+              telegramUsername: from?.username || null,
+              firstName: from?.first_name || null,
+              lastName: from?.last_name || null,
+              role: "PENDING_MEMBER",
+              membershipStatus: "PROFILE_INCOMPLETE",
+            },
+          });
+        }
+
+        const crypto = await import("crypto");
+        const loginToken = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        await prisma.loginToken.create({
+          data: { token: loginToken, userId: user.id, expiresAt },
+        });
+
+        const host = request.headers.get("host") || "localhost:3000";
+        const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+        const baseUrl = isLocalhost ? `http://${host}` : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+
         await sendTelegramMessage(
           chatId,
-          `⏳ <b>Ссылка недействительна</b>
+          `♻️ <b>Сессия обновлена</b>
 
-Откройте приложение МойСоюз и снова нажмите «Войти через бота».`,
+Нажмите кнопку ниже — вход в приложение будет выполнен автоматически.
+
+⏱ <i>Ссылка действительна 10 минут</i>`,
+        );
+
+        await sendMobileAppReturnButton(
+          chatId,
+          loginToken,
+          user.firstName ?? undefined,
+          baseUrl,
+          expoHost,
         );
         return NextResponse.json({ ok: true });
       }
