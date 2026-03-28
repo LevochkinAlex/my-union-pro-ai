@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
 import {
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from "react-native";
@@ -47,6 +49,53 @@ function pickColor(id: string): string {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function AttachmentView({ attachment, isMine }: { attachment: NonNullable<ChatMessageItem["attachments"]>[0], isMine: boolean }) {
+  const isImage = attachment.type === "IMAGE" || attachment.type === "image" || attachment.mimeType?.startsWith("image/");
+  if (isImage) {
+    return (
+      <View style={styles.imageAttachWrap}>
+        <Image source={{ uri: attachment.url }} style={styles.imageAttach} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.fileAttachWrap, isMine && { borderColor: "rgba(255,255,255,0.2)" }]}>
+      <View style={[styles.fileAttachIcon, isMine && { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+        <MaterialCommunityIcons name="file-document-outline" size={20} color={isMine ? colors.white : colors.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <FluidText variant="labelMd" color={isMine ? colors.white : colors.onSurface} numberOfLines={1}>
+          {attachment.name || "Файл"}
+        </FluidText>
+        <FluidText variant="labelSm" color={isMine ? "rgba(255,255,255,0.7)" : colors.onSurfaceVariant}>
+          {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Документ"}
+        </FluidText>
+      </View>
+      <MaterialCommunityIcons name="download" size={20} color={isMine ? colors.white : colors.primary} />
+    </View>
+  );
+}
+
+function ReactionsView({ reactions }: { reactions: NonNullable<ChatMessageItem["reactions"]> }) {
+  if (!reactions || reactions.length === 0) return null;
+  const grouped = reactions.reduce((acc, r) => {
+    acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return (
+    <View style={styles.reactionsWrap}>
+      {Object.entries(grouped).map(([emoji, count]) => (
+        <View key={emoji} style={styles.reactionPill}>
+          <Text style={{ fontSize: 12 }}>{emoji}</Text>
+          <FluidText variant="labelSm" color={colors.onSurfaceVariant}>{count}</FluidText>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 export function ChatThreadScreen({
@@ -128,12 +177,31 @@ export function ChatThreadScreen({
                     end={{ x: 1, y: 1 }}
                     style={[styles.bubble, styles.bubbleMine]}
                   >
+                    {item.replyTo && (
+                      <View style={[styles.replyWrap, { borderLeftColor: "rgba(255,255,255,0.5)", backgroundColor: "rgba(255,255,255,0.1)" }]}>
+                        <FluidText variant="labelSm" color={colors.white} style={{ fontFamily: fonts.bodySemibold }}>
+                          {item.replyTo.sender?.firstName || "Пользователь"}
+                        </FluidText>
+                        <FluidText variant="bodySm" color="rgba(255,255,255,0.8)" numberOfLines={1}>
+                          {item.replyTo.content}
+                        </FluidText>
+                      </View>
+                    )}
                     <FluidText variant="bodyMd" color={colors.white}>
                       {item.content}
                     </FluidText>
-                    <FluidText variant="labelSm" color="rgba(255,255,255,0.6)" style={styles.ts}>
-                      {formatTime(item.createdAt)}
-                    </FluidText>
+                    {item.attachments?.map((att) => (
+                      <AttachmentView key={att.id} attachment={att} isMine={isMine} />
+                    ))}
+                    <View style={styles.tsWrap}>
+                      <FluidText variant="labelSm" color="rgba(255,255,255,0.6)">
+                        {formatTime(item.createdAt)}
+                      </FluidText>
+                      {item.readBy && item.readBy.length > 0 && (
+                        <MaterialCommunityIcons name="check-all" size={14} color="rgba(255,255,255,0.8)" style={{ marginLeft: 4 }} />
+                      )}
+                    </View>
+                    <ReactionsView reactions={item.reactions || []} />
                   </LinearGradient>
                 ) : (
                   <View style={[styles.bubble, styles.bubbleOther]}>
@@ -142,12 +210,26 @@ export function ChatThreadScreen({
                         {senderName}
                       </FluidText>
                     )}
+                    {item.replyTo && (
+                      <View style={[styles.replyWrap, { borderLeftColor: colors.primary, backgroundColor: colors.surfaceContainerLow }]}>
+                        <FluidText variant="labelSm" color={colors.primary} style={{ fontFamily: fonts.bodySemibold }}>
+                          {item.replyTo.sender?.firstName || "Пользователь"}
+                        </FluidText>
+                        <FluidText variant="bodySm" color={colors.onSurfaceVariant} numberOfLines={1}>
+                          {item.replyTo.content}
+                        </FluidText>
+                      </View>
+                    )}
                     <FluidText variant="bodyMd" color={colors.onSurface}>
                       {item.content}
                     </FluidText>
+                    {item.attachments?.map((att) => (
+                      <AttachmentView key={att.id} attachment={att} isMine={isMine} />
+                    ))}
                     <FluidText variant="labelSm" color={colors.outline} style={styles.ts}>
                       {formatTime(item.createdAt)}
                     </FluidText>
+                    <ReactionsView reactions={item.reactions || []} />
                   </View>
                 )}
               </View>
@@ -159,23 +241,36 @@ export function ChatThreadScreen({
       {/* Compose Bar */}
       <GlassCard style={styles.composeOuter} borderRadius={0}>
         <View style={styles.composeBar}>
-          <Pressable style={styles.composeIcon}>
-            <MaterialCommunityIcons name="plus" size={22} color={colors.tertiary} />
+          <Pressable style={styles.composePlusBtn}>
+            <MaterialCommunityIcons name="plus-circle-outline" size={24} color={colors.onSurfaceVariant} />
           </Pressable>
-          <TextInput
-            style={styles.composeInput}
-            value={messageInput}
-            onChangeText={onChangeInput}
-            placeholder="Сообщение…"
-            placeholderTextColor={colors.outline}
-            selectionColor={colors.primary}
-            multiline
-            maxLength={8000}
-          />
+
+          <View style={styles.composeCenter}>
+            <TextInput
+              style={styles.composeInput}
+              value={messageInput}
+              onChangeText={onChangeInput}
+              placeholder="Сообщение…"
+              placeholderTextColor={colors.outline}
+              selectionColor={colors.primary}
+              multiline
+              maxLength={8000}
+            />
+            <View style={styles.composeToolsRow}>
+              <View style={styles.composeToolsLeft}>
+                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="format-bold" size={20} color={colors.onSurfaceVariant} /></Pressable>
+                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="format-italic" size={20} color={colors.onSurfaceVariant} /></Pressable>
+                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="code-tags" size={20} color={colors.onSurfaceVariant} /></Pressable>
+                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="link-variant" size={20} color={colors.onSurfaceVariant} /></Pressable>
+              </View>
+              <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="emoticon-outline" size={20} color={colors.onSurfaceVariant} /></Pressable>
+            </View>
+          </View>
+
           <Pressable
             onPress={onSend}
             disabled={!messageInput.trim()}
-            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.sendBtnWrap, pressed && { opacity: 0.7 }]}
           >
             <LinearGradient
               colors={
@@ -189,7 +284,7 @@ export function ChatThreadScreen({
             >
               <MaterialCommunityIcons
                 name="send"
-                size={18}
+                size={20}
                 color={messageInput.trim() ? colors.white : colors.outline}
               />
             </LinearGradient>
@@ -247,7 +342,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
-    maxWidth: "100%",
+    flexShrink: 1,
   },
   bubbleMine: {
     borderRadius: radii.xl,
@@ -266,42 +361,123 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
     marginTop: spacing.sm,
   },
+  tsWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    marginTop: spacing.sm,
+  },
   composeOuter: {
     borderTopWidth: 0,
+    paddingBottom: spacing.lg,
   },
   composeBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
   },
-  composeIcon: {
+  composePlusBtn: {
     width: 40,
     height: 40,
-    borderRadius: radii.full,
-    backgroundColor: colors.surfaceContainerHigh,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+    marginBottom: spacing.xs,
   },
-  composeInput: {
+  composeCenter: {
     flex: 1,
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: radii["2xl"],
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  composeInput: {
     color: colors.onSurface,
     fontFamily: fonts.body,
     fontSize: 15,
     maxHeight: 120,
+    paddingTop: 0,
+    paddingBottom: 0,
+    minHeight: 24,
+  },
+  composeToolsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  composeToolsLeft: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  toolBtn: {
+    padding: spacing.xs,
+    borderRadius: radii.md,
+  },
+  sendBtnWrap: {
+    marginBottom: spacing.xs,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radii.full,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
   },
+  imageAttachWrap: {
+    marginTop: spacing.sm,
+    borderRadius: radii.xl,
+    overflow: "hidden",
+    width: "100%",
+    aspectRatio: 4 / 3,
+  },
+  imageAttach: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  fileAttachWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: "rgba(145, 143, 161, 0.2)",
+    gap: spacing.md,
+  },
+  fileAttachIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.lg,
+    backgroundColor: "rgba(195, 192, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reactionsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  reactionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: colors.surfaceContainerHighest,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  replyWrap: {
+    paddingLeft: spacing.md,
+    borderLeftWidth: 2,
+    marginBottom: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radii.sm,
+  }
 });

@@ -149,6 +149,7 @@ export function ChatListScreen({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.tabsScroll}
         contentContainerStyle={styles.tabsRow}
       >
         {tabItems.map(({ key, label }) => {
@@ -194,6 +195,7 @@ export function ChatListScreen({
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
+                style={styles.pinnedScroll}
                 contentContainerStyle={styles.pinnedRow}
               >
                 {ai && (
@@ -460,26 +462,39 @@ const styles = StyleSheet.create({
     fontSize: 15,
     padding: 0,
   },
+  tabsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   tabsRow: {
     flexDirection: "row",
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
+    alignItems: "center",
   },
   chip: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     borderRadius: radii.full,
     backgroundColor: colors.surfaceContainerHigh,
+    alignItems: "center",
+    justifyContent: "center",
   },
   chipActive: {
     backgroundColor: colors.primaryContainer,
   },
   list: { flex: 1 },
   listContent: { paddingHorizontal: spacing.xl, paddingBottom: spacing["5xl"] },
+  pinnedScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   pinnedRow: {
+    flexDirection: "row",
     gap: spacing.lg,
     paddingVertical: spacing.lg,
+    alignItems: "center",
   },
   bentoCard: {
     width: 140,

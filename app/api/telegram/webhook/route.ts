@@ -786,10 +786,22 @@ ${loginUrl}
       return NextResponse.json({ ok: true });
     }
 
-    // /start app_<sessionKey> — вход из мобильного приложения (сессия создана через POST /api/mobile/auth/bot-login/start)
+    // /start app_<sessionKey>[_<base64url(expoHost)>] — вход из мобильного приложения
     if (trimmedText.startsWith("/start app_")) {
-      const sessionKey = trimmedText.replace("/start app_", "").trim();
-      console.log("[Telegram Webhook] Вход в приложение, sessionKey:", sessionKey);
+      const payload = trimmedText.replace("/start app_", "").trim();
+      const [sessionKey, encodedExpoHost] = payload.split("_");
+      let expoHost: string | null = null;
+      if (encodedExpoHost) {
+        try {
+          const decoded = Buffer.from(encodedExpoHost, "base64url").toString("utf8");
+          if (/^[a-zA-Z0-9.\-:]+$/.test(decoded)) {
+            expoHost = decoded;
+          }
+        } catch {
+          expoHost = null;
+        }
+      }
+      console.log("[Telegram Webhook] Вход в приложение:", { sessionKey, expoHost });
 
       const session = await prisma.botAppLoginSession.findUnique({
         where: { sessionKey },
@@ -849,6 +861,7 @@ ${loginUrl}
         loginToken,
         user.firstName ?? undefined,
         baseUrl,
+        expoHost,
       );
       if (!result.success) {
         console.error("[Telegram Webhook] sendMobileAppReturnButton:", result.error);

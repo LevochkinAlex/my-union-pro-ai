@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import {
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
   TextInput,
@@ -33,6 +34,34 @@ const QUICK_ACTIONS = [
   { icon: "translate" as const, label: "Перевести", desc: "На другой язык" },
   { icon: "lightbulb-outline" as const, label: "Идеи", desc: "Генерация идей" },
 ];
+
+function AttachmentView({ attachment, isMine }: { attachment: NonNullable<ChatMessageItem["attachments"]>[0], isMine: boolean }) {
+  const isImage = attachment.type === "IMAGE" || attachment.type === "image" || attachment.mimeType?.startsWith("image/");
+  if (isImage) {
+    return (
+      <View style={styles.imageAttachWrap}>
+        <Image source={{ uri: attachment.url }} style={styles.imageAttach} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.fileAttachWrap, isMine && { borderColor: "rgba(255,255,255,0.2)" }]}>
+      <View style={[styles.fileAttachIcon, isMine && { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+        <MaterialCommunityIcons name="file-document-outline" size={20} color={isMine ? colors.white : colors.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <FluidText variant="labelMd" color={isMine ? colors.white : colors.onSurface} numberOfLines={1}>
+          {attachment.name || "Файл"}
+        </FluidText>
+        <FluidText variant="labelSm" color={isMine ? "rgba(255,255,255,0.7)" : colors.onSurfaceVariant}>
+          {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Документ"}
+        </FluidText>
+      </View>
+      <MaterialCommunityIcons name="download" size={20} color={isMine ? colors.white : colors.primary} />
+    </View>
+  );
+}
 
 export function AIBotChatScreen({
   messages,
@@ -121,13 +150,24 @@ export function AIBotChatScreen({
                     style={[styles.bubble, styles.bubbleMine]}
                   >
                     <FluidText variant="bodyMd" color={colors.white}>{item.content}</FluidText>
-                    <FluidText variant="labelSm" color="rgba(255,255,255,0.6)" style={styles.ts}>
-                      {formatTime(item.createdAt)}
-                    </FluidText>
+                    {item.attachments?.map((att) => (
+                      <AttachmentView key={att.id} attachment={att} isMine={isMine} />
+                    ))}
+                    <View style={styles.tsWrap}>
+                      <FluidText variant="labelSm" color="rgba(255,255,255,0.6)">
+                        {formatTime(item.createdAt)}
+                      </FluidText>
+                      {item.readBy && item.readBy.length > 0 && (
+                        <MaterialCommunityIcons name="check-all" size={14} color="rgba(255,255,255,0.8)" style={{ marginLeft: 4 }} />
+                      )}
+                    </View>
                   </LinearGradient>
                 ) : (
                   <View style={[styles.bubble, styles.bubbleAI]}>
                     <FluidText variant="bodyMd" color={colors.onSurface}>{item.content}</FluidText>
+                    {item.attachments?.map((att) => (
+                      <AttachmentView key={att.id} attachment={att} isMine={isMine} />
+                    ))}
                     <FluidText variant="labelSm" color={colors.outline} style={styles.ts}>
                       {formatTime(item.createdAt)}
                     </FluidText>
@@ -142,20 +182,34 @@ export function AIBotChatScreen({
       {/* Compose */}
       <GlassCard style={styles.composeOuter} borderRadius={0}>
         <View style={styles.composeBar}>
-          <TextInput
-            style={styles.composeInput}
-            value={messageInput}
-            onChangeText={onChangeInput}
-            placeholder="Спросите AI…"
-            placeholderTextColor={colors.outline}
-            selectionColor={colors.primary}
-            multiline
-            maxLength={8000}
-          />
+          <Pressable style={styles.composePlusBtn}>
+            <MaterialCommunityIcons name="plus-circle-outline" size={24} color={colors.onSurfaceVariant} />
+          </Pressable>
+
+          <View style={styles.composeCenter}>
+            <TextInput
+              style={styles.composeInput}
+              value={messageInput}
+              onChangeText={onChangeInput}
+              placeholder="Спросите AI…"
+              placeholderTextColor={colors.outline}
+              selectionColor={colors.primary}
+              multiline
+              maxLength={8000}
+            />
+            <View style={styles.composeToolsRow}>
+              <View style={styles.composeToolsLeft}>
+                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="format-bold" size={20} color={colors.onSurfaceVariant} /></Pressable>
+                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="format-italic" size={20} color={colors.onSurfaceVariant} /></Pressable>
+                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="code-tags" size={20} color={colors.onSurfaceVariant} /></Pressable>
+              </View>
+            </View>
+          </View>
+
           <Pressable
             onPress={onSend}
             disabled={!messageInput.trim()}
-            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.sendBtnWrap, pressed && { opacity: 0.7 }]}
           >
             <LinearGradient
               colors={
@@ -169,7 +223,7 @@ export function AIBotChatScreen({
             >
               <MaterialCommunityIcons
                 name="send"
-                size={18}
+                size={20}
                 color={messageInput.trim() ? colors.white : colors.outline}
               />
             </LinearGradient>
@@ -254,6 +308,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
+    flexShrink: 1,
   },
   bubbleMine: {
     borderRadius: radii.xl,
@@ -266,32 +321,98 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: "rgba(76,215,246,0.3)",
   },
-  ts: { alignSelf: "flex-end", marginTop: spacing.sm },
-  composeOuter: { borderTopWidth: 0 },
+  ts: {
+    alignSelf: "flex-end",
+    marginTop: spacing.sm,
+  },
+  tsWrap: { flexDirection: "row", alignItems: "center", alignSelf: "flex-end", marginTop: spacing.sm },
+  composeOuter: {
+    borderTopWidth: 0,
+    paddingBottom: spacing.lg,
+  },
   composeBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
   },
-  composeInput: {
+  composePlusBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+  },
+  composeCenter: {
     flex: 1,
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: radii["2xl"],
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  composeInput: {
     color: colors.onSurface,
     fontFamily: fonts.body,
     fontSize: 15,
     maxHeight: 120,
+    paddingTop: 0,
+    paddingBottom: 0,
+    minHeight: 24,
+  },
+  composeToolsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  composeToolsLeft: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  toolBtn: {
+    padding: spacing.xs,
+    borderRadius: radii.md,
+  },
+  sendBtnWrap: {
+    marginBottom: spacing.xs,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radii.full,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+  },
+  imageAttachWrap: {
+    marginTop: spacing.sm,
+    borderRadius: radii.xl,
+    overflow: "hidden",
+    width: "100%",
+    aspectRatio: 4 / 3,
+  },
+  imageAttach: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  fileAttachWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: "rgba(145, 143, 161, 0.2)",
+    gap: spacing.md,
+  },
+  fileAttachIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.lg,
+    backgroundColor: "rgba(195, 192, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

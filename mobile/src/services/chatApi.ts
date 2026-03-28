@@ -20,8 +20,22 @@ const authJson = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
 });
 
+async function fetchJson(input: string, init?: RequestInit) {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/Network request failed/i.test(message)) {
+      throw new Error(
+        `Нет соединения с API (${appConfig.apiBaseUrl}). Проверьте, что сервер запущен и телефон в той же сети.`,
+      );
+    }
+    throw error instanceof Error ? error : new Error(message);
+  }
+}
+
 export async function getHealthStatus() {
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/health`);
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/health`);
   if (!response.ok) {
     throw new Error(`Health check failed: ${response.status}`);
   }
@@ -32,7 +46,7 @@ export async function getChats(accessToken: string, options?: { bypassCache?: bo
   const params = new URLSearchParams();
   params.set("includeAI", "true");
   if (options?.bypassCache) params.set("bypassCache", "1");
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/chat?${params.toString()}`, {
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/chat?${params.toString()}`, {
     headers: authJson(accessToken),
   });
 
@@ -44,7 +58,7 @@ export async function getChats(accessToken: string, options?: { bypassCache?: bo
 }
 
 export async function getViewMode(accessToken: string) {
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/user/view-mode`, {
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/user/view-mode`, {
     headers: authJson(accessToken),
   });
   if (!response.ok) {
@@ -59,7 +73,7 @@ export async function getViewMode(accessToken: string) {
 }
 
 export async function mobileLogin(email: string, password: string) {
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/mobile/auth/login`, {
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/mobile/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -77,7 +91,7 @@ export async function mobileLogin(email: string, password: string) {
 
 /** Как на сайте: письмо со ссылкой для входа (без пароля). */
 export async function sendEmailMagicLink(email: string) {
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/auth/email/send-magic-link`, {
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/auth/email/send-magic-link`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
@@ -95,10 +109,11 @@ export async function sendEmailMagicLink(email: string) {
 }
 
 /** Сессия входа через бота: открыть https://t.me/BOT?start=app_<key> */
-export async function startBotAppLoginSession(): Promise<{ botUrl: string }> {
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/mobile/auth/bot-login/start`, {
+export async function startBotAppLoginSession(options?: { expoHost?: string | null }): Promise<{ botUrl: string }> {
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/mobile/auth/bot-login/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expoHost: options?.expoHost ?? null }),
   });
   const data = (await response.json().catch(() => ({}))) as { botUrl?: string; error?: string };
   if (!response.ok || !data.botUrl) {
@@ -109,7 +124,7 @@ export async function startBotAppLoginSession(): Promise<{ botUrl: string }> {
 
 /** Одноразовый token из ссылки в письме → JWT приложения. */
 export async function exchangeMagicLinkToken(token: string): Promise<MobileAuthSuccess> {
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/mobile/auth/exchange-login-token`, {
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/mobile/auth/exchange-login-token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token: token.trim() }),
@@ -152,7 +167,7 @@ export function extractTokenFromEmailLink(input: string): string | null {
 export async function getChatThread(accessToken: string, chatId: string, limit = 80) {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
-  const response = await fetch(`${appConfig.apiBaseUrl}/api/chat/${chatId}?${params.toString()}`, {
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/chat/${chatId}?${params.toString()}`, {
     headers: authJson(accessToken),
   });
 

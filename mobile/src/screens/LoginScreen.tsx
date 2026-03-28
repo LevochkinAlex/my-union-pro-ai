@@ -23,6 +23,7 @@ import {
   startBotAppLoginSession,
   type MobileAuthSuccess,
 } from "../services/chatApi";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { IconDarkSvg } from "../components/IconDarkSvg";
 import { FluidText, FluidButton, FluidInput, GlassCard } from "../components/ui";
 import { colors, fonts, radii, spacing } from "../theme/tokens";
@@ -34,10 +35,22 @@ type Props = {
   onAuthenticated: (data: MobileAuthSuccess) => void | Promise<void>;
 };
 
+function getExpoHostPort(): string | null {
+  try {
+    const appUrl = Linking.createURL("/");
+    const parsed = new URL(appUrl);
+    if (!parsed.hostname) return null;
+    return parsed.port ? `${parsed.hostname}:${parsed.port}` : parsed.hostname;
+  } catch {
+    return null;
+  }
+}
+
 export function LoginScreen({ onAuthenticated }: Props) {
   const [step, setStep] = useState<Step>("input");
   const [email, setEmail] = useState("");
   const [manualCode, setManualCode] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegramGuideVisible, setTelegramGuideVisible] = useState(false);
@@ -81,7 +94,8 @@ export function LoginScreen({ onAuthenticated }: Props) {
     if (!(await ensureTelegramOrAlert())) return;
     setLoading(true);
     try {
-      const { botUrl } = await startBotAppLoginSession();
+      const expoHost = isExpoGo ? getExpoHostPort() : null;
+      const { botUrl } = await startBotAppLoginSession({ expoHost });
       await Linking.openURL(botUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось начать вход через бота");
@@ -250,33 +264,51 @@ export function LoginScreen({ onAuthenticated }: Props) {
                 </FluidText>
               </Pressable>
 
-              {isExpoGo ? (
+              {isExpoGo && !showManualInput ? (
                 <FluidText variant="bodySm" color={colors.tertiary} style={[styles.textCenter, styles.mt16]}>
                   В Expo Go ссылка myunion:// из Safari часто не возвращает в приложение. После кнопки в бота вставьте ссылку или код ниже.
                 </FluidText>
               ) : null}
 
-              <FluidText variant="labelSm" color={colors.onSurfaceVariant} style={[styles.mt20, styles.textCenter]}>
-                Ссылка из бота не открыла приложение?
-              </FluidText>
-              <FluidInput
-                label="Вставьте ссылку или код"
-                value={manualCode}
-                onChangeText={setManualCode}
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="https://myunion.pro/m?t=…"
-                multiline
-                style={styles.mt8}
-              />
-              <FluidButton
-                title="Войти по коду из бота"
-                variant="ghost"
-                onPress={() => void handleManualCodeSubmit()}
-                loading={loading}
-                disabled={loading || !manualCode.trim()}
-                style={styles.mt12}
-              />
+              {!showManualInput ? (
+                <Pressable 
+                  onPress={() => setShowManualInput(true)} 
+                  style={({ pressed }) => [styles.ghostLink, pressed && { opacity: 0.7 }, { marginTop: spacing.md }]}
+                >
+                  <FluidText variant="labelSm" color={colors.onSurfaceVariant} style={styles.textCenter}>
+                    Не открывается приложение после бота?
+                  </FluidText>
+                </Pressable>
+              ) : (
+                <View style={styles.manualInputCard}>
+                  <View style={styles.manualInputHeader}>
+                    <FluidText variant="labelSm" color={colors.onSurfaceVariant}>
+                      Вход по коду из бота
+                    </FluidText>
+                    <Pressable onPress={() => setShowManualInput(false)} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+                      <MaterialCommunityIcons name="close" size={16} color={colors.outline} />
+                    </Pressable>
+                  </View>
+                  <FluidInput
+                    label="Вставьте скопированную ссылку или код"
+                    value={manualCode}
+                    onChangeText={setManualCode}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="https://myunion.pro/m?t=…"
+                    multiline
+                    style={styles.mt8}
+                  />
+                  <FluidButton
+                    title="Войти"
+                    variant="surface"
+                    onPress={() => void handleManualCodeSubmit()}
+                    loading={loading}
+                    disabled={loading || !manualCode.trim()}
+                    style={styles.mt12}
+                  />
+                </View>
+              )}
 
               <FluidText variant="bodySm" color={colors.outline} style={[styles.textCenter, styles.mt20]}>
                 Нет аккаунта? Регистрация автоматическая при первом входе.
@@ -472,5 +504,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(11,19,38,0.5)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  manualInputCard: {
+    marginTop: spacing.xl,
+    padding: spacing.xl,
+    backgroundColor: colors.surfaceContainerHighest,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+  },
+  manualInputHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
   },
 });

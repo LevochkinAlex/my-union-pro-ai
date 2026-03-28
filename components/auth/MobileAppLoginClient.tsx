@@ -15,11 +15,21 @@ const APP_SCHEME = "myunion://auth";
 function MobileAppLoginInner() {
   const searchParams = useSearchParams();
   const token = searchParams.get("t");
+  const expoHost = searchParams.get("eh");
 
-  const deepLink = useMemo(() => {
+  const schemeDeepLink = useMemo(() => {
     if (!token) return null;
     return `${APP_SCHEME}?loginToken=${encodeURIComponent(token)}`;
   }, [token]);
+
+  const expoDeepLink = useMemo(() => {
+    if (!token || !expoHost) return null;
+    if (!/^[a-zA-Z0-9.\-:]+$/.test(expoHost)) return null;
+    return `exp://${expoHost}/--/auth?loginToken=${encodeURIComponent(token)}`;
+  }, [token, expoHost]);
+
+  const primaryDeepLink = expoDeepLink || schemeDeepLink;
+  const fallbackDeepLink = expoDeepLink ? schemeDeepLink : null;
 
   const [showExtraHint, setShowExtraHint] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
@@ -37,15 +47,28 @@ function MobileAppLoginInner() {
   }
 
   useEffect(() => {
-    if (!deepLink) return;
+    if (!primaryDeepLink) return;
     try {
-      window.location.replace(deepLink);
+      window.location.replace(primaryDeepLink);
     } catch {
       // ignore
     }
+    let fallbackTimer: number | null = null;
+    if (fallbackDeepLink) {
+      fallbackTimer = window.setTimeout(() => {
+        try {
+          window.location.href = fallbackDeepLink;
+        } catch {
+          // ignore
+        }
+      }, 1200);
+    }
     const tmr = window.setTimeout(() => setShowExtraHint(true), 2000);
-    return () => window.clearTimeout(tmr);
-  }, [deepLink]);
+    return () => {
+      window.clearTimeout(tmr);
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+    };
+  }, [primaryDeepLink, fallbackDeepLink]);
 
   if (!token) {
     return (
@@ -77,11 +100,20 @@ function MobileAppLoginInner() {
       ) : null}
 
       <a
-        href={deepLink}
+        href={primaryDeepLink || "#"}
         className="inline-flex min-h-[44px] min-w-[200px] items-center justify-center rounded-xl bg-indigo-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:bg-indigo-800"
       >
-        Открыть МойСоюз
+        {expoDeepLink ? "Открыть в Expo Go" : "Открыть МойСоюз"}
       </a>
+
+      {fallbackDeepLink ? (
+        <a
+          href={fallbackDeepLink}
+          className="inline-flex min-h-[40px] min-w-[200px] items-center justify-center rounded-xl border border-slate-300 px-5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+        >
+          Или открыть через схему приложения
+        </a>
+      ) : null}
 
       <div className="max-w-md rounded-lg bg-slate-100 px-3 py-2 text-left">
         <p className="mb-2 text-xs font-medium text-slate-700">Не открылось (часто в Expo Go или из Telegram)?</p>

@@ -141,13 +141,35 @@ function AppContent() {
   useEffect(() => {
     if (!accessToken) { disconnectSocket(); return; }
     const socket = connectSocket(accessToken);
+    
     socket.on("message:new", (message: unknown) => {
       const msg = message as ChatMessageItem;
       const active = selectedChatRef.current;
       if (!active || msg.chatId !== active.id) return;
       setMessages((prev) => prev.some((item) => item.id === msg.id) ? prev : [...prev, msg]);
     });
-    return () => { socket.removeAllListeners("message:new"); };
+
+    socket.on("message:updated", (message: unknown) => {
+      const msg = message as ChatMessageItem;
+      setMessages((prev) => prev.map((m) => m.id === msg.id ? msg : m));
+    });
+
+    socket.on("message:deleted", (data: { messageId: string }) => {
+      if (!data?.messageId) return;
+      setMessages((prev) => prev.filter((m) => m.id !== data.messageId));
+    });
+
+    socket.on("reaction:updated", (data: { messageId: string, reactions: any[] }) => {
+      if (!data?.messageId) return;
+      setMessages((prev) => prev.map((m) => m.id === data.messageId ? { ...m, reactions: data.reactions } : m));
+    });
+
+    return () => { 
+      socket.removeAllListeners("message:new"); 
+      socket.removeAllListeners("message:updated"); 
+      socket.removeAllListeners("message:deleted"); 
+      socket.removeAllListeners("reaction:updated"); 
+    };
   }, [accessToken]);
 
   useEffect(() => { if (accessToken) void loadChats(); }, [accessToken]);

@@ -38,4 +38,30 @@ export type ChatMessageItem = {
     middleName?: string | null;
     avatarUrl: string | null;
   };
+  attachments?: {
+    id: string;
+    type: string;
+    url: string;
+    name: string;
+    size: number;
+    mimeType?: string;
+  }[];
+  reactions?: {
+    id: string;
+    userId: string;
+    emoji: string;
+  }[];
+  readBy?: {
+    userId: string;
+    readAt: string;
+  }[];
+  replyToId?: string | null;
+  replyTo?: {
+    id: string;
+    content: string;
+    sender: {
+      firstName: string | null;
+      lastName: string | null;
+    };
+  } | null;
 };

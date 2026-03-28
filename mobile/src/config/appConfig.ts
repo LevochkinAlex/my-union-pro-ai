@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 type ExtraConfig = {
   apiBaseUrl?: string;
@@ -15,7 +16,37 @@ type ExtraConfig = {
 
 const extra = (Constants.expoConfig?.extra || {}) as ExtraConfig;
 
-const apiBaseUrl = extra.apiBaseUrl || "http://localhost:3004";
+function getExpoHostFromManifest(): string | null {
+  const cfg = Constants as unknown as {
+    expoConfig?: { hostUri?: string };
+    manifest2?: { extra?: { expoGo?: { debuggerHost?: string } } };
+    manifest?: { debuggerHost?: string };
+  };
+  const hostWithPort =
+    cfg.expoConfig?.hostUri ||
+    cfg.manifest2?.extra?.expoGo?.debuggerHost ||
+    cfg.manifest?.debuggerHost ||
+    "";
+  const host = hostWithPort.split(":")[0]?.trim();
+  return host || null;
+}
+
+function resolveUrlForDevice(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    const isLocalhost = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    if (!isLocalhost || Platform.OS === "web") return rawUrl;
+    const host = getExpoHostFromManifest();
+    if (!host) return rawUrl;
+    u.hostname = host;
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return rawUrl;
+  }
+}
+
+const rawApiBaseUrl = extra.apiBaseUrl || "http://localhost:3004";
+const apiBaseUrl = resolveUrlForDevice(rawApiBaseUrl);
 const webAppUrl = extra.webAppUrl || apiBaseUrl;
 
 function resolveTelegramLoginOrigin(): string | null {

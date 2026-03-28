@@ -244,11 +244,13 @@ export async function sendMobileAppReturnButton(
   loginToken: string,
   firstName: string | undefined,
   baseUrl: string,
+  expoHost?: string | null,
 ): Promise<SendMessageResult> {
   const name = firstName ? `, ${firstName}` : "";
   const appUrl = baseUrl.replace(/\/$/, "");
   // Короткий путь /m — в диалоге Telegram/iOS меньше символов, чем у /auth/mobile-app-login
-  const returnUrl = `${appUrl}/m?t=${encodeURIComponent(loginToken)}`;
+  const expoHostParam = expoHost ? `&eh=${encodeURIComponent(expoHost)}` : "";
+  const returnUrl = `${appUrl}/m?t=${encodeURIComponent(loginToken)}${expoHostParam}`;
 
   const message = `
 ✅ <b>Запрос на вход в приложение МойСоюз${name}</b>
