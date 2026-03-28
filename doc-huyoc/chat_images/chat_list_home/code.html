@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fluid Architect | Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#2d3449",
+              "inverse-on-surface": "#283044",
+              "surface-container-high": "#222a3d",
+              "secondary-fixed": "#e9ddff",
+              "outline-variant": "#464555",
+              "on-primary-container": "#dad7ff",
+              "on-primary": "#1d00a5",
+              "tertiary-container": "#006a7c",
+              "on-tertiary-container": "#93e8ff",
+              "on-surface": "#dae2fd",
+              "surface-container-lowest": "#060e20",
+              "on-tertiary": "#003640",
+              "on-secondary": "#3c0091",
+              "secondary": "#d0bcff",
+              "on-tertiary-fixed-variant": "#004e5c",
+              "on-surface-variant": "#c7c4d8",
+              "on-error": "#690005",
+              "primary-container": "#4f46e5",
+              "secondary-container": "#571bc1",
+              "on-background": "#dae2fd",
+              "primary-fixed-dim": "#c3c0ff",
+              "primary-fixed": "#e2dfff",
+              "on-secondary-fixed": "#23005c",
+              "surface-container-low": "#131b2e",
+              "surface-variant": "#2d3449",
+              "surface": "#0b1326",
+              "surface-dim": "#0b1326",
+              "on-error-container": "#ffdad6",
+              "tertiary-fixed-dim": "#4cd7f6",
+              "on-tertiary-fixed": "#001f26",
+              "error-container": "#93000a",
+              "surface-bright": "#31394d",
+              "tertiary": "#4cd7f6",
+              "on-primary-fixed": "#0f0069",
+              "on-primary-fixed-variant": "#3323cc",
+              "tertiary-fixed": "#acedff",
+              "on-secondary-fixed-variant": "#5516be",
+              "surface-container": "#171f33",
+              "primary": "#c3c0ff",
+              "error": "#ffb4ab",
+              "background": "#0b1326",
+              "inverse-surface": "#dae2fd",
+              "inverse-primary": "#4d44e3",
+              "secondary-fixed-dim": "#d0bcff",
+              "on-secondary-container": "#c4abff",
+              "surface-tint": "#c3c0ff",
+              "outline": "#918fa1"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30 min-h-screen pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="bg-[#0b1326] flex justify-between items-center w-full px-6 h-16 sticky top-0 z-50">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="Close up portrait of a young professional man with a friendly expression in a modern office setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCF-4KJtBdCstrvRvAv_OTkx0a0HtC8eTZ0D1m6oK4Pf5-cZPFw1Um3l0QquJcx8tat3A5gxUxTL_gfMP_NzXBJs3tS0wCui6oiF7Hijsk46YFToGi7L_Mk4uCR1neJda2c_J9m-2lS_EPB_I431cCLTDagUokyxb_rNOmPB28kjGSM_GmsBEzfjSKYGNU5NoJXVlzAyS1POxXXOYYxIkpz6qJZEBxxqAeEjwaj21CtUMXq19buCBoSG3VBGi9H3uEHyG8VsHk3jTm4"/>
+</div>
+<h1 class="text-xl font-extrabold text-[#c3c0ff] tracking-tighter font-headline">Fluid Architect</h1>
+</div>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-[#c3c0ff] hover:bg-[#222a3d] transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined">search</span>
+</button>
+</div>
+</header>
+<main class="max-w-4xl mx-auto px-4 pt-6 space-y-8">
+<!-- Search & Filter Bar (The Compose Bar Style) -->
+<section class="relative">
+<div class="w-full h-12 bg-surface-container-high rounded-full flex items-center px-4 group transition-all duration-300 focus-within:ring-2 focus-within:ring-primary/20">
+<span class="material-symbols-outlined text-outline mr-3">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-full text-on-surface placeholder:text-outline-variant font-body" placeholder="Search workspaces, bots, or people..." type="text"/>
+<span class="material-symbols-outlined text-tertiary ml-2 cursor-pointer">tune</span>
+</div>
+</section>
+<!-- Pinned Section (Horizontal Bento Cards) -->
+<section>
+<div class="flex items-center justify-between mb-4 px-2">
+<h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase">Pinned</h2>
+<span class="text-[10px] font-medium text-outline uppercase tracking-tighter">4 Items</span>
+</div>
+<div class="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+<!-- AI Bot Card -->
+<div class="flex-shrink-0 w-40 h-44 bg-gradient-to-br from-surface-container-high to-surface-container-low rounded-3xl p-4 flex flex-col justify-between relative group cursor-pointer border border-white/5">
+<div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-container to-tertiary flex items-center justify-center shadow-lg shadow-primary-container/20">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<div>
+<p class="font-headline font-bold text-on-surface leading-tight">My AI Bot</p>
+<p class="text-[10px] text-tertiary font-medium">Always Online</p>
+</div>
+<div class="absolute top-4 right-4 w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_rgba(76,215,246,0.6)]"></div>
+</div>
+<!-- Team Alpha Card -->
+<div class="flex-shrink-0 w-40 h-44 bg-surface-container rounded-3xl p-4 flex flex-col justify-between group cursor-pointer hover:bg-surface-container-high transition-all">
+<div class="flex -space-x-3">
+<img class="w-10 h-10 rounded-xl object-cover ring-4 ring-surface" data-alt="portrait of a confident woman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfQzhU5dQ7t35hC5HA6S98JxyGRKMIbuGvSPUDPYUqk0euZpwUDZPXm473RCtZxhjP_efWZdnrMb3RRvMlJkk-pZBQqmVkz8SCN2jgzJpXqw08aq3d-RUUKpMUgBP3AvuUDfGJdkTwFM7IJKwSa7pbqxG9-XBws4tSCUPuZ6XMFTx_fX3CNYEQTiWr6gCraB7duLRWNeuG50AhLTa_Cq3-jBGZ10JnhU6Q7ILGbJiAfgf00HTy5cn6N88B7_SsiuFkBg6vdnIqSj3z"/>
+<img class="w-10 h-10 rounded-xl object-cover ring-4 ring-surface" data-alt="portrait of a man smiling" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyjhdkfzXwBDsW_5AEzg_UWPhED74i8ELzxQWcXWkZldn4mMICAGOnVikB6q7S-toMA6gJSRDOmymOD5grXd7r5ihps_CneX0BtOB-QO_HluR61-236vv_d5bn0UlSh4P7hNb5oLYEPJEQT1GKOZVuZ4LtuvI6ajGesw0mQBs693ZydJ0h5kKMzUvO3xokCKGKQs-_zdR5fNrl_w8h_-jBpzTTNKwLEv3ocvcFTFksAiY1z0Y58b5KtZ7SyBsOFyowgz-uh8l-nU7a"/>
+<div class="w-10 h-10 rounded-xl bg-surface-bright flex items-center justify-center text-[10px] font-bold text-primary ring-4 ring-surface">+8</div>
+</div>
+<div>
+<p class="font-headline font-bold text-on-surface leading-tight">Team Alpha</p>
+<p class="text-[10px] text-outline font-medium">12 active now</p>
+</div>
+</div>
+<!-- Project Zenith -->
+<div class="flex-shrink-0 w-40 h-44 bg-surface-container rounded-3xl p-4 flex flex-col justify-between group cursor-pointer hover:bg-surface-container-high transition-all">
+<div class="w-12 h-12 rounded-2xl bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">architecture</span>
+</div>
+<div>
+<p class="font-headline font-bold text-on-surface leading-tight">Project Zenith</p>
+<p class="text-[10px] text-outline font-medium">Last active 2m</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Channels & Direct Messages (Unified Unified View) -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Channels Section -->
+<section class="space-y-4">
+<div class="flex items-center justify-between px-2">
+<h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase">Channels</h2>
+<button class="text-primary hover:bg-primary/10 p-1 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-sm">add_circle</span>
+</button>
+</div>
+<div class="space-y-1">
+<div class="flex items-center p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container-high transition-all cursor-pointer group">
+<div class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-highest text-outline mr-4 font-bold group-hover:text-primary transition-colors">#</div>
+<div class="flex-1">
+<h3 class="text-sm font-semibold text-on-surface">general</h3>
+<p class="text-xs text-outline-variant truncate">Alex: Let's sync at 3PM today...</p>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-outline-variant">14:20</span>
+<div class="w-5 h-5 bg-primary-container text-white text-[10px] font-bold flex items-center justify-center rounded-lg">3</div>
+</div>
+</div>
+<div class="flex items-center p-3 rounded-2xl hover:bg-surface-container-low transition-all cursor-pointer group">
+<div class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-highest text-outline mr-4 font-bold group-hover:text-tertiary transition-colors">#</div>
+<div class="flex-1">
+<h3 class="text-sm font-semibold text-on-surface">design-system</h3>
+<p class="text-xs text-outline-variant truncate">Updated the color tokens...</p>
+</div>
+<div class="text-[10px] text-outline-variant">Yesterday</div>
+</div>
+<div class="flex items-center p-3 rounded-2xl hover:bg-surface-container-low transition-all cursor-pointer group">
+<div class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-highest text-outline mr-4 font-bold group-hover:text-secondary transition-colors">#</div>
+<div class="flex-1">
+<h3 class="text-sm font-semibold text-on-surface">marketing-ops</h3>
+<p class="text-xs text-outline-variant truncate">New campaign assets are live</p>
+</div>
+<div class="text-[10px] text-outline-variant">2 days ago</div>
+</div>
+</div>
+</section>
+<!-- Direct Messages Section -->
+<section class="space-y-4">
+<div class="flex items-center justify-between px-2">
+<h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase">Direct Messages</h2>
+<button class="text-primary hover:bg-primary/10 p-1 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-sm">person_add</span>
+</button>
+</div>
+<div class="space-y-1">
+<!-- Online User -->
+<div class="flex items-center p-3 rounded-2xl hover:bg-surface-container-low transition-all cursor-pointer">
+<div class="relative mr-4">
+<img class="w-10 h-10 rounded-xl object-cover" data-alt="Close up portrait of a young man with glasses smiling" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6e3bwz9n91Osfo9Hu0OGH8VkcHEV6nFZpSdI0kWkbdSdwnSLkY7DvIVd_L1VuGIKEIXXdBKmtIDuif1wN_Fjo7McfZ793D3f7yc0QwWVIEAgRZzXR1rCdO9dECubZaEgHMNTOikxvGRwsXAMNw8S5MTtba_PZhk-LctwUAUxl8pn8fRBfDFGpkv1cjsJq8vJ1kZGO_ZKK0ySFsiVa0u7VPiYa9Ae7YL3oK2_mZ0L5DA22eu7S8ZKyDn1R5CNey4JI4yoQpveTlSSL"/>
+<div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-tertiary rounded-full border-2 border-surface"></div>
+</div>
+<div class="flex-1">
+<h3 class="text-sm font-semibold text-on-surface">Marcus Chen</h3>
+<p class="text-xs text-tertiary">Typing...</p>
+</div>
+<div class="text-[10px] text-outline-variant">Just now</div>
+</div>
+<!-- Offline User -->
+<div class="flex items-center p-3 rounded-2xl hover:bg-surface-container-low transition-all cursor-pointer opacity-70">
+<div class="relative mr-4">
+<img class="w-10 h-10 rounded-xl object-cover grayscale" data-alt="Minimalist portrait of a woman with a clean background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxzl-nowted5r0CzMQ9rGHRpruFgzyhhgPCu7guLytt8m3XR4tu0RQCEMw1JhxSHzP6DQJxUiTTZ9DpZgptlp1iD7xZpbiOyq-k1VWzUPsU-LtWbBA6FDZPhpxBgeDGlx_IFvbx0URb7j0_Nq9C7IDP0muPyklZ4aYx5o1Cet9LHDYu8z4E5rzjHsu2celLctkEiaafMnbKd4sBYUxGMjJNPNP4LbuNOoyIvsoxEJe10UoSjQ_KV2bLNpMbNPttp4Z6xgxN1cL_rFz"/>
+</div>
+<div class="flex-1">
+<h3 class="text-sm font-semibold text-on-surface">Elena Rodriguez</h3>
+<p class="text-xs text-outline-variant truncate">See you on Monday then!</p>
+</div>
+<div class="text-[10px] text-outline-variant">1h ago</div>
+</div>
+<!-- Online User 2 -->
+<div class="flex items-center p-3 rounded-2xl hover:bg-surface-container-low transition-all cursor-pointer">
+<div class="relative mr-4">
+<img class="w-10 h-10 rounded-xl object-cover" data-alt="Portrait of a creative professional looking at camera" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWhamksrvTifLwcm9RWEbB3I0csJIec6SifzycSC_bS1Xzcu0i6sssH_9gZWEi5S-aXmBnuwfaOq5g0l8sD7rpqz9I2T7S8Mldxu9l2Ob_g10NDcMcPU8bIZk-WdclKwOfkLnn_-GLDPIiTDfYSUL1RwKNvviLZZYHZPAcWGPz4_8BO3SCkZXUk9VMS7txyqnMmKbmsiEkNzJ8IipVWcTfXIfvvT-XoHWUZjv9jcqUTYUCZ8yccmfwb8d3BOsxUaEgttKIIlt4-zMx"/>
+<div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-tertiary rounded-full border-2 border-surface"></div>
+</div>
+<div class="flex-1">
+<h3 class="text-sm font-semibold text-on-surface">James Wilson</h3>
+<p class="text-xs text-outline-variant truncate">The prototype is ready for review</p>
+</div>
+<div class="text-[10px] text-outline-variant">4h ago</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-28 right-6 w-14 h-14 bg-gradient-to-br from-primary-container to-primary text-white rounded-[2rem] shadow-2xl shadow-primary-container/40 flex items-center justify-center active:scale-90 transition-transform z-40 group">
+<span class="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform duration-300">add</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-[#0b1326]/60 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)] rounded-t-3xl">
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-[#4f46e5] to-[#c3c0ff] text-white rounded-2xl p-2 px-4 scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Workspaces</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">AI Bot</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

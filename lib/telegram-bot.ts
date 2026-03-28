@@ -247,12 +247,15 @@ export async function sendMobileAppReturnButton(
 ): Promise<SendMessageResult> {
   const name = firstName ? `, ${firstName}` : "";
   const appUrl = baseUrl.replace(/\/$/, "");
-  const returnUrl = `${appUrl}/auth/mobile-app-login?t=${encodeURIComponent(loginToken)}`;
+  // Короткий путь /m — в диалоге Telegram/iOS меньше символов, чем у /auth/mobile-app-login
+  const returnUrl = `${appUrl}/m?t=${encodeURIComponent(loginToken)}`;
 
   const message = `
 ✅ <b>Запрос на вход в приложение МойСоюз${name}</b>
 
 Нажмите кнопку ниже, чтобы вернуться в приложение — вы войдёте автоматически.
+
+📱 <i>Telegram или телефон могут спросить «Открыть ссылку?» — это нормально, нажмите «Открыть».</i>
 
 ⏱ <i>Ссылка действительна 10 минут</i>
   `.trim();

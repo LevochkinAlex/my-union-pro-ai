@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary": "#4cd7f6",
+              "on-surface": "#dae2fd",
+              "on-tertiary-fixed-variant": "#004e5c",
+              "tertiary-container": "#006a7c",
+              "on-primary-fixed": "#0f0069",
+              "background": "#0b1326",
+              "on-tertiary-fixed": "#001f26",
+              "secondary": "#d0bcff",
+              "secondary-fixed-dim": "#d0bcff",
+              "outline-variant": "#464555",
+              "surface-container-lowest": "#060e20",
+              "tertiary-fixed-dim": "#4cd7f6",
+              "surface-container-highest": "#2d3449",
+              "surface-container": "#171f33",
+              "on-secondary": "#3c0091",
+              "secondary-fixed": "#e9ddff",
+              "primary-fixed": "#e2dfff",
+              "surface-container-low": "#131b2e",
+              "on-tertiary": "#003640",
+              "inverse-primary": "#4d44e3",
+              "outline": "#918fa1",
+              "on-primary-fixed-variant": "#3323cc",
+              "on-error": "#690005",
+              "surface-container-high": "#222a3d",
+              "surface": "#0b1326",
+              "on-tertiary-container": "#93e8ff",
+              "on-primary-container": "#dad7ff",
+              "error": "#ffb4ab",
+              "secondary-container": "#571bc1",
+              "primary-container": "#4f46e5",
+              "tertiary-fixed": "#acedff",
+              "surface-bright": "#31394d",
+              "surface-variant": "#2d3449",
+              "on-surface-variant": "#c7c4d8",
+              "inverse-surface": "#dae2fd",
+              "surface-tint": "#c3c0ff",
+              "on-primary": "#1d00a5",
+              "primary-fixed-dim": "#c3c0ff",
+              "surface-dim": "#0b1326",
+              "error-container": "#93000a",
+              "on-error-container": "#ffdad6",
+              "on-background": "#dae2fd",
+              "on-secondary-fixed": "#23005c",
+              "on-secondary-fixed-variant": "#5516be",
+              "on-secondary-container": "#c4abff",
+              "inverse-on-surface": "#283044",
+              "primary": "#c3c0ff"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(45, 52, 73, 0.6);
+            backdrop-filter: blur(20px);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #4f46e5 0%, #c3c0ff 100%);
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b1326;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #222a3d;
+            border-radius: 10px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30 min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-[#0b1326] flex justify-between items-center w-full px-6 h-16 fixed top-0 z-40">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<img alt="Group Profile" class="w-full h-full object-cover" data-alt="Minimalist geometric logo icon with initials DS in soft violet and white over a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7aoDUtRn_KKWxsw5V-DQEwJMUfdcAKXxLukrPQ9ao4pDMMEnr7f6fTttnrU6S8opeGv4ny0aN6hxqQbuhr8T_2HavII3uOpJT3V2NqgXg0uLiZMbuJoNbxVQoaiSSNdHvWK5kaZVaXTEOKWnEvHVpXr87GbR-J3mWXagvEsyrmQEOwX4fAY83nNj5Y3T1gl2iKzVQCFiFWiYAqw1M1WF9eSx36oM58K3VBXQdrUs4lscXD5pTvwYP5s9DWJowL0k6PxaEYsHtUTKW"/>
+</div>
+<div class="flex flex-col">
+<h1 class="font-headline font-bold text-lg tracking-tight text-[#c3c0ff]">Design System Squad</h1>
+<span class="font-label text-[11px] font-medium text-tertiary tracking-wide flex items-center gap-1">
+<span class="w-1.5 h-1.5 bg-tertiary rounded-full animate-pulse"></span>
+                    8 members online
+                </span>
+</div>
+</div>
+<button class="text-[#c3c0ff] hover:bg-[#222a3d] transition-colors duration-200 p-2 rounded-full active:opacity-80 transition-all">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</header>
+<!-- Chat Feed Canvas -->
+<main class="flex-1 mt-16 mb-40 overflow-y-auto px-4 py-6 flex flex-col gap-6 bg-surface-container-low">
+<!-- Other User: Text Message -->
+<div class="flex items-end gap-3 max-w-[85%] self-start group">
+<div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Portrait of a young tech professional with short dark hair and glasses in a moody blue studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKDW3JtLvEDqRmc4NSVLI9uHEn_VzX9gI--n1gb2M24Bz3wZklkiCcRuO8TbB5_StExJS1ZxzCY7g_jB1se8fBSsqwKOJ-0KM6gmX-RKLuVKrhlHapT8Go4O32CjptUZzDoawvIgysWoy0y3p4p0d-Edph01GXP3BlO8h2aJjLlM1kSN_nDHF771wH1_x99lpVu2NeVc4Ii8rj0zG075L8IBCwFXJC_drs3dk96r_-8JS7kFsszrQJagcBkWtpvTXyCOUT_VA3jhWD"/>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[11px] font-medium text-on-surface-variant px-1">Jordan Doe</span>
+<div class="bg-surface-container-high p-3 rounded-xl rounded-bl-none text-on-surface text-sm leading-relaxed">
+                    Hey team! Just pushed the updated button component variants to the library. Let me know if the focus states feel right.
+                </div>
+<span class="text-[10px] text-on-surface-variant/60 self-start">10:42 AM</span>
+</div>
+</div>
+<!-- Self User: Text Message -->
+<div class="flex flex-col gap-1 items-end max-w-[85%] self-end">
+<div class="primary-gradient p-3 rounded-xl rounded-br-none text-white text-sm leading-relaxed shadow-lg">
+                Checked them out, Jordan! The glow effect on the primary variant is spot on. Very architecturally sound.
+            </div>
+<span class="text-[10px] text-on-surface-variant/60">10:45 AM</span>
+</div>
+<!-- Other User: Code Snippet -->
+<div class="flex items-end gap-3 max-w-[90%] self-start">
+<div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Professional woman with a creative style, vibrant purple lighting on her face" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCuKP74qbLNfPTJDiaAIQQLxnfY-Z8NW7-r-KIfvjy63_Zw5QarSkbbpfYnx9hv_ZIycHDxmeVlkndUr0wYagqGsOSKPM8f1OTisgWRGRgU6kE1rJA78_OKuFfh2QuotMCXk2CI8a0PjYaREGK-MaQbvU10VvE-Oimg5HdjpcStpGp7Ye2AXxmWHi80byp8XIcwuZj0BU25AUpSb-GSlEvR3aDgSPj3vWjE-NkMs0fhpAteInPMW4VZC1igGNbuKzYW1Ka7t-Fz_GP"/>
+</div>
+<div class="flex flex-col gap-1 w-full">
+<span class="text-[11px] font-medium text-on-surface-variant px-1">Alex Morgan</span>
+<div class="bg-surface-container-high rounded-xl rounded-bl-none overflow-hidden border border-outline-variant/10">
+<div class="bg-surface-container-highest px-3 py-1.5 text-[10px] font-mono text-tertiary flex justify-between items-center">
+<span>Button.tsx</span>
+<span class="material-symbols-outlined text-xs" data-icon="content_copy">content_copy</span>
+</div>
+<pre class="p-4 text-[12px] font-mono overflow-x-auto bg-surface-container text-on-surface-variant leading-relaxed"><span class="text-tertiary">const</span> <span class="text-secondary">Button</span> = ({ children, variant }) =&gt; {
+  <span class="text-tertiary">return</span> (
+    &lt;<span class="text-secondary">button</span> 
+      className={`btn-${variant} glass-effect`}
+    &gt;
+      {children}
+    &lt;/<span class="text-secondary">button</span>&gt;
+  );
+};</pre>
+</div>
+<span class="text-[10px] text-on-surface-variant/60">10:48 AM</span>
+</div>
+</div>
+<!-- Other User: Image Attachment -->
+<div class="flex items-end gap-3 max-w-[85%] self-start">
+<div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Artistic profile of a young man with curly hair in a neon-lit cyberpunk environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBikqBwd6w9c9QqxpwPgPkgMvlazWS1a_hBDs9GIZ4B3JrBDFhgF32i8MNG46iiObMaCjYx6QpRNKjPR2_r9oe4saivoPo8l-Q_GUIQWZL6YRJqh576RwKrmTXimNEgHooetOenPjpfXFYF4KIe5A9l1bNdi6-tA5Jsmm1-_jCIbP31HeJW46pauNALRprL4Exd-k8Wp-rs5EVFcMnLMhluNhaG2V5oZKFvFgDvGaqetmcgNYW5RLnvPa-o-A4zCH_NMsBsJLuUj-oT"/>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[11px] font-medium text-on-surface-variant px-1">Kevin Chen</span>
+<div class="bg-surface-container-high p-2 rounded-xl rounded-bl-none space-y-2">
+<div class="rounded-lg overflow-hidden border border-outline-variant/10">
+<img alt="UI Design" class="w-full h-auto" data-alt="A sleek dark mode mobile app user interface featuring glassmorphic cards, vibrant violet accents, and high-end typography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzEsV2LNU1yvpeIgFsKYr0TAfQDPK1nF3MKF5WZFoPMcfmsOTZj8qw4SD3HLwZ0c8X-tX4POnaP8oZG7HUk0C7h3VN12F_HRyZutPliYZT-t3AFcFh1RzgJgLXOg_cMKSvSZz_FUVCMZtxUeVe5YOGLqD_FyqupgEbwVojCSY1HsKbTnfQ78qTZ5-UThAjdWcAboV9FfR4RKoTTQGGYhBCs4EZK-_dk7Nd3iWd1ojYet3BFe4z8HBZc_-ACBRtebgV98kJCp75moHv"/>
+</div>
+<p class="text-sm px-1 py-1 text-on-surface">Here's the mockup for the new navigation shell. Thoughts on the backdrop blur?</p>
+</div>
+<span class="text-[10px] text-on-surface-variant/60">11:02 AM</span>
+</div>
+</div>
+<!-- Self User: Quick Confirmation -->
+<div class="flex flex-col gap-1 items-end max-w-[85%] self-end">
+<div class="primary-gradient p-3 rounded-xl rounded-br-none text-white text-sm shadow-lg">
+                The 20px blur is perfect. Keeps the context without the noise. 🚀
+            </div>
+<span class="text-[10px] text-on-surface-variant/60">11:05 AM</span>
+</div>
+</main>
+<!-- Compose Bar (Floating Shell) -->
+<div class="fixed bottom-[92px] left-0 w-full px-4 z-40">
+<div class="bg-[#2d3449]/60 backdrop-blur-xl border border-outline-variant/10 rounded-full h-14 flex items-center px-2 gap-2 shadow-2xl">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-tertiary hover:bg-surface-container-highest transition-all active:scale-90">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+</button>
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder-on-surface-variant/40 text-sm h-full font-body" placeholder="Type a message..." type="text"/>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-tertiary hover:bg-surface-container-highest transition-all active:scale-90">
+<span class="material-symbols-outlined" data-icon="mic">mic</span>
+</button>
+<button class="w-10 h-10 rounded-full primary-gradient flex items-center justify-center text-white shadow-lg active:scale-90 transition-all">
+<span class="material-symbols-outlined" data-icon="send" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+<!-- BottomNavBar -->
+<nav class="bg-[#0b1326]/60 backdrop-blur-xl fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
+<!-- Chats (Active) -->
+<a class="flex flex-col items-center justify-center bg-[#4f46e5] text-white rounded-xl px-4 py-1.5 transition-all tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="chat_bubble" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+<span class="font-['Inter'] text-[11px] font-medium tracking-tighter">Chats</span>
+</a>
+<!-- Channels -->
+<a class="flex flex-col items-center justify-center text-[#31394d] px-4 py-1.5 transition-all hover:text-[#c3c0ff] tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="explore">explore</span>
+<span class="font-['Inter'] text-[11px] font-medium tracking-tighter">Channels</span>
+</a>
+<!-- Calls -->
+<a class="flex flex-col items-center justify-center text-[#31394d] px-4 py-1.5 transition-all hover:text-[#c3c0ff] tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="call">call</span>
+<span class="font-['Inter'] text-[11px] font-medium tracking-tighter">Calls</span>
+</a>
+<!-- Settings -->
+<a class="flex flex-col items-center justify-center text-[#31394d] px-4 py-1.5 transition-all hover:text-[#c3c0ff] tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="settings">settings</span>
+<span class="font-['Inter'] text-[11px] font-medium tracking-tighter">Settings</span>
+</a>
+</nav>
+<!-- Custom Contextual FAB (Suppress because we are in a focused chat details view, but if needed as 'New Thread' logic per JSON, we'd place here. Per instructions: suppress on focus/detail pages.) -->
+</body></html>

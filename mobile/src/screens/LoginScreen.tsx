@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -10,38 +11,37 @@ import {
   View,
 } from "react-native";
 import * as Linking from "expo-linking";
-import {
-  Button,
-  Divider,
-  HelperText,
-  Text,
-  TextInput,
-  useTheme,
-} from "react-native-paper";
+import Constants from "expo-constants";
+import { LinearGradient } from "expo-linear-gradient";
 import { appConfig } from "../config/appConfig";
+import { extractMobileLoginToken } from "../lib/extractMobileLoginToken";
 import { getTelegramStoreUrl, isTelegramClientInstalled } from "../lib/telegramClient";
 import {
   buildTelegramOAuthUrl,
+  exchangeMagicLinkToken,
   sendEmailMagicLink,
   startBotAppLoginSession,
   type MobileAuthSuccess,
 } from "../services/chatApi";
+import { IconDarkSvg } from "../components/IconDarkSvg";
+import { FluidText, FluidButton, FluidInput, GlassCard } from "../components/ui";
+import { colors, fonts, radii, spacing } from "../theme/tokens";
 
 const APP_SCHEME = "myunion";
-
 type Step = "input" | "email-sent";
 
 type Props = {
   onAuthenticated: (data: MobileAuthSuccess) => void | Promise<void>;
 };
 
-export function LoginScreen({ onAuthenticated: _onAuthenticated }: Props) {
-  const theme = useTheme();
+export function LoginScreen({ onAuthenticated }: Props) {
   const [step, setStep] = useState<Step>("input");
   const [email, setEmail] = useState("");
+  const [manualCode, setManualCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegramGuideVisible, setTelegramGuideVisible] = useState(false);
+  const isExpoGo = Constants.appOwnership === "expo";
 
   async function handleEmailSubmit() {
     setError(null);
@@ -93,12 +93,10 @@ export function LoginScreen({ onAuthenticated: _onAuthenticated }: Props) {
   async function startTelegramLoginFlow() {
     setError(null);
     if (!appConfig.telegramLoginOrigin) {
-      setError("Telegram Login работает только с HTTPS. Задайте telegramLoginOrigin в app.json (ваш продовый домен из BotFather).");
+      setError("Telegram Login работает только с HTTPS. Задайте telegramLoginOrigin в app.json.");
       return;
     }
-
     if (!(await ensureTelegramOrAlert())) return;
-
     setTelegramGuideVisible(true);
   }
 
@@ -108,12 +106,10 @@ export function LoginScreen({ onAuthenticated: _onAuthenticated }: Props) {
     try {
       const redirectUri = Linking.createURL("auth");
       const oauthUrl = buildTelegramOAuthUrl(redirectUri, APP_SCHEME);
-
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.location.href = oauthUrl;
         return;
       }
-
       await Linking.openURL(oauthUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка Telegram");
@@ -122,230 +118,359 @@ export function LoginScreen({ onAuthenticated: _onAuthenticated }: Props) {
     }
   }
 
+  async function handleManualCodeSubmit() {
+    setError(null);
+    const t = extractMobileLoginToken(manualCode.trim());
+    if (!t) {
+      setError("Вставьте полную ссылку из браузера или только длинный код из неё");
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await exchangeMagicLinkToken(t);
+      await Promise.resolve(onAuthenticated(data));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка входа");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (step === "email-sent") {
     return (
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.sentWrap}>
-            <Text variant="headlineSmall" style={{ fontWeight: "700", textAlign: "center" }}>
-              Проверьте почту
-            </Text>
-            <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant, textAlign: "center", marginTop: 8 }}>
-              Мы отправили ссылку для входа на{"\n"}
-              <Text style={{ fontWeight: "700" }}>{email}</Text>
-            </Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.outline, textAlign: "center", marginTop: 12 }}>
-              Откройте ссылку на этом телефоне — вы войдёте автоматически. Ссылка действительна 15 минут.
-            </Text>
-            <Button
-              mode="text"
-              onPress={() => { setStep("input"); setEmail(""); setError(null); }}
-              style={{ marginTop: 20 }}
-            >
-              Изменить email
-            </Button>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <View style={styles.root}>
+        <MeshBackground />
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <GlassCard style={styles.card}>
+              <View style={styles.cardInner}>
+                <View style={styles.sentIcon}>
+                  <FluidText variant="displayLg" color={colors.tertiary}>✉</FluidText>
+                </View>
+                <FluidText variant="headlineSm" color={colors.onSurface} style={styles.textCenter}>
+                  Проверьте почту
+                </FluidText>
+                <FluidText variant="bodyMd" color={colors.onSurfaceVariant} style={[styles.textCenter, styles.mt8]}>
+                  Мы отправили ссылку для входа на{"\n"}
+                  <FluidText variant="titleSm" color={colors.primary}>{email}</FluidText>
+                </FluidText>
+                <FluidText variant="bodySm" color={colors.outline} style={[styles.textCenter, styles.mt12]}>
+                  Откройте ссылку на этом устройстве — вы войдёте автоматически. Ссылка действительна 15 минут.
+                </FluidText>
+                <FluidButton
+                  title="Изменить email"
+                  variant="ghost"
+                  onPress={() => { setStep("input"); setEmail(""); setError(null); }}
+                  style={styles.mt20}
+                />
+              </View>
+            </GlassCard>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text variant="headlineLarge" style={styles.brand}>МойСоюз</Text>
-        <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-          Выберите способ входа
-        </Text>
+    <View style={styles.root}>
+      <MeshBackground />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {/* Logo */}
+          <View style={styles.logoWrap}>
+            <View style={styles.logoIcon}>
+              <IconDarkSvg width={48} height={48} />
+            </View>
+            <FluidText variant="headlineLg" color={colors.primary} style={styles.logoText}>
+              МойСоюз
+            </FluidText>
+          </View>
 
-        {error ? (
-          <HelperText type="error" visible style={styles.errorText}>
-            {error}
-          </HelperText>
-        ) : null}
+          {/* Glass Card */}
+          <GlassCard style={styles.card}>
+            <View style={styles.cardInner}>
+              <FluidText variant="headlineSm" color={colors.onSurface}>
+                Добро пожаловать
+              </FluidText>
+              <FluidText variant="bodySm" color={colors.onSurfaceVariant} style={styles.mt4}>
+                Войдите, чтобы продолжить
+              </FluidText>
 
-        <Button
-          mode="contained"
-          onPress={() => void handleBotLogin()}
-          loading={loading}
-          disabled={loading}
-          icon="telegram"
-          buttonColor="#0088cc"
-          textColor="#fff"
-          style={styles.actionButton}
-          contentStyle={styles.actionButtonContent}
-          labelStyle={styles.actionButtonLabel}
-        >
-          Войти через бота
-        </Button>
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 10 }}>
-          Откроется чат с @myunionpro_bot. Бот пришлёт кнопку «Вернуться в приложение» — нажмите её, чтобы завершить вход.
-        </Text>
+              {error ? (
+                <View style={styles.errorBanner}>
+                  <FluidText variant="bodySm" color={colors.error}>{error}</FluidText>
+                </View>
+              ) : null}
 
-        <Button
-          mode="outlined"
-          onPress={startTelegramLoginFlow}
-          loading={loading}
-          disabled={loading}
-          style={[styles.actionButton, styles.oauthAltButton]}
-          contentStyle={styles.actionButtonContent}
-          labelStyle={styles.actionButtonLabel}
-        >
-          Вход через сайт Telegram (браузер)
-        </Button>
-        <Text variant="bodySmall" style={{ color: theme.colors.outline, marginTop: 6 }}>
-          Альтернатива без бота: страница oauth.telegram.org в Safari.
-        </Text>
+              {/* Email */}
+              <FluidInput
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+                placeholder="you@example.com"
+                style={styles.mt20}
+              />
 
-        <Modal
-          visible={telegramGuideVisible}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setTelegramGuideVisible(false)}
-        >
-          <Pressable
-            style={[styles.tgModalBackdrop, { backgroundColor: "rgba(15, 23, 42, 0.45)" }]}
-            onPress={() => setTelegramGuideVisible(false)}
-          >
-            <Pressable style={[styles.tgModalCard, { backgroundColor: theme.colors.surface }]} onPress={(e) => e.stopPropagation()}>
-              <Text variant="titleLarge" style={styles.tgModalTitle}>
-                Вход через Telegram
-              </Text>
-              <ScrollView style={styles.tgModalScroll} showsVerticalScrollIndicator={false}>
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
-                  Telegram не даёт сторонним приложениям открыть вас сразу после «Принять» в чате — токен передаётся через браузер. Поэтому важно не закрывать вкладку Safari до конца входа.
-                </Text>
-                <Text variant="titleSmall" style={{ marginBottom: 8 }}>
-                  Как это работает
-                </Text>
-                <Text variant="bodyMedium" style={styles.stepLine}>
-                  1. Откроется Safari со страницей входа Telegram (номер, код — там же).
-                </Text>
-                <Text variant="bodyMedium" style={styles.stepLine}>
-                  2. В Telegram может прийти сообщение: запрос на вход на myunion.pro и кнопки «Принять» / «Отклонить» — это штатно.
-                </Text>
-                <Text variant="bodyMedium" style={styles.stepLine}>
-                  3. Нажмите «Принять» в Telegram, затем вернитесь в Safari (свайп по нижнему краю или из списка приложений). Страница дождётся подтверждения и сама перенаправит в МойСоюз уже авторизованным.
-                </Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.outline, marginTop: 12 }}>
-                  Если Safari закрыли до завершения, начните вход снова. Прямой переход только из чата Telegram в приложение с готовым входом Telegram для нас сделать нельзя — ограничение платформы, не нашего кода.
-                </Text>
-              </ScrollView>
-              <View style={styles.tgModalActions}>
-                <Button mode="outlined" onPress={() => setTelegramGuideVisible(false)} style={styles.tgModalActionBtn}>
-                  Отмена
-                </Button>
-                <Button mode="contained" onPress={() => void launchTelegramOAuth()} style={styles.tgModalActionBtn}>
-                  Открыть страницу входа
-                </Button>
+              <FluidButton
+                title="Получить ссылку"
+                onPress={handleEmailSubmit}
+                loading={loading}
+                disabled={loading}
+                style={styles.mt16}
+              />
+
+              {/* Divider */}
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <FluidText variant="labelSm" color={colors.outline} style={styles.dividerText}>или</FluidText>
+                <View style={styles.dividerLine} />
               </View>
+
+              {/* Telegram buttons */}
+              <FluidButton
+                title="Войти с Telegram"
+                variant="surface"
+                onPress={() => void handleBotLogin()}
+                loading={loading}
+                disabled={loading}
+                icon={<FluidText variant="titleSm" color={colors.tertiary}>✈</FluidText>}
+              />
+
+              <Pressable
+                onPress={startTelegramLoginFlow}
+                disabled={loading}
+                style={({ pressed }) => [styles.ghostLink, pressed && { opacity: 0.7 }]}
+              >
+                <FluidText variant="bodySm" color={colors.onSurfaceVariant}>
+                  Или через{" "}
+                  <FluidText variant="bodySm" color={colors.primary}>сайт Telegram</FluidText>
+                </FluidText>
+              </Pressable>
+
+              {isExpoGo ? (
+                <FluidText variant="bodySm" color={colors.tertiary} style={[styles.textCenter, styles.mt16]}>
+                  В Expo Go ссылка myunion:// из Safari часто не возвращает в приложение. После кнопки в бота вставьте ссылку или код ниже.
+                </FluidText>
+              ) : null}
+
+              <FluidText variant="labelSm" color={colors.onSurfaceVariant} style={[styles.mt20, styles.textCenter]}>
+                Ссылка из бота не открыла приложение?
+              </FluidText>
+              <FluidInput
+                label="Вставьте ссылку или код"
+                value={manualCode}
+                onChangeText={setManualCode}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="https://myunion.pro/m?t=…"
+                multiline
+                style={styles.mt8}
+              />
+              <FluidButton
+                title="Войти по коду из бота"
+                variant="ghost"
+                onPress={() => void handleManualCodeSubmit()}
+                loading={loading}
+                disabled={loading || !manualCode.trim()}
+                style={styles.mt12}
+              />
+
+              <FluidText variant="bodySm" color={colors.outline} style={[styles.textCenter, styles.mt20]}>
+                Нет аккаунта? Регистрация автоматическая при первом входе.
+              </FluidText>
+            </View>
+          </GlassCard>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <FluidText variant="labelSm" color={colors.outline}>
+              Условия использования · Конфиденциальность
+            </FluidText>
+          </View>
+
+          {/* Telegram Guide Modal */}
+          <Modal
+            visible={telegramGuideVisible}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setTelegramGuideVisible(false)}
+          >
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={() => setTelegramGuideVisible(false)}
+            >
+              <GlassCard style={styles.modalCard} borderRadius={radii["3xl"]}>
+                <Pressable onPress={(e) => e.stopPropagation()}>
+                  <View style={styles.modalInner}>
+                    <FluidText variant="titleLg" color={colors.onSurface}>
+                      Вход через Telegram
+                    </FluidText>
+                    <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                      <FluidText variant="bodyMd" color={colors.onSurfaceVariant} style={styles.mt12}>
+                        Telegram не даёт приложениям открыть вас сразу — токен передаётся через браузер. Не закрывайте вкладку Safari.
+                      </FluidText>
+                      <FluidText variant="titleSm" color={colors.onSurface} style={styles.mt16}>
+                        Как это работает
+                      </FluidText>
+                      <FluidText variant="bodyMd" color={colors.onSurfaceVariant} style={styles.mt8}>
+                        1. Откроется Safari со страницей Telegram.
+                      </FluidText>
+                      <FluidText variant="bodyMd" color={colors.onSurfaceVariant} style={styles.mt4}>
+                        2. Telegram может прислать запрос на авторизацию — нажмите «Принять».
+                      </FluidText>
+                      <FluidText variant="bodyMd" color={colors.onSurfaceVariant} style={styles.mt4}>
+                        3. Вернитесь в Safari — страница перенаправит в МойСоюз.
+                      </FluidText>
+                    </ScrollView>
+                    <View style={styles.modalActions}>
+                      <FluidButton
+                        title="Отмена"
+                        variant="ghost"
+                        onPress={() => setTelegramGuideVisible(false)}
+                      />
+                      <FluidButton
+                        title="Открыть"
+                        onPress={() => void launchTelegramOAuth()}
+                      />
+                    </View>
+                  </View>
+                </Pressable>
+              </GlassCard>
             </Pressable>
-          </Pressable>
-        </Modal>
+          </Modal>
 
-        <View style={styles.dividerRow}>
-          <Divider style={styles.dividerLine} />
-          <Text variant="bodySmall" style={{ color: theme.colors.outline, paddingHorizontal: 12 }}>или</Text>
-          <Divider style={styles.dividerLine} />
-        </View>
-
-        <TextInput
-          mode="outlined"
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoComplete="email"
-          style={styles.emailInput}
-        />
-
-        <Button
-          mode="contained"
-          onPress={handleEmailSubmit}
-          loading={loading}
-          disabled={loading}
-          style={styles.actionButton}
-          contentStyle={styles.actionButtonContent}
-          labelStyle={styles.actionButtonLabel}
-        >
-          Продолжить
-        </Button>
-
-        <Text variant="bodySmall" style={{ color: theme.colors.outline, marginTop: 8 }}>
-          Отправим ссылку для входа на email
-        </Text>
-
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: "center", marginTop: 24 }}>
-          Нет аккаунта? Регистрация автоматическая при первом входе.
-        </Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {loading && (
+            <View style={styles.overlayLoader}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const BUTTON_RADIUS = 14;
-const BUTTON_HEIGHT = 52;
+function MeshBackground() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <LinearGradient
+        colors={[colors.surface, "#101830", colors.surface]}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={["rgba(79,70,229,0.15)", "transparent"]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 0.6 }}
+        style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
+      />
+      <LinearGradient
+        colors={["rgba(76,215,246,0.08)", "transparent"]}
+        start={{ x: 0.8, y: 0.2 }}
+        end={{ x: 0.2, y: 0.8 }}
+        style={[StyleSheet.absoluteFill, { opacity: 0.4 }]}
+      />
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: spacing["3xl"],
+    paddingVertical: spacing["4xl"],
   },
-  brand: { fontWeight: "700", letterSpacing: -0.5 },
-  errorText: { marginTop: 8, fontSize: 14 },
-  actionButton: { marginTop: 16, borderRadius: BUTTON_RADIUS },
-  oauthAltButton: { marginTop: 12 },
-  actionButtonContent: { height: BUTTON_HEIGHT },
-  actionButtonLabel: { fontSize: 16, fontWeight: "600", letterSpacing: 0.15 },
+  logoWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing["4xl"],
+    gap: spacing.lg,
+  },
+  logoIcon: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoText: {
+    fontFamily: fonts.headlineExtrabold,
+    letterSpacing: -0.5,
+  },
+  card: {
+    paddingHorizontal: spacing["3xl"],
+    paddingVertical: spacing["4xl"],
+  },
+  cardInner: {},
+  mt4: { marginTop: 4 },
+  mt8: { marginTop: 8 },
+  mt12: { marginTop: 12 },
+  mt16: { marginTop: 16 },
+  mt20: { marginTop: 20 },
+  textCenter: { textAlign: "center" },
+  errorBanner: {
+    marginTop: spacing.xl,
+    backgroundColor: colors.errorContainer,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+  },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 20,
+    marginVertical: spacing["3xl"],
   },
-  dividerLine: { flex: 1 },
-  emailInput: { marginBottom: 0 },
-  sentWrap: { alignItems: "center", paddingTop: 40 },
-  stepLine: { marginBottom: 8 },
-  tgModalBackdrop: {
+  dividerLine: {
     flex: 1,
+    height: 1,
+    backgroundColor: colors.outlineVariant,
+    opacity: 0.3,
+  },
+  dividerText: { paddingHorizontal: spacing.lg },
+  ghostLink: {
+    alignSelf: "center",
+    marginTop: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  footer: {
+    alignItems: "center",
+    marginTop: spacing["4xl"],
+  },
+  sentIcon: {
+    alignItems: "center",
+    marginBottom: spacing.xl,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(11,19,38,0.8)",
     justifyContent: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing["3xl"],
   },
-  tgModalCard: {
-    borderRadius: 10,
-    maxHeight: "82%",
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
+  modalCard: {
+    maxHeight: "80%",
   },
-  tgModalTitle: {
-    fontWeight: "700",
-    marginBottom: 12,
+  modalInner: {
+    padding: spacing["3xl"],
   },
-  tgModalScroll: {
-    maxHeight: 360,
+  modalScroll: {
+    maxHeight: 320,
   },
-  tgModalActions: {
+  modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(148, 163, 184, 0.35)",
+    gap: spacing.lg,
+    marginTop: spacing["3xl"],
   },
-  tgModalActionBtn: {
-    borderRadius: 8,
-    marginLeft: 4,
+  overlayLoader: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(11,19,38,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

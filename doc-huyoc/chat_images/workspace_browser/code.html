@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fluid Architect | Workspace Browser</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#2d3449",
+              "inverse-on-surface": "#283044",
+              "surface-container-high": "#222a3d",
+              "secondary-fixed": "#e9ddff",
+              "outline-variant": "#464555",
+              "on-primary-container": "#dad7ff",
+              "on-primary": "#1d00a5",
+              "tertiary-container": "#006a7c",
+              "on-tertiary-container": "#93e8ff",
+              "on-surface": "#dae2fd",
+              "surface-container-lowest": "#060e20",
+              "on-tertiary": "#003640",
+              "on-secondary": "#3c0091",
+              "secondary": "#d0bcff",
+              "on-tertiary-fixed-variant": "#004e5c",
+              "on-surface-variant": "#c7c4d8",
+              "on-error": "#690005",
+              "primary-container": "#4f46e5",
+              "secondary-container": "#571bc1",
+              "on-background": "#dae2fd",
+              "primary-fixed-dim": "#c3c0ff",
+              "primary-fixed": "#e2dfff",
+              "on-secondary-fixed": "#23005c",
+              "surface-container-low": "#131b2e",
+              "surface-variant": "#2d3449",
+              "surface": "#0b1326",
+              "surface-dim": "#0b1326",
+              "on-error-container": "#ffdad6",
+              "tertiary-fixed-dim": "#4cd7f6",
+              "on-tertiary-fixed": "#001f26",
+              "error-container": "#93000a",
+              "surface-bright": "#31394d",
+              "tertiary": "#4cd7f6",
+              "on-primary-fixed": "#0f0069",
+              "on-primary-fixed-variant": "#3323cc",
+              "tertiary-fixed": "#acedff",
+              "on-secondary-fixed-variant": "#5516be",
+              "surface-container": "#171f33",
+              "primary": "#c3c0ff",
+              "error": "#ffb4ab",
+              "background": "#0b1326",
+              "inverse-surface": "#dae2fd",
+              "inverse-primary": "#4d44e3",
+              "secondary-fixed-dim": "#d0bcff",
+              "on-secondary-container": "#c4abff",
+              "surface-tint": "#c3c0ff",
+              "outline": "#918fa1"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        background-color: #0b1326;
+        color: #dae2fd;
+        font-family: 'Inter', sans-serif;
+      }
+      .glass-effect {
+        background: rgba(45, 52, 73, 0.6);
+        backdrop-filter: blur(20px);
+      }
+      .primary-gradient {
+        background: linear-gradient(135deg, #4f46e5 0%, #c3c0ff 100%);
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-[#0b1326] text-[#c3c0ff] font-['Manrope'] font-bold tracking-tight docked full-width top-0 z-50">
+<div class="flex justify-between items-center w-full px-6 h-16 bg-[#131b2e] flat no lines depth-first layering">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="professional minimalist avatar of a creative technologist with sleek glasses and dark hair on a soft indigo background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuArh9S9c6-XnBBtXDsl-rIowwde0d2mkIdIYCqPf9NY0hR7cGa_6JUungy36ytD4rTkjmZo0FElOwo-Yv_5XTOAdRqU4eJXWm7pig7wiVUDj6t1wAdVzl5hydYe-VRUizzhL0a38815ZroViqV6py1yywatCx-EPgSNciNjaJ7o96MC-NZoFXri7F5B6w_5tw8hWa9QK5E-8I-Sujvlbi_eYLYvnkwV6W6HOb0FggVKGn4BsDmKtLvsdsVedEX4JPPDBoUnlzf9JZku"/>
+</div>
+<span class="text-xl font-extrabold text-[#c3c0ff] tracking-tighter">Fluid Architect</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-lg hover:bg-[#222a3d] transition-colors text-[#c3c0ff] active:scale-95 duration-200">
+<span class="material-symbols-outlined">search</span>
+</button>
+</div>
+</div>
+</header>
+<main class="flex-1 flex overflow-hidden">
+<!-- Sidebar: Workspace Selector (Asymmetric List) -->
+<aside class="w-20 md:w-24 bg-surface-container-lowest flex flex-col items-center py-6 gap-6 overflow-y-auto no-scrollbar border-none">
+<button class="w-12 h-12 md:w-14 md:h-14 primary-gradient rounded-2xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-white">add</span>
+</button>
+<div class="w-8 h-px bg-outline-variant/20"></div>
+<!-- Workspace Items -->
+<div class="flex flex-col gap-5 items-center">
+<div class="relative group">
+<div class="absolute -left-3 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-primary rounded-r-full"></div>
+<button class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-surface-container-high overflow-hidden hover:rounded-xl transition-all duration-300">
+<img alt="TechHub" class="w-full h-full object-cover" data-alt="abstract 3d visualization of interconnected blue glowing circuits and data nodes representing a technology hub" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAR7mMUHZPN6Fj7aPI5z4DpXvp6xCLdm1RaRIJ1ecD_ToDrXGgc81mLWdmWtn-_AUcJNf6mrZfh78Fr2uRSxV7Edty3EIHBKehNt4Kl7iskAR1TLYCq-hRpZgPaFzEeDb-XoNHC6WvmrXFGQrDi_11gbgePG3D3Al-U3cy4Ar1mwEaoNsrm1Tl5Rg6B38nxQmi52DR7y_ZALJ056l_7WQibr4ly80fiyPM3FViQSIrVf0bz8FJ7_nEbLX-7l4S3lMMusXr3kdAfOCdD"/>
+</button>
+</div>
+<button class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-surface-container-high overflow-hidden hover:rounded-xl transition-all duration-300 group">
+<img alt="Creative Studio" class="w-full h-full object-cover opacity-80 group-hover:opacity-100" data-alt="vibrant neon vaporwave aesthetic with retro computer hardware and soft purple lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqLcYzWEdlzTRPAJ6IosMpnDRgV6vYZPnG3tsgNKBXqhLhY9bgeEaVugWD7hmVufluEGuFfyT0QSzs4N7ANQ-fCU7TKDpE8RSYPQREGD6ZPuu8aqzSlpypChHay0SChmLwh934STni1CkfQlbjFVxw22-9IhcCLXa16nHV5r0MYAzVRvQrxZeLXZjIjSEeZVtFkepMqYMkqORWJnjBOoHY581PhYySrbBUltQ3EfwV2RNEkAJd2Z0VC33N4cVsV4RNSeUsYY1YpwLu"/>
+</button>
+<button class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-surface-container-high overflow-hidden hover:rounded-xl transition-all duration-300 group">
+<img alt="My AI Lab" class="w-full h-full object-cover opacity-80 group-hover:opacity-100" data-alt="futuristic laboratory setting with clean glass surfaces and soft cyan holographic displays" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDS4Py1tq8TPUYJeNltl6HSNtVwmb43Wv-pUOI9_7r9l3YdWNn319LCzrJX3YMwO0kuc318-6krMrn6jmxEXJWKdga2TU1g-pQQSnzogV27CHxtHOSbC9d7lsA65DezrDfB4bMczKuBObnE3fJlp7LJGddjWB-hAkzUbfHdie83k1QB3slpy5AcWkMFEyWVOXo5QFt7Y8A6KaSBI_3qMC9bIJTJEatj24PqI6KAuJHL64bu5kZN-QxuWPctwqmaI4wXpPavyie9uaO2"/>
+</button>
+</div>
+</aside>
+<!-- Content Area: Bento Grid Layout -->
+<section class="flex-1 bg-surface-container-low p-6 md:p-8 overflow-y-auto">
+<div class="max-w-6xl mx-auto">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+<div>
+<span class="text-xs font-bold uppercase tracking-widest text-primary/60 mb-2 block font-label">Current Environment</span>
+<h1 class="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tight">TechHub <span class="text-primary">Global</span></h1>
+</div>
+<div class="flex gap-3">
+<button class="px-5 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant font-medium text-sm hover:bg-surface-bright transition-colors">
+                            Manage Settings
+                        </button>
+<button class="px-5 py-2.5 rounded-full primary-gradient text-on-primary font-bold text-sm shadow-md hover:shadow-primary/20 transition-all">
+                            Invite Team
+                        </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Main Channel List Card -->
+<div class="md:col-span-4 lg:col-span-3 space-y-4">
+<div class="p-6 rounded-3xl bg-surface-container-high shadow-sm">
+<h3 class="text-on-surface font-headline font-bold mb-4 flex items-center justify-between">
+                                Channels
+                                <span class="material-symbols-outlined text-primary text-sm">add_circle</span>
+</h3>
+<div class="space-y-1">
+<a class="flex items-center gap-3 p-3 rounded-xl bg-primary-container text-white font-medium" href="#">
+<span class="material-symbols-outlined text-lg">tag</span>
+<span>architecture-main</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-bright text-on-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">tag</span>
+<span>design-ops</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-bright text-on-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">lock</span>
+<span>exec-private</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-bright text-on-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">campaign</span>
+<span>announcements</span>
+</a>
+</div>
+</div>
+<!-- Integration Status Card -->
+<div class="p-6 rounded-3xl bg-surface-container shadow-sm">
+<h3 class="text-on-surface font-headline font-bold mb-4">Integrations</h3>
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-highest text-tertiary text-xs font-bold border border-tertiary/20">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span> GPT-4 Omni
+                                </div>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-highest text-on-surface-variant text-xs font-bold border border-outline-variant/20">
+<span class="w-2 h-2 rounded-full bg-outline"></span> Midjourney
+                                </div>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-highest text-secondary text-xs font-bold border border-secondary/20">
+<span class="w-2 h-2 rounded-full bg-secondary"></span> Claude 3
+                                </div>
+</div>
+</div>
+</div>
+<!-- Selected Workspace Details (Asymmetric Centerpiece) -->
+<div class="md:col-span-8 lg:col-span-9 space-y-6">
+<!-- Hero Detail Card -->
+<div class="relative h-64 md:h-80 rounded-3xl overflow-hidden group">
+<img alt="Workspace Cover" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="ultra-modern glass office interior with minimalist furniture and cool blue atmospheric lighting during twilight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCH50smGI3mGiIj3sOuGZLQVDKn653r4kRq5Rj8PF28iXg2O925Tdm6NEgWYeERVCf1RVeyU0uPVe4ceMaIyKgx93WDk_ztj9GGRxCaEqjj7oXYA70icMV-UAUVf9dHgQCiFcZqUrrVXIgJREuE2BcxFgbvI6K-u8yR2TqgW9fxT3njT7G8ZRRETYJHBvVDPpgF8PU5h5LO9KJIyxtiqwDjxQqsdvPcl34nXFxb_PZ1oX3sPYwk8nSaWo9seU0lg1fPr8X7ZKIISfpt"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent"></div>
+<div class="absolute bottom-0 left-0 p-8 w-full flex justify-between items-end">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="px-2 py-0.5 rounded-md bg-primary text-on-primary text-[10px] font-bold uppercase tracking-tighter">Pro Tier</span>
+<span class="text-on-surface-variant text-xs font-medium">Est. 2024</span>
+</div>
+<h2 class="text-3xl font-headline font-bold text-white">Advanced Engineering Hub</h2>
+</div>
+<div class="hidden lg:flex items-center -space-x-3">
+<img alt="team member" class="w-10 h-10 rounded-full border-4 border-surface" data-alt="stylized avatar of a developer" src="https://lh3.googleusercontent.com/aida-public/AB6AXuApLUNUTVYnKTKYUQYpO6fFsH9GJ3EFXDPjC9DufvLCmLOLaQixSXrN43178pFSEeQQmfl9iX76xWVtngnal7yp60l5aTl-WmQakcN9uIYVWfeSdlNZ5E2raBoSROipZiJLT_55CybbPBqdt5lFYaLHjqql61MsM5ySrJZdwmMcd_f-YqGuBS8z_NKHaw055vkj3lgyhHL1Drhb1GtzyxcEPu8wBUvP6Jr8wGHLsCOqtZg2MDkLz-uTF2bgvmcavdR00q6X3_DEosJL"/>
+<img alt="team member" class="w-10 h-10 rounded-full border-4 border-surface" data-alt="stylized avatar of a designer" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBf__Fv9gfzuPNLUJz08OgTdj7XRWiRnroSGP37xJU_GSolvHHQlVOzJvTDGb6naciserWdfyRTBVIkSz4esUEQVZsTCbjnigeqDmGeKw5VVd64o-m5qI3ZOKtW7-Gk6dRfDsIwFYGfmxE3yv5CCiOCLBJ122qaUDflfcL6Zjk2aMYxg6cJ_1VpkEBSrDPuMky1x-DhSEyZqryLfT9sNPYmW-0vPoJApr_C5EyYt0RDVBMu2T0daWAyg01hijxkNt0zfxfzxnH2_pkg"/>
+<img alt="team member" class="w-10 h-10 rounded-full border-4 border-surface" data-alt="stylized avatar of a project manager" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbGThq4u7dzOZ4lhm6byW0cfNim-oNFpIfab5x2Im7YI1vKn2QOijljT4tE71FOAmWrXVp7f6J8x-FVPU6ytmv6VZNSkmp-kuJQ0nh14asvsRyhBiJC1LCk7ig_oVCZM6r0XFASkAntURBiA4e1exuRa-orLeLTVMzUs8EHrMAGlh0Gb9pqQtT2fux2gF3q9DodoSB68zPoRfKn9OqANZI9Ixz0QlshcvRWFe0US_i-Q0ffTwt-X7au7q4hzKJ_0KKfdy8vBD2hIyL"/>
+<div class="w-10 h-10 rounded-full border-4 border-surface bg-surface-bright flex items-center justify-center text-[10px] font-bold text-primary">+12</div>
+</div>
+</div>
+</div>
+<!-- Integration Details Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Integration Card -->
+<div class="p-6 rounded-3xl bg-surface-container-high hover:bg-surface-bright transition-all cursor-pointer group">
+<div class="w-12 h-12 rounded-2xl bg-tertiary-container flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<h4 class="text-on-surface font-headline font-bold mb-1">Architecture Bot</h4>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-4">Structural integrity analysis and BIM data integration agent.</p>
+<div class="flex items-center justify-between">
+<span class="text-[10px] font-bold text-tertiary uppercase">Active</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">arrow_forward</span>
+</div>
+</div>
+<!-- Integration Card -->
+<div class="p-6 rounded-3xl bg-surface-container-high hover:bg-surface-bright transition-all cursor-pointer group">
+<div class="w-12 h-12 rounded-2xl bg-secondary-container flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<h4 class="text-on-surface font-headline font-bold mb-1">Visual Synthesizer</h4>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-4">Real-time render generation from text descriptions.</p>
+<div class="flex items-center justify-between">
+<span class="text-[10px] font-bold text-secondary uppercase">Processing</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">arrow_forward</span>
+</div>
+</div>
+<!-- Integration Card -->
+<div class="p-6 rounded-3xl bg-surface-container-high border border-dashed border-outline-variant/30 flex flex-col items-center justify-center text-center group hover:border-primary/50 transition-all">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-on-surface-variant">add</span>
+</div>
+<h4 class="text-on-surface-variant font-headline font-bold text-sm">Add Integration</h4>
+<p class="text-outline text-xs mt-1">Connect new AI tools</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Visible on Mobile) -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-[#0b1326]/60 backdrop-blur-xl md:hidden rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+<div class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-gradient-to-br from-[#4f46e5] to-[#c3c0ff] text-white rounded-2xl p-2 px-4 scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Workspaces</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">AI Bot</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Profile</span>
+</div>
+</nav>
+</body></html>

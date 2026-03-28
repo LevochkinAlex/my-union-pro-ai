@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fluid Architect | AI Bot Chat</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#2d3449",
+              "inverse-on-surface": "#283044",
+              "surface-container-high": "#222a3d",
+              "secondary-fixed": "#e9ddff",
+              "outline-variant": "#464555",
+              "on-primary-container": "#dad7ff",
+              "on-primary": "#1d00a5",
+              "tertiary-container": "#006a7c",
+              "on-tertiary-container": "#93e8ff",
+              "on-surface": "#dae2fd",
+              "surface-container-lowest": "#060e20",
+              "on-tertiary": "#003640",
+              "on-secondary": "#3c0091",
+              "secondary": "#d0bcff",
+              "on-tertiary-fixed-variant": "#004e5c",
+              "on-surface-variant": "#c7c4d8",
+              "on-error": "#690005",
+              "primary-container": "#4f46e5",
+              "secondary-container": "#571bc1",
+              "on-background": "#dae2fd",
+              "primary-fixed-dim": "#c3c0ff",
+              "primary-fixed": "#e2dfff",
+              "on-secondary-fixed": "#23005c",
+              "surface-container-low": "#131b2e",
+              "surface-variant": "#2d3449",
+              "surface": "#0b1326",
+              "surface-dim": "#0b1326",
+              "on-error-container": "#ffdad6",
+              "tertiary-fixed-dim": "#4cd7f6",
+              "on-tertiary-fixed": "#001f26",
+              "error-container": "#93000a",
+              "surface-bright": "#31394d",
+              "tertiary": "#4cd7f6",
+              "on-primary-fixed": "#0f0069",
+              "on-primary-fixed-variant": "#3323cc",
+              "tertiary-fixed": "#acedff",
+              "on-secondary-fixed-variant": "#5516be",
+              "surface-container": "#171f33",
+              "primary": "#c3c0ff",
+              "error": "#ffb4ab",
+              "background": "#0b1326",
+              "inverse-surface": "#dae2fd",
+              "inverse-primary": "#4d44e3",
+              "secondary-fixed-dim": "#d0bcff",
+              "on-secondary-container": "#c4abff",
+              "surface-tint": "#c3c0ff",
+              "outline": "#918fa1"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .chat-wallpaper {
+            background-image: radial-gradient(circle at 2px 2px, rgba(195, 192, 255, 0.05) 1px, transparent 0);
+            background-size: 32px 32px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container/30">
+<!-- Top Navigation Anchor -->
+<header class="bg-[#0b1326] flex justify-between items-center w-full px-6 h-16 fixed top-0 z-50">
+<div class="flex items-center gap-4">
+<div class="relative">
+<img alt="AI Bot Avatar" class="w-10 h-10 rounded-full border-2 border-primary/20" data-alt="Futuristic glowing purple AI avatar icon with circuit patterns and a central glowing core" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBv__ADmvmKkYSRhMmjH5LAy_M7eAX0XB9NmSC3KTBjGY4YZTk9OGLSxoJWXHgCWbP7OPqrOQw96zDZi-QP-9nwhYW5MM_CwaC2ouMMmUMcgAIv3EVD_klbPfpu9tkuIWkdQuh8Va4wH3Sldxxg5bk10dKzA7CtkIiYTVkcWeIsiaEiPUE1LmfXz52fEnSvRgkOjDUnX13Mho_HpENs0nkyCdg4gsX6sCzx5-16rjJufyb7rVEmRQpoZS-YPl6cIFUpXnIqOhlNuZcF"/>
+<span class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface"></span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-bold tracking-tight text-[#c3c0ff] leading-none">Architect Prime</span>
+<span class="text-[10px] text-tertiary font-medium mt-1 uppercase tracking-widest">Bot is typing...</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-[#c3c0ff] hover:bg-[#222a3d] transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-[#c3c0ff] hover:bg-[#222a3d] transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</header>
+<!-- Main Chat Canvas -->
+<main class="min-h-screen pt-16 pb-32 chat-wallpaper px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto flex flex-col gap-6">
+<!-- Date Marker -->
+<div class="flex justify-center my-8">
+<span class="text-[11px] font-semibold text-on-surface-variant bg-surface-container px-3 py-1 rounded-full uppercase tracking-widest">Today</span>
+</div>
+<!-- Incoming Message (AI) -->
+<div class="flex flex-col gap-2 max-w-[85%] self-start group">
+<div class="bg-surface-container-high p-4 rounded-xl rounded-tl-none shadow-xl border-l-2 border-tertiary/30">
+<p class="text-sm leading-relaxed text-on-surface">Hello there. I've analyzed your architectural drafts for the Fluid system. The structural rigor is impressive, but we could optimize the kinetic transitions in the sidebar. Would you like me to generate a refined motion spec?</p>
+</div>
+<div class="flex items-center gap-3 px-1">
+<span class="text-[10px] font-medium text-on-surface-variant">09:41 AM</span>
+<button class="text-[10px] font-bold text-tertiary uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">Copy</button>
+</div>
+</div>
+<!-- Outgoing Message (User) -->
+<div class="flex flex-col gap-2 max-w-[85%] self-end">
+<div class="bg-gradient-to-br from-[#4f46e5] to-[#c3c0ff] p-4 rounded-xl rounded-tr-none shadow-lg text-white">
+<p class="text-sm leading-relaxed">That sounds perfect. Please focus on the "Depth-First" layering principle we discussed. I want the transition to feel like physical layers sliding over one another.</p>
+</div>
+<div class="flex items-center justify-end gap-2 px-1">
+<span class="text-[10px] font-medium text-on-surface-variant">09:43 AM</span>
+<span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">done_all</span>
+</div>
+</div>
+<!-- Incoming Message with Code/Data (AI) -->
+<div class="flex flex-col gap-2 max-w-[90%] self-start group">
+<div class="bg-surface-container-high p-5 rounded-xl rounded-tl-none shadow-2xl relative overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-tertiary/5 blur-3xl -mr-16 -mt-16"></div>
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-tertiary text-sm">auto_awesome</span>
+<span class="text-[11px] font-bold text-tertiary uppercase tracking-widest">Architect Suggestion</span>
+</div>
+<p class="text-sm leading-relaxed text-on-surface mb-4">I've calculated the optimal easing function for your layering. This cubic-bezier provides the "heavy yet fluid" feel of industrial glass.</p>
+<div class="bg-surface-container-lowest p-3 rounded-lg font-mono text-xs text-secondary-fixed border border-outline-variant/20">
+                    transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+                </div>
+</div>
+<div class="flex items-center gap-3 px-1">
+<span class="text-[10px] font-medium text-on-surface-variant">09:44 AM</span>
+</div>
+</div>
+<!-- AI Quick Actions Bento -->
+<div class="grid grid-cols-2 gap-3 mt-4">
+<button class="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container-high transition-all group border border-outline-variant/10 active:scale-95">
+<div class="flex flex-col items-start">
+<span class="material-symbols-outlined text-tertiary mb-2">summarize</span>
+<span class="text-[11px] font-bold text-on-surface uppercase tracking-tight">Summarize Chat</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<button class="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container-high transition-all group border border-outline-variant/10 active:scale-95">
+<div class="flex flex-col items-start">
+<span class="material-symbols-outlined text-primary mb-2">auto_fix_high</span>
+<span class="text-[11px] font-bold text-on-surface uppercase tracking-tight">Refine Drafts</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</main>
+<!-- Bottom Navigation Shell -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-[#0b1326]/60 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)] rounded-t-3xl md:hidden">
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Workspaces</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-[#4f46e5] to-[#c3c0ff] text-white rounded-2xl p-2 px-4 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">AI Bot</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Profile</span>
+</a>
+</nav>
+<!-- Compose Bar -->
+<div class="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-surface to-transparent md:mb-0 mb-20">
+<div class="max-w-4xl mx-auto flex items-end gap-3 bg-surface-container-high/60 backdrop-blur-xl p-2 pl-4 pr-2 rounded-[2rem] border border-outline-variant/10 shadow-2xl">
+<button class="mb-1 w-10 h-10 flex items-center justify-center rounded-full text-tertiary hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<textarea class="flex-1 bg-transparent border-none focus:ring-0 text-sm text-on-surface py-3 resize-none max-h-32 placeholder:text-on-surface-variant/50 font-body" placeholder="Message Architect..." rows="1"></textarea>
+<button class="mb-1 w-10 h-10 flex items-center justify-center rounded-full text-tertiary hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined">mic</span>
+</button>
+<button class="mb-1 w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-br from-primary-container to-primary text-white shadow-lg shadow-primary-container/20 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+<!-- Web Navigation (Desktop Only) -->
+<div class="hidden md:flex fixed left-0 top-16 bottom-0 w-20 flex-col items-center py-8 gap-8 bg-surface-container-low border-r border-outline-variant/5">
+<div class="p-3 bg-primary-container/20 rounded-2xl text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+</div>
+<div class="p-3 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+<span class="material-symbols-outlined">grid_view</span>
+</div>
+<div class="p-3 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+<span class="material-symbols-outlined">smart_toy</span>
+</div>
+<div class="mt-auto p-3 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+<span class="material-symbols-outlined">settings</span>
+</div>
+</div>
+</body></html>

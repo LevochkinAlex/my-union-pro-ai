@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-container": "#4f46e5",
+              "error-container": "#93000a",
+              "on-primary": "#1d00a5",
+              "tertiary-fixed": "#acedff",
+              "surface-container-highest": "#2d3449",
+              "inverse-surface": "#dae2fd",
+              "on-secondary-fixed": "#23005c",
+              "secondary": "#d0bcff",
+              "secondary-container": "#571bc1",
+              "primary": "#c3c0ff",
+              "on-secondary-fixed-variant": "#5516be",
+              "on-primary-fixed-variant": "#3323cc",
+              "outline-variant": "#464555",
+              "on-surface-variant": "#c7c4d8",
+              "on-tertiary-fixed-variant": "#004e5c",
+              "on-tertiary-container": "#93e8ff",
+              "on-primary-fixed": "#0f0069",
+              "surface-bright": "#31394d",
+              "tertiary-fixed-dim": "#4cd7f6",
+              "surface": "#0b1326",
+              "primary-fixed": "#e2dfff",
+              "on-secondary": "#3c0091",
+              "inverse-primary": "#4d44e3",
+              "surface-container": "#171f33",
+              "on-surface": "#dae2fd",
+              "primary-fixed-dim": "#c3c0ff",
+              "tertiary-container": "#006a7c",
+              "on-secondary-container": "#c4abff",
+              "tertiary": "#4cd7f6",
+              "surface-container-high": "#222a3d",
+              "inverse-on-surface": "#283044",
+              "on-primary-container": "#dad7ff",
+              "secondary-fixed-dim": "#d0bcff",
+              "surface-variant": "#2d3449",
+              "surface-tint": "#c3c0ff",
+              "outline": "#918fa1",
+              "background": "#0b1326",
+              "on-error-container": "#ffdad6",
+              "on-error": "#690005",
+              "surface-container-lowest": "#060e20",
+              "secondary-fixed": "#e9ddff",
+              "on-tertiary": "#003640",
+              "surface-dim": "#0b1326",
+              "on-tertiary-fixed": "#001f26",
+              "on-background": "#dae2fd",
+              "surface-container-low": "#131b2e",
+              "error": "#ffb4ab"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(45, 52, 73, 0.6);
+        backdrop-filter: blur(20px);
+      }
+      .gradient-bg {
+        background: linear-gradient(135deg, #4f46e5 0%, #c3c0ff 100%);
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body min-h-screen pb-32">
+<!-- Top AppBar -->
+<header class="bg-[#131b2e] flex justify-between items-center w-full px-6 h-16 fixed top-0 z-50">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="close-up portrait of a professional man with a kind expression and modern glasses in a dimly lit tech office" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRB__q0wQVOrbE0j9mnFv1TVYfRG_w60sRNB4jj8FteJs03WIHDgZPc6kLiPElCNDovckG_gzyG4HQefmp8i7QMbKh2Pf-rf2Vzow6k91O_s2VBLy0gPJQG6DPh_GbVcELEUff2KV7KUJU9K7YuaN_1FvINXsNu3mBfFN9JSp6WOajhiuvYhHSyHGUywnp-tvySS2W6335MAKG5OQtP5nRLdCzf48LYRitxAgQTZnzFmsIpByEoFykFpTLIwksG5cfgouxyxUx2ix7"/>
+</div>
+<span class="font-headline font-extrabold text-[#c3c0ff] tracking-tighter text-xl">Fluid Architect</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-[#c3c0ff] hover:bg-[#222a3d] p-2 rounded-full transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<button class="text-[#c3c0ff] hover:bg-[#222a3d] p-2 rounded-full transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-4xl mx-auto space-y-8">
+<!-- Profile Header Section -->
+<section class="relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary-container to-tertiary opacity-20 blur-2xl group-hover:opacity-30 transition duration-1000"></div>
+<div class="relative flex flex-col md:flex-row items-center md:items-end gap-6 p-8 rounded-3xl bg-surface-container-low">
+<div class="relative">
+<div class="w-32 h-32 rounded-3xl overflow-hidden ring-4 ring-surface-container-high ring-offset-4 ring-offset-surface-container-low">
+<img alt="Alex Rivera" class="w-full h-full object-cover" data-alt="high-quality cinematic portrait of a creative professional named Alex Rivera with soft teal and violet rim lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4jc2suEDtkUXF4a3u2nudKQCn4zopmfdbRfISh_hiEVKgzVkT-Xyk6x0g_2La6J87NvJtqWI4Nmnb2K0fTSEMP-4037p_VoQJW_tWhpGPrcl5uyKihi_UXsQmXSYn3-RGCfpFwdlRxuXjs6N6Wk57tsF7rwwo5LEfPQZHwGs_1zo91hwEKdK4_Bawr79sTK-ARg5wS49oaiQGtJbAQ0LDCI2FND-37pqqzUlLYQP3r0unm6VXDXElkMqWH7PdNO34iDC3TeHG9WWd"/>
+</div>
+<div class="absolute -bottom-2 -right-2 w-8 h-8 bg-green-500 border-4 border-surface-container-low rounded-full"></div>
+</div>
+<div class="flex-1 text-center md:text-left">
+<h1 class="font-headline font-bold text-4xl tracking-tight text-on-surface">Alex Rivera</h1>
+<p class="font-label text-tertiary font-medium tracking-wide mt-1">Available for collaboration</p>
+<div class="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
+<span class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-xs font-medium border border-outline-variant/15">Product Designer</span>
+<span class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-xs font-medium border border-outline-variant/15">@arivera</span>
+</div>
+</div>
+<button class="gradient-bg px-8 py-3 rounded-full text-on-primary font-bold text-sm shadow-xl active:scale-95 transition-transform">
+                    Message
+                </button>
+</div>
+</section>
+<!-- Bento Grid Content -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- About Me (Spans 2 columns) -->
+<section class="md:col-span-2 space-y-4">
+<div class="p-8 rounded-3xl bg-surface-container-low h-full">
+<h2 class="font-headline font-bold text-xl text-primary mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+                        About Me
+                    </h2>
+<p class="text-on-surface-variant leading-relaxed font-body">
+                        Architecting digital experiences at the intersection of aesthetics and utility. Currently leading the design systems team for Project Aurora. Passionate about fluid motion, generative interfaces, and high-fidelity prototyping. 
+                    </p>
+<div class="mt-8 grid grid-cols-2 gap-4">
+<div class="p-4 rounded-2xl bg-surface-container">
+<span class="text-xs text-outline block mb-1">Location</span>
+<span class="font-medium text-on-surface">San Francisco, CA</span>
+</div>
+<div class="p-4 rounded-2xl bg-surface-container">
+<span class="text-xs text-outline block mb-1">Timezone</span>
+<span class="font-medium text-on-surface">PST (UTC-8)</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Activity Feed (Spans 1 column) -->
+<section class="space-y-4">
+<div class="p-6 rounded-3xl bg-surface-container-low h-full">
+<h2 class="font-headline font-bold text-xl text-primary mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="bolt">bolt</span>
+                        Activity
+                    </h2>
+<div class="space-y-6">
+<div class="flex gap-3">
+<div class="mt-1 w-2 h-2 rounded-full bg-tertiary flex-shrink-0"></div>
+<div>
+<p class="text-sm text-on-surface font-medium leading-snug">Replied to a thread in <span class="text-tertiary">#project-aurora</span></p>
+<span class="text-[10px] text-outline mt-1 block">2 hours ago</span>
+</div>
+</div>
+<div class="flex gap-3">
+<div class="mt-1 w-2 h-2 rounded-full bg-primary flex-shrink-0"></div>
+<div>
+<p class="text-sm text-on-surface font-medium leading-snug">Updated the <span class="text-primary">Design Token</span> library</p>
+<span class="text-[10px] text-outline mt-1 block">5 hours ago</span>
+</div>
+</div>
+<div class="flex gap-3">
+<div class="mt-1 w-2 h-2 rounded-full bg-secondary flex-shrink-0"></div>
+<div>
+<p class="text-sm text-on-surface font-medium leading-snug">Joined <span class="text-secondary">Engineering Weekly</span></p>
+<span class="text-[10px] text-outline mt-1 block">Yesterday</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Shared Media (Full width) -->
+<section class="md:col-span-3 space-y-4">
+<div class="p-8 rounded-3xl bg-surface-container-low">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline font-bold text-xl text-primary flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="perm_media">perm_media</span>
+                            Shared Media
+                        </h2>
+<button class="text-tertiary text-sm font-semibold hover:underline">View All</button>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+<div class="aspect-square rounded-2xl overflow-hidden bg-surface-container-high group cursor-pointer">
+<img alt="Design Asset 1" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="abstract 3D render of flowing neon violet and cyan shapes with a frosted glass texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0H_3j_62G5NySjlUdv98vxPUoCaZ-KbyNBc3ROrkAkCiad4pU9_Rn8nbGPVzqxXRrAFKVzONfCFz6KBj3b4tmsIf3urr9HARhuvkEIUXFw0Z-zys7EHqDjuSh7Dx4ALUL0qMZSjP5dSzYpXXv2Sty5dQP0X-Z383c_QTbyW2jnquZzMiR-jt8TgyqeyBK6nZtWKwWS7fQjRmrBXApuBb91-gCWt1SItEC6NPDqBrzGbJUnq6oMy4MqdgwsU2MmXLmbbaZY2f2OXPD"/>
+</div>
+<div class="aspect-square rounded-2xl overflow-hidden bg-surface-container-high group cursor-pointer">
+<img alt="Design Asset 2" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="sleek dark workspace setup with multiple monitors showing code and creative software in a moody indigo lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9-W5ePdbYY3WAomQ1tM_AUueTQa2vy_XE2cur56ph7muHkBDGtU8dciHpgQJiOTxQZy6KcH7cKb_TWX6Jw-huad3_nZKDGjEBbrjmiEQpZtiUlF6sz60mb_yIgYyEjXephbK21OvbbBbfzxt8tlA5LVyD1lZPdDBePsPgQYNVOQdmViETBMhMG_4HEIt5osdNZlzV2n3KCy3bNPOGV5LsSoVhM2lNUZvnNoGcGcNC3Nt0iBA-JhZzI67c3v0KrDIUH2zMy49iPV-M"/>
+</div>
+<div class="aspect-square rounded-2xl overflow-hidden bg-surface-container-high group cursor-pointer">
+<img alt="Design Asset 3" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="macro photograph of a high-end mechanical keyboard with glowing RGB backlighting in deep purple and blue" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCoQZVvRaG6UagcB0pMoZniKMa4MKX4PEmSD6kLN1noyllDxlkKWx4ywoSbeNJqy4v-wjF2efWfahNgGFpRhUL--y3HRQjyKCTjzSjoBB2z5gqbCz15rMWTeVxUOIfOLsoUpqg-swQJh0daMISIS15nU-C7xjTb5LeL3s91QpIX7X1PXxur-g2di1tMJpvwnEHxDSJwE4RZ8WH4x2At5OG4ESItpXjT2GbPsayTkgdTEWYgrqbYYhgdVltyjD8p8iuwxHwjPTNh7M9h"/>
+</div>
+<div class="aspect-square rounded-2xl overflow-hidden bg-surface-container-high group cursor-pointer">
+<img alt="Design Asset 4" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="minimalist architectural photo of a modern concrete building with sharp shadows and a clear deep blue sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqJ1BydsDSK5CUQtVlV98fUFTTF-A5QyxheiA3oHqrFTymO4BsscUkFNIVUQc1bKNFNYI-zo8f_i0fCdxPxzAfrGjsKZ2qhkrDCjbd7L0uD0TAd-SfKla457VITsbWV4PdlC6Z2TzkDRSsebiMFssq6dDxiandjKzGOlmvlUbdRXOVVcN1Jjkxfnhzo_ImEWjjN7S4JAcgblx6YfWu3WKtN85_GvpB2vDyHHyIPM9ufOAX_8xjYeQ8ELEmd-gDxA4FYui4Zf7xbIV8"/>
+</div>
+<div class="hidden sm:block aspect-square rounded-2xl overflow-hidden bg-surface-container-high group cursor-pointer">
+<img alt="Design Asset 5" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="close up of digital UI components with soft gradients and translucent layers over a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3sFKsElhcv5Q6fCOltmV2Y5nntc2dKN84KSvsyIm-OdGiM_03DsUicNhX27mw0jrQAgbTtksBLiXW9p1dswL7ZVThI_LqIHUeGsw3scA9Heacywnbho4Oc8g9u0tp3XaVvi6xqTcgfWS51fP4hPXj3lUaFUTvyGzPWSqeLEl-VbSlq_aTPWzoUTxGRzK-jc1DHh7m_bymBcfLhtrk45oDG0jmMJNEbQenVXbFyi_bi4j-UWa_p6yXbM966YsAHySc5mu3oOcuyfof"/>
+</div>
+<div class="hidden sm:block aspect-square rounded-2xl overflow-hidden bg-surface-container-high group cursor-pointer relative">
+<img alt="Design Asset 6" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-40" data-alt="aerial view of a futuristic city grid at night with glowing blue and purple light paths" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6Anw0Dx8reWOZMCYcMthxPOoWo1Dk7oWOzNuZEatSIn92lT1nbQk5KWqOdqnQWlA8a3OrxL_ZQsrHDovsWoc01iu5R-vqEvAEGpydBWe3KvW_LHOyqxdgPtFZZkXUnkO-3D9AG-_elCx-xzyppZOjovdfLcsiD8Mz_FFuXwzvxTQVbZbOzF3Q_vyC0zAv4wVK_TjXzCTgt5c57sD1GK8jZuysQv2pmUVaYb8Sw3DqKpo2fiQTmhHC4fxIT_ztrzwBDfD_nRVNHGuQ"/>
+<div class="absolute inset-0 flex items-center justify-center font-bold text-on-surface">+12</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-[#0b1326]/60 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)] rounded-t-3xl">
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="grid_view">grid_view</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Workspaces</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="smart_toy">smart_toy</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">AI Bot</span>
+</a>
+<!-- ACTIVE TAB: Profile -->
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-[#4f46e5] to-[#c3c0ff] text-white rounded-2xl p-2 px-4 scale-90 duration-150" href="#">
+<span class="material-symbols-outlined mb-0.5" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Profile</span>
+</a>
+</nav>
+</body></html>

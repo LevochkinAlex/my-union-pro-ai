@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-container": "#4f46e5",
+              "error-container": "#93000a",
+              "on-primary": "#1d00a5",
+              "tertiary-fixed": "#acedff",
+              "surface-container-highest": "#2d3449",
+              "inverse-surface": "#dae2fd",
+              "on-secondary-fixed": "#23005c",
+              "secondary": "#d0bcff",
+              "secondary-container": "#571bc1",
+              "primary": "#c3c0ff",
+              "on-secondary-fixed-variant": "#5516be",
+              "on-primary-fixed-variant": "#3323cc",
+              "outline-variant": "#464555",
+              "on-surface-variant": "#c7c4d8",
+              "on-tertiary-fixed-variant": "#004e5c",
+              "on-tertiary-container": "#93e8ff",
+              "on-primary-fixed": "#0f0069",
+              "surface-bright": "#31394d",
+              "tertiary-fixed-dim": "#4cd7f6",
+              "surface": "#0b1326",
+              "primary-fixed": "#e2dfff",
+              "on-secondary": "#3c0091",
+              "inverse-primary": "#4d44e3",
+              "surface-container": "#171f33",
+              "on-surface": "#dae2fd",
+              "primary-fixed-dim": "#c3c0ff",
+              "tertiary-container": "#006a7c",
+              "on-secondary-container": "#c4abff",
+              "tertiary": "#4cd7f6",
+              "surface-container-high": "#222a3d",
+              "inverse-on-surface": "#283044",
+              "on-primary-container": "#dad7ff",
+              "secondary-fixed-dim": "#d0bcff",
+              "surface-variant": "#2d3449",
+              "surface-tint": "#c3c0ff",
+              "outline": "#918fa1",
+              "background": "#0b1326",
+              "on-error-container": "#ffdad6",
+              "on-error": "#690005",
+              "surface-container-lowest": "#060e20",
+              "secondary-fixed": "#e9ddff",
+              "on-tertiary": "#003640",
+              "surface-dim": "#0b1326",
+              "on-tertiary-fixed": "#001f26",
+              "on-background": "#dae2fd",
+              "surface-container-low": "#131b2e",
+              "error": "#ffb4ab"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0b1326;
+            color: #dae2fd;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-primary-container/30">
+<!-- TopAppBar -->
+<header class="bg-[#0b1326] sticky top-0 z-50 flex justify-between items-center w-full px-6 h-16">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="professional headshot of a person with soft cinematic lighting on a deep indigo background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqzh6goGQN-2dauZV3sgz42IXzJz9Xg6U-PM33qAdLT3uwVaHhGffjc86Xlkb0lIDHwf76Bn8prIETkYnPxUG19ANBZ7-QzQ9XBxP09uMaUuKAGt_daTfb6Lu91J2UEPtmapSyo_2jijaOealINtcE6-Z4Vdqmeg7CgzNlKDCNrBNWgcIipTh45GoMcKQgpHiiZM7muE17GK6tkfO4onlkFt1OXN--BNC1vnxxhtQDsEZfHQGh3pRkDWLAXmcz3iGRz9kPFRj75UyE"/>
+</div>
+<h1 class="font-headline font-bold tracking-tight text-xl text-[#c3c0ff]">Settings</h1>
+</div>
+<div class="flex items-center">
+<button class="p-2 rounded-full hover:bg-[#222a3d] transition-colors text-[#c3c0ff] active:scale-95 duration-200">
+<span class="material-symbols-outlined">search</span>
+</button>
+</div>
+</header>
+<main class="max-w-2xl mx-auto px-6 pb-32 pt-4">
+<!-- Profile Header Section -->
+<section class="mb-10 flex flex-col items-center text-center p-8 bg-surface-container-low rounded-3xl relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-primary-container/10 to-transparent pointer-events-none"></div>
+<div class="relative mb-4">
+<div class="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-primary-container to-tertiary">
+<img alt="Profile" class="w-full h-full rounded-full object-cover border-4 border-surface-container-low" data-alt="vibrant abstract profile avatar with glowing edges and indigo tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBG07P6N5JMPHyFrH2S5aylgIL4E9GU8YduoGr5PG4vk1sZEjEqBmoLWB4ZZG9Rus9Aj_flKlldKuCWJmouZFpZtK16wN1NJwWkSmZTBMzDpCQHNFhOZFDa5fkzE0JtL85kJUKfQ70SV2Xm20UliWism2D7mOdyz075GHnfc2wwv-c-UeXGL-x_NpUfX2nHzaA7vVfJCXt7Z4PuxH2TOOQiAJ-q3gYftnDtXXmphUicNwCKB-YMxw9jNy6DY5FBkMfKlkcbiu76RB2u"/>
+</div>
+<button class="absolute bottom-0 right-0 p-2 bg-secondary-container text-white rounded-full shadow-lg border-2 border-surface-container-low">
+<span class="material-symbols-outlined text-sm">edit</span>
+</button>
+</div>
+<h2 class="font-headline text-2xl font-extrabold text-on-surface tracking-tight">Julian Smith</h2>
+<p class="text-on-surface-variant font-medium text-sm mt-1">@julian_architect</p>
+</section>
+<!-- Account Section -->
+<div class="mb-8">
+<h3 class="font-headline text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-4 px-2">Account</h3>
+<div class="bg-surface-container-low rounded-3xl overflow-hidden divide-y divide-outline-variant/10">
+<!-- Item -->
+<div class="flex items-center justify-between p-4 hover:bg-surface-container-high transition-all group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">mail</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-on-surface">Email</p>
+<p class="text-xs text-on-surface-variant">julian.s@fluid-design.com</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+<!-- Item -->
+<div class="flex items-center justify-between p-4 hover:bg-surface-container-high transition-all group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">call</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-on-surface">Phone</p>
+<p class="text-xs text-on-surface-variant">+1 (555) 902-4410</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- Notifications Section -->
+<div class="mb-8">
+<h3 class="font-headline text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-4 px-2">Notifications</h3>
+<div class="bg-surface-container-low rounded-3xl overflow-hidden divide-y divide-outline-variant/10">
+<!-- Toggle Item -->
+<div class="flex items-center justify-between p-4">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">notifications_active</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-on-surface">Push Notifications</p>
+<p class="text-xs text-on-surface-variant">Enabled for all messages</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+<!-- Toggle Item -->
+<div class="flex items-center justify-between p-4">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">message</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-on-surface">In-app Notifications</p>
+<p class="text-xs text-on-surface-variant">Banners and sounds</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+</div>
+</div>
+<!-- Privacy & Security -->
+<div class="mb-8">
+<h3 class="font-headline text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-4 px-2">Privacy &amp; Security</h3>
+<div class="bg-surface-container-low rounded-3xl overflow-hidden divide-y divide-outline-variant/10">
+<!-- Item -->
+<div class="flex items-center justify-between p-4 hover:bg-surface-container-high transition-all group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-on-surface">Two-factor Authentication</p>
+<p class="text-xs text-on-surface-variant">Highly recommended</p>
+</div>
+</div>
+<span class="text-xs font-bold text-primary px-2 py-1 bg-primary/10 rounded-lg">On</span>
+</div>
+<!-- Item -->
+<div class="flex items-center justify-between p-4 hover:bg-surface-container-high transition-all group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">block</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-on-surface">Blocked Users</p>
+<p class="text-xs text-on-surface-variant">12 users</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- Appearance -->
+<div class="mb-12">
+<h3 class="font-headline text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-4 px-2">Appearance</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Selection Card 1 -->
+<div class="bg-surface-container-low p-5 rounded-3xl border-2 border-primary-container relative">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center text-white">
+<span class="material-symbols-outlined">dark_mode</span>
+</div>
+<span class="material-symbols-outlined text-primary text-xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<p class="text-sm font-bold text-on-surface">Theme</p>
+<p class="text-xs text-on-surface-variant mt-1">Deep Indigo (Dark)</p>
+</div>
+<!-- Selection Card 2 -->
+<div class="bg-surface-container-low p-5 rounded-3xl border border-outline-variant/20">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">format_size</span>
+</div>
+</div>
+<p class="text-sm font-bold text-on-surface">Font Size</p>
+<p class="text-xs text-on-surface-variant mt-1">Medium (Default)</p>
+</div>
+</div>
+</div>
+<!-- Logout Action -->
+<button class="w-full p-4 bg-error-container/10 rounded-3xl flex items-center justify-center gap-2 group hover:bg-error-container transition-colors duration-300">
+<span class="material-symbols-outlined text-error group-hover:text-white">logout</span>
+<span class="text-sm font-bold text-error group-hover:text-white">Log Out</span>
+</button>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-[#0b1326]/60 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)] rounded-t-3xl">
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Workspaces</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">AI Bot</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-[#4f46e5] to-[#c3c0ff] text-white rounded-2xl p-2 px-4 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

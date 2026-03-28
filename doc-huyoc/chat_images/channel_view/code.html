@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#2d3449",
+              "inverse-on-surface": "#283044",
+              "surface-container-high": "#222a3d",
+              "secondary-fixed": "#e9ddff",
+              "outline-variant": "#464555",
+              "on-primary-container": "#dad7ff",
+              "on-primary": "#1d00a5",
+              "tertiary-container": "#006a7c",
+              "on-tertiary-container": "#93e8ff",
+              "on-surface": "#dae2fd",
+              "surface-container-lowest": "#060e20",
+              "on-tertiary": "#003640",
+              "on-secondary": "#3c0091",
+              "secondary": "#d0bcff",
+              "on-tertiary-fixed-variant": "#004e5c",
+              "on-surface-variant": "#c7c4d8",
+              "on-error": "#690005",
+              "primary-container": "#4f46e5",
+              "secondary-container": "#571bc1",
+              "on-background": "#dae2fd",
+              "primary-fixed-dim": "#c3c0ff",
+              "primary-fixed": "#e2dfff",
+              "on-secondary-fixed": "#23005c",
+              "surface-container-low": "#131b2e",
+              "surface-variant": "#2d3449",
+              "surface": "#0b1326",
+              "surface-dim": "#0b1326",
+              "on-error-container": "#ffdad6",
+              "tertiary-fixed-dim": "#4cd7f6",
+              "on-tertiary-fixed": "#001f26",
+              "error-container": "#93000a",
+              "surface-bright": "#31394d",
+              "tertiary": "#4cd7f6",
+              "on-primary-fixed": "#0f0069",
+              "on-primary-fixed-variant": "#3323cc",
+              "tertiary-fixed": "#acedff",
+              "on-secondary-fixed-variant": "#5516be",
+              "surface-container": "#171f33",
+              "primary": "#c3c0ff",
+              "error": "#ffb4ab",
+              "background": "#0b1326",
+              "inverse-surface": "#dae2fd",
+              "inverse-primary": "#4d44e3",
+              "secondary-fixed-dim": "#d0bcff",
+              "on-secondary-container": "#c4abff",
+              "surface-tint": "#c3c0ff",
+              "outline": "#918fa1"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-morphism {
+        background: rgba(45, 52, 73, 0.6);
+        backdrop-filter: blur(20px);
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0b1326;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #222a3d;
+        border-radius: 10px;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30 selection:text-primary min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-[#0b1326] flex justify-between items-center w-full px-6 h-16 sticky top-0 z-40">
+<div class="flex items-center gap-4">
+<div class="flex items-center justify-center w-10 h-10 rounded-xl bg-surface-container-high overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="professional user profile portrait with soft studio lighting and a clean dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDppj62G7fHM3nJSc4V4oSDpJrTYXQhEhi8GsLq1MqI7K_5hyC51euzcG1OhH_04Eqdoc_hiQ-lZ8xbTdZt_TWzTLzcedykmJEIj1RBrxu8iciWigSMariQHAltLsCOXxgEQgdj0cLFgHOSr1FrYcz0zKLyCW2Xm_jHa_pyizHA4lmP_b0ZbcIGZoY5pyZ-7WUqMrU7GtneYBQkIRN_4Nn4o_wWDwgp_iYRmxT8Xwz7v2nxdZKLcxjHOpdOO6MdYVmCoTsnj3g_E1pi"/>
+</div>
+<div class="flex flex-col">
+<h1 class="font-['Manrope'] font-bold tracking-tight text-[#c3c0ff] text-xl tracking-tighter"># project-aurora</h1>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest font-semibold">12 Members Online</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[#222a3d] transition-colors text-[#c3c0ff] active:scale-95 duration-200">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[#222a3d] transition-colors text-[#c3c0ff] active:scale-95 duration-200">
+<span class="material-symbols-outlined">info</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area (Scrollable Chat) -->
+<main class="flex-1 flex flex-col px-4 md:px-8 max-w-5xl mx-auto w-full pb-32 pt-6 gap-8">
+<!-- Day Divider -->
+<div class="flex items-center gap-4 py-4">
+<div class="h-[1px] flex-1 bg-surface-container-highest/30"></div>
+<span class="font-label text-xs font-semibold text-on-surface-variant bg-surface-container-low px-3 py-1 rounded-full">Monday, Oct 24</span>
+<div class="h-[1px] flex-1 bg-surface-container-highest/30"></div>
+</div>
+<!-- Incoming Message with Code Snippet -->
+<div class="flex gap-4 group">
+<div class="flex-shrink-0 mt-1">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high overflow-hidden">
+<img alt="Dev Avatar" data-alt="close-up of a diverse male developer with glasses smiling in a modern office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCm2pEdfvVF28NTGkD6qcYP1u5SZYBhZAH2619T5sPD2SZAJ0Wr5xbM-Pb-Dpc7ZgvI2J35NtziPFN6mrzOEsiW_GB_YRrHPIS2Z2i7FurwHQew3339tOxBNKMUCOKbcvOeFZpQdZpQx6iiays9fIdwXSy1vstZu2W69K5OCJ4C4DIBYBtCNNZs9EEcLXEcMXvfBcJRGaGH4qZewLTIN3-st-opK8p0ck2xP60zDvfzuuj3I-y-3o7ZrzvOsLWkXBnFu6nrTmR6Hl4j"/>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%]">
+<div class="flex items-baseline gap-2">
+<span class="font-headline font-bold text-primary">Alex Rivera</span>
+<span class="font-label text-[10px] text-on-surface-variant font-medium">10:42 AM</span>
+</div>
+<div class="bg-surface-container-high p-4 rounded-xl rounded-tl-none text-on-surface shadow-sm">
+<p class="leading-relaxed mb-3">Hey team, I've refactored the physics engine for the fluid transitions. Can someone check the integration logic in the new module?</p>
+<div class="bg-surface-container-lowest rounded-lg p-4 font-mono text-sm border border-outline-variant/10 overflow-x-auto">
+<pre class="text-tertiary-fixed-dim"><code>const calculateFluidDensity = (layers) =&gt; {
+  return layers.reduce((acc, curr) =&gt; {
+    return acc + (curr.opacity * curr.blurRadius);
+  }, 0);
+};</code></pre>
+</div>
+</div>
+<!-- Reactions -->
+<div class="flex flex-wrap gap-2 mt-2">
+<button class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container-highest hover:bg-surface-bright transition-colors text-xs border border-transparent hover:border-primary/20">
+<span>🚀</span><span class="text-on-surface-variant font-medium">3</span>
+</button>
+<button class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container-highest hover:bg-surface-bright transition-colors text-xs">
+<span>🔥</span><span class="text-on-surface-variant font-medium">1</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Outgoing Message (Me) -->
+<div class="flex gap-4 flex-row-reverse group">
+<div class="flex-shrink-0 mt-1">
+<div class="w-10 h-10 rounded-xl bg-primary-container overflow-hidden">
+<img alt="My Avatar" data-alt="professional headshot of a person with friendly expression in high-key lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBW9lBr0P5wsT1Am4mbZ68-gtT_H2s_zp-d6U2ibWYPckK18izBzwpvgEHLRDVBy0Br_bIUIGlLY2PUqvfxA59d_bTmSZV3LrwEIQ_yp4a06c9fnrYXKwfdC6reKqhbEg0Me1v_8Rt2YaApuXalE1FNZVNsWYZP0nNAFOlvGzTG18qOEWPDYYqH0qg_Z3B1y18Ibl1eXvj6nO_6RJVzA_kAmOlWZX82OoVfujhASl5jxDkCagGNs6wjHV67DWLCQ7f2b4oLVKdeYYZ2"/>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%] items-end">
+<div class="flex items-baseline gap-2 flex-row-reverse">
+<span class="font-headline font-bold text-secondary">You</span>
+<span class="font-label text-[10px] text-on-surface-variant font-medium">10:45 AM</span>
+</div>
+<div class="bg-gradient-to-br from-primary-container to-primary p-4 rounded-xl rounded-tr-none text-white shadow-lg">
+<p class="leading-relaxed">Looks clean! I'll dive in after the standup. Does this account for the backdrop-blur performance hit on mobile?</p>
+</div>
+</div>
+</div>
+<!-- Incoming Message with Image -->
+<div class="flex gap-4 group">
+<div class="flex-shrink-0 mt-1">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high overflow-hidden">
+<img alt="Designer Avatar" data-alt="close-up of a creative female designer with artistic accessories in a bright studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCol_lLT8nOKGTcOaK6bn9O67gbCe8Glgh0C9RKpjcyZvxcJKPcjrYE8OU9MrQ-vz5AARfCzz-e1xbucOlPL3_2DAHF8-SvIoNhKTKw4iY4RJloPhEUaAZV6M9jlLudTkFOQNPe-KWJ_QDuaDDYpC79l5B6Gfka-BKf4NwSlGQeicaKLtCFayRGkXuTPO_RABbELbaMBNo8p1O-ZenacLEidk-U6bsVFU0TOcURPE9FrS8dxG0qO11JFZ1mF6S2thVWUJR7pZc6vJu2"/>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%]">
+<div class="flex items-baseline gap-2">
+<span class="font-headline font-bold text-primary">Sarah Chen</span>
+<span class="font-label text-[10px] text-on-surface-variant font-medium">11:02 AM</span>
+</div>
+<div class="bg-surface-container-high p-4 rounded-xl rounded-tl-none text-on-surface shadow-sm">
+<p class="leading-relaxed mb-4">Sharing the updated moodboard for the architectural layout. We're going for that "Depth-First" feel we discussed.</p>
+<div class="rounded-xl overflow-hidden border border-outline-variant/20">
+<img class="w-full h-64 object-cover" data-alt="abstract digital art showing fluid 3d shapes in deep blue and iridescent purple with soft glows and shallow depth of field" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFu2OBzRoiym8uPf9bqJ-mQuwCNGK_5EzjbXLx4SMxIwAq6GgybBQqeto8HMKJQE41q9ROdqmNNQ4yLUAB16Ft25EkRi6EFGWcFwLFbO3cXrmkjhf4PIz7wjD-Oj5eFl88SLdikRyBrwbgnEnE8djkqYYxcODXaNQi-XZny5KGAQ_-DYqPC-f6mFipU1ygRHIbO0mKQ45KXhPy55CSDH7EMIktfXhWE-nEOWEvfzJ9zUtw0fyZHWGpXzCyUnEVoa3_QpGO3ZfDiGad"/>
+<div class="p-3 bg-surface-container-lowest flex justify-between items-center">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-sm">image</span>
+<span class="text-xs font-medium">depth-study-v2.jpg</span>
+</div>
+<button class="text-primary hover:text-on-primary-container transition-colors">
+<span class="material-symbols-outlined text-sm">download</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Threaded Reply Example -->
+<div class="ml-14 flex flex-col gap-4 border-l-2 border-surface-container-highest pl-6 mt-[-1rem]">
+<div class="flex gap-3 group">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high overflow-hidden mt-1">
+<img alt="Thread Avatar" data-alt="headshot of a young professional with a warm smile against a neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEAG7Bt0pyW5ukKtZpSZhAzyjUdVtksX9xSD1O1YXzJV7IMMesJ5q1FrqzvnGn2BNPZ-S6oUJAtp23SETkEYCgmdFdusB1TmYiiqI64kalmrnSGfzjiAi5ZRNZhRcgLX134eUTJiA5gwot87A1ppBRq9g02HfohQXBrjySRQlfKv_rXtkwXr2HRTP-WYHC-S5vYLbKbRCB8OqWl2RO0v4rXF6m7GNi5OzxkJVRahT44jodMkiZl5XAlJgDj7mpcnQX1R2c8WKQU357"/>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-baseline gap-2">
+<span class="font-headline font-bold text-sm text-on-surface">Jordan Smyth</span>
+<span class="font-label text-[10px] text-on-surface-variant">11:05 AM</span>
+</div>
+<div class="bg-surface-container p-3 rounded-lg text-sm text-on-surface-variant border border-outline-variant/10">
+                        The layering in that visual is incredible. Matches the fluid architect theme perfectly.
+                    </div>
+</div>
+</div>
+</div>
+<!-- File Attachment Message -->
+<div class="flex gap-4 group">
+<div class="flex-shrink-0 mt-1">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high overflow-hidden">
+<img alt="Dev Avatar" data-alt="close-up portrait of a developer in a casual workspace setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOUB52_CNyJ9U25N87trTJ0z1g0osNRZG52kpV4ftSk1VmG7H8fSDUuIUzEohO5R0ZlKrR_gi5665EVKk12JNkbGCn8CiSwgLrF1Sdxnnfs151bdAE65WBWReRJPWicP9U61Zyi6fli4dz-e9xC0n3xa6UAwA4uVgfxnapGtmEASV5if15puPBdjp-sXCgwZdxJ6QpV3D9iUbYFDHsrLB3UYjMLM01S-yc7FDYDs-GxWF3pOisk92qEK6mrZqF2iGdS6j0TV9FbzUu"/>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%]">
+<div class="flex items-baseline gap-2">
+<span class="font-headline font-bold text-primary">Alex Rivera</span>
+<span class="font-label text-[10px] text-on-surface-variant font-medium">11:15 AM</span>
+</div>
+<div class="bg-surface-container-high p-4 rounded-xl rounded-tl-none text-on-surface shadow-sm">
+<p class="leading-relaxed mb-3">Attached the final spec doc for the sprint.</p>
+<div class="flex items-center gap-4 p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/20 hover:border-primary/40 transition-all cursor-pointer group/file">
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary-container/20 text-primary">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-on-surface">Q4_Product_Architecture.pdf</p>
+<p class="text-[10px] text-on-surface-variant font-medium uppercase tracking-tight">4.2 MB • PDF DOCUMENT</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover/file:text-primary transition-colors">open_in_new</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Compose Bar -->
+<div class="fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-gradient-to-t from-surface via-surface/95 to-transparent z-50">
+<div class="max-w-5xl mx-auto flex items-end gap-3 glass-morphism p-3 rounded-[2rem] border border-outline-variant/10 shadow-2xl">
+<div class="flex items-center self-center pl-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined">add_circle</span>
+</button>
+</div>
+<div class="flex-1 min-w-0 bg-surface-container-high rounded-2xl px-4 py-3 flex flex-col gap-2">
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant resize-none font-body text-sm py-0" placeholder="Message #project-aurora" rows="1"></textarea>
+<div class="flex justify-between items-center">
+<div class="flex gap-1">
+<button class="p-1.5 rounded-md hover:bg-surface-bright text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">format_bold</span>
+</button>
+<button class="p-1.5 rounded-md hover:bg-surface-bright text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">format_italic</span>
+</button>
+<button class="p-1.5 rounded-md hover:bg-surface-bright text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">code</span>
+</button>
+<button class="p-1.5 rounded-md hover:bg-surface-bright text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">link</span>
+</button>
+</div>
+<div class="flex items-center gap-2">
+<button class="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined text-xl">mood</span>
+</button>
+</div>
+</div>
+</div>
+<div class="flex items-center self-center pr-2">
+<button class="w-12 h-12 flex items-center justify-center rounded-full bg-gradient-to-br from-primary-container to-primary text-white shadow-lg active:scale-90 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Navigation Shell (BottomNavBar for Mobile) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-[#0b1326]/60 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)] rounded-t-3xl">
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-[#4f46e5] to-[#c3c0ff] text-white rounded-2xl p-2 px-4 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Workspaces</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">AI Bot</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#31394d] p-2 hover:text-[#c3c0ff] transition-all active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-tight">Profile</span>
+</a>
+</nav>
+<!-- Contextual FAB (Only on desktop or as needed) -->
+<div class="hidden md:block fixed right-8 bottom-32">
+<button class="w-14 h-14 rounded-xl bg-secondary-container flex items-center justify-center text-white shadow-2xl hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</div>
+</body></html>

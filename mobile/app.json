@@ -53,7 +53,8 @@
       "telegramBotId": "8321416024"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font"
     ]
   }
 }

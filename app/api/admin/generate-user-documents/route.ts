@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       await Logger.error(
         "api/admin/generate-user-documents/POST",
         "Failed to generate documents",
-        generateError,
+        generateError instanceof Error ? generateError : String(generateError),
         { userId },
         session?.user?.id
       );
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     await Logger.error(
       "api/admin/generate-user-documents/POST",
       "Unhandled error in document generation",
-      error,
+      error instanceof Error ? error : String(error),
       {},
       session?.user?.id
     );
