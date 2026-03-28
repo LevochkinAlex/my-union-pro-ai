@@ -237,6 +237,32 @@ export async function sendReturningUserWelcome(
 }
 
 /**
+ * Кнопка «Вернуться в приложение» — HTTPS-страница открывает deep link myunion:// (мобильное приложение).
+ */
+export async function sendMobileAppReturnButton(
+  chatId: string,
+  loginToken: string,
+  firstName: string | undefined,
+  baseUrl: string,
+): Promise<SendMessageResult> {
+  const name = firstName ? `, ${firstName}` : "";
+  const appUrl = baseUrl.replace(/\/$/, "");
+  const returnUrl = `${appUrl}/auth/mobile-app-login?t=${encodeURIComponent(loginToken)}`;
+
+  const message = `
+✅ <b>Запрос на вход в приложение МойСоюз${name}</b>
+
+Нажмите кнопку ниже, чтобы вернуться в приложение — вы войдёте автоматически.
+
+⏱ <i>Ссылка действительна 10 минут</i>
+  `.trim();
+
+  const buttons: InlineButton[][] = [[{ text: "↩️ Вернуться в приложение", url: returnUrl }]];
+
+  return sendTelegramMessage(chatId, message, buttons);
+}
+
+/**
  * Отправляет сообщение техподдержки
  */
 export async function sendSupportMessage(

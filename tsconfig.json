@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "scripts", "trade-union-survey-system", "profreport-main", "__tests__", "**/*.test.ts", "**/*.test.tsx"]
+  "exclude": ["node_modules", "scripts", "trade-union-survey-system", "profreport-main", "__tests__", "**/*.test.ts", "**/*.test.tsx", "mobile"]
 }

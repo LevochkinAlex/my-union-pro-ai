@@ -19,6 +19,7 @@ import { ensureMeetingGroupChat } from '@/lib/meeting-chat';
 import { getOrCreateAIBotUser } from '@/lib/ai-assistant-bot';
 import { ChatType } from '@prisma/client';
 import { isDemoUserId } from '@/lib/demo';
+import { getRequestUserId } from '@/lib/api-request-user';
 
 const DEMO_CHAT_IDS = ['demo-ai-chat', 'demo-chat-ticket-1', 'demo-ai-chat-ppo', 'demo-chat-ticket-ppo'];
 // Динамический импорт для избежания проблем при сборке
@@ -45,10 +46,12 @@ export async function GET(
   { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const requestUser = await getRequestUserId(request);
+    if (!requestUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = requestUser.id;
+    const session = { user: { id: userId } };
 
     const resolvedParams = await Promise.resolve(params);
     const chatId = resolvedParams.chatId;
@@ -650,7 +653,6 @@ export async function GET(
         userId: true,
       },
     });
-    const userId = session.user.id;
     const otherParticipantIds = chatParticipants
       .map(p => p.userId)
       .filter(id => id !== userId);
@@ -1332,14 +1334,14 @@ export async function POST(
   { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const requestUser = await getRequestUserId(request);
+    if (!requestUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const resolvedParams = await Promise.resolve(params);
     const chatId = resolvedParams.chatId;
-    const userId = session.user.id;
+    const userId = requestUser.id;
 
     // Демо: возвращаем мок-сообщение для демо-чатов
     if (DEMO_CHAT_IDS.includes(chatId) || isDemoUserId(userId)) {

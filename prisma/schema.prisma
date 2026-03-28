@@ -395,6 +395,18 @@ model LoginToken {
   @@index([used])
 }
 
+// Одноразовая сессия «вход в приложение через бота» (/start app_<key> в Telegram)
+model BotAppLoginSession {
+  id         String   @id @default(cuid())
+  sessionKey String   @unique
+  expiresAt  DateTime
+  consumed   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([sessionKey])
+  @@index([expiresAt])
+}
+
 // Email PIN-коды для валидации email
 model EmailPinCode {
   id String @id @default(cuid())

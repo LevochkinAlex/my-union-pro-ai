@@ -9,6 +9,8 @@ dotenv.config({ path: ".env.local" });
 
 const prisma = new PrismaClient();
 const PORT = parseInt(process.env.SOCKET_PORT || "3005", 10);
+const ACCESS_CACHE_TTL_MS = 15_000;
+const USER_CACHE_TTL_MS = 60_000;
 
 // Типы событий
 interface ServerToClientEvents {
@@ -36,8 +38,69 @@ interface SocketData {
 }
 
 // Хранилище
-const typingTimeouts = new Map<string, NodeJS.Timeout>(); // `${chatId}:${userId}` -> timeout
+const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>(); // `${chatId}:${userId}` -> timeout
 const onlineUsers = new Set<string>();
+const chatAccessCache = new Map<string, { allowed: boolean; expiresAt: number }>();
+const userIdentityCache = new Map<string, { id: string; userName: string; expiresAt: number }>();
+
+function getCacheKey(chatId: string, userId: string): string {
+  return `${chatId}:${userId}`;
+}
+
+async function hasChatAccess(chatId: string, userId: string): Promise<boolean> {
+  const key = getCacheKey(chatId, userId);
+  const now = Date.now();
+  const cached = chatAccessCache.get(key);
+
+  if (cached && cached.expiresAt > now) {
+    return cached.allowed;
+  }
+
+  const participant = await prisma.chatParticipant.findUnique({
+    where: { chatId_userId: { chatId, userId } },
+  });
+  const allowed = !!participant;
+  chatAccessCache.set(key, { allowed, expiresAt: now + ACCESS_CACHE_TTL_MS });
+  return allowed;
+}
+
+async function getUserIdentity(userId: string): Promise<{ id: string; userName: string } | null> {
+  const cached = userIdentityCache.get(userId);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return { id: cached.id, userName: cached.userName };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, firstName: true, lastName: true },
+  });
+
+  if (!user) return null;
+
+  const userName = [user.lastName, user.firstName].filter(Boolean).join(" ") || "Пользователь";
+  userIdentityCache.set(userId, {
+    id: user.id,
+    userName,
+    expiresAt: now + USER_CACHE_TTL_MS,
+  });
+
+  return { id: user.id, userName };
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of chatAccessCache.entries()) {
+    if (value.expiresAt <= now) {
+      chatAccessCache.delete(key);
+    }
+  }
+  for (const [key, value] of userIdentityCache.entries()) {
+    if (value.expiresAt <= now) {
+      userIdentityCache.delete(key);
+    }
+  }
+}, 30_000);
 
 const httpServer = createServer();
 
@@ -63,18 +126,13 @@ io.use(async (socket, next) => {
       return next(new Error("Неверный токен"));
     }
 
-    // Получаем данные пользователя
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.sub },
-      select: { id: true, firstName: true, lastName: true },
-    });
-
-    if (!user) {
+    const identity = await getUserIdentity(decoded.sub);
+    if (!identity) {
       return next(new Error("Пользователь не найден"));
     }
 
-    socket.data.userId = user.id;
-    socket.data.userName = [user.lastName, user.firstName].filter(Boolean).join(" ") || "Пользователь";
+    socket.data.userId = identity.id;
+    socket.data.userName = identity.userName;
     next();
   } catch (error) {
     console.error("[Socket Auth Error]", error);
@@ -98,12 +156,8 @@ io.on("connection", (socket) => {
       socketId: socket.id,
     });
     
-    // Проверяем доступ к чату
-    const participant = await prisma.chatParticipant.findUnique({
-      where: { chatId_userId: { chatId, userId } },
-    });
-
-    if (!participant) {
+    const allowed = await hasChatAccess(chatId, userId);
+    if (!allowed) {
       console.warn(`[Socket] ❌ Access denied: user ${userId} not a participant of chat ${chatId}`);
       socket.emit("error", { message: "Нет доступа к чату" });
       return;
@@ -136,12 +190,8 @@ io.on("connection", (socket) => {
     });
 
     try {
-      // Проверяем доступ
-      const participant = await prisma.chatParticipant.findUnique({
-        where: { chatId_userId: { chatId, userId } },
-      });
-
-      if (!participant) {
+      const allowed = await hasChatAccess(chatId, userId);
+      if (!allowed) {
         callback({ success: false, error: "Нет доступа к чату" });
         return;
       }
@@ -228,42 +278,6 @@ io.on("connection", (socket) => {
 
       console.log(`[Socket] ✅ Message saved to DB: ${message.id} in chat ${chatId}`);
 
-      // Авто-смена статуса обращения на IN_PROGRESS при первом сообщении председателя
-      try {
-        const linkedTicket = await prisma.ticket.findFirst({
-          where: { chatId },
-          select: { id: true, userId: true, status: true },
-        });
-        if (linkedTicket && linkedTicket.status === "PENDING" && linkedTicket.userId !== userId) {
-          await prisma.ticket.update({
-            where: { id: linkedTicket.id },
-            data: { status: "IN_PROGRESS", lastResponseAt: new Date() },
-          });
-          const statusMsg = await prisma.chatMessage.create({
-            data: {
-              chatId,
-              senderId: userId,
-              content: `📋 Статус обращения изменён на «В работе»`,
-              messageType: "text",
-            },
-            include: {
-              sender: {
-                select: { id: true, firstName: true, lastName: true, middleName: true, avatarUrl: true },
-              },
-              attachments: true,
-            },
-          });
-          await prisma.chat.update({
-            where: { id: chatId },
-            data: { lastMessageId: statusMsg.id, lastMessageAt: statusMsg.createdAt },
-          });
-          io.to(chatId).emit("message:new", statusMsg);
-          console.log(`[Socket] ✅ Auto-changed ticket ${linkedTicket.id} to IN_PROGRESS`);
-        }
-      } catch (autoStatusErr) {
-        console.error("[Socket] Auto-status error:", autoStatusErr);
-      }
-
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем количество подключенных клиентов в комнате
       const room = io.sockets.adapter.rooms.get(chatId);
       const clientsCount = room ? room.size : 0;
@@ -284,90 +298,9 @@ io.on("connection", (socket) => {
 
       // Останавливаем typing
       clearTyping(chatId, userId, socket);
-
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Создаем уведомления для участников чата
-      try {
-        // Получаем информацию о чате и участниках
-        const chat = await prisma.chat.findUnique({
-          where: { id: chatId },
-          select: {
-            id: true,
-            type: true,
-            name: true,
-            ticket: {
-              select: {
-                publicId: true,
-                title: true,
-              },
-            },
-          },
-        });
-
-        const participants = await prisma.chatParticipant.findMany({
-          where: {
-            chatId,
-            leftAt: null,
-            userId: { not: userId }, // Исключаем отправителя
-          },
-          select: {
-            userId: true,
-          },
-        });
-
-        if (participants.length > 0) {
-          // Динамически импортируем sendUserNotification
-          const { sendUserNotification } = await import('@/lib/notifications');
-          
-          const senderName = `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim() || 'Пользователь';
-          const notificationContent = content.length > 100 ? content.substring(0, 100) + '...' : content;
-          
-          // Определяем имя чата
-          let chatName = chat?.name || '';
-          if (!chatName && chat?.type === 'PRIVATE') {
-            // Для приватных чатов имя формируется из другого участника
-            chatName = senderName;
-          } else if (chat?.ticket) {
-            chatName = `Обращение #${chat.ticket.publicId}`;
-          }
-          
-          const notificationUrl = `/dashboard/chat?chatId=${chatId}`;
-
-          console.log(`[Socket] 📬 Sending notifications to ${participants.length} participants`);
-
-          // Отправляем уведомления асинхронно (не блокируем ответ)
-          Promise.allSettled(
-            participants.map(async (participant) => {
-              try {
-                await sendUserNotification({
-                  userId: participant.userId,
-                  type: 'chat_message',
-                  title: chat?.type === 'CHANNEL' 
-                    ? `Новый пост в канале "${chatName}"`
-                    : chat?.ticket
-                    ? `Новое сообщение в обращении #${chat.ticket.publicId}`
-                    : `Новое сообщение от ${senderName}`,
-                  body: notificationContent,
-                  url: notificationUrl,
-                  senderName: senderName,
-                  metadata: {
-                    chatId,
-                    messageId: message.id,
-                  },
-                });
-              } catch (err) {
-                console.error(`[Socket] Error sending notification to user ${participant.userId}:`, err);
-              }
-            })
-          ).catch(err => {
-            console.error('[Socket] Error in notification batch:', err);
-          });
-        }
-      } catch (notifError) {
-        console.error('[Socket] Error preparing notifications:', notifError);
-        // Не прерываем выполнение - уведомления не критичны
-      }
-
       callback({ success: true, message });
+
+      void runPostSendTasks({ chatId, userId, content, message });
 
       console.log(`[Socket] 📨 Сообщение от ${userName} в чат ${chatId}`);
     } catch (error) {
@@ -428,6 +361,127 @@ function clearTyping(chatId: string, odlId: string, socket: Socket) {
   }
 }
 
+async function runPostSendTasks(args: {
+  chatId: string;
+  userId: string;
+  content: string;
+  message: any;
+}) {
+  const { chatId, userId, content, message } = args;
+
+  // Авто-смена статуса обращения на IN_PROGRESS при первом сообщении председателя
+  try {
+    const linkedTicket = await prisma.ticket.findFirst({
+      where: { chatId },
+      select: { id: true, userId: true, status: true },
+    });
+    if (linkedTicket && linkedTicket.status === "PENDING" && linkedTicket.userId !== userId) {
+      await prisma.ticket.update({
+        where: { id: linkedTicket.id },
+        data: { status: "IN_PROGRESS", lastResponseAt: new Date() },
+      });
+      const statusMsg = await prisma.chatMessage.create({
+        data: {
+          chatId,
+          senderId: userId,
+          content: "📋 Статус обращения изменён на «В работе»",
+          messageType: "text",
+        },
+        include: {
+          sender: {
+            select: { id: true, firstName: true, lastName: true, middleName: true, avatarUrl: true },
+          },
+          attachments: true,
+        },
+      });
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: { lastMessageId: statusMsg.id, lastMessageAt: statusMsg.createdAt },
+      });
+      io.to(chatId).emit("message:new", statusMsg);
+      console.log(`[Socket] ✅ Auto-changed ticket ${linkedTicket.id} to IN_PROGRESS`);
+    }
+  } catch (autoStatusErr) {
+    console.error("[Socket] Auto-status error:", autoStatusErr);
+  }
+
+  // Уведомления участникам чата (не блокируют отправку)
+  try {
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        ticket: {
+          select: {
+            publicId: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    const participants = await prisma.chatParticipant.findMany({
+      where: {
+        chatId,
+        leftAt: null,
+        userId: { not: userId },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    if (participants.length > 0) {
+      const { sendUserNotification } = await import("@/lib/notifications");
+
+      const senderName = `${message.sender.firstName || ""} ${message.sender.lastName || ""}`.trim() || "Пользователь";
+      const notificationContent = content.length > 100 ? `${content.substring(0, 100)}...` : content;
+
+      let chatName = chat?.name || "";
+      if (!chatName && chat?.type === "PRIVATE") {
+        chatName = senderName;
+      } else if (chat?.ticket) {
+        chatName = `Обращение #${chat.ticket.publicId}`;
+      }
+
+      const notificationUrl = `/dashboard/chat?chatId=${chatId}`;
+
+      console.log(`[Socket] 📬 Sending notifications to ${participants.length} participants`);
+
+      Promise.allSettled(
+        participants.map(async (participant) => {
+          try {
+            await sendUserNotification({
+              userId: participant.userId,
+              type: "chat_message",
+              title: chat?.type === "CHANNEL"
+                ? `Новый пост в канале "${chatName}"`
+                : chat?.ticket
+                ? `Новое сообщение в обращении #${chat.ticket.publicId}`
+                : `Новое сообщение от ${senderName}`,
+              body: notificationContent,
+              url: notificationUrl,
+              senderName,
+              metadata: {
+                chatId,
+                messageId: message.id,
+              },
+            });
+          } catch (err) {
+            console.error(`[Socket] Error sending notification to user ${participant.userId}:`, err);
+          }
+        }),
+      ).catch((err) => {
+        console.error("[Socket] Error in notification batch:", err);
+      });
+    }
+  } catch (notifError) {
+    console.error("[Socket] Error preparing notifications:", notifError);
+  }
+}
+
 // Функции для вызова из API (через HTTP или напрямую)
 export function emitToChat(chatId: string, event: string, data: any) {
   io.to(chatId).emit(event as any, data);
@@ -440,6 +494,8 @@ httpServer.listen(PORT, () => {
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   console.log("Завершение работы...");
+  chatAccessCache.clear();
+  userIdentityCache.clear();
   await prisma.$disconnect();
   httpServer.close();
   process.exit(0);

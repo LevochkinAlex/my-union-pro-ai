@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
@@ -8,6 +6,7 @@ import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhance
 import { callAI, buildAssistantSystemPrompt } from "@/lib/ai-call";
 import * as Sentry from "@sentry/nextjs";
 import { isDemoUserId } from "@/lib/demo";
+import { getRequestUserId } from "@/lib/api-request-user";
 
 const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot"; // Виртуальный ID бота
@@ -16,16 +15,17 @@ const AI_BOT_ID = "ai-assistant-bot"; // Виртуальный ID бота
  * GET /api/chat/ai
  * Получить или создать чат с ИИ-ассистентом
  */
-export async function GET() {
-  let session: any = null;
+export async function GET(request: NextRequest) {
+  let sentryUserId: string | undefined;
   try {
-    session = await getServerSession(authOptions);
+    const requestUser = await getRequestUserId(request);
 
-    if (!session?.user?.id) {
+    if (!requestUser) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = requestUser.id;
+    sentryUserId = userId;
 
     // Демо: возвращаем мок-чат для демо-пользователей
     if (isDemoUserId(userId)) {
@@ -183,7 +183,7 @@ export async function GET() {
     console.error("[chat/ai] GET error:", error);
     Sentry.captureException(error, {
       tags: { endpoint: 'GET /api/chat/ai' },
-      extra: { userId: session?.user?.id },
+      extra: { userId: sentryUserId },
     });
     // Возвращаем 200 с пустым чатом, чтобы клиент не падал и не ретраил бесконечно
     return NextResponse.json({
@@ -199,16 +199,17 @@ export async function GET() {
  * Отправить сообщение в чат с ИИ и получить ответ
  */
 export async function POST(request: NextRequest) {
-  let session: any = null;
   let chatId: string | undefined;
+  let sentryUserId: string | undefined;
   try {
-    session = await getServerSession(authOptions);
+    const requestUser = await getRequestUserId(request);
 
-    if (!session?.user?.id) {
+    if (!requestUser) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = requestUser.id;
+    sentryUserId = userId;
     const body = await request.json();
     const { content, chatId: bodyChatId } = body;
     chatId = bodyChatId;
@@ -471,12 +472,12 @@ export async function POST(request: NextRequest) {
     console.error("[chat/ai] Error type:", error?.name);
     console.error("[chat/ai] Error message:", error?.message);
     console.error("[chat/ai] Error stack:", error?.stack?.substring(0, 1000));
-    console.error("[chat/ai] User ID:", session?.user?.id);
+    console.error("[chat/ai] User ID:", sentryUserId);
     console.error("[chat/ai] Chat ID:", chatId);
     
     Sentry.captureException(error, {
       tags: { endpoint: 'POST /api/chat/ai' },
-      extra: { userId: session?.user?.id, chatId },
+      extra: { userId: sentryUserId, chatId },
     });
     
     const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;

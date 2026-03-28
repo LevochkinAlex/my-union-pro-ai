@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendTelegramMessage, sendReturningUserWelcome } from "@/lib/telegram-bot";
+import { sendTelegramMessage, sendReturningUserWelcome, sendMobileAppReturnButton } from "@/lib/telegram-bot";
 
 /**
  * POST /api/telegram/webhook
@@ -786,6 +786,77 @@ ${loginUrl}
       return NextResponse.json({ ok: true });
     }
 
+    // /start app_<sessionKey> — вход из мобильного приложения (сессия создана через POST /api/mobile/auth/bot-login/start)
+    if (trimmedText.startsWith("/start app_")) {
+      const sessionKey = trimmedText.replace("/start app_", "").trim();
+      console.log("[Telegram Webhook] Вход в приложение, sessionKey:", sessionKey);
+
+      const session = await prisma.botAppLoginSession.findUnique({
+        where: { sessionKey },
+      });
+
+      if (!session || session.consumed || session.expiresAt < new Date()) {
+        await sendTelegramMessage(
+          chatId,
+          `⏳ <b>Ссылка недействительна</b>
+
+Откройте приложение МойСоюз и снова нажмите «Войти через бота».`,
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      await prisma.botAppLoginSession.update({
+        where: { id: session.id },
+        data: { consumed: true },
+      });
+
+      let user = await prisma.user.findUnique({
+        where: { telegramChatId: chatId },
+      });
+
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            telegramChatId: chatId,
+            telegramUsername: from?.username || null,
+            firstName: from?.first_name || null,
+            lastName: from?.last_name || null,
+            role: "PENDING_MEMBER",
+            membershipStatus: "PROFILE_INCOMPLETE",
+          },
+        });
+        console.log("[Telegram Webhook] Создан пользователь для app-сессии:", user.id);
+      } else if (from?.username && user.telegramUsername !== from.username) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { telegramUsername: from.username },
+        });
+      }
+
+      const crypto = await import("crypto");
+      const loginToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      await prisma.loginToken.create({
+        data: { token: loginToken, userId: user.id, expiresAt },
+      });
+
+      const host = request.headers.get("host") || "localhost:3000";
+      const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+      const baseUrl = isLocalhost ? `http://${host}` : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+
+      const result = await sendMobileAppReturnButton(
+        chatId,
+        loginToken,
+        user.firstName ?? undefined,
+        baseUrl,
+      );
+      if (!result.success) {
+        console.error("[Telegram Webhook] sendMobileAppReturnButton:", result.error);
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
     // Команда /start login - авторизация через кнопку в боте
     // ВАЖНО: обрабатываем до общего /start, иначе "/start login" попадет в ветку isStartCommand.
     if (trimmedText === "/start login" || trimmedText === "/login") {
@@ -906,6 +977,7 @@ ${loginUrl}
       (trimmedText === "/restart" || trimmedText === "/start" || trimmedText.startsWith("/start ")) &&
       !trimmedText.startsWith("/start AUTH_phone_") &&
       !trimmedText.startsWith("/start link_phone_") &&
+      !trimmedText.startsWith("/start app_") &&
       trimmedText !== "/start login";
 
     // Обычная команда /start (без параметра)

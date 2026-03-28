@@ -6,24 +6,29 @@ import { revalidatePath } from "next/cache";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getAvailableViewModes, resolveCurrentMode } from "@/lib/session-user";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { getRequestUserId } from "@/lib/api-request-user";
 
 // GET /api/user/view-mode
-// Текущий режим и доступные режимы — только из сессии (без запроса в БД)
-export async function GET() {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user) {
+// Текущий режим и доступные режимы (сессия NextAuth или Bearer JWT для мобильного приложения).
+export async function GET(request: NextRequest) {
+  const requestUser = await getRequestUserId(request);
+  if (!requestUser) {
     return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
   }
 
-  if (session.user.id === DEMO_MEMBER_USER_ID) {
+  const userId = requestUser.id;
+
+  if (userId === DEMO_MEMBER_USER_ID) {
     return NextResponse.json({
       currentMode: "MEMBER",
       availableModes: [{ mode: "MEMBER", label: "Член профсоюза" }],
       canSwitch: false,
     });
   }
-  if (session.user.id === DEMO_USER_ID || session.user.isDemo) {
+
+  const session = await getServerSession(authOptions);
+  const isDemoSession = session?.user?.id === DEMO_USER_ID || Boolean((session?.user as { isDemo?: boolean })?.isDemo);
+  if (userId === DEMO_USER_ID || isDemoSession) {
     return NextResponse.json({
       currentMode: "PPO_HEAD",
       availableModes: [{ mode: "PPO_HEAD", label: "Председатель ППО", organizationName: "ППО Аппарат МООП РЗ РФ" }],
@@ -32,12 +37,13 @@ export async function GET() {
   }
 
   // Для РПО/МПО/ППО и сотрудников берём актуальные флаги из БД.
-  let sourceUser: any = session.user;
+  let sourceUser: any =
+    requestUser.source === "session" && session?.user ? session.user : { id: userId };
   let isStaff = false;
   try {
     const [dbUser, activeStaffPosition] = await Promise.all([
       prisma.user.findUnique({
-        where: { id: session.user.id },
+        where: { id: userId },
         select: {
           role: true,
           viewMode: true,
@@ -53,18 +59,20 @@ export async function GET() {
         },
       }),
       prisma.organizationStaff.findFirst({
-        where: { userId: session.user.id, status: "ACTIVE" },
+        where: { userId, status: "ACTIVE" },
         select: { id: true },
       }),
     ]);
-    if (dbUser) sourceUser = dbUser;
+    if (dbUser) {
+      sourceUser = { ...sourceUser, ...dbUser };
+    }
     isStaff = Boolean(activeStaffPosition);
   } catch (error) {
     console.warn("[user/view-mode] GET fallback to session:", error);
   }
 
   const availableModes = getAvailableViewModes({ user: sourceUser } as any, isStaff);
-  const currentMode = resolveCurrentMode(sourceUser.viewMode ?? session.user.viewMode, availableModes);
+  const currentMode = resolveCurrentMode(sourceUser.viewMode ?? (session?.user as { viewMode?: string })?.viewMode, availableModes);
 
   return NextResponse.json({
     currentMode,

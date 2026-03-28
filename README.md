@@ -58,6 +58,25 @@ pnpm dev
 
 ---
 
+## Mobile (React Native / Expo)
+
+В репозитории добавлен отдельный мобильный клиент: `mobile/`.
+
+```bash
+cd mobile
+npm install
+npm run start
+```
+
+По умолчанию мобильный клиент ожидает:
+
+- API: `http://localhost:3004`
+- Socket: `http://localhost:3005`
+
+Настройки заданы в `mobile/app.json` (`expo.extra`).
+
+---
+
 ## Команды
 
 | Команда | Описание |

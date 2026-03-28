@@ -19,6 +19,7 @@ import { REGIONAL_NEWS_CHANNEL_NAME } from "@/lib/regional-news";
 import * as Sentry from "@sentry/nextjs";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getDemoMemberChats, getDemoChairmanChats } from "@/lib/demo";
+import { getRequestUserId } from "@/lib/api-request-user";
 
 const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot";
@@ -280,15 +281,15 @@ function formatSupportChat(supportChat: any, userId: string) {
  * Получить список чатов пользователя
  */
 export async function GET(request: NextRequest) {
-  let session: any = null;
+  let requestUser: { id: string } | null = null;
   let filter: ChatFilter = {};
   try {
-    session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    requestUser = await getRequestUserId(request);
+    if (!requestUser) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = requestUser.id;
     const { searchParams } = new URL(request.url);
     const bypassCache = searchParams.get("bypassCache") === "1";
 
@@ -749,7 +750,7 @@ export async function GET(request: NextRequest) {
     console.error("[chat] GET Error:", error);
     Sentry.captureException(error, {
       tags: { endpoint: 'GET /api/chat' },
-      extra: { userId: session?.user?.id, filter },
+      extra: { userId: requestUser?.id, filter },
     });
     // Всегда возвращаем 200 с массивом чатов, чтобы не ломать UI («Не удалось загрузить чаты»)
     return NextResponse.json({

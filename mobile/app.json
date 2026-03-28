@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "MyUnion Mobile",
+    "slug": "myunion-mobile",
+    "scheme": "myunion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "tg"
+        ]
+      }
+    },
+    "android": {
+      "queries": [
+        {
+          "intent": {
+            "action": "VIEW",
+            "data": {
+              "scheme": "tg"
+            }
+          }
+        },
+        {
+          "package": "org.telegram.messenger"
+        }
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:3004",
+      "socketUrl": "http://localhost:3005",
+      "webAppUrl": "http://localhost:3004",
+      "telegramLoginOrigin": "https://myunion.pro",
+      "telegramBotId": "8321416024"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
