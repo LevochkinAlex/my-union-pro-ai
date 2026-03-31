@@ -329,6 +329,7 @@ export function getDemoProfile(userId: string): { user: any; viewMode: string | 
     isPPOHead: isChairman,
     createdAt: isChairman ? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
     updatedAt: DEMO_UPDATED_AT,
+    bestBenefitsLinked: true,
   };
   const user = isChairman
     ? {

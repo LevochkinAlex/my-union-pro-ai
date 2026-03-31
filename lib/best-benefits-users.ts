@@ -14,8 +14,6 @@ export const BB_MYUNION_ORG_API_BASE = "https://bestbenefits.ru/api/myunion";
 export const BB_MYUNION_CREATE_USER_URL = `${BB_MYUNION_ORG_API_BASE}/create_user`;
 export const BB_MYUNION_CHANGE_STATUS_URL = `${BB_MYUNION_ORG_API_BASE}/change_status`;
 
-const ORG_TOKEN = process.env.BB_PROFSOYUZY_TOKEN;
-
 function resolveOrgApiBase(): string {
   const fallback = BB_MYUNION_ORG_API_BASE;
   const raw = process.env.BB_ORG_API_BASE?.trim().replace(/\/$/, "");
@@ -65,8 +63,10 @@ interface ChangeStatusResponse {
 }
 
 async function getOrgApiBearer(): Promise<string> {
-  if (ORG_TOKEN?.trim()) {
-    return ORG_TOKEN.trim();
+  // Читаем при каждом вызове: при импорте модуля до dotenv.config() (скрипты) env ещё пустой
+  const org = process.env.BB_PROFSOYUZY_TOKEN?.trim();
+  if (org) {
+    return org;
   }
   return getBestBenefitsToken();
 }
@@ -113,7 +113,8 @@ async function postToOrganizationApi(
 
   if (!response.ok) {
     const errorsPart = data?.errors ? ` | errors: ${JSON.stringify(data.errors)}` : "";
-    throw new Error(`${data?.message || `HTTP ${response.status}`}${errorsPart}`);
+    const msg = data?.message || `HTTP ${response.status}`;
+    throw new Error(`[BB ${response.status}] ${msg}${errorsPart}`);
   }
 
   return data;

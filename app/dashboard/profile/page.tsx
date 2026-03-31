@@ -123,6 +123,8 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [emailVerified, setEmailVerified] = useState<Date | null>(null);
+  /** undefined — ещё не загрузили профиль; false/true — из GET /api/profile */
+  const [bestBenefitsLinked, setBestBenefitsLinked] = useState<boolean | undefined>(undefined);
   const [dateOfBirthError, setDateOfBirthError] = useState<string | null>(null);
   
   // Справочники профессий и должностей
@@ -556,6 +558,9 @@ export default function ProfilePage() {
         organization: user.organization,
       });
       setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
+      setBestBenefitsLinked(
+        typeof user.bestBenefitsLinked === "boolean" ? user.bestBenefitsLinked : undefined
+      );
       
       // Обновляем дополнительную информацию (включая профессию и образование)
       setAdditionalInfo(prev => ({
@@ -1506,6 +1511,9 @@ export default function ProfilePage() {
                 <EmailValidationField
                   email={profileData.email || ""}
                   emailVerified={emailVerified}
+                  firstName={profileData.firstName}
+                  lastName={profileData.lastName}
+                  bestBenefitsLinked={bestBenefitsLinked}
                   onEmailChange={(email) => {
                     // Используем функциональное обновление для сохранения всех полей
                     setProfileData(prev => ({ ...prev, email }));
@@ -1521,6 +1529,11 @@ export default function ProfilePage() {
                       if (response.ok) {
                         const data = await response.json();
                         setEmailVerified(data.user.emailVerified ? new Date(data.user.emailVerified) : null);
+                        setBestBenefitsLinked(
+                          typeof data.user.bestBenefitsLinked === "boolean"
+                            ? data.user.bestBenefitsLinked
+                            : undefined
+                        );
                         // Используем функциональное обновление для сохранения всех полей
                         setProfileData(prev => ({ ...prev, email: data.user.email || "" }));
                       }

@@ -47,6 +47,8 @@ function resolveUrlForDevice(rawUrl: string): string {
 
 const rawApiBaseUrl = extra.apiBaseUrl || "http://localhost:3004";
 const apiBaseUrl = resolveUrlForDevice(rawApiBaseUrl);
+const rawSocketUrl = extra.socketUrl || "http://localhost:3005";
+const socketUrl = resolveUrlForDevice(rawSocketUrl);
 const webAppUrl = extra.webAppUrl || apiBaseUrl;
 
 function resolveTelegramLoginOrigin(): string | null {
@@ -76,7 +78,7 @@ const telegramLoginOrigin = resolveTelegramLoginOrigin();
 
 export const appConfig = {
   apiBaseUrl,
-  socketUrl: extra.socketUrl || "http://localhost:3005",
+  socketUrl,
   webAppUrl,
   /** null → виджет Telegram откроет «Bot domain invalid»; задайте telegramLoginOrigin в app.json */
   telegramLoginOrigin,

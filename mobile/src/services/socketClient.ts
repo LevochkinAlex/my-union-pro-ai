@@ -3,6 +3,11 @@ import { appConfig } from "../config/appConfig";
 
 type ServerToClientEvents = {
   "message:new": (message: unknown) => void;
+  "message:updated": (message: unknown) => void;
+  "message:deleted": (data: { messageId: string; chatId: string }) => void;
+  "reaction:add": (data: { messageId: string; userId: string; emoji: string }) => void;
+  "reaction:remove": (data: { messageId: string; userId: string; emoji: string }) => void;
+  "read:update": (data: { chatId: string; userId: string; messageId: string }) => void;
   "typing:start": (data: { chatId: string; userId: string; userName: string }) => void;
   "typing:stop": (data: { chatId: string; userId: string }) => void;
   "user:online": (userId: string) => void;
@@ -14,6 +19,8 @@ type ClientToServerEvents = {
   "chat:leave": (chatId: string) => void;
   "typing:start": (chatId: string) => void;
   "typing:stop": (chatId: string) => void;
+  "read:mark": (data: { chatId: string; messageId: string }) => void;
+  "reaction:toggle": (data: { messageId: string; emoji: string }) => void;
   "message:send": (
     data: {
       chatId: string;

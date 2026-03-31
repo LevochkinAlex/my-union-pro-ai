@@ -7,6 +7,11 @@ interface EmailValidationFieldProps {
   emailVerified: Date | null;
   onEmailChange: (email: string) => void;
   onVerified: () => void;
+  /** Фамилия и имя в форме профиля / анкеты — без них нельзя запросить код (см. API). */
+  firstName?: string;
+  lastName?: string;
+  /** Связка профиля с BestBenefits (скидки у партнёров). Без этого подтверждённый email не означает доступ к активации промокодов. */
+  bestBenefitsLinked?: boolean;
 }
 
 export default function EmailValidationField({
@@ -14,7 +19,15 @@ export default function EmailValidationField({
   emailVerified,
   onEmailChange,
   onVerified,
+  firstName,
+  lastName,
+  bestBenefitsLinked,
 }: EmailValidationFieldProps) {
+  const nameGate =
+    firstName !== undefined && lastName !== undefined;
+  const namesFilled =
+    Boolean(String(firstName ?? "").trim()) && Boolean(String(lastName ?? "").trim());
+  const canStartEmailValidation = !nameGate || namesFilled;
   const [mode, setMode] = useState<"initial" | "pin-sent" | "verified">(
     emailVerified ? "verified" : "initial"
   );
@@ -38,6 +51,10 @@ export default function EmailValidationField({
       setError("Введите email");
       return;
     }
+    if (nameGate && !namesFilled) {
+      setError("Сначала укажите фамилию и имя в форме профиля.");
+      return;
+    }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -52,7 +69,10 @@ export default function EmailValidationField({
       const response = await fetch("/api/auth/email/send-pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email,
+          ...(nameGate ? { firstName, lastName } : {}),
+        }),
       });
 
       const data = await response.json();
@@ -78,6 +98,10 @@ export default function EmailValidationField({
       setError("Введите 6-значный код");
       return;
     }
+    if (nameGate && !namesFilled) {
+      setError("Сначала укажите фамилию и имя в форме профиля.");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -86,7 +110,11 @@ export default function EmailValidationField({
       const response = await fetch("/api/auth/email/verify-pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, pin }),
+        body: JSON.stringify({
+          email,
+          pin,
+          ...(nameGate ? { firstName, lastName } : {}),
+        }),
       });
 
       const data = await response.json();
@@ -146,7 +174,12 @@ export default function EmailValidationField({
               <button
                 type="button"
                 onClick={handleSendPin}
-                disabled={loading || !email || !email.trim()}
+                disabled={
+                  loading ||
+                  !email ||
+                  !email.trim() ||
+                  !canStartEmailValidation
+                }
                 className="h-11 px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors whitespace-nowrap flex-shrink-0 w-full sm:w-auto"
               >
                 {loading ? "Отправка..." : "Валидировать"}
@@ -156,10 +189,20 @@ export default function EmailValidationField({
           {mode === "verified" && (
             <>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Email подтвержден и используется для доступа к скидкам от партнёров. Изменение невозможно.
+                Email подтверждён. Изменение адреса недоступно. Подтверждённый адрес используется для входа и сервисных уведомлений.
               </p>
+              {bestBenefitsLinked === true && (
+                <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                  Скидки у партнёров: аккаунт BestBenefits связан с профилем — можно активировать промокоды в разделе «Скидки».
+                </p>
+              )}
+              {bestBenefitsLinked === false && (
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                  Скидки у партнёров: связка с BestBenefits пока не создана. Если имя и фамилия уже указаны в профиле, нажмите «Сохранить изменения» — подключение к партнёрским скидкам выполнится автоматически. Иначе заполните ФИО и сохраните профиль. При повторных ошибках обратитесь в поддержку.
+                </p>
+              )}
               <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                Email {email} подтвержден
+                Email {email} подтверждён
               </p>
             </>
           )}
@@ -178,7 +221,11 @@ export default function EmailValidationField({
                 const value = e.target.value.replace(/\D/g, "");
                 setPin(value);
                 // Автоматическая проверка при вводе 6 цифр
-                if (value.length === 6) {
+                if (value.length === 6 && !canStartEmailValidation) {
+                  setError("Сначала укажите фамилию и имя в профиле.");
+                  return;
+                }
+                if (value.length === 6 && canStartEmailValidation) {
                   setPin(value);
                   // Небольшая задержка для UX
                   setTimeout(() => {
@@ -186,7 +233,11 @@ export default function EmailValidationField({
                     fetch("/api/auth/email/verify-pin", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ email, pin: value }),
+                      body: JSON.stringify({
+                        email,
+                        pin: value,
+                        ...(nameGate ? { firstName, lastName } : {}),
+                      }),
                     })
                       .then((res) => res.json())
                       .then((data) => {
@@ -213,7 +264,7 @@ export default function EmailValidationField({
             <button
               type="button"
               onClick={handleSendPin}
-              disabled={loading}
+              disabled={loading || !canStartEmailValidation}
               className="h-11 px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors whitespace-nowrap w-full sm:w-auto"
             >
               {loading ? "Отправка..." : "Отправить повторно"}
@@ -239,9 +290,14 @@ export default function EmailValidationField({
         <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
       )}
 
-      {mode === "initial" && !emailVerified && email && (
+      {nameGate && !namesFilled && mode === "initial" && !emailVerified && (
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+          Сначала укажите фамилию и имя в форме выше — после этого можно запросить код подтверждения email.
+        </p>
+      )}
+      {mode === "initial" && !emailVerified && email && canStartEmailValidation && (
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Для доступа к скидкам от партнёров подтвердите email
+          Подтвердите email — он нужен для входа в сервис и восстановления доступа.
         </p>
       )}
     </div>

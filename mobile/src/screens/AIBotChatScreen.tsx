@@ -2,10 +2,12 @@ import { useRef, useState } from "react";
 import {
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Pressable,
   StyleSheet,
   TextInput,
   View,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -20,6 +22,7 @@ type Props = {
   messageInput: string;
   onChangeInput: (text: string) => void;
   onSend: () => void;
+  onPickImage: () => void;
   onBack: () => void;
 };
 
@@ -70,13 +73,14 @@ export function AIBotChatScreen({
   messageInput,
   onChangeInput,
   onSend,
+  onPickImage,
   onBack,
 }: Props) {
   const flatListRef = useRef<FlatList>(null);
   const hasMessages = messages.length > 0;
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.backBtn}>
@@ -150,7 +154,7 @@ export function AIBotChatScreen({
                     style={[styles.bubble, styles.bubbleMine]}
                   >
                     <FluidText variant="bodyMd" color={colors.white}>{item.content}</FluidText>
-                    {item.attachments?.map((att) => (
+                    {item.attachments?.map((att: NonNullable<ChatMessageItem["attachments"]>[number]) => (
                       <AttachmentView key={att.id} attachment={att} isMine={isMine} />
                     ))}
                     <View style={styles.tsWrap}>
@@ -165,7 +169,7 @@ export function AIBotChatScreen({
                 ) : (
                   <View style={[styles.bubble, styles.bubbleAI]}>
                     <FluidText variant="bodyMd" color={colors.onSurface}>{item.content}</FluidText>
-                    {item.attachments?.map((att) => (
+                    {item.attachments?.map((att: NonNullable<ChatMessageItem["attachments"]>[number]) => (
                       <AttachmentView key={att.id} attachment={att} isMine={isMine} />
                     ))}
                     <FluidText variant="labelSm" color={colors.outline} style={styles.ts}>
@@ -182,11 +186,11 @@ export function AIBotChatScreen({
       {/* Compose */}
       <GlassCard style={styles.composeOuter} borderRadius={0}>
         <View style={styles.composeBar}>
-          <Pressable style={styles.composePlusBtn}>
+          <Pressable style={styles.composePlusBtn} onPress={onPickImage}>
             <MaterialCommunityIcons name="plus-circle-outline" size={24} color={colors.onSurfaceVariant} />
           </Pressable>
 
-          <View style={styles.composeCenter}>
+          <View style={styles.composeInputWrap}>
             <TextInput
               style={styles.composeInput}
               value={messageInput}
@@ -197,13 +201,9 @@ export function AIBotChatScreen({
               multiline
               maxLength={8000}
             />
-            <View style={styles.composeToolsRow}>
-              <View style={styles.composeToolsLeft}>
-                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="format-bold" size={20} color={colors.onSurfaceVariant} /></Pressable>
-                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="format-italic" size={20} color={colors.onSurfaceVariant} /></Pressable>
-                <Pressable style={styles.toolBtn}><MaterialCommunityIcons name="code-tags" size={20} color={colors.onSurfaceVariant} /></Pressable>
-              </View>
-            </View>
+            <Pressable style={styles.composeEmojiBtn}>
+              <MaterialCommunityIcons name="emoticon-outline" size={20} color={colors.onSurfaceVariant} />
+            </Pressable>
           </View>
 
           <Pressable
@@ -230,7 +230,7 @@ export function AIBotChatScreen({
           </Pressable>
         </View>
       </GlassCard>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -328,58 +328,49 @@ const styles = StyleSheet.create({
   tsWrap: { flexDirection: "row", alignItems: "center", alignSelf: "flex-end", marginTop: spacing.sm },
   composeOuter: {
     borderTopWidth: 0,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xs,
   },
   composeBar: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingTop: spacing.xs,
     gap: spacing.sm,
   },
   composePlusBtn: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: spacing.xs,
   },
-  composeCenter: {
+  composeInputWrap: {
     flex: 1,
     backgroundColor: colors.surfaceContainerHigh,
-    borderRadius: radii["2xl"],
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
+    borderRadius: radii.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.xs,
+    minHeight: 44,
   },
   composeInput: {
+    flex: 1,
     color: colors.onSurface,
     fontFamily: fonts.body,
     fontSize: 15,
-    maxHeight: 120,
+    maxHeight: 110,
     paddingTop: 0,
     paddingBottom: 0,
-    minHeight: 24,
+    minHeight: 22,
   },
-  composeToolsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  composeToolsLeft: {
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  toolBtn: {
-    padding: spacing.xs,
-    borderRadius: radii.md,
-  },
+  composeEmojiBtn: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   sendBtnWrap: {
-    marginBottom: spacing.xs,
+    alignSelf: "flex-end",
   },
   sendBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: radii.full,
     alignItems: "center",
     justifyContent: "center",

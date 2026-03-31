@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncUserToBestBenefits } from "@/lib/best-benefits-users";
-import { decryptPassword, encryptPassword } from "@/lib/best-benefits-password";
-import crypto from "crypto";
+import { scheduleSyncBestBenefitsIfEligible } from "@/lib/best-benefits-sync-eligible";
+import { EMAIL_NEEDS_NAME_MESSAGE } from "@/lib/email-verification-requirements";
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,6 +40,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (!user.firstName?.trim() || !user.lastName?.trim()) {
+      return NextResponse.json(
+        { error: EMAIL_NEEDS_NAME_MESSAGE, code: "PROFILE_NEEDS_NAME" },
+        { status: 400 },
+      );
+    }
+
     // Подтверждаем email
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
@@ -53,71 +59,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[verify-email] Email verified for user:", user.id, user.email);
 
-    // Синхронизируем с BestBenefits только после подтверждения email
-    // Примечание: Основной способ создания аккаунта BestBenefits - через подтверждение email в анкете (/api/auth/email/verify-pin)
-    // Этот endpoint также создает аккаунт для обратной совместимости (подтверждение email по токену из письма)
-    if (
-      process.env.USE_REAL_BB_API === "true" &&
-      updatedUser.firstName &&
-      updatedUser.lastName &&
-      updatedUser.email &&
-      !updatedUser.bestBenefitsUserId // Ещё не синхронизирован
-    ) {
-      console.log("[verify-email] Creating BestBenefits account for verified email...");
-
-      try {
-        // Генерируем или используем сохраненный пароль
-        let bbPassword: string;
-        
-        if (updatedUser.bestBenefitsPassword) {
-          try {
-            bbPassword = decryptPassword(updatedUser.bestBenefitsPassword);
-            console.log("[verify-email] Using saved password for BestBenefits");
-          } catch (error) {
-            console.error("[verify-email] Failed to decrypt password, generating new:", error);
-            bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
-            await prisma.user.update({
-              where: { id: updatedUser.id },
-              data: { bestBenefitsPassword: encryptPassword(bbPassword) },
-            });
-          }
-        } else {
-          console.log("[verify-email] Generating new password for BestBenefits");
-          bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
-          await prisma.user.update({
-            where: { id: updatedUser.id },
-            data: { bestBenefitsPassword: encryptPassword(bbPassword) },
-          });
-        }
-
-        // Создаем аккаунт в BB (асинхронно, не блокируем ответ)
-        syncUserToBestBenefits({
-          id: updatedUser.id,
-          email: updatedUser.email,
-          firstName: updatedUser.firstName,
-          lastName: updatedUser.lastName,
-          password: bbPassword,
-          city_id: null,
-        })
-          .then(async (bbData) => {
-            await prisma.user.update({
-              where: { id: updatedUser.id },
-              data: {
-                bestBenefitsUserId: bbData.bestBenefitsUserId,
-                bestBenefitsStatus: bbData.status,
-                bestBenefitsCreatedAt: new Date(),
-              },
-            });
-            console.log("[verify-email] User synced to BestBenefits:", bbData.bestBenefitsUserId);
-          })
-          .catch((error) => {
-            console.error("[verify-email] Failed to sync to BestBenefits:", error);
-          });
-      } catch (error) {
-        console.error("[verify-email] BestBenefits sync error:", error);
-        // Не блокируем верификацию email из-за ошибки BB
-      }
-    }
+    scheduleSyncBestBenefitsIfEligible(updatedUser.id, "verify-email-token");
 
     return NextResponse.json({
       success: true,

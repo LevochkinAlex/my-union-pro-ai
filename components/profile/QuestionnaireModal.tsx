@@ -1073,6 +1073,8 @@ export default function QuestionnaireModal({
                   <EmailValidationField
                     email={formData.email}
                     emailVerified={emailVerified}
+                    firstName={formData.firstName}
+                    lastName={formData.lastName}
                     onEmailChange={(value) => {
                       setFormData({ ...formData, email: value });
                     }}

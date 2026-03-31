@@ -3,14 +3,19 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { verifyEmailPin } from "@/lib/email-pin";
 import { prisma } from "@/lib/prisma";
-import { syncUserToBestBenefits } from "@/lib/best-benefits-users";
-import { decryptPassword, encryptPassword } from "@/lib/best-benefits-password";
-import crypto from "crypto";
+import { scheduleSyncBestBenefitsIfEligible } from "@/lib/best-benefits-sync-eligible";
+import { ensureNamesBeforeEmailVerification } from "@/lib/email-verification-requirements";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const { email, pin } = await request.json();
+    const body = await request.json();
+    const { email, pin, firstName, lastName } = body as {
+      email?: string;
+      pin?: string;
+      firstName?: string | null;
+      lastName?: string | null;
+    };
 
     if (!email || !pin) {
       return NextResponse.json(
@@ -20,6 +25,20 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[Verify Email PIN] Проверка PIN для email:", email);
+
+    // ФИО должны быть до проверки PIN (код помечается использованным при успехе)
+    if (session?.user?.id) {
+      const nameCheck = await ensureNamesBeforeEmailVerification(session.user.id, {
+        firstName,
+        lastName,
+      });
+      if (nameCheck.ok === false) {
+        return NextResponse.json(
+          { error: nameCheck.error, code: nameCheck.code },
+          { status: 400 },
+        );
+      }
+    }
 
     // Проверяем PIN-код
     const result = await verifyEmailPin(email, pin);
@@ -70,76 +89,8 @@ export async function POST(request: NextRequest) {
 
       console.log("[Verify Email PIN] ✅ Email подтвержден для пользователя:", session.user.id);
 
-      // Создаем аккаунт BestBenefits только если:
-      // 1. Email подтвержден
-      // 2. Есть firstName и lastName (профиль заполнен)
-      // 3. Аккаунт BestBenefits еще не создан
-      if (
-        process.env.USE_REAL_BB_API === "true" &&
-        updatedUser.firstName &&
-        updatedUser.lastName &&
-        updatedUser.email &&
-        !updatedUser.bestBenefitsUserId
-      ) {
-        console.log("[Verify Email PIN] Creating BestBenefits account for verified email...");
-
-        try {
-          // Генерируем или используем сохраненный пароль
-          let bbPassword: string;
-          
-          if (updatedUser.bestBenefitsPassword) {
-            try {
-              bbPassword = decryptPassword(updatedUser.bestBenefitsPassword);
-              console.log("[Verify Email PIN] Using saved password for BestBenefits");
-            } catch (error) {
-              console.error("[Verify Email PIN] Failed to decrypt password, generating new:", error);
-              bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
-              // Сохраняем новый пароль
-              const encryptedBbPassword = encryptPassword(bbPassword);
-              await prisma.user.update({
-                where: { id: updatedUser.id },
-                data: { bestBenefitsPassword: encryptedBbPassword },
-              });
-            }
-          } else {
-            console.log("[Verify Email PIN] Generating new password for BestBenefits");
-            bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
-            // Сохраняем пароль
-            const encryptedBbPassword = encryptPassword(bbPassword);
-            await prisma.user.update({
-              where: { id: updatedUser.id },
-              data: { bestBenefitsPassword: encryptedBbPassword },
-            });
-          }
-
-          // Создаем аккаунт в BB (асинхронно, не блокируем ответ)
-          syncUserToBestBenefits({
-            id: updatedUser.id,
-            email: updatedUser.email,
-            firstName: updatedUser.firstName,
-            lastName: updatedUser.lastName,
-            password: bbPassword,
-            city_id: null,
-          })
-            .then(async (bbData) => {
-              await prisma.user.update({
-                where: { id: updatedUser.id },
-                data: {
-                  bestBenefitsUserId: bbData.bestBenefitsUserId,
-                  bestBenefitsStatus: bbData.status,
-                  bestBenefitsCreatedAt: new Date(),
-                },
-              });
-              console.log("[Verify Email PIN] User synced to BestBenefits:", bbData.bestBenefitsUserId);
-            })
-            .catch((error) => {
-              console.error("[Verify Email PIN] Failed to sync to BestBenefits:", error);
-            });
-        } catch (error) {
-          console.error("[Verify Email PIN] BestBenefits sync error:", error);
-          // Не блокируем верификацию email из-за ошибки BB
-        }
-      }
+      // BestBenefits: при наличии ФИО — создаём сразу; иначе — после сохранения профиля (см. /api/profile PUT)
+      scheduleSyncBestBenefitsIfEligible(updatedUser.id, "verify-pin");
 
       return NextResponse.json({
         success: true,

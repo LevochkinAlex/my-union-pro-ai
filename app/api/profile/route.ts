@@ -14,6 +14,7 @@ import { sendMassNotification } from "@/lib/notifications";
 import { withCache, getCacheKey } from "@/lib/cache";
 import { isRestrictedJobTitleForSelfService } from "@/lib/dictionaries";
 import { findPPOsByWorkplace } from "@/lib/workplace-ppo-mapping";
+import { scheduleSyncBestBenefitsIfEligible } from "@/lib/best-benefits-sync-eligible";
 // Удалено: SystemMessages - больше не используется
 
 function normalizeString(value: unknown): string | null {
@@ -91,6 +92,7 @@ export async function GET() {
       isPPOHead: true,
       createdAt: true,
       updatedAt: true,
+      bestBenefitsUserId: true,
       organization: {
         select: { id: true, name: true, inn: true },
       },
@@ -192,6 +194,8 @@ export async function GET() {
         isPPOHead: user.isPPOHead, // Флаг председателя ППО
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        /** Есть ли связка с BestBenefits (активация промокодов у партнёров) */
+        bestBenefitsLinked: Boolean(user.bestBenefitsUserId),
       },
       // Дублируем viewMode и isPPOHead в корень ответа для удобства
       viewMode: user.viewMode,
@@ -685,9 +689,8 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    // Синхронизация с BestBenefits перенесена в /api/user/verify-email
-    // Аккаунт создается только ПОСЛЕ подтверждения email пользователем
-    console.log("[profile] Profile saved. BestBenefits sync will happen after email verification.");
+    // Повторная попытка BB: если email уже подтверждён, а ФИО только что дописали — раньше sync не вызывался
+    scheduleSyncBestBenefitsIfEligible(session.user.id, "profile-put");
 
     // Проверяем готовность профиля для генерации документов
     const requiredFields = [

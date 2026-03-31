@@ -3,11 +3,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sendEmailPin } from "@/lib/email-pin";
 import { prisma } from "@/lib/prisma";
+import { ensureNamesBeforeEmailVerification } from "@/lib/email-verification-requirements";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const { email } = await request.json();
+    const body = await request.json();
+    const { email, firstName, lastName } = body as {
+      email?: string;
+      firstName?: string | null;
+      lastName?: string | null;
+    };
 
     if (!email) {
       return NextResponse.json(
@@ -40,6 +46,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: "Этот email уже используется другим пользователем" },
           { status: 400 }
+        );
+      }
+
+      const nameCheck = await ensureNamesBeforeEmailVerification(session.user.id, {
+        firstName,
+        lastName,
+      });
+      if (nameCheck.ok === false) {
+        return NextResponse.json(
+          { error: nameCheck.error, code: nameCheck.code },
+          { status: 400 },
         );
       }
     } else {

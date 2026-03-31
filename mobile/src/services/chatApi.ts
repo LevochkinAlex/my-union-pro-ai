@@ -177,3 +177,32 @@ export async function getChatThread(accessToken: string, chatId: string, limit =
 
   return response.json() as Promise<{ messages: ChatMessageItem[]; chat: unknown }>;
 }
+
+export async function uploadChatAttachment(
+  accessToken: string,
+  chatId: string,
+  file: { uri: string; name: string; type: string },
+  options?: { content?: string; replyToId?: string | null },
+) {
+  const form = new FormData();
+  form.append("file", file as any);
+  if (options?.content) form.append("content", options.content);
+  if (options?.replyToId) form.append("replyToId", options.replyToId);
+
+  const response = await fetchJson(`${appConfig.apiBaseUrl}/api/chat/${chatId}/attachments`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: form,
+  });
+
+  const data = (await response.json().catch(() => ({}))) as {
+    message?: ChatMessageItem;
+    error?: string;
+  };
+  if (!response.ok || !data.message) {
+    throw new Error(data.error || `Ошибка загрузки: ${response.status}`);
+  }
+  return data.message;
+}
