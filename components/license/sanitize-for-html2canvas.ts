@@ -17,48 +17,56 @@ export function sanitizeClonedNodeForHtml2Canvas(root: HTMLElement): void {
   }
 
   root.style.cssText =
-    "background:#ffffff;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;line-height:1.45;padding:10px 12px;box-sizing:border-box;border:none;box-shadow:none;outline:none;max-width:100%;";
+    "background:#ffffff;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12.5px;line-height:1.58;padding:24px 26px 28px;box-sizing:border-box;border:none;box-shadow:none;outline:none;max-width:100%;";
 
-  root.querySelectorAll("section").forEach((s) => {
-    (s as HTMLElement).style.cssText +=
-      "display:block;margin:0;padding:0;background:transparent;";
+  root.querySelectorAll("section").forEach((s, idx) => {
+    const el = s as HTMLElement;
+    let block =
+      "display:block;background:transparent;box-sizing:border-box;";
+    if (idx > 0) {
+      block +=
+        "margin:20px 0 0 0;padding:16px 0 0 0;border-top:1px solid #e5e7eb;";
+    } else {
+      block += "margin:0;padding:0;";
+    }
+    el.style.cssText += block;
   });
 
   root.querySelectorAll("h1").forEach((h) => {
     (h as HTMLElement).style.cssText +=
-      "font-size:17px;font-weight:700;margin:0 0 6px 0;color:#111827;line-height:1.2;background:transparent;";
+      "font-size:18px;font-weight:700;margin:0 0 10px 0;color:#111827;line-height:1.25;background:transparent;";
   });
 
   root.querySelectorAll("h2").forEach((h) => {
     (h as HTMLElement).style.cssText +=
-      "font-size:13px;font-weight:600;margin:12px 0 6px 0;color:#111827;line-height:1.25;background:transparent;";
+      "font-size:13.5px;font-weight:600;margin:6px 0 10px 0;color:#111827;line-height:1.35;background:transparent;clear:both;";
   });
 
   root.querySelectorAll("p").forEach((p) => {
     (p as HTMLElement).style.cssText +=
-      "margin:0 0 5px 0;color:#374151;background:transparent;font-size:12px;";
+      "margin:0 0 11px 0;color:#374151;background:transparent;font-size:12.5px;line-height:1.58;max-width:100%;";
   });
 
   root.querySelectorAll("a").forEach((a) => {
     (a as HTMLElement).style.cssText +=
-      "color:#1d4ed8;text-decoration:underline;background:transparent;font-size:12px;";
+      "color:#1d4ed8;text-decoration:underline;background:transparent;font-size:12.5px;";
   });
 
   root.querySelectorAll("ul").forEach((ul) => {
     (ul as HTMLElement).style.cssText +=
-      "margin:5px 0;padding:0 0 0 1.1em;list-style-type:disc;background:transparent;font-size:12px;";
+      "margin:8px 0 14px 0;padding:4px 0 6px 1.25em;list-style-type:disc;background:transparent;font-size:12.5px;line-height:1.55;";
   });
 
   root.querySelectorAll("li").forEach((li) => {
     (li as HTMLElement).style.cssText +=
-      "margin:2px 0;color:#374151;background:transparent;font-size:12px;";
+      "margin:0 0 6px 0;color:#374151;background:transparent;font-size:12.5px;line-height:1.55;";
   });
 
   root.querySelectorAll("strong").forEach((s) => {
     (s as HTMLElement).style.fontWeight = "600";
     (s as HTMLElement).style.color = "#111827";
     (s as HTMLElement).style.background = "transparent";
-    (s as HTMLElement).style.fontSize = "12px";
+    (s as HTMLElement).style.fontSize = "12.5px";
   });
 
   const rel = root.querySelector("[data-pdf-relative-wrapper]");
@@ -90,7 +98,7 @@ export function sanitizeClonedNodeForHtml2Canvas(root: HTMLElement): void {
     const te = t as HTMLElement;
     const inRequisites = te.closest("[data-pdf-table-layer]");
     te.style.cssText +=
-      "width:100%;border-collapse:collapse;font-size:10.5px;color:#111827;" +
+      "width:100%;border-collapse:collapse;font-size:11px;color:#111827;" +
       (inRequisites ? "background:transparent;" : "background:#ffffff;");
     const par = te.parentElement;
     if (
@@ -99,7 +107,7 @@ export function sanitizeClonedNodeForHtml2Canvas(root: HTMLElement): void {
       !par.hasAttribute("data-pdf-table-layer")
     ) {
       par.style.cssText +=
-        "display:block;overflow-x:auto;margin:6px 0;border:1px solid #e5e7eb;border-radius:6px;background:#ffffff;";
+        "display:block;overflow-x:visible;margin:12px 0 16px 0;border:1px solid #d1d5db;border-radius:8px;background:#ffffff;";
     }
   });
 
@@ -118,12 +126,20 @@ export function sanitizeClonedNodeForHtml2Canvas(root: HTMLElement): void {
     const inReq = cell.closest("[data-pdf-table-layer]");
     if (inReq) {
       cell.style.cssText +=
-        "border-bottom:1px solid #e2e8f0;padding:4px 8px;text-align:left;vertical-align:top;color:#111827;background:rgba(255,255,255,0.78);font-size:10.5px;";
+        "border-bottom:1px solid #e2e8f0;padding:6px 10px;text-align:left;vertical-align:top;color:#111827;background:rgba(255,255,255,0.78);font-size:10.5px;";
       cell.style.textShadow =
         "0 0 2px #fff, 0 0 4px #fff, 0 1px 0 rgba(255,255,255,0.95)";
+    } else if (cell.tagName === "TH") {
+      cell.style.cssText +=
+        "border-bottom:1px solid #d1d5db;padding:9px 12px;font-weight:600;color:#111827;background:#f3f4f6;text-align:left;vertical-align:middle;font-size:11px;";
     } else {
       cell.style.cssText +=
-        "border-bottom:1px solid #e5e7eb;padding:4px 8px;text-align:left;vertical-align:top;color:#111827;background:#ffffff;font-size:10.5px;";
+        "border-bottom:1px solid #e5e7eb;padding:7px 12px;text-align:left;vertical-align:top;color:#374151;background:#ffffff;font-size:11px;";
     }
+  });
+
+  root.querySelectorAll("thead").forEach((thead) => {
+    (thead as HTMLElement).style.cssText +=
+      "background:#f3f4f6;border-bottom:1px solid #d1d5db;";
   });
 }

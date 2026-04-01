@@ -61,7 +61,7 @@ export function LicensePdfDownloadButton() {
         compress: true,
       });
 
-      const margin = 10;
+      const margin = 14;
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
       const contentH = pageH - 2 * margin;
