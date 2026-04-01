@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { getSession } from "next-auth/react";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import PhoneInput from "@/components/form/PhoneInput";
@@ -96,6 +96,8 @@ export default function QuestionnaireModal({
   const [sendingPpoRequest, setSendingPpoRequest] = useState(false);
   const [generateProgress, setGenerateProgress] = useState<number | null>(null);
   const [justGeneratedDocuments, setJustGeneratedDocuments] = useState(false);
+  /** Название ППО из GET /api/profile (user.organization), если списка organizations ещё нет */
+  const [organizationNameFromApi, setOrganizationNameFromApi] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -223,7 +225,13 @@ export default function QuestionnaireModal({
         };
         console.log("[QuestionnaireModal] Setting form data:", loadedData);
         setFormData(loadedData);
+        setOrganizationNameFromApi(
+          typeof profileData.user?.organization?.name === "string"
+            ? profileData.user.organization.name
+            : "",
+        );
       } else {
+        setOrganizationNameFromApi("");
         console.error("[QuestionnaireModal] Failed to load profile:", profileRes.status, profileRes.statusText);
         const errorText = await profileRes.text();
         console.error("[QuestionnaireModal] Error response:", errorText);
@@ -780,6 +788,100 @@ export default function QuestionnaireModal({
 
   const selectedOrganization = organizations.find((org) => org.id === formData.organizationId);
 
+  const organizationDisplayName = useMemo(() => {
+    return (
+      selectedOrganization?.name ||
+      ppoOptionsForWorkplace.find((p) => p.id === formData.organizationId)?.name ||
+      organizationNameFromApi ||
+      ""
+    );
+  }, [
+    selectedOrganization?.name,
+    ppoOptionsForWorkplace,
+    formData.organizationId,
+    organizationNameFromApi,
+  ]);
+
+  const step2Summary = useMemo(() => {
+    const fioLine = [formData.lastName, formData.firstName, formData.middleName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const dob =
+      formData.dateOfBirth &&
+      !Number.isNaN(new Date(formData.dateOfBirth).getTime())
+        ? new Date(formData.dateOfBirth).toLocaleDateString("ru-RU")
+        : "";
+
+    const filled: { label: string; value: string; note?: string }[] = [];
+    const missing: string[] = [];
+
+    if (organizationDisplayName.trim()) {
+      filled.push({ label: "Организация профсоюза", value: organizationDisplayName.trim() });
+    } else {
+      missing.push("организация профсоюза");
+    }
+
+    if (fioLine) {
+      filled.push({ label: "ФИО", value: fioLine });
+    } else {
+      missing.push("ФИО");
+    }
+
+    if (dob) {
+      filled.push({ label: "Дата рождения", value: dob });
+    } else {
+      missing.push("дата рождения");
+    }
+
+    if (formData.phone?.trim()) {
+      filled.push({ label: "Телефон", value: formData.phone.trim() });
+    } else {
+      missing.push("телефон");
+    }
+
+    if (formData.email?.trim()) {
+      filled.push({
+        label: "Email",
+        value: formData.email.trim(),
+        note: "Учётная запись; подтверждается при регистрации",
+      });
+    } else {
+      missing.push("email");
+    }
+
+    if (formData.address?.trim()) {
+      filled.push({ label: "Адрес", value: formData.address.trim() });
+    } else {
+      missing.push("адрес");
+    }
+
+    if (formData.workplace?.trim()) {
+      filled.push({ label: "Место работы", value: formData.workplace.trim() });
+    } else {
+      missing.push("место работы");
+    }
+
+    if (formData.jobTitle?.trim()) {
+      filled.push({ label: "Должность", value: formData.jobTitle.trim() });
+    } else {
+      missing.push("должность");
+    }
+
+    return { filled, missing };
+  }, [
+    organizationDisplayName,
+    formData.lastName,
+    formData.firstName,
+    formData.middleName,
+    formData.dateOfBirth,
+    formData.phone,
+    formData.email,
+    formData.address,
+    formData.workplace,
+    formData.jobTitle,
+  ]);
+
   if (isLoading) {
     return (
       <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
@@ -830,7 +932,7 @@ export default function QuestionnaireModal({
               {/* ФИО, телефон и email — подставляются из регистрации и профиля */}
               <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 sm:p-5 dark:border-blue-900/50 dark:bg-blue-950/25">
                 <p className="mb-3 text-sm font-medium text-gray-800 dark:text-gray-100">
-                  Данные из регистрации
+                  Учётные данные
                 </p>
                 <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
                   Фамилия, имя, отчество и телефон переносятся из шага регистрации — при необходимости их можно исправить.
@@ -1110,48 +1212,59 @@ export default function QuestionnaireModal({
               <h3 className="text-base font-semibold text-gray-900 dark:text-white sm:text-lg">
                 Проверьте введенные данные
               </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Ниже показаны только заполненные поля. Пустые не дублируются списком с «—».
+              </p>
+              {step2Summary.missing.length > 0 && (
+                <div
+                  className="rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/80 dark:bg-amber-950/35 dark:text-amber-100"
+                  role="status"
+                >
+                  <p className="font-medium">Не заполнено</p>
+                  <p className="mt-1 text-amber-900/95 dark:text-amber-200/95">
+                    {step2Summary.missing.join(", ")}. Нажмите «Редактировать» и укажите данные на шаге 1.
+                  </p>
+                </div>
+              )}
               <div className="rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50 p-4 sm:p-6 min-w-0">
-                <dl className="space-y-5 min-w-0">
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Организация профсоюза</dt>
-                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{selectedOrganization?.name || "—"}</dd>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">ФИО</dt>
-                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                    {[formData.lastName, formData.firstName, formData.middleName].filter(Boolean).join(" ") || "—"}
-                  </dd>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Дата рождения</dt>
-                  <dd className="mt-1.5 text-sm text-gray-900 dark:text-white sm:text-base">
-                    {formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString("ru-RU") : "—"}
-                  </dd>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Телефон</dt>
-                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.phone || "—"}</dd>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Email</dt>
-                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                    {formData.email || "—"}
-                    <span className="block text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">
-                      Учётная запись; подтверждается при регистрации
-                    </span>
-                  </dd>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Адрес</dt>
-                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.address || "—"}</dd>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Место работы</dt>
-                  <dd className="mt-1.5 min-w-0">
-                    <p className="break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.workplace || "Не указано"}</p>
-                    {(formData.directorName || formData.workplaceInn) && (
-                      <div className="mt-2 pl-3 sm:pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-1.5">
-                        {formData.directorName && (
-                          <p className="break-words text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
-                            {formData.directorPosition || "Руководитель"}: {formData.directorName}
-                          </p>
-                        )}
-                        {formData.workplaceInn && (
-                          <p className="text-xs text-gray-500 dark:text-gray-500">ИНН: {formData.workplaceInn}</p>
-                        )}
-                      </div>
-                    )}
-                  </dd>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Должность</dt>
-                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.jobTitle || "—"}</dd>
-                </dl>
+                {step2Summary.filled.length === 0 ? (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Пока нет ни одного заполненного поля для сводки — вернитесь на шаг 1.
+                  </p>
+                ) : (
+                  <dl className="space-y-5 min-w-0">
+                    {step2Summary.filled.map((row) => (
+                      <Fragment key={row.label}>
+                        <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">
+                          {row.label}
+                        </dt>
+                        <dd className="mt-1.5 min-w-0 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                          <span>{row.value}</span>
+                          {row.note && (
+                            <span className="block text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">
+                              {row.note}
+                            </span>
+                          )}
+                          {row.label === "Место работы" &&
+                            (formData.directorName || formData.workplaceInn) && (
+                              <div className="mt-2 pl-3 sm:pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-1.5">
+                                {formData.directorName && (
+                                  <p className="break-words text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
+                                    {formData.directorPosition || "Руководитель"}: {formData.directorName}
+                                  </p>
+                                )}
+                                {formData.workplaceInn && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                                    ИНН: {formData.workplaceInn}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                        </dd>
+                      </Fragment>
+                    ))}
+                  </dl>
+                )}
               </div>
             </div>
           )}
