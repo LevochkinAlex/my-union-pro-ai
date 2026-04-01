@@ -145,7 +145,12 @@ export default function EmailValidationField({
   return (
     <div>
       <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-        Email <span className="text-red-500">*</span>
+        Email
+        {!emailVerified && mode !== "verified" && (
+          <span className="ml-1.5 font-normal text-gray-500 dark:text-gray-400">
+            (необязательно для сохранения профиля)
+          </span>
+        )}
         {mode === "verified" && (
           <span className="ml-2 text-xs text-green-600 dark:text-green-400">
             Подтвержден
@@ -189,21 +194,13 @@ export default function EmailValidationField({
           {mode === "verified" && (
             <>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Email подтверждён. Изменение адреса недоступно. Подтверждённый адрес используется для входа и сервисных уведомлений.
+                Подтверждённый адрес используется для входа и уведомлений. В профиле его изменить нельзя; у аккаунтов с онлайн-регистрацией email задаётся при регистрации и дальше не меняется. Смена адреса — через поддержку.
               </p>
-              {bestBenefitsLinked === true && (
-                <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                  Скидки у партнёров: аккаунт BestBenefits связан с профилем — можно активировать промокоды в разделе «Скидки».
-                </p>
-              )}
               {bestBenefitsLinked === false && (
                 <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                  Скидки у партнёров: связка с BestBenefits пока не создана. Если имя и фамилия уже указаны в профиле, нажмите «Сохранить изменения» — подключение к партнёрским скидкам выполнится автоматически. Иначе заполните ФИО и сохраните профиль. При повторных ошибках обратитесь в поддержку.
+                  Партнёрские скидки (BestBenefits): связка ещё не создана. Укажите фамилию и имя и нажмите «Сохранить изменения» — синхронизация выполнится автоматически. Если не помогает — напишите в поддержку.
                 </p>
               )}
-              <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                Email {email} подтверждён
-              </p>
             </>
           )}
         </>
@@ -292,12 +289,12 @@ export default function EmailValidationField({
 
       {nameGate && !namesFilled && mode === "initial" && !emailVerified && (
         <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-          Сначала укажите фамилию и имя в форме выше — после этого можно запросить код подтверждения email.
+          Чтобы запросить код подтверждения, укажите фамилию и имя в форме выше (блок «Фамилия» и «Имя»). Сохраните профиль кнопкой «Сохранить изменения», если данные ещё не были сохранены.
         </p>
       )}
       {mode === "initial" && !emailVerified && email && canStartEmailValidation && (
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Подтвердите email — он нужен для входа в сервис и восстановления доступа.
+          Подтвердите email — для партнёрских скидок, входа и восстановления доступа.
         </p>
       )}
     </div>

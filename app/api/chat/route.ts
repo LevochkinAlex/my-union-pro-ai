@@ -11,7 +11,7 @@ import {
   formatChatInfo,
 } from "@/lib/chat-service";
 import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
-import { getSupportUserId } from "@/lib/support-user";
+import { getSupportUserId, getSupportEmail } from "@/lib/support-user";
 import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
 import { withCache, getCacheKey } from "@/lib/cache";
@@ -745,7 +745,10 @@ export async function GET(request: NextRequest) {
       }));
     }
 
-    return NextResponse.json({ chats: finalChats || [] });
+    return NextResponse.json({
+      chats: finalChats || [],
+      supportUserId: supportUserId ?? null,
+    });
   } catch (error: any) {
     console.error("[chat] GET Error:", error);
     Sentry.captureException(error, {
@@ -787,11 +790,19 @@ export async function POST(request: NextRequest) {
         prisma.user.findUnique({ where: { id: targetUserId }, select: { organizationId: true, email: true } }),
       ]);
       const isAIBot = target?.email === "ai-assistant@myunion.pro";
+      const supportEmail = getSupportEmail().toLowerCase();
+      const isSupportAccount =
+        !!target?.email && target.email.toLowerCase() === supportEmail;
       if (isAIBot) {
         // Для ИИ всегда используем единый каноничный чат "ИИ-Ассистент",
         // чтобы не создавать отдельные приватные "ветки" с ботом.
         chat = await getOrCreateAIChat(userId);
         isNew = false;
+      } else if (isSupportAccount) {
+        // Техподдержка — общий аккаунт без привязки к ППО; не сравниваем organizationId.
+        const result = await getOrCreatePrivateChat(userId, targetUserId);
+        chat = result.chat;
+        isNew = result.isNew;
       } else {
         const myOrg = me?.organizationId ?? null;
         const targetOrg = target?.organizationId ?? null;

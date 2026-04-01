@@ -629,6 +629,7 @@ export default function SlackStyleChat({
     selectChat,
     openChatById,
     createOrOpenChat,
+    supportUserId,
     sendMessage,
     editMessage,
     deleteMessage,
@@ -1106,6 +1107,7 @@ export default function SlackStyleChat({
             }}
             onOpenAIChat={handleOpenAIChat}
             onArchiveTabFocus={() => loadChats(true)}
+            supportUserId={supportUserId}
           />
         </div>
 

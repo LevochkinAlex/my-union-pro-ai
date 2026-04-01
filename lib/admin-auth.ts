@@ -2,6 +2,7 @@ import type { Session } from "next-auth";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export async function ensureSuperAdmin(): Promise<
   { session: Session; error: null } | { session: null; error: NextResponse }
@@ -15,7 +16,13 @@ export async function ensureSuperAdmin(): Promise<
     };
   }
 
-  if (session.user.role !== "SUPER_ADMIN") {
+  // Источник истины — БД: после назначения SUPER_ADMIN JWT может ещё содержать старую роль.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+
+  if (dbUser?.role !== "SUPER_ADMIN") {
     return {
       session: null,
       error: NextResponse.json({ error: "Недостаточно прав" }, { status: 403 }),

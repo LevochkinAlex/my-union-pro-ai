@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getSession } from "next-auth/react";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
 import Autocomplete from "@/components/form/Autocomplete";
 import OrganizationAutocomplete from "@/components/form/OrganizationAutocomplete";
-import EmailValidationField from "@/components/form/EmailValidationField";
 import AvatarUpload from "@/components/profile/AvatarUpload";
-import ChangePhoneModal from "@/components/profile/ChangePhoneModal";
 import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { useAlert } from "@/components/ui/Alert";
 import { ProgressBarFill } from "@/components/ui/ProgressBarFill";
@@ -84,13 +83,10 @@ export default function QuestionnaireModal({
     organizationId: "",
     avatarUrl: null,
   });
-  const [emailVerified, setEmailVerified] = useState<Date | null>(null);
-
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; fullPath?: string; indentedName?: string; type?: string; level?: number }>>([]);
   const [jobTitles, setJobTitles] = useState<string[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
-  const [isChangePhoneModalOpen, setIsChangePhoneModalOpen] = useState(false);
   const [isExistingMember, setIsExistingMember] = useState(false);
   // ППО по месту работы из справочника (один или несколько — выбор из дропдауна)
   const [ppoOptionsForWorkplace, setPpoOptionsForWorkplace] = useState<Array<{ id: string; name: string }>>([]);
@@ -170,7 +166,7 @@ export default function QuestionnaireModal({
       
       // Используем Promise.allSettled, чтобы один запрос не блокировал остальные
       const results = await Promise.allSettled([
-        fetch("/api/profile"),
+        fetch("/api/profile", { cache: "no-store" }),
         fetch("/api/organizations"),
         fetch("/api/dictionaries"),
         fetch("/api/documents"),
@@ -195,6 +191,7 @@ export default function QuestionnaireModal({
       let loadedData: FormData | null = null;
       if (profileRes.ok) {
         const profileData = await profileRes.json();
+        const session = await getSession();
         console.log("[QuestionnaireModal] Full profile data from API:", profileData);
         console.log("[QuestionnaireModal] Loading profile data:", {
           firstName: profileData.user?.firstName,
@@ -207,8 +204,8 @@ export default function QuestionnaireModal({
           email: profileData.user?.email,
         });
         loadedData = {
-          firstName: profileData.user?.firstName || "",
-          lastName: profileData.user?.lastName || "",
+          firstName: profileData.user?.firstName || session?.user?.firstName || "",
+          lastName: profileData.user?.lastName || session?.user?.lastName || "",
           middleName: profileData.user?.middleName || "",
           phone: profileData.user?.phone || "",
           dateOfBirth: profileData.user?.dateOfBirth
@@ -226,7 +223,6 @@ export default function QuestionnaireModal({
         };
         console.log("[QuestionnaireModal] Setting form data:", loadedData);
         setFormData(loadedData);
-        setEmailVerified(profileData.user?.emailVerified ? new Date(profileData.user.emailVerified) : null);
       } else {
         console.error("[QuestionnaireModal] Failed to load profile:", profileRes.status, profileRes.statusText);
         const errorText = await profileRes.text();
@@ -421,7 +417,6 @@ export default function QuestionnaireModal({
           phone: formData.phone,
           dateOfBirth: formData.dateOfBirth,
           address: formData.address,
-          email: formData.email,
           workplace: formData.workplace,
           workplaceInn: formData.workplaceInn,
           directorName: formData.directorName,
@@ -750,8 +745,6 @@ export default function QuestionnaireModal({
       formData.lastName &&
       formData.dateOfBirth &&
       formData.phone &&
-      formData.email &&
-      emailVerified &&
       formData.address &&
       formData.organizationId &&
       formData.workplace &&
@@ -833,6 +826,82 @@ export default function QuestionnaireModal({
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                 Основная информация
               </h3>
+
+              {/* ФИО, телефон и email — подставляются из регистрации и профиля */}
+              <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 sm:p-5 dark:border-blue-900/50 dark:bg-blue-950/25">
+                <p className="mb-3 text-sm font-medium text-gray-800 dark:text-gray-100">
+                  Данные из регистрации
+                </p>
+                <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+                  Фамилия, имя, отчество и телефон переносятся из шага регистрации — при необходимости их можно исправить.
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+                  <div>
+                    <label htmlFor="questionnaire-lastName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Фамилия <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="questionnaire-lastName"
+                      type="text"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="questionnaire-firstName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Имя <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="questionnaire-firstName"
+                      type="text"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Отчество <span className="font-normal text-gray-500">(необязательно)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.middleName}
+                      onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                      className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
+                      placeholder="Например: Петрович"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="questionnaire-phone" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Телефон <span className="text-red-500">*</span>
+                    </label>
+                    <PhoneInput
+                      id="questionnaire-phone"
+                      value={formData.phone}
+                      onChange={(value) => setFormData({ ...formData, phone: value })}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label htmlFor="questionnaire-email-readonly" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Email
+                    </label>
+                    <input
+                      id="questionnaire-email-readonly"
+                      type="email"
+                      readOnly
+                      value={formData.email}
+                      className="w-full h-11 cursor-not-allowed rounded-lg border border-gray-200 bg-gray-100 px-4 py-2.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300"
+                      aria-readonly
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Учётная запись; совпадает с email при регистрации
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               {/* Место работы и Должность — первая строка */}
               <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
@@ -982,45 +1051,16 @@ export default function QuestionnaireModal({
                 />
               </div>
 
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  Дата рождения и адрес
+                </h4>
+                <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+                  Укажите для завершения анкеты — в регистрацию не входят.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-                <div>
-                  <label htmlFor="questionnaire-lastName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Фамилия <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="questionnaire-lastName"
-                    type="text"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="questionnaire-firstName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Имя <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="questionnaire-firstName"
-                    type="text"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Отчество <span className="font-normal text-gray-500">(необязательно)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.middleName}
-                    onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
-                    className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
-                    placeholder="Например: Петрович"
-                  />
-                </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Дата рождения <span className="text-red-500">*</span>
@@ -1049,38 +1089,6 @@ export default function QuestionnaireModal({
                     }}
                     error={dateOfBirthError || undefined}
                     maxAge={100}
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Телефон <span className="text-red-500">*</span>
-                  </label>
-                  <PhoneInput
-                    value={formData.phone}
-                    onChange={(value) => setFormData({ ...formData, phone: value })}
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    <button
-                      type="button"
-                      onClick={() => setIsChangePhoneModalOpen(true)}
-                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                    >
-                      Изменить номер
-                    </button>
-                  </p>
-                </div>
-                <div>
-                  <EmailValidationField
-                    email={formData.email}
-                    emailVerified={emailVerified}
-                    firstName={formData.firstName}
-                    lastName={formData.lastName}
-                    onEmailChange={(value) => {
-                      setFormData({ ...formData, email: value });
-                    }}
-                    onVerified={() => {
-                      setEmailVerified(new Date());
-                    }}
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -1117,7 +1125,12 @@ export default function QuestionnaireModal({
                   <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Телефон</dt>
                   <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.phone || "—"}</dd>
                   <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Email</dt>
-                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.email || "—"}</dd>
+                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                    {formData.email || "—"}
+                    <span className="block text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">
+                      Учётная запись; подтверждается при регистрации
+                    </span>
+                  </dd>
                   <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Адрес</dt>
                   <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.address || "—"}</dd>
                   <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Место работы</dt>
@@ -1637,16 +1650,6 @@ export default function QuestionnaireModal({
           </div>
         </ModalFooter>
       </Modal>
-      <ChangePhoneModal
-        isOpen={isChangePhoneModalOpen}
-        onClose={() => setIsChangePhoneModalOpen(false)}
-        currentPhone={formData.phone}
-        onPhoneChanged={(newPhone) => {
-          setFormData({ ...formData, phone: newPhone });
-          setIsChangePhoneModalOpen(false);
-          showAlert({ message: "Номер телефона успешно изменен", type: "success" });
-        }}
-      />
       {AlertComponent}
     </>
   );

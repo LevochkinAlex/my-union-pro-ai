@@ -22,6 +22,7 @@
     "test:api": "dotenv -e .env.local -- node scripts/test-tickets-api.mjs",
     "test:security:runtime": "node --test scripts/security-role-runtime-smoke.mjs",
     "test:ticket-flow": "dotenv -e .env.local -- node scripts/test-ticket-creation-flow.mjs",
+    "test:registration-flow": "dotenv -e .env.local -- npx tsx scripts/test-registration-flow.ts",
     "pre-deploy": "dotenv -e .env.local -- node scripts/pre-deploy-check.mjs",
     "prisma:migrate": "dotenv -e .env.local -- pnpm prisma migrate dev",
     "prisma:studio": "dotenv -e .env.local -- pnpm prisma studio",

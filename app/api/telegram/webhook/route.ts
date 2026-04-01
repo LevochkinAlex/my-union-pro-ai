@@ -912,6 +912,25 @@ ${loginUrl}
       return NextResponse.json({ ok: true });
     }
 
+    // /start login_issue — заявка о проблеме со входом (лид на email поддержки)
+    if (trimmedText === "/start login_issue" || trimmedText === "/login_issue") {
+      await sendTelegramMessage(
+        chatId,
+        `🔐 <b>Проблема со входом на myunion.pro</b>
+
+Опишите ситуацию <b>одной командой</b> — мы отправим заявку в техподдержку на email.
+
+Формат:
+<code>/issue ваш@email.ru кратко: что не получается</code>
+
+Пример:
+<code>/issue ivan@example.com не приходит письмо со ссылкой для входа</code>
+
+Если email пока не помните — напишите телефон или любой контакт в тексте после команды <code>/issue</code>.`
+      );
+      return NextResponse.json({ ok: true });
+    }
+
     // Команда /start login - авторизация через кнопку в боте
     // ВАЖНО: обрабатываем до общего /start, иначе "/start login" попадет в ветку isStartCommand.
     if (trimmedText === "/start login" || trimmedText === "/login") {
@@ -1033,7 +1052,8 @@ ${loginUrl}
       !trimmedText.startsWith("/start AUTH_phone_") &&
       !trimmedText.startsWith("/start link_phone_") &&
       !trimmedText.startsWith("/start app_") &&
-      trimmedText !== "/start login";
+      trimmedText !== "/start login" &&
+      trimmedText !== "/start login_issue";
 
     // Обычная команда /start (без параметра)
     if (isStartCommand) {
@@ -1208,6 +1228,57 @@ ${loginUrl}
     if (text === "/help" || text === "/support" || text.toLowerCase() === "помощь" || text.toLowerCase() === "поддержка") {
       const { sendSupportMessage } = await import("@/lib/telegram-bot");
       await sendSupportMessage(chatId, from);
+      return NextResponse.json({ ok: true });
+    }
+
+    // Заявка о проблеме со входом → email на support
+    if (trimmedText.toLowerCase().startsWith("/issue")) {
+      const { sendLoginIssueLeadEmail } = await import("@/lib/email");
+      const rest = trimmedText.replace(/^\/issue\s*/i, "").trim();
+      if (!rest) {
+        await sendTelegramMessage(
+          chatId,
+          `Укажите текст заявки, например:
+<code>/issue email@example.com не приходит письмо для входа</code>`
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      const emailBody = rest.match(/^(\S+@\S+)\s+([\s\S]+)$/);
+      const contactEmail = emailBody ? emailBody[1] : null;
+      const description = emailBody ? emailBody[2].trim() : rest;
+
+      const linkedUser = await prisma.user.findUnique({
+        where: { telegramChatId: chatId },
+        select: { id: true, email: true },
+      });
+
+      try {
+        await sendLoginIssueLeadEmail({
+          telegramChatId: chatId,
+          telegramUsername: from?.username ?? null,
+          fromFirstName: from?.first_name ?? null,
+          fromLastName: from?.last_name ?? null,
+          linkedUserId: linkedUser?.id ?? null,
+          linkedUserEmail: linkedUser?.email ?? null,
+          contactEmail,
+          description,
+        });
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>Заявка отправлена</b>
+
+Мы передали обращение в техподдержку. Ответ придёт на email, если вы его указали, или здесь в Telegram.
+
+⏱ Обычно отвечаем в рабочие часы (Пн–Пт).`
+        );
+      } catch (e) {
+        console.error("[Telegram Webhook] sendLoginIssueLeadEmail:", e);
+        await sendTelegramMessage(
+          chatId,
+          `❌ Не удалось отправить заявку. Напишите на <a href="mailto:support@myunion.pro">support@myunion.pro</a> или попробуйте позже.`
+        );
+      }
       return NextResponse.json({ ok: true });
     }
 

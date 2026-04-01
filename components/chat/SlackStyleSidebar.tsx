@@ -129,6 +129,8 @@ export interface SlackStyleSidebarProps {
   onOpenAIChat?: () => void;
   /** Вызывается при переходе на вкладку «Архив» — обновить список без кэша */
   onArchiveTabFocus?: () => void;
+  /** ID пользователя техподдержки (из GET /api/chat) — чтобы открыть чат до первого сообщения */
+  supportUserId?: string | null;
 }
 
 interface UserSearchResult {
@@ -706,6 +708,7 @@ export default function SlackStyleSidebar({
   onCreateChannel,
   onOpenAIChat,
   onArchiveTabFocus,
+  supportUserId = null,
 }: SlackStyleSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "work" | "personal" | "archived">("all");
@@ -921,8 +924,12 @@ export default function SlackStyleSidebar({
   }, [aiChat, onSelectChat, onOpenAIChat]);
 
   const handleSupportChatClick = useCallback(() => {
-    if (supportChat) onSelectChat(supportChat);
-  }, [supportChat, onSelectChat]);
+    if (supportChat) {
+      onSelectChat(supportChat);
+      return;
+    }
+    if (supportUserId && onCreateChat) onCreateChat(supportUserId);
+  }, [supportChat, supportUserId, onCreateChat, onSelectChat]);
 
   const handleCreateChat = useCallback((userId: string) => {
     onCreateChat?.(userId);
@@ -1065,8 +1072,8 @@ export default function SlackStyleSidebar({
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
         </button>
 
-        {/* Техподдержка - сразу под ИИ */}
-        {displayedChats.support && (
+        {/* Техподдержка - сразу под ИИ (показываем всегда, если есть id поддержки или уже есть чат) */}
+        {(displayedChats.support || supportUserId) && (
           <button
             type="button"
             onClick={handleSupportChatClick}

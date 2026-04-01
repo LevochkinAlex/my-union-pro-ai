@@ -79,6 +79,7 @@ export function useChat(options: UseChatOptions = {}) {
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [aiTyping, setAiTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [supportUserId, setSupportUserId] = useState<string | null>(null);
   
   const socketRef = useRef<Socket | null>(null);
   const messagesRef = useRef<Message[]>([]);
@@ -118,17 +119,24 @@ export function useChat(options: UseChatOptions = {}) {
     return () => clearInterval(interval);
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    if (!session?.user?.id) setSupportUserId(null);
+  }, [session?.user?.id]);
+
   // Загрузка списка чатов (forceRefresh — обход кэша, чтобы в «Архив» попали актуальные чаты)
   const loadChats = useCallback(async (forceRefresh?: boolean) => {
     try {
       const url = forceRefresh ? "/api/chat?bypassCache=1" : "/api/chat";
-      const data = await fetchJsonWithRetry<{ chats: Chat[] }>(url, {
+      const data = await fetchJsonWithRetry<{ chats: Chat[]; supportUserId?: string | null }>(url, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       }, { timeoutMs: 60000 });
       
       if (data?.chats) {
         setChats(data.chats);
+        if (data && typeof data === "object" && "supportUserId" in data) {
+          setSupportUserId(data.supportUserId ?? null);
+        }
 
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа.
         // Не учитываем чаты бота и ИИ-Ассистент (МойСоюз Помощник, ИИ-Ассистент).
@@ -1511,6 +1519,7 @@ export function useChat(options: UseChatOptions = {}) {
     aiTyping,
     isConnected,
     isBotTyping: typingUsers.length > 0 || aiTyping,
+    supportUserId,
 
     // Действия
     loadChats,

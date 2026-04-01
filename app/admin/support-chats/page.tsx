@@ -42,13 +42,20 @@ export default function AdminSupportChatsPage() {
   const [messageLoading, setMessageLoading] = useState(false);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
 
   const loadChats = useCallback(async () => {
     setLoading(true);
+    setListError(null);
     try {
       const res = await fetch("/api/admin/support-chats");
       const data = await res.json();
-      if (res.ok && data.chats) setChats(data.chats);
+      if (!res.ok) {
+        setListError(typeof data?.error === "string" ? data.error : "Не удалось загрузить список чатов");
+        setChats([]);
+        return;
+      }
+      if (data.chats) setChats(data.chats);
     } finally {
       setLoading(false);
     }
@@ -127,6 +134,12 @@ export default function AdminSupportChatsPage() {
           </div>
         </div>
       </div>
+
+      {listError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {listError}
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-12rem)] min-h-[420px]">
         {/* Список чатов */}

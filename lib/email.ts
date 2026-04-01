@@ -3,6 +3,7 @@
  */
 
 import nodemailer from "nodemailer";
+import { getSupportEmail } from "@/lib/support-user";
 
 export interface SendEmailResult {
   success: boolean;
@@ -231,6 +232,77 @@ export async function sendMagicLinkEmail(
   }
 }
 
+/** Письмо со ссылкой подтверждения полной регистрации (до создания аккаунта в БД) */
+export async function sendRegistrationConfirmationEmail(
+  email: string,
+  confirmLink: string,
+  opts: { firstName: string },
+): Promise<SendEmailResult & { devMode?: boolean; magicLink?: string }> {
+  const subject = "Подтвердите регистрацию в МойСоюз";
+  const greeting = opts.firstName ? `Здравствуйте, ${opts.firstName}!` : "Здравствуйте!";
+
+  if (isDevMode() || !isSmtpConfigured()) {
+    console.log("\n" + "🔗".repeat(30));
+    console.log("📧 [REGISTRATION] Подтверждение регистрации");
+    console.log("📧 Email:", email);
+    console.log("👉", confirmLink);
+    console.log("🔗".repeat(30) + "\n");
+    return {
+      success: true,
+      messageId: "dev-reg-" + Date.now(),
+      devMode: true,
+      magicLink: confirmLink,
+    };
+  }
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${subject}</title></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;">
+  <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+    <div style="background:linear-gradient(135deg,#0a5db5 0%,#5b21b6 100%);padding:32px 20px;text-align:center;">
+      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:600;">Подтверждение регистрации</h1>
+    </div>
+    <div style="padding:32px 28px;">
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#333;">${greeting}</p>
+      <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#333;">
+        Нажмите кнопку ниже, чтобы подтвердить email и войти в личный кабинет. Пароль не требуется — дальнейшие входы по одноразовой ссылке на почту.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${confirmLink}" style="display:inline-block;padding:14px 36px;background:#0a5db5;color:#fff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:600;">
+          Подтвердить и войти
+        </a>
+      </div>
+      <p style="margin:16px 0 8px;font-size:13px;color:#666;">Или скопируйте ссылку:</p>
+      <div style="padding:12px;background:#f5f5f5;border-radius:6px;word-break:break-all;font-size:13px;">
+        <a href="${confirmLink}" style="color:#0a5db5;">${confirmLink}</a>
+      </div>
+      <p style="margin-top:24px;font-size:13px;color:#999;line-height:1.5;">
+        Ссылка действительна <strong>24 часа</strong>. Если вы не оставляли заявку, проигнорируйте письмо.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+
+  try {
+    await sendEmail({
+      to: email,
+      subject,
+      html: htmlContent,
+      text: `${greeting}\n\nПодтвердите регистрацию по ссылке (действительна 24 часа):\n${confirmLink}`,
+    });
+    return { success: true, messageId: "sent-reg-" + Date.now() };
+  } catch (error) {
+    console.error("[Email] registration confirm:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * Отправляет код верификации на email (для старой системы регистрации)
  */
@@ -403,4 +475,52 @@ export async function sendWelcomeEmail(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function escapeHtmlForEmail(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Лид «проблема со входом» из Telegram-бота → на почту поддержки.
+ */
+export async function sendLoginIssueLeadEmail(params: {
+  telegramChatId: string;
+  telegramUsername: string | null;
+  fromFirstName?: string | null;
+  fromLastName?: string | null;
+  linkedUserId?: string | null;
+  linkedUserEmail?: string | null;
+  contactEmail?: string | null;
+  description: string;
+}): Promise<void> {
+  const to = process.env.SUPPORT_LEAD_INBOX_EMAIL || getSupportEmail();
+  const subject = "[МойСоюз] Проблема со входом (Telegram)";
+  const text = [
+    "Заявка: проблема со входом на сайт (ссылка с страницы входа → Telegram-бот).",
+    "",
+    `Telegram chat_id: ${params.telegramChatId}`,
+    params.telegramUsername ? `Username: @${params.telegramUsername}` : "Username: не указан",
+    `Имя в Telegram: ${[params.fromFirstName, params.fromLastName].filter(Boolean).join(" ") || "—"}`,
+    params.linkedUserId ? `Пользователь в БД: ${params.linkedUserId}` : "Аккаунт в БД не привязан к этому Telegram",
+    params.linkedUserEmail ? `Email в профиле: ${params.linkedUserEmail}` : null,
+    params.contactEmail ? `Email из заявки: ${params.contactEmail}` : null,
+    "",
+    "Описание:",
+    params.description,
+  ]
+    .filter((line): line is string => line != null)
+    .join("\n");
+
+  await sendEmail({
+    to,
+    subject,
+    text,
+    html: `<pre style="font-family:system-ui,Segoe UI,sans-serif;font-size:14px;white-space:pre-wrap">${escapeHtmlForEmail(
+      text
+    )}</pre>`,
+  });
 }

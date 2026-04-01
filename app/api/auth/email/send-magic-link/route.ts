@@ -59,20 +59,19 @@ export async function POST(request: NextRequest) {
       isNewUser = !user;
 
       if (!user) {
-        // Создаем нового пользователя
-        console.log("[Email Auth] Создаем нового пользователя");
-        user = await prisma.user.create({
-          data: {
-            email: normalizedEmail,
-            role: "PENDING_MEMBER",
-            membershipStatus: "PROFILE_INCOMPLETE",
+        console.log("[Email Auth] Пользователь не найден — вход только для зарегистрированных");
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Аккаунт с таким email не найден. Зарегистрируйтесь на странице «Регистрация».",
+            code: "USER_NOT_FOUND",
           },
-          select: { id: true, firstName: true },
-        });
-        console.log("[Email Auth] Новый пользователь создан:", user.id);
-      } else {
-        console.log("[Email Auth] Пользователь найден:", user.id);
+          { status: 404 },
+        );
       }
+
+      console.log("[Email Auth] Пользователь найден:", user.id);
 
       // Создаем одноразовый токен
       token = crypto.randomBytes(32).toString("hex");

@@ -123,6 +123,8 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [emailVerified, setEmailVerified] = useState<Date | null>(null);
+  /** ФИО уже есть в профиле (загрузка с сервера или успешное сохранение) — показываем призыв подтвердить email для скидок */
+  const [hasPersistedFio, setHasPersistedFio] = useState(false);
   /** undefined — ещё не загрузили профиль; false/true — из GET /api/profile */
   const [bestBenefitsLinked, setBestBenefitsLinked] = useState<boolean | undefined>(undefined);
   const [dateOfBirthError, setDateOfBirthError] = useState<string | null>(null);
@@ -558,6 +560,9 @@ export default function ProfilePage() {
         organization: user.organization,
       });
       setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
+      setHasPersistedFio(
+        Boolean(String(user.firstName ?? "").trim() && String(user.lastName ?? "").trim()),
+      );
       setBestBenefitsLinked(
         typeof user.bestBenefitsLinked === "boolean" ? user.bestBenefitsLinked : undefined
       );
@@ -946,6 +951,10 @@ export default function ProfilePage() {
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Не удалось обновить профиль");
+      }
+
+      if (profileData.firstName?.trim() && profileData.lastName?.trim()) {
+        setHasPersistedFio(true);
       }
 
       setMessage({ type: "success", text: "Профиль успешно обновлен" });
@@ -1506,6 +1515,17 @@ export default function ProfilePage() {
 
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Информация об аккаунте</h3>
+            {hasPersistedFio && !emailVerified && (
+              <div
+                className="mt-4 rounded-xl border border-blue-200 bg-blue-50/90 px-4 py-3 text-sm dark:border-blue-800/80 dark:bg-blue-950/35"
+                role="status"
+              >
+                <p className="font-semibold text-blue-900 dark:text-blue-100">Партнёрские скидки</p>
+                <p className="mt-1.5 text-blue-900/90 dark:text-blue-200/95">
+                  Укажите email в поле ниже (если ещё не указан) и нажмите «Валидировать», затем введите код из письма. Подтверждённый адрес нужен для активации промокодов у партнёров и для восстановления доступа.
+                </p>
+              </div>
+            )}
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <EmailValidationField

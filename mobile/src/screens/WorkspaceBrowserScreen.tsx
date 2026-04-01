@@ -66,7 +66,7 @@ export function WorkspaceBrowserScreen({ onBack }: Props) {
                   <FluidText variant="titleSm" color={colors.onSurface}>Интеграции</FluidText>
                 </View>
                 <View style={styles.integrationChips}>
-                  {["Telegram", "Email", "Госуслуги"].map((name) => (
+                  {["Email"].map((name) => (
                     <View key={name} style={styles.integrationChip}>
                       <FluidText variant="labelSm" color={colors.onSurfaceVariant}>{name}</FluidText>
                     </View>

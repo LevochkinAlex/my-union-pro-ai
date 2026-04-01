@@ -395,6 +395,23 @@ model LoginToken {
   @@index([used])
 }
 
+// Заявка на регистрация до подтверждения email (ссылка из письма создаёт User и вход)
+model PendingRegistration {
+  id               String   @id @default(cuid())
+  email            String
+  firstName        String
+  lastName         String
+  middleName       String?
+  phone            String
+  telegramUsername String?
+  token            String   @unique
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
 // Одноразовая сессия «вход в приложение через бота» (/start app_<key> в Telegram)
 model BotAppLoginSession {
   id         String   @id @default(cuid())

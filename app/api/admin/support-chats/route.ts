@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSupportUserId } from "@/lib/support-user";
+import { ensureSuperAdmin } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/support-chats
  * Список чатов с техподдержкой для суперадмина (все диалоги пользователей с поддержкой).
  */
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || (session.user as { role?: string }).role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { error } = await ensureSuperAdmin();
+  if (error) return error;
 
   const supportUserId = await getSupportUserId();
   if (!supportUserId) {

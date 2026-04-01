@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSupportUserId } from "@/lib/support-user";
 import { invalidateChatCache } from "@/lib/chat-redis";
 import { emitNewMessage } from "@/server/socket";
-
-function requireSuperAdmin() {
-  return async () => {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || (session.user as { role?: string }).role !== "SUPER_ADMIN") {
-      return { ok: false as const, status: 403 };
-    }
-    return { ok: true as const, session };
-  };
-}
+import { ensureSuperAdmin } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/support-chats/[chatId]
@@ -24,8 +13,8 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ chatId: string }> }
 ) {
-  const check = await requireSuperAdmin()();
-  if (!check.ok) return NextResponse.json({ error: "Forbidden" }, { status: check.status });
+  const superCheck = await ensureSuperAdmin();
+  if (superCheck.error) return superCheck.error;
 
   const { chatId } = await context.params;
   const supportUserId = await getSupportUserId();
@@ -105,8 +94,8 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ chatId: string }> }
 ) {
-  const check = await requireSuperAdmin()();
-  if (!check.ok) return NextResponse.json({ error: "Forbidden" }, { status: check.status });
+  const superCheck = await ensureSuperAdmin();
+  if (superCheck.error) return superCheck.error;
 
   const { chatId } = await context.params;
   const supportUserId = await getSupportUserId();

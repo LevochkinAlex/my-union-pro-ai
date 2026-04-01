@@ -3,6 +3,7 @@
 import { useRef } from "react";
 
 interface PhoneInputProps {
+  id?: string;
   name?: string;
   value: string;
   onChange: (value: string) => void;
@@ -13,6 +14,7 @@ interface PhoneInputProps {
 }
 
 export default function PhoneInput({
+  id,
   name,
   value,
   onChange,
@@ -69,6 +71,7 @@ export default function PhoneInput({
   return (
     <input
       ref={inputRef}
+      id={id}
       type="tel"
       name={name}
       value={value}

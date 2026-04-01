@@ -2,23 +2,29 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Input from "@/components/ui/InputField";
 import Label from "@/components/form/Label";
-import Button from "@/components/ui/button/Button";
-import { signIn } from "next-auth/react";
+import PhoneInput from "@/components/form/PhoneInput";
+import AuthTabs from "@/components/auth/AuthTabs";
+import { TELEGRAM_LOGIN_HELP_URL } from "@/lib/auth-public-links";
+
+const labelClass = "text-gray-700 dark:text-gray-300";
 
 export default function RegisterPage() {
-  const router = useRouter();
+  const [lastName, setLastName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [telegramUsername, setTelegramUsername] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<"email" | "verify">("email");
-  const [verificationCode, setVerificationCode] = useState("");
+  const [sent, setSent] = useState(false);
+  const [devLink, setDevLink] = useState<string | null>(null);
   const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -28,306 +34,221 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
-
     try {
-      const response = await fetch("/api/auth/register/send-code", {
+      const response = await fetch("/api/auth/register/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          lastName: lastName.trim(),
+          firstName: firstName.trim(),
+          middleName: middleName.trim() || undefined,
+          phone,
+          telegramUsername: telegramUsername.trim() || undefined,
+          email: email.trim().toLowerCase(),
+        }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setError(data.error || "Ошибка отправки кода");
+      if (!response.ok || !data.success) {
+        setError(data.error || "Ошибка отправки");
         return;
       }
 
-      setStep("verify");
+      if (data.devMode && data.confirmLink) {
+        setDevLink(data.confirmLink);
+      }
+      setSent(true);
     } catch {
-      setError("Произошла ошибка");
+      setError("Произошла ошибка сети");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/auth/register/verify-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: verificationCode }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Неверный код");
-        return;
-      }
-
-      // После подтверждения email пользователь должен войти через magic link
-      // Отправляем magic link на email для входа
-      const magicLinkResponse = await fetch("/api/auth/email/send-magic-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      const magicLinkData = await magicLinkResponse.json();
-
-      if (!magicLinkResponse.ok || !magicLinkData.success) {
-        setError(
-          "Регистрация прошла, но не удалось отправить ссылку для входа. Проверьте почту и войдите вручную.",
-        );
-        return;
-      }
-
-      // Показываем сообщение об успешной регистрации
-      setError("");
-      setStep("verify");
-      
-      // Перенаправляем на страницу логина с сообщением
-      router.push("/login?registered=true&email=" + encodeURIComponent(email));
-    } catch {
-      setError("Произошла ошибка");
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (sent) {
+    return (
+      <div className="flex flex-col flex-1 w-full">
+        <div className="flex flex-col justify-center flex-1 w-full max-w-md px-8 mx-auto">
+          <AuthTabs active="register" />
+          <div className="text-center py-6">
+            <div className="mb-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-4">
+                <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Проверьте почту</h1>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                На <strong>{email}</strong> отправлена ссылка. Перейдите по ней — это завершит регистрацию и откроет вход в
+                кабинет.
+              </p>
+              {devLink ? (
+                <div className="mt-4 mb-6">
+                  <a
+                    href={devLink}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                  >
+                    Подтвердить (dev)
+                  </a>
+                  <p className="mt-3 text-xs text-gray-500 dark:text-gray-500 break-all">{devLink}</p>
+                </div>
+              ) : null}
+              <p className="text-sm text-gray-500 dark:text-gray-500">Ссылка действительна 24 часа</p>
+            </div>
+            <Link href="/login" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium">
+              На страницу входа
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col flex-1 w-full lg:w-1/2">
-      <div className="flex flex-col justify-center flex-1 w-full max-w-md px-5 mx-auto">
-        <div>
-          <div className="mb-8">
-            <h1 className="mb-2 font-semibold text-gray-800 text-title-md dark:text-white/90">
-              {step === "email" ? "Регистрация" : "Подтверждение email"}
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {step === "email"
-                ? "Введите ваш email для регистрации"
-                : "Введите код из письма, отправленного на вашу почту"}
-            </p>
+    <div className="flex flex-col flex-1 w-full">
+      <div className="flex flex-col justify-center flex-1 w-full max-w-md px-8 mx-auto py-8">
+        <AuthTabs active="register" />
+        <div className="mb-10">
+          <h1 className="mb-3 text-3xl font-bold text-gray-900 dark:text-white">Регистрация</h1>
+          <p className="text-base text-gray-600 dark:text-gray-400">
+            Заполните данные. На email придёт ссылка для подтверждения — после перехода создаётся аккаунт (в т.ч. в сервисе
+            льгот). Пароль не задаётся; вход — по одноразовым ссылкам на почту.
+          </p>
+        </div>
+
+        {error && (
+          <div className="p-4 mb-4 text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label className={labelClass}>
+                Фамилия <span className="text-red-500">*</span>
+              </Label>
+              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} required placeholder="Иванов" />
+            </div>
+            <div>
+              <Label className={labelClass}>
+                Имя <span className="text-red-500">*</span>
+              </Label>
+              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required placeholder="Иван" />
+            </div>
+          </div>
+          <div>
+            <Label className={labelClass}>Отчество</Label>
+            <Input value={middleName} onChange={(e) => setMiddleName(e.target.value)} placeholder="Необязательно" />
+          </div>
+          <div>
+            <Label className={labelClass}>
+              Телефон <span className="text-red-500">*</span>
+            </Label>
+            <PhoneInput value={phone} onChange={setPhone} />
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Полный номер, например +7 (999) 123-45-67</p>
+          </div>
+          <div>
+            <Label className={labelClass}>Telegram</Label>
+            <Input
+              value={telegramUsername}
+              onChange={(e) => setTelegramUsername(e.target.value.replace(/^@+/, ""))}
+              placeholder="username (необязательно)"
+            />
+          </div>
+          <div>
+            <Label className={labelClass}>
+              Email <span className="text-red-500">*</span>
+            </Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@mail.ru" />
           </div>
 
-          {error && (
-            <div className="p-4 mb-6 text-sm rounded-lg bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400">
-              {error}
-            </div>
-          )}
-
-          {step === "email" ? (
-            <form onSubmit={handleEmailSubmit}>
-              <div className="space-y-6">
-                <div>
-                  <Label>
-                    Email <span className="text-error-500">*</span>
-                  </Label>
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    required
-                  />
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    id="policy-agree"
-                    checked={agreedToPolicy}
-                    onChange={(e) => setAgreedToPolicy(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-2 focus:ring-brand-500 cursor-pointer"
-                  />
-                  <label htmlFor="policy-agree" className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-                    Я согласен с{" "}
-                    <button
-                      type="button"
-                      onClick={() => setShowPolicyModal(true)}
-                      className="text-brand-500 hover:text-brand-600 dark:text-brand-400 underline"
-                    >
-                      политикой конфиденциальности
-                    </button>
-                    {" "}и обработкой персональных данных, а также с{" "}
-                    <Link
-                      href="/license"
-                      target="_blank"
-                      className="text-brand-500 hover:text-brand-600 dark:text-brand-400 underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      публичной офертой
-                    </Link>
-                  </label>
-                </div>
-
-                <div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    size="sm"
-                    disabled={loading || !agreedToPolicy}
-                  >
-                    {loading ? "Отправка..." : "Продолжить"}
-                  </Button>
-                </div>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifySubmit}>
-              <div className="space-y-6">
-                <div>
-                  <Label>
-                    Код подтверждения <span className="text-error-500">*</span>
-                  </Label>
-                  <Input
-                    type="text"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                    placeholder="Введите 6-значный код"
-                    required
-                    maxLength={6}
-                  />
-                </div>
-
-                <div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    size="sm"
-                    disabled={loading}
-                  >
-                    {loading ? "Проверка..." : "Подтвердить"}
-                  </Button>
-                </div>
-
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setStep("email")}
-                    className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
-                  >
-                    Изменить email
-                  </button>
-                </div>
-              </div>
-            </form>
-          )}
-
-          <div className="mt-5">
-            <p className="text-sm font-normal text-center text-gray-700 dark:text-gray-400">
-              Уже есть аккаунт?{" "}
-              <Link
-                href="/login"
-                className="text-brand-500 hover:text-brand-600 dark:text-brand-400"
+          <div className="flex items-start gap-3 pt-1">
+            <input
+              type="checkbox"
+              id="policy-agree"
+              checked={agreedToPolicy}
+              onChange={(e) => setAgreedToPolicy(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+            />
+            <label htmlFor="policy-agree" className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer leading-relaxed">
+              Я согласен с{" "}
+              <button
+                type="button"
+                onClick={() => setShowPolicyModal(true)}
+                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 underline"
               >
-                Войти
+                политикой конфиденциальности
+              </button>{" "}
+              и обработкой персональных данных, а также с{" "}
+              <Link href="/license" target="_blank" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 underline">
+                публичной офертой
               </Link>
-            </p>
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !agreedToPolicy}
+            className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? "Отправка..." : "Зарегистрироваться"}
+          </button>
+        </form>
+
+        <div className="mt-8 text-center space-y-3">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+            <a
+              href={TELEGRAM_LOGIN_HELP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 underline"
+              title="Откроется Telegram-бот: опишите проблему командой /issue — заявка уйдёт в техподдержку"
+            >
+              Проблема с входом?
+            </a>
+            <Link href="/privacy" className="text-gray-600 hover:text-gray-700 dark:text-gray-400 underline">
+              Политика конфиденциальности
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Policy Modal */}
       {showPolicyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-md dark:backdrop-blur-lg">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-md">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Политика конфиденциальности и обработка персональных данных
-              </h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Политика конфиденциальности</h2>
               <button
+                type="button"
                 onClick={() => setShowPolicyModal(false)}
-                aria-label="Закрыть модальное окно политики"
-                title="Закрыть"
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                aria-label="Закрыть"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-
-            <div className="overflow-y-auto flex-1 p-6 space-y-4 text-sm text-gray-700 dark:text-gray-300">
-              <section>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">1. Введение</h3>
-                <p>
-                  Данная политика конфиденциальности описывает, как мы собираем, используем и защищаем ваши персональные данные 
-                  при регистрации и использовании нашего приложения.
-                </p>
-              </section>
-
-              <section>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">2. Собираемые данные</h3>
-                <p>Мы собираем следующие категории персональных данных:</p>
-                <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>Адрес электронной почты</li>
-                  <li>Фамилия, имя, отчество</li>
-                  <li>Дата рождения</li>
-                  <li>Номер телефона</li>
-                  <li>Адрес проживания</li>
-                  <li>Должность и сведения о работе</li>
-                  <li>Профессия и образование</li>
-                </ul>
-              </section>
-
-              <section>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">3. Использование данных</h3>
-                <p>Ваши персональные данные используются для:</p>
-                <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>Регистрации и управления учетной записью</li>
-                  <li>Обработки заявлений на вступление в профсоюз</li>
-                  <li>Подготовки необходимых документов</li>
-                  <li>Коммуникации с вами о вашей учетной записи</li>
-                  <li>Обеспечения безопасности и предотвращения мошенничества</li>
-                </ul>
-              </section>
-
-              <section>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">4. Защита данных</h3>
-                <p>
-                  Мы применяем технические и организационные меры для защиты ваших персональных данных от несанкционированного доступа, 
-                  изменения, раскрытия или уничтожения. Ваш пароль хранится в зашифрованном виде.
-                </p>
-              </section>
-
-              <section>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">5. Ваши права</h3>
-                <p>Вы имеете право:</p>
-                <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>Получать информацию о ваших персональных данных</li>
-                  <li>Требовать исправление неточных данных</li>
-                  <li>Требовать удаление ваших данных (право быть забытым)</li>
-                  <li>Возражать против обработки ваших данных</li>
-                </ul>
-              </section>
-
-              <section>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">6. Контактная информация</h3>
-                <p>
-                  Если у вас есть вопросы о защите ваших персональных данных, пожалуйста, свяжитесь с нашей администрацией.
-                </p>
-              </section>
+            <div className="overflow-y-auto flex-1 p-6 text-sm text-gray-700 dark:text-gray-300 space-y-3">
+              <p>Мы обрабатываем персональные данные в соответствии с законодательством РФ.</p>
             </div>
-
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
+                type="button"
                 onClick={() => setShowPolicyModal(false)}
-                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
               >
                 Закрыть
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setAgreedToPolicy(true);
                   setShowPolicyModal(false);
                 }}
-                className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 font-medium"
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
               >
                 Согласен
               </button>
@@ -338,4 +259,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-
