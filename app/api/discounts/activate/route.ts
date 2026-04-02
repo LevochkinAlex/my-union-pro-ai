@@ -149,6 +149,13 @@ export async function POST(request: NextRequest) {
       ? existingFilters.favorites
       : [];
 
+    // Полный список избранного приходит только со списка скидок (DiscountsClient).
+    // Страница карточки не должна передавать favorites: [] — [] truthy и раньше затирал избранное.
+    const mergedFavorites =
+      favorites !== undefined && Array.isArray(favorites)
+        ? favorites
+        : existingFavorites;
+
     // Получаем все активированные скидки из DiscountActivation
     const { getValidActivatedDiscounts } = await import("@/lib/discount-activation");
     const validActivations = await getValidActivatedDiscounts(user.id);
@@ -158,21 +165,21 @@ export async function POST(request: NextRequest) {
       promoCode: a.promoCode,
     }));
 
+    const nextFilters = {
+      ...existingFilters,
+      claimed: validClaimed,
+      favorites: mergedFavorites,
+    };
+
     await prisma.discountPreference.upsert({
       where: { userId: session.user.id },
       create: {
         userId: session.user.id,
         pushEnabled: false,
-        filters: {
-          claimed: validClaimed,
-          favorites: favorites || existingFavorites,
-        },
+        filters: nextFilters,
       },
       update: {
-        filters: {
-          claimed: validClaimed,
-          favorites: favorites || existingFavorites,
-        },
+        filters: nextFilters,
       },
     });
 

@@ -446,7 +446,7 @@ export default function DiscountDetailPage() {
           parentDiscountId: discount.id, // Родительская скидка (для сохранения в preferences)
           promoCode: discount.promoCode || null,
           claimed: [discount.id],
-          favorites: isFavorite ? [discount.id] : [],
+          // Не передаём favorites: [] — на сервере сохранится текущее избранное из БД
         }),
       });
       

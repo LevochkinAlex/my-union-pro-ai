@@ -11,7 +11,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getUserActivatedDiscounts } from "@/lib/best-benefits-activation";
+import { getUserActivatedDiscountsWithMeta } from "@/lib/best-benefits-activation";
 
 export interface DiscountActivationData {
   discountId: number;
@@ -102,25 +102,43 @@ export async function syncDiscountsWithBestBenefits(
   updated: number;
   errors: string[];
   usedFallback: boolean;
+  /** Не удалось войти в BB (401) — пароль в БД не совпадает с bestbenefits.ru */
+  bbAuthFailed?: boolean;
 }> {
   const errors: string[] = [];
   let synced = 0;
   let expired = 0;
   let updated = 0;
   let usedFallback = false;
+  let bbAuthFailed = false;
 
   try {
     console.log(`[discount-activation] Syncing discounts for user ${userId}...`);
     
-    // Получаем активированные скидки из BestBenefits
-    const bbActivated = await getUserActivatedDiscounts(
+    const { items: bbActivated, authFailed } = await getUserActivatedDiscountsWithMeta(
       bestBenefitsUserId,
       bestBenefitsPassword,
       {
-        timeout: 25000, // Увеличен таймаут
-        retries: 3,
+        timeout: 25000,
+        retries: 2,
       }
     );
+
+    if (authFailed) {
+      console.warn(
+        `[discount-activation] BB auth failed (401) for user ${userId} — не обновляем данные с BB`
+      );
+      return {
+        synced: 0,
+        expired: 0,
+        updated: 0,
+        errors: [
+          "BestBenefits: неверный email/пароль (401). Обновите пароль: POST /api/admin/reset-and-sync-bb",
+        ],
+        usedFallback: false,
+        bbAuthFailed: true,
+      };
+    }
 
     console.log(`[discount-activation] Got ${bbActivated.length} discounts from BB`);
 
@@ -134,7 +152,14 @@ export async function syncDiscountsWithBestBenefits(
       if (localActivations > 0) {
         console.warn(`[discount-activation] ⚠️ BB returned 0 discounts but we have ${localActivations} locally. Keeping local data.`);
         usedFallback = true;
-        return { synced: 0, expired: 0, updated: 0, errors: [], usedFallback };
+        return {
+          synced: 0,
+          expired: 0,
+          updated: 0,
+          errors: [],
+          usedFallback,
+          bbAuthFailed: false,
+        };
       }
     }
 
@@ -250,15 +275,20 @@ export async function syncDiscountsWithBestBenefits(
     console.log(`[discount-activation] ✅ Sync complete: ${synced} new, ${updated} updated, ${expired} expired`);
 
   } catch (error: any) {
-    const isAuthError = error?.message?.includes("401") || error?.message?.includes("User authentication failed");
+    const isAuthError =
+      error?.message?.includes("401") ||
+      error?.message?.includes("User authentication failed");
     if (isAuthError) {
-      console.warn(`[discount-activation] BB auth failed (invalid/expired user credentials), keeping local data:`, error?.message);
+      bbAuthFailed = true;
+      console.warn(
+        `[discount-activation] BB auth failed (invalid/expired user credentials), keeping local data:`,
+        error?.message
+      );
     } else {
       console.error(`[discount-activation] ❌ Sync failed:`, error);
     }
     errors.push(`Sync failed: ${error.message}`);
-    
-    // FALLBACK: при ошибке API возвращаем данные из локальной БД
+
     const localCount = await prisma.discountActivation.count({ where: { userId } });
     if (localCount > 0) {
       console.log(`[discount-activation] 📦 Using fallback: ${localCount} discounts from local DB`);
@@ -266,7 +296,7 @@ export async function syncDiscountsWithBestBenefits(
     }
   }
 
-  return { synced, expired, updated, errors, usedFallback };
+  return { synced, expired, updated, errors, usedFallback, bbAuthFailed };
 }
 
 /**

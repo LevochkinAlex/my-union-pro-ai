@@ -77,6 +77,16 @@ export async function runSyncAllUsersDiscounts(options?: {
         userPassword
       );
 
+      if (syncResult.bbAuthFailed) {
+        result.errorCount++;
+        result.errors.push(
+          `${label}: 401 BB — пароль в БД не подходит к bestbenefits.ru (reset-and-sync-bb)`
+        );
+        options?.onProgress?.(i + 1, users.length, label, false);
+        await new Promise((r) => setTimeout(r, DELAY_BETWEEN_USERS_MS));
+        continue;
+      }
+
       result.totalSynced += syncResult.synced;
       result.totalUpdated += syncResult.updated;
 
@@ -120,15 +130,21 @@ export async function runSyncAllUsersDiscounts(options?: {
         promoCode: a.promoCode,
       }));
 
+      const nextFilters = {
+        ...existingFilters,
+        claimed,
+        favorites: existingFavorites,
+      };
+
       await prisma.discountPreference.upsert({
         where: { userId: user.id },
         create: {
           userId: user.id,
           pushEnabled: false,
-          filters: { claimed, favorites: existingFavorites },
+          filters: nextFilters,
         },
         update: {
-          filters: { claimed, favorites: existingFavorites },
+          filters: nextFilters,
         },
       });
 

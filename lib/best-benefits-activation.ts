@@ -282,21 +282,28 @@ export async function checkDiscountActivation(
  * - Endpoint: GET /api/received
  * - Returns: { data: [{ id: number, name: string, codes: [{ code: string, end_date: string }] }] }
  */
+export type UserActivatedDiscountsMeta = {
+  items: Array<{ id: number; promoCode?: string; validUntil?: string }>;
+  /** true если BB вернул 401 при логине или по /received — пароль в БД не подходит */
+  authFailed: boolean;
+};
+
 /**
  * Получает активированные скидки с отказоустойчивостью:
  * - Retry при временных ошибках (5xx)
  * - Timeout для предотвращения зависания
+ * - При 401 по токену — без повторных попыток (сразу authFailed)
  * - ВАЖНО: НЕ использует fallback на локальные данные - только данные из BestBenefits API
  *   Это гарантирует, что промокоды всегда актуальны и валидны
  */
-export async function getUserActivatedDiscounts(
+export async function getUserActivatedDiscountsWithMeta(
   bestBenefitsUserId: string,
   password?: string,
   options?: {
     timeout?: number; // Timeout в миллисекундах (по умолчанию 15 секунд)
     retries?: number; // Количество попыток (по умолчанию 2)
   }
-): Promise<Array<{ id: number; promoCode?: string; validUntil?: string }>> {
+): Promise<UserActivatedDiscountsMeta> {
   const timeout = options?.timeout ?? 15000; // 15 секунд по умолчанию
   const retries = options?.retries ?? 2;
 
@@ -335,7 +342,7 @@ export async function getUserActivatedDiscounts(
         // НЕ используем organization token - это может вернуть скидки от организации
         // Вместо этого возвращаем пустой массив, чтобы не показывать чужие скидки
         console.warn("[BestBenefits Activation] ⚠️ No password provided - cannot use personal token. Returning empty array to prevent showing organization discounts.");
-        return [];
+        return { items: [], authFailed: false };
       }
 
       debugLog(`[BestBenefits Activation] Fetching activated discounts for user: ${bestBenefitsUserId} (attempt ${attempt + 1}/${retries + 1})`);
@@ -376,10 +383,10 @@ export async function getUserActivatedDiscounts(
           if (response.status >= 400 && response.status < 500) {
             if (response.status === 401) {
               console.warn(`[BestBenefits Activation] BB 401 (user token invalid), returning empty array, keeping local data`);
-            } else {
-              console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+              return { items: [], authFailed: true };
             }
-            return [];
+            console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+            return { items: [], authFailed: false };
           }
           
           if (attempt < retries) {
@@ -390,7 +397,7 @@ export async function getUserActivatedDiscounts(
           }
           
           console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)");
-          return [];
+          return { items: [], authFailed: false };
         }
 
         const data = await response.json();
@@ -590,40 +597,50 @@ export async function getUserActivatedDiscounts(
     }).filter((p: any) => p.id !== null);
     
       debugLog("[BestBenefits Activation] Processed discounts:", result);
-      return result;
+      return { items: result, authFailed: false };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       const isAuthError = lastError.message.includes("401") || lastError.message.includes("User authentication failed");
       if (isAuthError) {
-        console.warn(`[BestBenefits Activation] User BB auth failed (attempt ${attempt + 1}), using local data:`, lastError.message);
-      } else {
-        console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
+        console.warn(
+          `[BestBenefits Activation] User BB auth failed — без повторов (401/логин):`,
+          lastError.message
+        );
+        return { items: [], authFailed: true };
       }
-      
+      console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
+
       // Если это последняя попытка, возвращаем пустой массив
-      // НЕ используем fallback, чтобы не показывать невалидные промокоды
       if (attempt >= retries) {
-        if (!isAuthError) {
-          console.error("[BestBenefits Activation] All attempts failed, returning empty array (no fallback to prevent invalid promo codes)", {
-            error: lastError.message,
-          });
-        }
-        return [];
+        console.error("[BestBenefits Activation] All attempts failed, returning empty array (no fallback to prevent invalid promo codes)", {
+          error: lastError.message,
+        });
+        return { items: [], authFailed: false };
       }
-      
-      // Ждем перед следующей попыткой (exponential backoff)
+
       await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
     }
   }
 
-  // Если все попытки провалились, возвращаем пустой массив
-  const isAuthError = lastError?.message?.includes("401") || lastError?.message?.includes("User authentication failed");
-  if (!isAuthError) {
+  if (lastError) {
     console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)", {
-      error: lastError?.message,
+      error: lastError.message,
     });
   }
-  return [];
+  return { items: [], authFailed: false };
+}
+
+/** Совместимость: только массив скидок (без признака 401) */
+export async function getUserActivatedDiscounts(
+  bestBenefitsUserId: string,
+  password?: string,
+  options?: {
+    timeout?: number;
+    retries?: number;
+  }
+): Promise<Array<{ id: number; promoCode?: string; validUntil?: string }>> {
+  const { items } = await getUserActivatedDiscountsWithMeta(bestBenefitsUserId, password, options);
+  return items;
 }
 
 /**

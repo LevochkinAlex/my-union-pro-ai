@@ -40,6 +40,15 @@ export default function AdminDiscountsPage() {
   const [error, setError] = useState<string | null>(null);
   const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
+  const [userSyncing, setUserSyncing] = useState(false);
+  const [userSyncResult, setUserSyncResult] = useState<{
+    success: boolean;
+    successCount?: number;
+    errorCount?: number;
+    errors?: string[];
+    duration?: number;
+    error?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchStatus();
@@ -50,11 +59,18 @@ export default function AdminDiscountsPage() {
     try {
       setLoading(true);
       const response = await fetch("/api/discounts/sync-all");
-      if (!response.ok) {
-        throw new Error("Не удалось загрузить статус");
-      }
       const data = await response.json();
+      if (!response.ok) {
+        const msg =
+          typeof data?.error === "string"
+            ? data.error
+            : response.status === 403
+              ? "Недостаточно прав (нужна роль SUPER_ADMIN)"
+              : "Не удалось загрузить статус";
+        throw new Error(msg);
+      }
       setStatus(data);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка загрузки");
     } finally {
@@ -65,7 +81,9 @@ export default function AdminDiscountsPage() {
   const fetchSyncLogs = async () => {
     try {
       setLoadingLogs(true);
-      const response = await fetch("/api/admin/sync-logs?type=DISCOUNTS&limit=10");
+      const response = await fetch(
+        "/api/admin/sync-logs?types=DISCOUNTS,USER_DISCOUNTS&limit=15"
+      );
       if (response.ok) {
         const data = await response.json();
         setSyncLogs(data.logs || []);
@@ -90,6 +108,17 @@ export default function AdminDiscountsPage() {
       });
 
       const data = await response.json();
+      if (!response.ok) {
+        const msg =
+          typeof data?.error === "string"
+            ? data.error
+            : response.status === 403
+              ? "Недостаточно прав (SUPER_ADMIN)"
+              : "Синхронизация каталога не удалась";
+        setError(msg);
+        setSyncResult({ ...data, success: false });
+        return;
+      }
       setSyncResult(data);
 
       if (data.success) {
@@ -102,6 +131,45 @@ export default function AdminDiscountsPage() {
       setError(err instanceof Error ? err.message : "Ошибка синхронизации");
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleUserDiscountsSync = async () => {
+    if (userSyncing) return;
+    try {
+      setUserSyncing(true);
+      setUserSyncResult(null);
+      const response = await fetch("/api/admin/sync-all-users-discounts", {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setUserSyncResult({
+          success: false,
+          error:
+            typeof data?.error === "string"
+              ? data.error
+              : response.status === 403
+                ? "Нужна роль SUPER_ADMIN"
+                : "Запрос не выполнен",
+        });
+        return;
+      }
+      setUserSyncResult({
+        success: true,
+        successCount: data.successCount,
+        errorCount: data.errorCount,
+        errors: data.errors,
+        duration: data.duration,
+      });
+      await fetchSyncLogs();
+    } catch (err) {
+      setUserSyncResult({
+        success: false,
+        error: err instanceof Error ? err.message : "Ошибка",
+      });
+    } finally {
+      setUserSyncing(false);
     }
   };
 
@@ -159,6 +227,17 @@ export default function AdminDiscountsPage() {
     }
   };
 
+  const getLogTypeLabel = (logType: string) => {
+    switch (logType) {
+      case "DISCOUNTS":
+        return "Каталог BB";
+      case "USER_DISCOUNTS":
+        return "Пользователи BB";
+      default:
+        return logType;
+    }
+  };
+
   const getSourceBadge = (source: string) => {
     switch (source) {
       case "CRON":
@@ -188,7 +267,8 @@ export default function AdminDiscountsPage() {
           Управление скидками
         </h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Синхронизация скидок с BestBenefits и управление локальным хранилищем
+          Каталог скидок из BestBenefits в базу и отдельно — синхронизация
+          активированных скидок по аккаунтам клиентов BB
         </p>
       </div>
 
@@ -269,13 +349,92 @@ export default function AdminDiscountsPage() {
         </div>
       </div>
 
-      {/* Manual Sync Card */}
+      {/* Per-user BB sync */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-6 dark:border-amber-800 dark:bg-amber-950/30">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Скидки пользователей в BestBenefits
+        </h2>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Обходит всех пользователей с привязкой BB и подтягивает активированные
+          скидки (DiscountActivation). Долго при большом числе клиентов — до нескольких
+          минут. Эквивалент{" "}
+          <code className="rounded bg-white/80 px-1 text-xs dark:bg-gray-900">
+            pnpm sync:all-users-discounts
+          </code>
+        </p>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={handleUserDiscountsSync}
+            disabled={userSyncing}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+              userSyncing
+                ? "cursor-not-allowed bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                : "bg-amber-600 text-white hover:bg-amber-700"
+            }`}
+          >
+            {userSyncing ? (
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Сканирование клиентов BB...
+              </>
+            ) : (
+              "Просканировать всех клиентов BB"
+            )}
+          </button>
+        </div>
+        {userSyncResult && (
+          <div
+            className={`mt-4 rounded-lg border p-4 text-sm ${
+              userSyncResult.success
+                ? "border-green-200 bg-white dark:border-green-800 dark:bg-gray-900/40"
+                : "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
+            }`}
+          >
+            {userSyncResult.success ? (
+              <>
+                <p className="font-medium text-green-800 dark:text-green-300">
+                  Готово за {formatDuration(userSyncResult.duration ?? 0)}
+                </p>
+                <ul className="mt-2 space-y-1 text-gray-700 dark:text-gray-300">
+                  <li>
+                    Успешно:{" "}
+                    <strong>{userSyncResult.successCount ?? 0}</strong>
+                  </li>
+                  <li>
+                    Ошибок:{" "}
+                    <strong>{userSyncResult.errorCount ?? 0}</strong>
+                  </li>
+                </ul>
+                {userSyncResult.errors && userSyncResult.errors.length > 0 && (
+                  <div className="mt-3 max-h-40 overflow-y-auto rounded border border-amber-200 bg-amber-50/50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                    <p className="font-medium">Не синхронизировались / ошибки:</p>
+                    <ul className="mt-1 list-inside list-disc">
+                      {userSyncResult.errors.map((e, i) => (
+                        <li key={i} className="break-words">
+                          {e}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-red-700 dark:text-red-300">
+                {userSyncResult.error}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Manual Sync Card — каталог */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Ручная синхронизация
+          Каталог скидок (из API BB)
         </h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Запустить синхронизацию вручную, если нужно обновить скидки прямо сейчас
+          Загрузка и обновление списка скидок, категорий и картинок в локальное хранилище
         </p>
 
         <div className="mt-4">
@@ -431,7 +590,7 @@ export default function AdminDiscountsPage() {
           История синхронизаций
         </h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Последние 10 синхронизаций (автоматические и ручные)
+          Каталог и пользовательские синхронизации (последние 15 записей)
         </p>
 
         {loadingLogs ? (
@@ -449,7 +608,8 @@ export default function AdminDiscountsPage() {
               <thead>
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   <th className="px-3 py-2">Дата</th>
-                  <th className="px-3 py-2">Тип</th>
+                  <th className="px-3 py-2">Задача</th>
+                  <th className="px-3 py-2">Источник</th>
                   <th className="px-3 py-2">Статус</th>
                   <th className="px-3 py-2">Создано</th>
                   <th className="px-3 py-2">Обновлено</th>
@@ -462,6 +622,9 @@ export default function AdminDiscountsPage() {
                   <tr key={log.id}>
                     <td className="whitespace-nowrap px-3 py-2 text-gray-700 dark:text-gray-300">
                       {formatShortDate(log.createdAt)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-600 dark:text-gray-400">
+                      {getLogTypeLabel(log.type)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2">
                       {getSourceBadge(log.source)}
@@ -496,9 +659,19 @@ export default function AdminDiscountsPage() {
           Как работает синхронизация
         </h3>
         <ul className="mt-2 space-y-1 text-sm text-blue-600 dark:text-blue-400">
-          <li>• <strong>Автоматически:</strong> Cron запускает синхронизацию каждый день в 03:00</li>
-          <li>• Все скидки загружаются из BestBenefits API</li>
-          <li>• Base64 изображения конвертируются и загружаются на CDN</li>
+          <li>
+            • <strong>Каталог:</strong> cron и кнопка выше подтягивают список скидок из BB в
+            базу
+          </li>
+          <li>
+            • <strong>Пользователи:</strong> отдельный процесс по аккаунтам BB
+            (кнопка «Просканировать всех клиентов BB» или cron{" "}
+            <code className="text-xs">/api/cron/sync-user-discounts</code>)
+          </li>
+          <li>
+            • Base64-картинки каталога при необходимости загружаются на CDN; описания
+            чистятся от лишнего HTML
+          </li>
           <li>• Описания очищаются от HTML-мусора (жирные точки и т.д.)</li>
           <li>• Категории и города синхронизируются автоматически</li>
           <li>• Скидки, которых больше нет в BB, помечаются неактивными</li>

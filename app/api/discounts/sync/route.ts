@@ -67,6 +67,18 @@ export async function POST(request: NextRequest) {
       userPassword
     );
 
+    if (syncResult.bbAuthFailed) {
+      return NextResponse.json(
+        {
+          success: false,
+          bbAuthFailed: true,
+          message:
+            "Пароль BestBenefits в профиле устарел или не совпадает с bestbenefits.ru. Обратитесь в поддержку.",
+          errors: syncResult.errors,
+        },
+        { status: 401 }
+      );
+    }
 
     // Получаем информацию о скидках для обновления сроков действия
     // Запрашиваем только активированные скидки пользователя
@@ -126,21 +138,21 @@ export async function POST(request: NextRequest) {
       promoCode: a.promoCode,
     }));
 
+    const nextFilters = {
+      ...existingFilters,
+      claimed,
+      favorites: existingFavorites,
+    };
+
     await prisma.discountPreference.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
         pushEnabled: false,
-        filters: {
-          claimed,
-          favorites: existingFavorites,
-        },
+        filters: nextFilters,
       },
       update: {
-        filters: {
-          claimed,
-          favorites: existingFavorites,
-        },
+        filters: nextFilters,
       },
     });
 

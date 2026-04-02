@@ -16,11 +16,26 @@ export async function GET(request: NextRequest) {
     }
 
     const url = new URL(request.url);
+    const typesParam = url.searchParams.get("types");
     const type = url.searchParams.get("type");
     const limit = parseInt(url.searchParams.get("limit") || "10");
 
+    const typeFilter =
+      typesParam && typesParam.trim().length > 0
+        ? {
+            type: {
+              in: typesParam
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+            },
+          }
+        : type
+          ? { type }
+          : undefined;
+
     const logs = await prisma.syncLog.findMany({
-      where: type ? { type } : undefined,
+      where: typeFilter,
       orderBy: { createdAt: "desc" },
       take: Math.min(limit, 100),
     });

@@ -105,6 +105,19 @@ export async function POST(request: NextRequest) {
 
     console.log(`[admin/sync-user-discounts] Sync result:`, syncResult);
 
+    if (syncResult.bbAuthFailed) {
+      return NextResponse.json(
+        {
+          success: false,
+          bbAuthFailed: true,
+          errors: syncResult.errors,
+          message:
+            "401 BestBenefits: пароль в БД не совпадает. Используйте reset-and-sync-bb.",
+        },
+        { status: 401 }
+      );
+    }
+
     // Получаем информацию о скидках для обновления сроков действия
     const validActivations = await getValidActivatedDiscounts(user.id);
     
@@ -162,21 +175,21 @@ export async function POST(request: NextRequest) {
       promoCode: a.promoCode,
     }));
 
+    const nextFilters = {
+      ...existingFilters,
+      claimed,
+      favorites: existingFavorites,
+    };
+
     await prisma.discountPreference.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
         pushEnabled: false,
-        filters: {
-          claimed,
-          favorites: existingFavorites,
-        },
+        filters: nextFilters,
       },
       update: {
-        filters: {
-          claimed,
-          favorites: existingFavorites,
-        },
+        filters: nextFilters,
       },
     });
 
