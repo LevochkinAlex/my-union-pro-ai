@@ -9,6 +9,7 @@ import Link from "next/link";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { MembershipGate } from "@/components/MembershipGate";
 import { useMembershipAccess } from "@/hooks/useMembershipAccess";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 interface Meeting {
   id: string;
@@ -528,8 +529,8 @@ export default function MeetingsPage() {
   return (
     <MembershipGate>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Заседания профкома
           </h1>
@@ -539,23 +540,25 @@ export default function MeetingsPage() {
         </div>
         {isOrgHead && (activeTab === "protocol" ? (
           <button
+            type="button"
             onClick={() => setShowProtocolFromAgendaModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             Новый протокол
           </button>
         ) : (
           <button
+            type="button"
             onClick={() => {
               setShowCreateForm(true);
               setFormData(prev => ({ ...prev, scheduledDate: new Date().toISOString().slice(0, 10) }));
             }}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Создать заседание
@@ -565,10 +568,16 @@ export default function MeetingsPage() {
 
       {/* Табы */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
+        <HorizontalTabArrowStrip
+          enabled={!isLoading}
+          remeasureDeps={[meetings.length, activeTab, isOrgHead]}
+        >
+          {(innerRef) => (
+        <nav ref={innerRef} className="-mb-px flex w-max max-w-none flex-nowrap gap-x-8">
           <button
+            type="button"
             onClick={() => setActiveTab("all")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "all"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -582,8 +591,9 @@ export default function MeetingsPage() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("agenda")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "agenda"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -597,8 +607,9 @@ export default function MeetingsPage() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("protocol")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "protocol"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -612,8 +623,9 @@ export default function MeetingsPage() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("resolutions")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "resolutions"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -627,8 +639,9 @@ export default function MeetingsPage() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("extracts")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "extracts"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -642,6 +655,8 @@ export default function MeetingsPage() {
             )}
           </button>
         </nav>
+          )}
+        </HorizontalTabArrowStrip>
       </div>
 
       {/* Алгоритм проведения заседания — свёрнут по умолчанию */}
@@ -1374,11 +1389,12 @@ export default function MeetingsPage() {
               </p>
               {isAllTab && isOrgHead && (
                 <button
+                  type="button"
                   onClick={() => {
               setShowCreateForm(true);
               setFormData(prev => ({ ...prev, scheduledDate: new Date().toISOString().slice(0, 10) }));
             }}
-                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                  className="mt-4 inline-flex shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 >
                   Создать заседание
                 </button>

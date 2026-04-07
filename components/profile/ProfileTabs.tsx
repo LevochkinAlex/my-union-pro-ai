@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { User, FileText, Medal, GraduationCap, Trophy } from "lucide-react";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 type TabKey = "profile" | "additional" | "membership" | "education" | "awards";
 
@@ -32,13 +33,16 @@ export default function ProfileTabs({ activeTab, onTabChange, children }: Profil
     <div className="space-y-6">
       {/* Tabs Navigation */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="flex space-x-8 overflow-x-auto" aria-label="Tabs">
+        <HorizontalTabArrowStrip enabled remeasureDeps={[activeTab]}>
+          {(innerRef) => (
+        <nav ref={innerRef} className="-mb-px flex w-max max-w-none flex-nowrap gap-x-8" aria-label="Tabs">
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              type="button"
               onClick={() => onTabChange(tab.key)}
               className={`
-                inline-flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                inline-flex shrink-0 items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
                 ${
                   activeTab === tab.key
                     ? "border-blue-500 text-blue-600 dark:text-blue-400"
@@ -51,6 +55,8 @@ export default function ProfileTabs({ activeTab, onTabChange, children }: Profil
             </button>
           ))}
         </nav>
+          )}
+        </HorizontalTabArrowStrip>
       </div>
 
       {/* Tab Content */}

@@ -16,6 +16,7 @@ import { workplaceInnDigits } from "@/lib/workplace-inn";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 // Маппинг между enum значениями в БД и человекочитаемыми значениями
 const MARITAL_STATUS_MAP = {
@@ -1164,10 +1165,13 @@ export default function ProfilePage() {
       )}
 
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
+        <HorizontalTabArrowStrip enabled remeasureDeps={[activeTab]}>
+          {(innerRef) => (
+        <nav ref={innerRef} className="-mb-px flex w-max max-w-none flex-nowrap gap-x-4 md:gap-x-8">
           <button
+            type="button"
             onClick={() => setActiveTab("profile")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+            className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "profile"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -1176,8 +1180,9 @@ export default function ProfilePage() {
             Профиль
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("additional")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+            className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "additional"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -1186,8 +1191,9 @@ export default function ProfilePage() {
             Дополнительная информация
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("membership")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+            className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "membership"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -1196,8 +1202,9 @@ export default function ProfilePage() {
             Членство
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("education")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+            className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "education"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -1206,8 +1213,9 @@ export default function ProfilePage() {
             Образование
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("awards")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+            className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "awards"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -1216,6 +1224,8 @@ export default function ProfilePage() {
             Награды
           </button>
         </nav>
+          )}
+        </HorizontalTabArrowStrip>
       </div>
 
       {activeTab === "profile" && (

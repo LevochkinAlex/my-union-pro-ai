@@ -78,13 +78,14 @@ export default function ImpersonationBanner() {
   };
 
   return (
-    <div className="bg-yellow-500 text-white px-4 py-3 flex items-center justify-between shadow-lg z-50 sticky top-0">
-      <div className="flex items-center gap-2 flex-1">
+    <div className="sticky top-0 z-50 flex flex-col gap-3 bg-yellow-500 px-4 py-3 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
         <svg
-          className="h-5 w-5 flex-shrink-0"
+          className="mt-0.5 h-5 w-5 flex-shrink-0 sm:mt-0"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-hidden
         >
           <path
             strokeLinecap="round"
@@ -93,15 +94,16 @@ export default function ImpersonationBanner() {
             d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
           />
         </svg>
-        <span className="font-medium text-sm sm:text-base">
+        <span className="min-w-0 font-medium text-sm sm:text-base">
           Режим просмотра: Вы просматриваете личный кабинет от имени пользователя
         </span>
       </div>
-      <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+      <div className="flex w-full min-w-0 shrink-0 items-stretch gap-2 sm:w-auto sm:items-center sm:justify-start">
         <button
+          type="button"
           onClick={handleStopImpersonation}
           disabled={loading}
-          className="bg-white text-yellow-600 px-4 py-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm sm:text-base transition-colors shadow-md"
+          className="min-w-0 flex-1 rounded-lg bg-white px-3 py-2 text-center text-sm font-medium leading-snug text-yellow-600 shadow-md transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial sm:px-4 sm:text-left sm:text-base"
         >
           {loading ? (
             <span className="flex items-center gap-2">
@@ -116,8 +118,9 @@ export default function ImpersonationBanner() {
           )}
         </button>
         <button
+          type="button"
           onClick={() => setDismissed(true)}
-          className="p-1.5 hover:bg-yellow-600 rounded-lg transition-colors"
+          className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-yellow-600"
           title="Скрыть баннер"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

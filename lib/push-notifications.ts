@@ -10,22 +10,6 @@ declare global {
   }
 }
 
-export async function initializePushNotifications(): Promise<boolean> {
-  if (typeof window === "undefined") {
-    console.log("[OneSignal] Window not available");
-    return false;
-  }
-
-  const OneSignal = (window as any).OneSignal;
-  if (!OneSignal) {
-    console.log("[OneSignal] OneSignal SDK not available");
-    return false;
-  }
-
-  console.log("[OneSignal] Initialization checked");
-  return true;
-}
-
 export async function requestPushPermission(): Promise<boolean> {
   if (typeof window === "undefined") {
     console.log("[OneSignal] Window not available");

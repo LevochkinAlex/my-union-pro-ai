@@ -753,8 +753,21 @@ export default function SlackStyleChat({
 
   // Handle URL params (userId, chatId — в т.ч. чат заседания по ссылке)
   const chatIdFromUrlTriedRef = useRef<string | null>(null);
+  /** Мобильный «Назад»: router.replace снимает query асинхронно — без флага эффекты снова открывают чат из старого searchParams */
+  const goingBackRef = useRef(false);
+
   useEffect(() => {
     if (!mounted || loading) return;
+
+    if (goingBackRef.current) {
+      const hasUrlChat =
+        searchParams.get("chatId") != null || searchParams.get("ticketId") != null;
+      if (!hasUrlChat) {
+        goingBackRef.current = false;
+      } else {
+        return;
+      }
+    }
 
     const userId = searchParams.get("userId");
     const chatId = searchParams.get("chatId");
@@ -804,6 +817,7 @@ export default function SlackStyleChat({
   // На десктопе при выборе чата показываем область чата; на мобильном — только если в URL есть chatId/ticketId (иначе кнопка «Назад» снова откроет чат из-за selectedChat)
   useEffect(() => {
     if (!selectedChat) return;
+    if (goingBackRef.current) return;
     const hasChatInUrl = searchParams.get("chatId") != null || searchParams.get("ticketId") != null;
     const isDesktop = typeof window !== "undefined" && window.innerWidth >= 768;
     if (isDesktop || hasChatInUrl) {
@@ -813,6 +827,7 @@ export default function SlackStyleChat({
 
   // Обработка прокрутки к сообщению при наличии messageId в URL
   useEffect(() => {
+    if (goingBackRef.current) return;
     const messageId = searchParams.get("messageId");
     if (messageId && selectedChat && messages.length > 0) {
       // Ждем рендеринга сообщений (увеличиваем задержку для надежности)
@@ -854,6 +869,7 @@ export default function SlackStyleChat({
 
   // Handlers
   const handleSelectChat = useCallback((chat: Chat) => {
+    goingBackRef.current = false;
     selectChat(chat);
     setReplyingTo(null);
     setEditingMessage(null);
@@ -876,6 +892,7 @@ export default function SlackStyleChat({
       if (response.ok) {
         const data = await safeJsonParse(response);
         if (data?.chat) {
+          goingBackRef.current = false;
           selectChat({ ...data.chat, isAIChat: true });
           setShowChatView(true);
         }
@@ -889,6 +906,7 @@ export default function SlackStyleChat({
   const handleCreateChat = useCallback(async (userId: string) => {
     const chat = await createOrOpenChat(userId);
     if (chat) {
+      goingBackRef.current = false;
       setShowChatView(true);
     }
   }, [createOrOpenChat]);
@@ -916,6 +934,7 @@ export default function SlackStyleChat({
         showToast("Группа создана", "success");
         await loadChats();
         if (result.chat) {
+          goingBackRef.current = false;
           selectChat(result.chat);
         }
       } else {
@@ -1020,12 +1039,17 @@ export default function SlackStyleChat({
   }, [deleteConfirm.messageId, deleteMessage]);
 
   const handleBackToList = useCallback(() => {
-    setShowChatView(false);
     setActiveThread(null);
-    // Очищаем URL на мобильном, чтобы эффект по searchParams не открывал чат снова (убираем мерцание)
     if (typeof window !== "undefined" && window.innerWidth < 768) {
+      goingBackRef.current = true;
+      try {
+        window.history.replaceState(null, "", baseUrl);
+      } catch {
+        // ignore
+      }
       router.replace(baseUrl, { scroll: false });
     }
+    setShowChatView(false);
   }, [router, baseUrl]);
 
   const handleLeaveChat = useCallback(async () => {

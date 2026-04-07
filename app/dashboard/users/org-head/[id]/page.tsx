@@ -14,6 +14,7 @@ import {
   MARITAL_STATUS_LABELS,
 } from "@/lib/status-labels";
 import UserDetailsForm from "@/components/admin/users/UserDetailsForm";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 interface Document {
   id: string;
@@ -378,21 +379,29 @@ export default function OrgHeadUserDetailPage() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
-                activeTab === tab.key
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+        <HorizontalTabArrowStrip
+          enabled={!!user && !loading}
+          remeasureDeps={[activeTab, user?.documents?.length ?? 0]}
+        >
+          {(innerRef) => (
+            <nav ref={innerRef} className="-mb-px flex w-max max-w-none flex-nowrap gap-x-4 md:gap-x-8">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
+                    activeTab === tab.key
+                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          )}
+        </HorizontalTabArrowStrip>
       </div>
 
       {/* Tab: Профиль */}

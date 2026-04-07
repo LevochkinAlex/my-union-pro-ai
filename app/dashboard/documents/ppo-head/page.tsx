@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { alertSuccess, alertError } from "@/lib/alert";
 import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 // Типы документов
 type DocumentType = 
@@ -461,10 +462,16 @@ export default function PPOHeadDocumentsPage() {
 
       {/* Табы */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
+        <HorizontalTabArrowStrip
+          enabled={!isLoading}
+          remeasureDeps={[activeTab, orgDocuments.length, personalDocuments.length, isRpoMode]}
+        >
+          {(innerRef) => (
+        <nav ref={innerRef} className="-mb-px flex w-max max-w-none flex-nowrap gap-x-8">
           <button
+            type="button"
             onClick={() => setActiveTab("organization")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "organization"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -478,8 +485,9 @@ export default function PPOHeadDocumentsPage() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("personal")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "personal"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -493,6 +501,8 @@ export default function PPOHeadDocumentsPage() {
             )}
           </button>
         </nav>
+          )}
+        </HorizontalTabArrowStrip>
       </div>
 
       {/* Информационный блок для таба организации */}

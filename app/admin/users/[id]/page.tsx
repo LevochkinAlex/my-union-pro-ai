@@ -11,6 +11,7 @@ import {
   getMembershipStatusLabel,
   getUserRoleLabel,
 } from "@/lib/status-labels";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 interface Document {
   id: string;
@@ -576,29 +577,37 @@ export default function AdminUserDetailsPage() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
-          {[
-            { key: "profile", label: "Профиль" },
-            { key: "work", label: "Работа" },
-            { key: "family", label: "Семья" },
-            { key: "education", label: "Образование" },
-            { key: "documents", label: `Документы (${user.documents.length})` },
-            { key: "membership", label: "Членство" },
-            { key: "knowledge", label: "База знаний" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as TabKey)}
-              className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
-                activeTab === tab.key
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+        <HorizontalTabArrowStrip
+          enabled={!!user && !loading}
+          remeasureDeps={[activeTab, user.documents.length]}
+        >
+          {(innerRef) => (
+            <nav ref={innerRef} className="-mb-px flex w-max max-w-none flex-nowrap gap-x-4 md:gap-x-8">
+              {[
+                { key: "profile", label: "Профиль" },
+                { key: "work", label: "Работа" },
+                { key: "family", label: "Семья" },
+                { key: "education", label: "Образование" },
+                { key: "documents", label: `Документы (${user.documents.length})` },
+                { key: "membership", label: "Членство" },
+                { key: "knowledge", label: "База знаний" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key as TabKey)}
+                  className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
+                    activeTab === tab.key
+                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          )}
+        </HorizontalTabArrowStrip>
       </div>
 
       {/* Tab: Профиль */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -49,6 +50,7 @@ export default function MobileMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [avatarError, setAvatarError] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const hasServerModes = serverViewModes.length > 1;
   const initialMode =
@@ -382,6 +384,8 @@ export default function MobileMenu({
                   {hasSubItems ? (
                     <>
                       <button
+                        type="button"
+                        aria-expanded={isExpanded}
                         onClick={() => toggleExpanded(item.href)}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           isActive || hasActiveSubItem
@@ -392,12 +396,13 @@ export default function MobileMenu({
                         {item.icon}
                         <span className="flex-1 text-left">{item.label}</span>
                         <svg
-                          className={`h-4 w-4 transition-transform ${
+                          className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none ${
                             isExpanded ? "rotate-180" : ""
                           }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
+                          aria-hidden
                         >
                           <path
                             strokeLinecap="round"
@@ -407,28 +412,43 @@ export default function MobileMenu({
                           />
                         </svg>
                       </button>
-                      {isExpanded && (
-                        <div className="ml-4 space-y-1 border-l border-gray-200 dark:border-gray-700 pl-4">
-                          {item.subItems!.map((subItem) => {
-                            const isSubActive = isSubItemActive(subItem);
-                            return (
-                              <Link
-                                key={subItem.href}
-                                href={subItem.href}
-                                prefetch={false}
-                                onClick={onClose}
-                                className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                  isSubActive
-                                    ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                                }`}
-                              >
-                                {subItem.label}
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <AnimatePresence initial={false}>
+                        {isExpanded && (
+                          <motion.div
+                            key={`sub-${item.href}`}
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={
+                              prefersReducedMotion
+                                ? { duration: 0 }
+                                : { duration: 0.28, ease: [0.4, 0, 0.2, 1] }
+                            }
+                            className="overflow-hidden"
+                          >
+                            <div className="ml-4 space-y-1 border-l border-gray-200 dark:border-gray-700 pl-4">
+                              {item.subItems!.map((subItem) => {
+                                const isSubActive = isSubItemActive(subItem);
+                                return (
+                                  <Link
+                                    key={subItem.href}
+                                    href={subItem.href}
+                                    prefetch={false}
+                                    onClick={onClose}
+                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                      isSubActive
+                                        ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                                        : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    }`}
+                                  >
+                                    {subItem.label}
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </>
                   ) : (
                     <Link

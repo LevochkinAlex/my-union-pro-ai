@@ -8,6 +8,7 @@ import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/d
 import Link from "next/link";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { MembershipGate } from "@/components/MembershipGate";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 interface Participant {
   id: string;
@@ -253,25 +254,6 @@ export default function MeetingDetailPage({
   const [protocolMeetingTime, setProtocolMeetingTime] = useState("");
   const [protocolPlace, setProtocolPlace] = useState("");
   const [isSavingMeetingGeneral, setIsSavingMeetingGeneral] = useState(false);
-  const tabsScrollRef = useRef<HTMLDivElement>(null);
-  const [tabsScrollLeftHint, setTabsScrollLeftHint] = useState(false);
-  const [tabsScrollRightHint, setTabsScrollRightHint] = useState(false);
-
-  const updateTabsScrollHint = useCallback(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    const canScrollLeft = el.scrollLeft > 2;
-    const canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 2;
-    setTabsScrollLeftHint(canScrollLeft);
-    setTabsScrollRightHint(canScrollRight);
-  }, []);
-
-  const scrollTabs = useCallback((direction: "left" | "right") => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    const step = Math.max(200, el.clientWidth * 0.6);
-    el.scrollBy({ left: direction === "left" ? -step : step, behavior: "smooth" });
-  }, []);
 
   const agendaAllApproved = !!(
     meeting?.agendaDocument?.approvals?.length &&
@@ -348,15 +330,6 @@ export default function MeetingDetailPage({
       });
     return () => { cancelled = true; };
   }, [extractIdForSendModal, resolvedParams.id]);
-
-  useEffect(() => {
-    updateTabsScrollHint();
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(updateTabsScrollHint);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [meeting, updateTabsScrollHint]);
 
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
@@ -1075,31 +1048,17 @@ export default function MeetingDetailPage({
         </div>
       </div>
 
-      {/* Навигация по документам — одна строка, скролл стрелками или тачем */}
+      {/* Навигация по документам — скролл стрелками или тачем */}
       <nav
         className="mt-6 border-b border-gray-200 dark:border-gray-700"
         aria-label="Разделы заседания"
       >
-        <div className="flex items-stretch">
-          {/* Стрелка влево — показать, когда есть куда скроллить влево */}
-          {tabsScrollLeftHint && (
-            <button
-              type="button"
-              onClick={() => scrollTabs("left")}
-              className="shrink-0 self-center flex items-center justify-center w-10 h-10 rounded-full border border-transparent bg-white/70 dark:bg-gray-800/70 backdrop-blur-md text-gray-600 dark:text-gray-400 hover:bg-white/90 hover:text-gray-900 dark:hover:bg-gray-700/90 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
-              aria-label="Прокрутить табы влево"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-          <div
-            ref={tabsScrollRef}
-            onScroll={updateTabsScrollHint}
-            className="meeting-tabs-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden -mb-px"
-          >
-            <ul className="flex flex-nowrap gap-0 -mb-px min-w-max">
+        <HorizontalTabArrowStrip
+          enabled={!!meeting && !isLoading}
+          remeasureDeps={[meeting?.id, effectiveTab, meetingTabs.length]}
+        >
+          {(innerRef) => (
+            <ul ref={innerRef} className="-mb-px flex min-w-max flex-nowrap gap-0">
           {meetingTabs.map((tab) => (
             <li key={tab.id}>
               <button
@@ -1112,7 +1071,7 @@ export default function MeetingDetailPage({
                 }}
                 aria-current={effectiveTab === tab.id ? "page" : undefined}
                 className={`
-                  flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors
+                  flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-t-md
                   ${effectiveTab === tab.id
                     ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
@@ -1139,21 +1098,8 @@ export default function MeetingDetailPage({
             </li>
           ))}
             </ul>
-          </div>
-          {/* Стрелка вправо — показать, когда есть куда скроллить вправо */}
-          {tabsScrollRightHint && (
-            <button
-              type="button"
-              onClick={() => scrollTabs("right")}
-              className="shrink-0 self-center flex items-center justify-center w-10 h-10 rounded-full border border-transparent bg-white/70 dark:bg-gray-800/70 backdrop-blur-md text-gray-600 dark:text-gray-400 hover:bg-white/90 hover:text-gray-900 dark:hover:bg-gray-700/90 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
-              aria-label="Прокрутить табы вправо"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
           )}
-        </div>
+        </HorizontalTabArrowStrip>
         {/* Контекст текущего раздела — одна строка вместо четырёх карточек */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
           {effectiveTab === "agenda" && (

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import CloseAppealModal from "@/components/appeals/CloseAppealModal";
+import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
 
 interface Ticket {
   id: string;
@@ -254,10 +255,13 @@ export default function PPOHeadAppealsPage() {
 
       {/* Табы */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto">
+        <HorizontalTabArrowStrip enabled={!isLoading} remeasureDeps={[filter, tickets.length]}>
+          {(innerRef) => (
+        <nav ref={innerRef} className="-mb-px flex w-max max-w-none flex-nowrap gap-x-4 sm:gap-x-8">
           <button
+            type="button"
             onClick={() => setFilter("all")}
-            className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+            className={`shrink-0 whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
               filter === "all"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -275,8 +279,9 @@ export default function PPOHeadAppealsPage() {
           {Object.entries(TICKET_STATUSES).map(([key, value]) => (
             <button
               key={key}
+              type="button"
               onClick={() => setFilter(key as FilterStatus)}
-              className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+              className={`shrink-0 whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
                 filter === key
                   ? "border-blue-500 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -295,6 +300,8 @@ export default function PPOHeadAppealsPage() {
             </button>
           ))}
         </nav>
+          )}
+        </HorizontalTabArrowStrip>
       </div>
 
       {/* Список обращений */}
