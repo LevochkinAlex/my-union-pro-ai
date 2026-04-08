@@ -10,6 +10,10 @@ export const COMPANY = {
   address: "127055, г. Москва, муниципальный округ Тверской, ул. Палиха, д. 7-9, к. 4, помещ. 1/1",
   addressNote: "",
   workingHours: "пн–пт 09:00–18:00",
+  /** Сообщество проекта во ВКонтакте */
+  vkGroupUrl: "https://vk.com/my_union_pro",
+  /** Канал в Telegram */
+  telegramChannelUrl: "https://t.me/myunionpro",
 } as const;
 
 export const CONTACTS = [
@@ -18,18 +22,21 @@ export const CONTACTS = [
     role: "Отдел продаж",
     email: "sales@myunion.pro",
     phone: "+7 995 095 55 93",
+    photo: "/nastya.png",
   },
   {
     name: "Ренат Усманов",
     role: "Генеральный директор",
     email: "ceo@yappix.ru",
     phone: "+7 987 415 78 97",
+    photo: "/renat.png",
   },
   {
     name: "Алексей Новиков",
     role: "Безопасность и инфраструктура",
     email: "security@myunion.pro",
     phone: "+7 995 095 55 93",
+    photo: "/alex.png",
   },
 ] as const;
 
