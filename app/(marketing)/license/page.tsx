@@ -75,10 +75,7 @@ export default function LicensePage() {
 
           {/* Main content */}
           <div className="min-w-0 flex-1">
-            <div
-              id="license-offer-pdf"
-              className="glass rounded-2xl p-6 sm:p-8"
-            >
+            <div className="glass rounded-2xl p-6 sm:p-8">
               <h1 className="text-2xl font-bold text-foreground mb-1">
                 Публичная оферта
               </h1>
@@ -272,20 +269,7 @@ export default function LicensePage() {
                 </S>
 
                 <S num="14" title="Реквизиты Лицензиара">
-                  <div className="relative not-prose" data-pdf-relative-wrapper>
-                    <div
-                      data-license-stamp
-                      className="license-offer-stamp pointer-events-none absolute inset-x-0 bottom-0 z-0 flex justify-end px-1 pb-1 pt-10 opacity-[0.42] dark:opacity-[0.36] sm:px-2 sm:pb-2"
-                      aria-hidden
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/license-stamp.png"
-                        alt=""
-                        className="h-auto max-h-40 w-auto max-w-[min(260px,52%)] object-contain object-bottom sm:max-h-48 sm:max-w-[min(300px,48%)]"
-                      />
-                    </div>
-                    <div data-pdf-table-layer className="relative z-10 overflow-x-auto rounded-xl glass">
+                  <div className="not-prose overflow-x-auto rounded-xl glass">
                       <table className="license-requisites-table w-full text-sm">
                         <tbody className="divide-y divide-white/10">
                           {([
@@ -312,7 +296,6 @@ export default function LicensePage() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
                   </div>
                 </S>
               </div>
