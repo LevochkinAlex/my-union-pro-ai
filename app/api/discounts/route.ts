@@ -20,12 +20,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Демо-режим: мок-ответ без BestBenefits и БД (избегаем 503/таймаутов)
+    // Демо-режим: мок-скидки без BestBenefits и БД
     if (isDemoUserId(session.user.id)) {
+      const { getDemoDiscounts } = await import("@/lib/demo");
+      const { discounts, total } = getDemoDiscounts();
       return NextResponse.json(
         {
-          discounts: [],
-          meta: { total: 0, page: 1, limit: 15, syncNeeded: false, activatedCount: 0 },
+          discounts,
+          meta: { total, page: 1, limit: 15, syncNeeded: false, activatedCount: 0 },
         },
         {
           status: 200,

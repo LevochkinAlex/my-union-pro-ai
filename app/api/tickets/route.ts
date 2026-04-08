@@ -262,6 +262,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (session.user.id === DEMO_MEMBER_USER_ID || session.user.id === (await import("@/lib/demo-constants")).DEMO_USER_ID) {
+      const formData = await request.formData();
+      const title = formData.get("title") as string;
+      return NextResponse.json({
+        success: true,
+        ticket: {
+          id: `demo-ticket-new-${Date.now()}`,
+          publicId: `DEMO-${Date.now().toString(36).toUpperCase()}`,
+          title: title || "Демо-обращение",
+          status: "PENDING",
+          createdAt: new Date().toISOString(),
+        },
+      });
+    }
+
     const formData = await request.formData();
     const type = formData.get("type") as string;
     const priority = formData.get("priority") as string;

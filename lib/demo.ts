@@ -17,6 +17,20 @@ import {
 export { DEMO_USER_ID, DEMO_MEMBER_USER_ID, DEMO_NEWS_ORG_NAME };
 export type { DemoStats, DemoAppeal, DemoMember };
 
+/** Server-side check: is this session a demo session (no real DB user). */
+export function isDemoSession(session: any): boolean {
+  return (
+    session?.user?.isDemo === true ||
+    session?.user?.id === DEMO_USER_ID ||
+    session?.user?.id === DEMO_MEMBER_USER_ID
+  );
+}
+
+/** Is this a demo chairman session? */
+export function isDemoChairman(session: any): boolean {
+  return session?.user?.id === DEMO_USER_ID;
+}
+
 /** Мок-статистика для дашборда председателя в демо. */
 export function getDemoStats(): DemoStats {
   return {
@@ -745,4 +759,188 @@ export function getDemoChairmanChats(): any[] {
 /** Проверка: является ли текущий пользователь демо (председатель или член). */
 export function isDemoUserId(userId: string | undefined): boolean {
   return userId === DEMO_USER_ID || userId === DEMO_MEMBER_USER_ID;
+}
+
+// ---------------------------------------------------------------------------
+//  Extended mocks for full demo cabinets
+// ---------------------------------------------------------------------------
+
+const DEMO_ORG_ID = "demo-org";
+
+/** Расширенный список членов профсоюза для раздела «Члены» (председатель). */
+export function getDemoMembersList(statusFilter?: string): any[] {
+  const now = new Date();
+  const approved = [
+    { id: "demo-u1", firstName: "Анна", lastName: "Сидорова", middleName: "Петровна", email: "anna.s@demo.local", phone: "+7 999 765 43 21", avatarUrl: null, jobTitle: "Медсестра", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 30 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 30 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-u2", firstName: "Иван", lastName: "Петров", middleName: "Сергеевич", email: "ivan.p@demo.local", phone: "+7 999 111 22 33", avatarUrl: null, jobTitle: "Врач", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 60 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 60 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-u3", firstName: "Мария", lastName: "Козлова", middleName: "Сергеевна", email: "maria.k@demo.local", phone: "+7 999 222 33 44", avatarUrl: null, jobTitle: "Специалист по кадрам", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 14 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 14 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-u4", firstName: "Ольга", lastName: "Новикова", middleName: null, email: "olga.n@demo.local", phone: "+7 999 333 44 55", avatarUrl: null, jobTitle: "Бухгалтер", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 90 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 90 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-u5", firstName: "Дмитрий", lastName: "Волков", middleName: "Игоревич", email: "dmitry.v@demo.local", phone: "+7 999 444 55 66", avatarUrl: null, jobTitle: "Инженер", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 7 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-u6", firstName: "Елена", lastName: "Соколова", middleName: "Владимировна", email: "elena.s@demo.local", phone: "+7 999 555 66 77", avatarUrl: null, jobTitle: "Юрист", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 120 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 120 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-u7", firstName: "Алексей", lastName: "Кузнецов", middleName: "Андреевич", email: "alex.k@demo.local", phone: "+7 999 666 77 88", avatarUrl: null, jobTitle: "Программист", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 180 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 180 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-u8", firstName: "Наталья", lastName: "Морозова", middleName: "Ивановна", email: "natalya.m@demo.local", phone: "+7 999 777 88 99", avatarUrl: null, jobTitle: "Экономист", status: "APPROVED", membershipJoinedAt: new Date(now.getTime() - 45 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 45 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+  ];
+  const pending = [
+    { id: "demo-pending-1", firstName: "Ольга", lastName: "Новикова", middleName: null, email: "olga.new@demo.local", phone: "+7 999 888 99 00", avatarUrl: null, jobTitle: "Терапевт", status: "DOCUMENTS_PENDING", membershipJoinedAt: null, createdAt: new Date(now.getTime() - 3 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+    { id: "demo-pending-2", firstName: "Дмитрий", lastName: "Волков", middleName: "Иг.", email: "dmitry.new@demo.local", phone: "+7 999 999 00 11", avatarUrl: null, jobTitle: "Водитель", status: "DOCUMENTS_PENDING", membershipJoinedAt: null, createdAt: new Date(now.getTime() - 1 * 86400000).toISOString(), organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME } },
+  ];
+  if (statusFilter === "pending" || statusFilter === "DOCUMENTS_PENDING") return pending;
+  if (statusFilter === "approved" || statusFilter === "APPROVED") return approved;
+  if (statusFilter === "excluded" || statusFilter === "EXCLUDED") return [];
+  return [...approved, ...pending];
+}
+
+/** Готовое демо-заседание (статус «Проведено»). */
+export function getDemoMeetings(): any[] {
+  const now = new Date();
+  const meetingDate = new Date(now.getTime() - 7 * 86400000);
+  return [{
+    id: "demo-meeting-1",
+    title: "Заседание профсоюзного комитета №4",
+    type: "COMMITTEE",
+    status: "COMPLETED",
+    meetingDate: meetingDate.toISOString(),
+    meetingNumber: "4",
+    location: "Конференц-зал, каб. 201",
+    chairman: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", middleName: "Сергеевич" },
+    secretary: { id: "demo-u3", firstName: "Мария", lastName: "Козлова", middleName: "Сергеевна" },
+    participantsCount: 5,
+    agendaItemsCount: 3,
+    documentsCount: 4,
+    createdAt: new Date(now.getTime() - 14 * 86400000).toISOString(),
+    updatedAt: meetingDate.toISOString(),
+    organizationId: DEMO_ORG_ID,
+    chatId: null,
+  }];
+}
+
+/** Детали демо-заседания по ID. */
+export function getDemoMeetingById(id: string): any | null {
+  if (id !== "demo-meeting-1") return null;
+  const now = new Date();
+  const meetingDate = new Date(now.getTime() - 7 * 86400000);
+  return {
+    id: "demo-meeting-1",
+    title: "Заседание профсоюзного комитета №4",
+    type: "COMMITTEE",
+    status: "COMPLETED",
+    meetingDate: meetingDate.toISOString(),
+    meetingNumber: "4",
+    location: "Конференц-зал, каб. 201",
+    chairman: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", middleName: "Сергеевич" },
+    secretary: { id: "demo-u3", firstName: "Мария", lastName: "Козлова", middleName: "Сергеевна" },
+    organizationId: DEMO_ORG_ID,
+    createdAt: new Date(now.getTime() - 14 * 86400000).toISOString(),
+    updatedAt: meetingDate.toISOString(),
+    chatId: null,
+    participants: [
+      { id: "demo-mp-1", userId: DEMO_USER_ID, role: "CHAIRMAN", user: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", middleName: "Сергеевич" }, attended: true },
+      { id: "demo-mp-2", userId: "demo-u3", role: "SECRETARY", user: { id: "demo-u3", firstName: "Мария", lastName: "Козлова", middleName: "Сергеевна" }, attended: true },
+      { id: "demo-mp-3", userId: "demo-u1", role: "MEMBER", user: { id: "demo-u1", firstName: "Анна", lastName: "Сидорова", middleName: "Петровна" }, attended: true },
+      { id: "demo-mp-4", userId: "demo-u6", role: "MEMBER", user: { id: "demo-u6", firstName: "Елена", lastName: "Соколова", middleName: "Владимировна" }, attended: true },
+      { id: "demo-mp-5", userId: "demo-u7", role: "MEMBER", user: { id: "demo-u7", firstName: "Алексей", lastName: "Кузнецов", middleName: "Андреевич" }, attended: false },
+    ],
+    agendaItems: [
+      { id: "demo-ai-1", number: 1, title: "Об итогах работы ППО за I квартал", speaker: "Еременко И.С.", coSpeaker: null, decision: "Принять к сведению. Информацию утвердить.", votesFor: 4, votesAgainst: 0, votesAbstained: 0, attachments: [] },
+      { id: "demo-ai-2", number: 2, title: "Об организации Дня здоровья для сотрудников", speaker: "Сидорова А.П.", coSpeaker: "Козлова М.С.", decision: "Провести мероприятие 15.05.2026. Ответственный — Сидорова А.П.", votesFor: 4, votesAgainst: 0, votesAbstained: 0, attachments: [] },
+      { id: "demo-ai-3", number: 3, title: "О материальной помощи членам профсоюза", speaker: "Соколова Е.В.", coSpeaker: null, decision: "Выделить материальную помощь согласно положению. Список утвердить.", votesFor: 3, votesAgainst: 0, votesAbstained: 1, attachments: [] },
+    ],
+    documents: [
+      { id: "demo-doc-agenda", type: "AGENDA", title: "Повестка заседания №4", status: "SIGNED", filePath: "/demo/demo-agenda.pdf", createdAt: new Date(now.getTime() - 10 * 86400000).toISOString() },
+      { id: "demo-doc-protocol", type: "PROTOCOL", title: "Протокол заседания №4", status: "SIGNED", filePath: "/demo/demo-protocol.pdf", createdAt: meetingDate.toISOString() },
+      { id: "demo-doc-resolution", type: "RESOLUTION", title: "Постановление по итогам заседания №4", status: "SIGNED", filePath: "/demo/demo-resolution.pdf", createdAt: meetingDate.toISOString() },
+      { id: "demo-doc-extract", type: "EXTRACT", title: "Выписка из протокола №4", status: "SIGNED", filePath: "/demo/demo-extract.pdf", createdAt: meetingDate.toISOString() },
+    ],
+  };
+}
+
+/** Документы организации для председателя. */
+export function getDemoChairmanDocuments(): any[] {
+  const now = new Date();
+  return [
+    { id: "demo-org-doc-1", type: "AGENDA", title: "Повестка заседания №4", status: "SIGNED", fileName: "Повестка_4.pdf", filePath: "/demo/demo-agenda.pdf", mimeType: "application/pdf", createdAt: new Date(now.getTime() - 10 * 86400000).toISOString(), updatedAt: new Date(now.getTime() - 10 * 86400000).toISOString(), meeting: { id: "demo-meeting-1", title: "Заседание №4" } },
+    { id: "demo-org-doc-2", type: "PROTOCOL", title: "Протокол заседания №4", status: "SIGNED", fileName: "Протокол_4.pdf", filePath: "/demo/demo-protocol.pdf", mimeType: "application/pdf", createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(), updatedAt: new Date(now.getTime() - 7 * 86400000).toISOString(), meeting: { id: "demo-meeting-1", title: "Заседание №4" } },
+    { id: "demo-org-doc-3", type: "RESOLUTION", title: "Постановление заседания №4", status: "SIGNED", fileName: "Постановление_4.pdf", filePath: "/demo/demo-resolution.pdf", mimeType: "application/pdf", createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(), updatedAt: new Date(now.getTime() - 7 * 86400000).toISOString(), meeting: { id: "demo-meeting-1", title: "Заседание №4" } },
+    { id: "demo-org-doc-4", type: "EXTRACT", title: "Выписка из протокола №4", status: "SIGNED", fileName: "Выписка_4.pdf", filePath: "/demo/demo-extract.pdf", mimeType: "application/pdf", createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(), updatedAt: new Date(now.getTime() - 7 * 86400000).toISOString(), meeting: { id: "demo-meeting-1", title: "Заседание №4" } },
+  ];
+}
+
+/** Мок-скидки (каталог) для демо — без промо-активации. */
+export function getDemoDiscounts(): { discounts: any[]; total: number } {
+  const discounts = [
+    { id: "demo-disc-1", title: "Скидка 15% в аптеке «Здоровье»", shortDescription: "Скидка на все лекарства и медтехнику для членов профсоюза", category: { id: "cat-1", name: "Здоровье" }, cities: [{ id: "city-1", name: "Москва" }], imageUrl: "/demo/demo-news-benefits.png", partnerName: "Аптека Здоровье", discountValue: "15%", isFavorite: false },
+    { id: "demo-disc-2", title: "Скидка 20% в фитнес-клубе FitLife", shortDescription: "Абонемент со скидкой для членов профсоюза и их семей", category: { id: "cat-2", name: "Спорт" }, cities: [{ id: "city-1", name: "Москва" }], imageUrl: "/demo/demo-post-health-event.png", partnerName: "FitLife", discountValue: "20%", isFavorite: false },
+    { id: "demo-disc-3", title: "Скидка 10% на путёвки в санаторий", shortDescription: "Льготные путёвки на санаторно-курортное лечение", category: { id: "cat-3", name: "Отдых" }, cities: [{ id: "city-1", name: "Москва" }, { id: "city-2", name: "Сочи" }], imageUrl: "/demo/demo-post-excursion.png", partnerName: "Санаторий «Подмосковье»", discountValue: "10%", isFavorite: false },
+    { id: "demo-disc-4", title: "Скидка 25% на юридические консультации", shortDescription: "Бесплатная первичная консультация и скидка на услуги", category: { id: "cat-4", name: "Услуги" }, cities: [{ id: "city-1", name: "Москва" }], imageUrl: null, partnerName: "Юридический центр «Право»", discountValue: "25%", isFavorite: false },
+    { id: "demo-disc-5", title: "Скидка 30% на обучающие курсы", shortDescription: "Повышение квалификации и переподготовка для членов профсоюза", category: { id: "cat-5", name: "Образование" }, cities: [{ id: "city-1", name: "Москва" }], imageUrl: null, partnerName: "Учебный центр «Профи»", discountValue: "30%", isFavorite: false },
+    { id: "demo-disc-6", title: "Скидка 10% на мобильную связь", shortDescription: "Специальный тариф для членов профсоюза", category: { id: "cat-6", name: "Связь" }, cities: [{ id: "city-1", name: "Москва" }, { id: "city-2", name: "Сочи" }], imageUrl: null, partnerName: "МТС", discountValue: "10%", isFavorite: false },
+  ];
+  return { discounts, total: discounts.length };
+}
+
+/** Мок-отчёты для демо-председателя. */
+export function getDemoReports(): any[] {
+  const now = new Date();
+  return [
+    { id: "demo-report-1", title: "Ежеквартальный отчёт за I квартал 2026", templateName: "Квартальный отчёт", status: "APPROVED", period: "Q1 2026", dueDate: new Date(now.getTime() - 15 * 86400000).toISOString(), submittedAt: new Date(now.getTime() - 20 * 86400000).toISOString(), approvedAt: new Date(now.getTime() - 17 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 30 * 86400000).toISOString(), updatedAt: new Date(now.getTime() - 17 * 86400000).toISOString() },
+    { id: "demo-report-2", title: "Годовой отчёт за 2025 год", templateName: "Годовой отчёт", status: "APPROVED", period: "2025", dueDate: new Date(now.getTime() - 60 * 86400000).toISOString(), submittedAt: new Date(now.getTime() - 65 * 86400000).toISOString(), approvedAt: new Date(now.getTime() - 62 * 86400000).toISOString(), createdAt: new Date(now.getTime() - 90 * 86400000).toISOString(), updatedAt: new Date(now.getTime() - 62 * 86400000).toISOString() },
+  ];
+}
+
+/** Мок-сотрудники ППО для демо-председателя. */
+export function getDemoStaff(): any[] {
+  return [
+    { id: "demo-staff-1", userId: "demo-u3", user: { id: "demo-u3", firstName: "Мария", lastName: "Козлова", middleName: "Сергеевна", email: "maria.k@demo.local", avatarUrl: null }, role: { id: "demo-role-1", name: "Секретарь", permissions: {} }, status: "ACTIVE", createdAt: new Date(Date.now() - 180 * 86400000).toISOString() },
+    { id: "demo-staff-2", userId: "demo-u6", user: { id: "demo-u6", firstName: "Елена", lastName: "Соколова", middleName: "Владимировна", email: "elena.s@demo.local", avatarUrl: null }, role: { id: "demo-role-2", name: "Юрист", permissions: {} }, status: "ACTIVE", createdAt: new Date(Date.now() - 120 * 86400000).toISOString() },
+    { id: "demo-staff-3", userId: "demo-u8", user: { id: "demo-u8", firstName: "Наталья", lastName: "Морозова", middleName: "Ивановна", email: "natalya.m@demo.local", avatarUrl: null }, role: { id: "demo-role-3", name: "Казначей", permissions: {} }, status: "ACTIVE", createdAt: new Date(Date.now() - 60 * 86400000).toISOString() },
+  ];
+}
+
+/** Каналы новостей для председателя (демо). */
+export function getDemoNewsChannels(): any[] {
+  return [
+    { id: "demo-channel", name: "Новости ППО", iconUrl: null, organizationId: DEMO_ORG_ID, postsCount: 3, canPublish: true },
+    { id: "demo-channel-2", name: "Объявления", iconUrl: null, organizationId: DEMO_ORG_ID, postsCount: 0, canPublish: true },
+  ];
+}
+
+/** Мок «избранные тела» для API /api/ppo-head/elected-body-members. */
+export function getDemoElectedBodyMembers(): any[] {
+  return [
+    { id: "demo-eb-1", userId: DEMO_USER_ID, user: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", middleName: "Сергеевич" }, role: "CHAIRMAN" },
+    { id: "demo-eb-2", userId: "demo-u3", user: { id: "demo-u3", firstName: "Мария", lastName: "Козлова", middleName: "Сергеевна" }, role: "SECRETARY" },
+    { id: "demo-eb-3", userId: "demo-u6", user: { id: "demo-u6", firstName: "Елена", lastName: "Соколова", middleName: "Владимировна" }, role: "MEMBER" },
+    { id: "demo-eb-4", userId: "demo-u7", user: { id: "demo-u7", firstName: "Алексей", lastName: "Кузнецов", middleName: "Андреевич" }, role: "MEMBER" },
+    { id: "demo-eb-5", userId: "demo-u1", user: { id: "demo-u1", firstName: "Анна", lastName: "Сидорова", middleName: "Петровна" }, role: "MEMBER" },
+  ];
+}
+
+/** Мок контекста дашборда (/api/dashboard/context) для демо. */
+export function getDemoDashboardContext(userId: string): any {
+  const isChairman = userId === DEMO_USER_ID;
+  return {
+    viewMode: isChairman ? "PPO_HEAD" : "MEMBER",
+    isPPOHead: isChairman,
+    permissions: isChairman
+      ? { documents_view: true, documents_manage: true, appeals_view: true, appeals_manage: true, news_view: true, news_manage: true, members_view: true, members_manage: true, chats_view: true, chats_manage: true, discounts_view: true, reports_view: true, reports_manage: true, staff_view: true, staff_manage: true, settings_view: true, settings_manage: true }
+      : {},
+    isStaff: false,
+    organization: { id: DEMO_ORG_ID, name: DEMO_NEWS_ORG_NAME },
+  };
+}
+
+/** Статистика по обращениям для вкладки «Отчётность» (GET /api/ppo-head/tickets/statistics). */
+export function getDemoTicketStatistics(): any {
+  return {
+    total: 15,
+    byStatus: { PENDING: 3, IN_PROGRESS: 5, RESOLVED: 6, CLOSED: 1 },
+    byType: { HR: 5, LEGAL: 4, OTHER: 6 },
+    avgResolutionDays: 3.2,
+    avgRating: 4.5,
+    monthly: [
+      { month: "2026-01", count: 4 },
+      { month: "2026-02", count: 5 },
+      { month: "2026-03", count: 6 },
+    ],
+  };
 }

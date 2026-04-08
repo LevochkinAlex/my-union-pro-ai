@@ -216,9 +216,8 @@ export default function FloatingChatBot() {
 
     try {
       if (isDemo) {
-        // Демо: только API помощника, история в localStorage
         const history = conversationHistoryRef.current.map((m) => ({ role: m.role, content: m.content }));
-        const response = await fetch("/api/assistant/chat", {
+        const response = await fetch("/api/assistant/demo-chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userMessage, history }),

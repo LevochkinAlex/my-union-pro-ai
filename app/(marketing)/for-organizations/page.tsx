@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AnimateOnScroll from "@/components/landing/AnimateOnScroll";
+import ChairmanDemoLink from "@/components/landing/ChairmanDemoLink";
 import GlassCard from "@/components/landing/GlassCard";
 import MarketingContactsCards from "@/components/landing/MarketingContactsCards";
 import LandingPricing from "@/components/landing/LandingPricing";
@@ -89,6 +90,12 @@ export default function OrganizationsLandingPage() {
               >
                 Узнать цены
               </a>
+            </div>
+          </AnimateOnScroll>
+
+          <AnimateOnScroll delay={4}>
+            <div className="flex justify-center">
+              <ChairmanDemoLink />
             </div>
           </AnimateOnScroll>
         </div>

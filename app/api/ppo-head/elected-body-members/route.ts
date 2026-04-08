@@ -10,6 +10,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isDemoUserId, getDemoElectedBodyMembers } from "@/lib/demo";
 
 export interface ElectedBodyMember {
   id: string;
@@ -27,7 +28,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Доступ: staff_view или documents_view (участники заседания должны видеть список для выбора докладчика/со-докладчиков)
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({ members: getDemoElectedBodyMembers() });
+    }
+
     let perm = await checkUserPermissions(session.user.id, "staff_view");
     if (!perm.hasAccess || !perm.organizationId) {
       perm = await checkUserPermissions(session.user.id, "documents_view");

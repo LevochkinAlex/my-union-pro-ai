@@ -18,24 +18,7 @@ export async function GET(request: NextRequest) {
     const channelId = searchParams.get("channelId") || null;
     const skip = (page - 1) * limit;
 
-    // Исключённый: доступ к новостям закрыт
-    if (session?.user?.id) {
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { membershipStatus: true, unionMembershipStatus: true },
-      });
-      const isExcluded = user?.membershipStatus === "EXCLUDED" || user?.unionMembershipStatus === "REMOVED";
-      const isReApplying = user?.unionMembershipStatus === "REMOVED" &&
-        (user?.membershipStatus === "DOCUMENTS_PENDING" || user?.membershipStatus === "PROFILE_INCOMPLETE");
-      if (isExcluded && !isReApplying) {
-        return NextResponse.json(
-          { error: "Доступ к новостям закрыт. Вы исключены из профсоюза." },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Демо-режим: мок-новости без БД
+    // Демо-режим: мок-новости без БД (must be before any Prisma call)
     if (session?.user?.id && isDemoUserId(session.user.id)) {
       const allDemo = getDemoNews(limit * 5);
       const total = allDemo.length;

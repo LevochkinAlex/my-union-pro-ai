@@ -243,6 +243,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
+    if (isDemoUserId(session.user.id)) {
+      const body = await request.json();
+      return NextResponse.json({
+        success: true,
+        post: {
+          id: `demo-news-${Date.now()}`,
+          title: body.title || "Демо-новость",
+          content: body.content || "",
+          coverImage: body.coverImage || null,
+          publishedAt: new Date().toISOString(),
+          viewCount: 0,
+          author: { id: session.user.id, firstName: "Иван", lastName: "Еременко", email: "demo@demo.local", avatarUrl: null },
+          channel: { id: body.channelId || "demo-channel", name: "Новости", iconUrl: null },
+          _count: { likes: 0, comments: 0 },
+          isLiked: false,
+        },
+      });
+    }
+
     const postUserRecord = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { isRPOHead: true, rpoHeadOrganizationId: true },

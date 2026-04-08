@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import DiscountsPageWrapper from "@/components/dashboard/DiscountsPageWrapper";
 import { PageHeader } from "@/components/ui";
 import type { DiscountPreferenceResponse } from "@/types/discounts";
+import { isDemoUserId, getDemoDiscounts } from "@/lib/demo";
 
 // Указываем, что страница динамическая (использует getServerSession)
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,29 @@ export default async function DiscountsPage() {
   if (!userId || typeof userId !== 'string') {
     console.log("[discounts/page] Invalid userId type:", typeof userId, "- redirecting to /login");
     redirect("/login");
+  }
+
+  if (isDemoUserId(userId)) {
+    const { discounts } = getDemoDiscounts();
+    const demoData = {
+      discounts,
+      categories: [],
+      cities: [],
+      meta: { total: discounts.length, page: 1, limit: 20, hasMore: false },
+      source: "demo",
+    } as any;
+    const demoPreference: DiscountPreferenceResponse = {
+      pushEnabled: false,
+      filters: { cityId: null, categoryIds: [], premiumOnly: false, claimed: [], favorites: [], view: "all" } as any,
+      geolocation: null,
+      updatedAt: null,
+    };
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Скидки" description="Каталог скидок для членов профсоюза (демо-режим)" />
+        <DiscountsPageWrapper initialData={demoData} initialPreference={demoPreference} />
+      </div>
+    );
   }
   
   console.log("[discounts/page] Loading discounts for user:", userId);

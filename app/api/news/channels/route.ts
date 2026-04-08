@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateRegionalNewsChannel, REGIONAL_NEWS_CHANNEL_NAME } from "@/lib/regional-news";
+import { isDemoUserId } from "@/lib/demo";
+import { getDemoNewsChannels } from "@/lib/demo";
 
 /**
  * GET /api/news/channels
@@ -16,7 +18,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Получаем организацию и роль пользователя (РПО — только региональный канал)
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({ channels: getDemoNewsChannels() });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {

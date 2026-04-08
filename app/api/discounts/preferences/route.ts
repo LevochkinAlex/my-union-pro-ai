@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getValidActivatedDiscounts } from "@/lib/discount-activation";
+import { isDemoUserId } from "@/lib/demo";
 
 const preferenceSchema = z.object({
   pushEnabled: z.boolean().optional(),
@@ -41,6 +42,10 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({ pushEnabled: false, filters: { cityId: null, categoryIds: [], premiumOnly: false, radiusKm: null, claimed: [], favorites: [], view: "all" }, geolocation: null });
     }
 
     const preference = await prisma.discountPreference.findUnique({
@@ -96,9 +101,13 @@ async function updatePreferences(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
+    if (isDemoUserId(session.user.id)) {
+      const body = await request.json();
+      return NextResponse.json({ ok: true, ...body });
+    }
+
     const body = await request.json();
     
-    // Получаем существующие preferences для мерджа
     const existingPreference = await prisma.discountPreference.findUnique({
       where: { userId: session.user.id },
     });

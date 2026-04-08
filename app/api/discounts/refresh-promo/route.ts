@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptPassword } from "@/lib/best-benefits-password";
 import { getUserBestBenefitsToken } from "@/lib/best-benefits-user-auth";
+import { isDemoUserId } from "@/lib/demo";
 
 /**
  * Получить СВЕЖИЙ промокод для активированной скидки.
@@ -18,6 +19,10 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({ success: false, demoBlocked: true, message: "В демо-режиме обновление промокодов недоступно." });
     }
 
     const body = await request.json();

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isDemoUserId, getDemoDiscounts } from "@/lib/demo";
 import type { DiscountItem, DiscountSearchResult, DiscountCategory, DiscountCity } from "@/types/discounts";
 
 /**
@@ -13,6 +14,11 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      const { discounts, total } = getDemoDiscounts();
+      return NextResponse.json({ discounts, total, page: 1, limit: 20, totalPages: 1, categories: [], cities: [] });
     }
 
     const url = new URL(request.url);

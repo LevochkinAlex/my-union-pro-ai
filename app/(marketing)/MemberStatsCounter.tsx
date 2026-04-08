@@ -5,10 +5,13 @@ import { PLATFORM_STATS } from "@/lib/constants/landing-members";
 
 function useCountUp(end: string, visible: boolean) {
   const [display, setDisplay] = useState(end);
-  const numMatch = end.match(/^([\d\s]+)/);
 
   useEffect(() => {
-    if (!visible || !numMatch) return;
+    if (!visible) return;
+
+    const numMatch = end.match(/^([\d\s]+)/);
+    if (!numMatch) return;
+
     const target = parseInt(numMatch[1].replace(/\s/g, ""), 10);
     if (isNaN(target)) return;
 
@@ -17,6 +20,9 @@ function useCountUp(end: string, visible: boolean) {
     const steps = 40;
     const stepTime = duration / steps;
     let step = 0;
+
+    // Start from zero so we do not flash the final value for one frame before the first tick.
+    setDisplay((0).toLocaleString("ru-RU") + suffix);
 
     const timer = setInterval(() => {
       step++;
@@ -31,7 +37,7 @@ function useCountUp(end: string, visible: boolean) {
     }, stepTime);
 
     return () => clearInterval(timer);
-  }, [visible, end, numMatch]);
+  }, [visible, end]);
 
   return display;
 }

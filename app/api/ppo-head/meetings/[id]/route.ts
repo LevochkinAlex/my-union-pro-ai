@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentType } from "@prisma/client";
+import { isDemoUserId, getDemoMeetingById } from "@/lib/demo";
 
 /**
  * GET /api/ppo-head/meetings/[id]
@@ -18,6 +19,13 @@ export async function GET(
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      const { id } = await params;
+      const meeting = getDemoMeetingById(id);
+      if (meeting) return NextResponse.json({ meeting });
+      return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
     }
 
     const currentUser = await prisma.user.findUnique({

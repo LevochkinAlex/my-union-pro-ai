@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { MeetingType, MeetingStatus, MeetingFormat } from "@prisma/client";
+import { isDemoUserId, getDemoMeetings } from "@/lib/demo";
 
 /**
  * GET /api/ppo-head/meetings
@@ -15,6 +16,11 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      const meetings = getDemoMeetings();
+      return NextResponse.json({ meetings, total: meetings.length, page: 1, limit: 20 });
     }
 
     const currentUser = await prisma.user.findUnique({
@@ -127,6 +133,20 @@ export async function POST(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      const body = await request.json();
+      return NextResponse.json({
+        success: true,
+        meeting: {
+          id: `demo-meeting-${Date.now()}`,
+          title: body.title || "Демо-заседание",
+          status: "PLANNED",
+          meetingDate: body.meetingDate || new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        },
+      });
     }
 
     const perm = await checkUserPermissions(session.user.id, "documents_create");

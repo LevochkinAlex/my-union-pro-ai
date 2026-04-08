@@ -952,13 +952,8 @@ export const authOptions: NextAuthOptions = {
         // avatarUrl не хранится в токене (слишком длинный URL), будет получаться из БД при необходимости
         session.user.avatarUrl = undefined;
         
-        // Демо-режим: не обращаемся к БД
-        if (token.id === DEMO_USER_ID || token.isDemo) {
-          (session.user as any).viewMode = "PPO_HEAD";
-          (session.user as any).isPPOHead = true;
-          (session.user as any).ppoHeadOrganizationId = null;
-          (session.user as any).isDemo = true;
-        } else if (token.id === DEMO_MEMBER_USER_ID) {
+        // Демо-режим: не обращаемся к БД (member checked first — token.isDemo is true for both)
+        if (token.id === DEMO_MEMBER_USER_ID) {
           (session.user as any).viewMode = "MEMBER";
           (session.user as any).isPPOHead = false;
           (session.user as any).ppoHeadOrganizationId = null;
@@ -966,6 +961,11 @@ export const authOptions: NextAuthOptions = {
           session.user.firstName = token.firstName || "Анна";
           session.user.lastName = token.lastName || "Сидорова";
           session.user.name = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ").trim() || "Анна Сидорова";
+        } else if (token.id === DEMO_USER_ID || token.isDemo) {
+          (session.user as any).viewMode = "PPO_HEAD";
+          (session.user as any).isPPOHead = true;
+          (session.user as any).ppoHeadOrganizationId = null;
+          (session.user as any).isDemo = true;
         } else {
           // Получаем актуальные данные из БД при каждом запросе; при ошибке/таймауте — fallback из токена (на проде не теряем РПО)
           const userId = typeof token.id === "string" && token.id.trim() ? token.id.trim() : null;

@@ -9,6 +9,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isDemoUserId, getDemoReports } from "@/lib/demo";
 
 // GET - список отчётов организации
 export async function GET(request: NextRequest) {
@@ -17,6 +18,11 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      const reports = getDemoReports();
+      return NextResponse.json({ reports, total: reports.length });
     }
 
     const access = await checkUserPermissions(session.user.id, "reports_view");

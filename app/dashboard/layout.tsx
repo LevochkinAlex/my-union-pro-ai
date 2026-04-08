@@ -45,7 +45,11 @@ export default async function DashboardLayout({
   let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
   let dbUser: { membershipStatus?: string; unionMembershipStatus?: string; organizationId?: string | null } | null = null;
 
-  if (session.user.id !== DEMO_MEMBER_USER_ID && !isDemo) {
+  // Demo chairman: force isApproved for menu building (meetings submenu)
+  const isDemoChairmanUser = session.user.id === DEMO_USER_ID;
+  const isDemoMemberUser = session.user.id === DEMO_MEMBER_USER_ID;
+
+  if (!isDemoMemberUser && !isDemo) {
     const LAYOUT_DB_TIMEOUT_MS = 2000;
     try {
       const [dbUserResult, staffResult, activeStaffPosition] = await Promise.all([
@@ -130,7 +134,7 @@ export default async function DashboardLayout({
   const dbUnionStatus = (dbUser as { unionMembershipStatus?: string } | null)?.unionMembershipStatus;
   const isReApplying = dbUnionStatus === "REMOVED" && (dbMembershipStatus === "DOCUMENTS_PENDING" || dbMembershipStatus === "PROFILE_INCOMPLETE");
   const isExcluded = (dbMembershipStatus === "EXCLUDED" || dbUnionStatus === "REMOVED") && !isReApplying;
-  const isApproved = dbMembershipStatus === "APPROVED" || dbUnionStatus === "ACCEPTED";
+  const isApproved = dbMembershipStatus === "APPROVED" || dbUnionStatus === "ACCEPTED" || isDemoChairmanUser || isDemoMemberUser;
   const perm = staffPermissions?.permissions ?? {};
 
   // Создаем базовое меню

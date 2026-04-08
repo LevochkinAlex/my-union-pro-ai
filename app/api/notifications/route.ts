@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isDemoUserId } from "@/lib/demo";
 
 // GET /api/notifications - получить список уведомлений пользователя
 export async function GET(request: NextRequest) {
@@ -9,6 +10,10 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({ notifications: [], total: 0, unreadCount: 0, page: 1, limit: 50 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -133,6 +138,10 @@ export async function PATCH(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({ success: true });
     }
 
     const body = await request.json();

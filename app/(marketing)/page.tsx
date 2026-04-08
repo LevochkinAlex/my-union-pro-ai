@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AnimateOnScroll from "@/components/landing/AnimateOnScroll";
 import MarketingContactsCards from "@/components/landing/MarketingContactsCards";
+import MemberDemoLink from "@/components/landing/MemberDemoLink";
 import ScreenshotCarousel from "@/components/landing/ScreenshotCarousel";
 import MemberBenefitsGrid from "./MemberBenefitsGrid";
 import MemberStatsCounter from "./MemberStatsCounter";
@@ -63,6 +64,12 @@ export default function MemberLandingPage() {
                 >
                   Узнать больше
                 </a>
+              </div>
+            </AnimateOnScroll>
+
+            <AnimateOnScroll delay={4}>
+              <div className="flex justify-center">
+                <MemberDemoLink />
               </div>
             </AnimateOnScroll>
           </div>

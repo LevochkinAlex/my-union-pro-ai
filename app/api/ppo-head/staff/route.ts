@@ -13,6 +13,7 @@ import { sendUserNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
+import { isDemoUserId, getDemoStaff } from "@/lib/demo";
 
 // Генерация токена приглашения
 function generateInviteToken(): string {
@@ -26,6 +27,10 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({ staff: getDemoStaff(), total: getDemoStaff().length });
     }
 
     const access = await checkUserPermissions(session.user.id, "staff_view");

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
+import { isDemoUserId, getDemoMembersList } from "@/lib/demo";
 
 /**
  * GET /api/ppo-head/members
@@ -14,6 +15,13 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    if (isDemoUserId(session.user.id)) {
+      const { searchParams } = new URL(request.url);
+      const status = searchParams.get("status") || undefined;
+      const members = getDemoMembersList(status);
+      return NextResponse.json({ members, total: members.length });
     }
 
     const perm = await checkUserPermissions(session.user.id, "members_view");
