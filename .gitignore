@@ -64,6 +64,9 @@ SERVER_ACCESS.md
 
 # PDF documents and uploaded files
 *.pdf
+# Статические PDF в репозитории (лендинг, демо)
+!public/offerta.pdf
+!public/demo/*.pdf
 /public/uploads/documents/*
 !/public/uploads/documents/.gitkeep
 /public/uploads/avatars/*
