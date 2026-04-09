@@ -3,6 +3,7 @@
   "version": "1.10.7-beta.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "fix-appeal-messages": "tsx scripts/fix-appeal-messages.ts",
     "rebuild-appeal-statuses": "dotenv -e .env.local -- tsx scripts/rebuild-appeal-statuses.ts",
     "rebuild-meeting-chats": "dotenv -e .env.local -- tsx scripts/rebuild-meeting-chats-for-user.ts",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -42,7 +43,12 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
   const searchParams = useSearchParams();
   const router = useRouter();
   const { openTour } = useTour();
+  const prefersReducedMotion = useReducedMotion();
   const fullPath = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
+
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [pathname]);
 
   // Обновляем отступ контента при изменении состояния sidebar
   useEffect(() => {
@@ -130,25 +136,22 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 {/* Main item */}
                 {hasSubItems ? (
                   <button
+                    type="button"
+                    aria-expanded={!isCollapsed && isExpanded}
                     onClick={() => {
                       if (isNavigating) return; // Prevent double clicks
                       
                       if (isCollapsed) {
-                        // If collapsed, navigate to main item using Next.js router
                         setIsNavigating(true);
                         router.push(item.href);
                         setTimeout(() => setIsNavigating(false), 500);
                       } else {
-                        // If expanded, toggle submenu
                         if (isExpanded) {
-                          // Сворачиваем
                           setExpandedItems(prev => prev.filter(h => h !== item.href));
-                          // Запоминаем что пользователь вручную свернул
                           if (isSubItemActive) {
                             setManuallyCollapsed(prev => [...prev, item.href]);
                           }
                         } else {
-                          // Разворачиваем
                           setExpandedItems(prev => [...prev, item.href]);
                           setManuallyCollapsed(prev => prev.filter(h => h !== item.href));
                         }
@@ -175,10 +178,11 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                       <>
                         <span className="flex-1 text-left">{item.label}</span>
                         <svg
-                          className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none ${isExpanded ? "rotate-180" : ""}`}
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
+                          aria-hidden
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
@@ -189,14 +193,6 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                   <Link
                     href={item.href}
                     prefetch={false}
-                    onClick={(e) => {
-                      if (isNavigating) {
-                        e.preventDefault();
-                        return;
-                      }
-                      setIsNavigating(true);
-                      setTimeout(() => setIsNavigating(false), 500);
-                    }}
                     className={`flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       isActive
                         ? "bg-blue-600 text-white shadow-sm"
@@ -205,7 +201,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                       isCollapsed
                         ? "h-10 w-10 justify-center"
                         : "w-full px-2.5 py-2"
-                    } ${isNavigating ? "pointer-events-none opacity-70" : ""}`}
+                    }`}
                     title={isCollapsed ? item.label : undefined}
                   >
                     <span className="flex-shrink-0 relative">
@@ -218,37 +214,54 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 )}
 
                 {/* Sub items */}
-                {hasSubItems && isExpanded && !isCollapsed && (
-                  <div className="mt-0.5 ml-2.5 space-y-0.5 border-l-2 border-gray-200 pl-3 dark:border-gray-700">
-                    {item.subItems!.map((subItem) => {
-                      const hrefPath = subItem.href.split("?")[0];
-                      const hasQuery = subItem.href.includes("?");
-                      const isExactMatch = hasQuery
-                        ? fullPath === subItem.href
-                        : pathname === subItem.href;
-                      const isChildPage = pathname.startsWith(hrefPath + "/") &&
-                                         !item.subItems!.some(other =>
-                                           other.href !== subItem.href &&
-                                           (pathname === other.href.split("?")[0] || pathname.startsWith(other.href.split("?")[0] + "/"))
-                                         );
-                      const subIsActive = isExactMatch || isChildPage;
-                      
-                      return (
-                        <Link
-                          key={subItem.href}
-                          href={subItem.href}
-                          prefetch={true}
-                          className={`block rounded-md px-2.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                              subIsActive
-                                ? "bg-blue-100 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                                : "text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700/50"
-                          }`}
-                        >
-                          {subItem.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
+                {hasSubItems && !isCollapsed && (
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        key={`sub-${item.href}`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={
+                          prefersReducedMotion
+                            ? { duration: 0 }
+                            : { duration: 0.28, ease: [0.4, 0, 0.2, 1] }
+                        }
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-0.5 ml-2.5 space-y-0.5 border-l-2 border-gray-200 pl-3 dark:border-gray-700">
+                          {item.subItems!.map((subItem) => {
+                            const hrefPath = subItem.href.split("?")[0];
+                            const hasQuery = subItem.href.includes("?");
+                            const isExactMatch = hasQuery
+                              ? fullPath === subItem.href
+                              : pathname === subItem.href;
+                            const isChildPage = pathname.startsWith(hrefPath + "/") &&
+                                               !item.subItems!.some(other =>
+                                                 other.href !== subItem.href &&
+                                                 (pathname === other.href.split("?")[0] || pathname.startsWith(other.href.split("?")[0] + "/"))
+                                               );
+                            const subIsActive = isExactMatch || isChildPage;
+
+                            return (
+                              <Link
+                                key={subItem.href}
+                                href={subItem.href}
+                                prefetch={true}
+                                className={`block rounded-md px-2.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                    subIsActive
+                                      ? "bg-blue-100 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                      : "text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700/50"
+                                }`}
+                              >
+                                {subItem.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 )}
               </div>
             );

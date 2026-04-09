@@ -291,6 +291,8 @@ model User {
   agendaItemsCoSpeaker  MeetingAgendaItem[]  @relation("AgendaItemCoSpeaker")
   agendaVotes           MeetingAgendaVote[]  @relation("UserAgendaVotes")
 
+  partnerLinkedAs Partner[] @relation("PartnerLinkedUser")
+
   @@index([email])
   @@index([phone])
   @@index([organizationId])
@@ -545,6 +547,41 @@ model Organization {
   @@index([inn])
   @@index([level])
   @@index([sortOrder])
+}
+
+// Партнёры (карточки в админке). Опционально: пользователь для «Войти как» (явно задаётся суперадмином).
+model Partner {
+  id String @id @default(cuid())
+
+  name        String
+  description String? @db.Text
+  website     String?
+
+  inn     String?
+  address String? @db.Text
+  phone   String?
+  email   String?
+
+  contactLastName   String?
+  contactFirstName  String?
+  contactMiddleName String?
+  contactEmail      String?
+  contactPhone      String?
+  contactJobTitle   String?
+
+  linkedUserId String?
+  linkedUser   User?   @relation("PartnerLinkedUser", fields: [linkedUserId], references: [id], onDelete: SetNull)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([inn])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([linkedUserId])
 }
 
 enum BillingEntityType {

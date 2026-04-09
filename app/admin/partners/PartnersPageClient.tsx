@@ -1,0 +1,660 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
+import { alertError, alertSuccess } from "@/lib/alert";
+
+const PAGE_SIZE = 20;
+
+type PartnerForm = {
+  name: string;
+  description: string;
+  website: string;
+  inn: string;
+  address: string;
+  phone: string;
+  email: string;
+  contactLastName: string;
+  contactFirstName: string;
+  contactMiddleName: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactJobTitle: string;
+  isActive: boolean;
+};
+
+export type PartnerRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  inn: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  contactLastName: string | null;
+  contactFirstName: string | null;
+  contactMiddleName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  contactJobTitle: string | null;
+  linkedUserId: string | null;
+  linkedUser?: { id: string; email: string | null } | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
+const emptyForm = (): PartnerForm => ({
+  name: "",
+  description: "",
+  website: "",
+  inn: "",
+  address: "",
+  phone: "",
+  email: "",
+  contactLastName: "",
+  contactFirstName: "",
+  contactMiddleName: "",
+  contactEmail: "",
+  contactPhone: "",
+  contactJobTitle: "",
+  isActive: true,
+});
+
+function formatContactFio(p: PartnerRow | null | undefined): string {
+  if (!p || typeof p !== "object") return "—";
+  const parts = [p.contactLastName, p.contactFirstName, p.contactMiddleName].filter(Boolean);
+  return parts.length ? parts.join(" ") : "—";
+}
+
+type PartnersPageClientProps = {
+  initialPartners?: PartnerRow[];
+  initialTotal?: number;
+  serverError?: string | null;
+};
+
+export default function PartnersPageClient({
+  initialPartners = [],
+  initialTotal = 0,
+  serverError = null,
+}: PartnersPageClientProps) {
+  const safeInitial = Array.isArray(initialPartners) ? initialPartners.filter((p) => p && p.id) : [];
+  const [partners, setPartners] = useState<PartnerRow[]>(safeInitial);
+  const [total, setTotal] = useState(initialTotal);
+  const [totalPages, setTotalPages] = useState(Math.max(1, Math.ceil(initialTotal / PAGE_SIZE)));
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [loading, setLoading] = useState(initialTotal === 0);
+  const [loadError, setLoadError] = useState<string | null>(serverError);
+  const skipFirstEmptySearchFetch = useRef(initialTotal > 0);
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [formData, setFormData] = useState<PartnerForm>(emptyForm);
+  const [saving, setSaving] = useState(false);
+
+  const loadPartners = useCallback(async (pageNum: number, searchQuery: string) => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(pageNum));
+      params.set("limit", String(PAGE_SIZE));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      const res = await fetch(`/api/admin/partners?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          data.error || (res.status === 403 ? "Недостаточно прав. Войдите как суперадмин." : "Ошибка загрузки");
+        setLoadError(msg);
+        setPartners([]);
+        setTotal(0);
+        setTotalPages(1);
+        return;
+      }
+      setPartners(data.partners || []);
+      setTotal(data.total ?? 0);
+      setTotalPages(Math.max(1, data.totalPages ?? 1));
+      setPage(data.page ?? pageNum);
+    } catch {
+      setLoadError("Ошибка сети");
+      setPartners([]);
+      setTotal(0);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (skipFirstEmptySearchFetch.current && search === "") {
+      skipFirstEmptySearchFetch.current = false;
+      if (initialTotal > 0) {
+        setLoading(false);
+        return;
+      }
+    }
+    loadPartners(1, search);
+  }, [search, loadPartners]);
+
+  const goToPage = (p: number) => {
+    const next = Math.max(1, Math.min(p, totalPages));
+    loadPartners(next, search);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput.trim());
+    setPage(1);
+  };
+
+  const handleCreate = () => {
+    setIsCreating(true);
+    setFormData(emptyForm());
+  };
+
+  const closeModal = () => {
+    if (saving) return;
+    setIsCreating(false);
+  };
+
+  const handleSave = async () => {
+    const name = formData.name.trim();
+    if (!name) {
+      alertError("Укажите название партнёра.", "Партнеры");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/partners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          description: formData.description.trim() || undefined,
+          website: formData.website.trim() || undefined,
+          inn: formData.inn.trim() || undefined,
+          address: formData.address.trim() || undefined,
+          phone: formData.phone.trim() || undefined,
+          email: formData.email.trim() || undefined,
+          contactLastName: formData.contactLastName.trim() || undefined,
+          contactFirstName: formData.contactFirstName.trim() || undefined,
+          contactMiddleName: formData.contactMiddleName.trim() || undefined,
+          contactEmail: formData.contactEmail.trim() || undefined,
+          contactPhone: formData.contactPhone.trim() || undefined,
+          contactJobTitle: formData.contactJobTitle.trim() || undefined,
+          isActive: formData.isActive,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alertError(typeof data.error === "string" ? data.error : "Ошибка сохранения", "Партнеры");
+        return;
+      }
+      alertSuccess("Партнёр сохранён.", "Партнеры");
+      setIsCreating(false);
+      setPage(1);
+      await loadPartners(1, search);
+    } catch {
+      alertError("Ошибка сети", "Партнеры");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 min-w-0 w-full">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Партнеры</h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Управление партнёрскими программами и связями.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCreate}
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-blue-700"
+        >
+          + Создать партнёра
+        </button>
+      </div>
+
+      <form onSubmit={handleSearchSubmit}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Поиск по названию, ИНН, email, телефону, контакту..."
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-lg bg-gray-200 px-4 py-2 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+          >
+            Найти
+          </button>
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                setSearch("");
+              }}
+              className="rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            >
+              Сбросить
+            </button>
+          )}
+        </div>
+      </form>
+
+      {loadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+          {loadError}
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          </div>
+        ) : (
+          <table className="w-full min-w-[1024px]">
+            <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+              <tr>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Название
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">ИНН</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Email</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Телефон</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Контактное лицо
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Статус</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Дата создания
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Действия</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {partners.filter((p) => p?.id).map((p) => {
+                const impersonateId = p.linkedUser?.id ?? p.linkedUserId;
+                const impersonateEmail = p.linkedUser?.email?.trim() || "";
+                return (
+                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{p.name ?? "—"}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{p.inn ?? "—"}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{p.email ?? "—"}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{p.phone ?? "—"}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{formatContactFio(p)}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                          p.isActive
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+                            : "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200"
+                        }`}
+                      >
+                        {p.isActive !== false ? "Активна" : "Неактивна"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                      {p.createdAt ? new Date(p.createdAt).toLocaleDateString("ru-RU") : "—"}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                          href={`/admin/partners/${p.id}`}
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                        >
+                          Редактировать
+                        </Link>
+                        {impersonateId && impersonateEmail ? (
+                          <ImpersonateButton
+                            userId={impersonateId}
+                            userEmail={impersonateEmail}
+                            label="Войти как"
+                          />
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        {!loading && partners.length === 0 && !loadError && (
+          <div className="py-12 text-center text-gray-600 dark:text-gray-400">Партнёров не найдено</div>
+        )}
+      </div>
+
+      {!loading && totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} из {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => goToPage(page - 1)}
+              disabled={page <= 1}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Назад
+            </button>
+            <span className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+              Страница {page} из {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => goToPage(page + 1)}
+              disabled={page >= totalPages}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Вперёд
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isCreating && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="flex min-h-full items-center justify-center bg-black/50 p-4 transition-opacity"
+            onClick={closeModal}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="partner-modal-title"
+              className="relative w-full max-w-3xl rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                <h2
+                  id="partner-modal-title"
+                  className="text-xl font-semibold text-gray-900 dark:text-white"
+                >
+                  Создание партнёра
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Закрыть окно"
+                  title="Закрыть"
+                  onClick={closeModal}
+                  disabled={saving}
+                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="max-h-[calc(100vh-200px)] overflow-y-auto px-6 py-4">
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="partner-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Название партнёра *
+                    </label>
+                    <input
+                      id="partner-name"
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                      placeholder="Например: ООО «Партнёр»"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="partner-desc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Описание
+                    </label>
+                    <textarea
+                      id="partner-desc"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                      rows={3}
+                      placeholder="Кратко о партнёрской программе"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="partner-website" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Сайт
+                    </label>
+                    <input
+                      id="partner-website"
+                      type="url"
+                      value={formData.website}
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                      placeholder="https://"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
+                    <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-white">
+                      Реквизиты юр. лица (фирмы/партнера)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="partner-inn" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          ИНН
+                        </label>
+                        <input
+                          id="partner-inn"
+                          type="text"
+                          value={formData.inn}
+                          onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="10 цифр"
+                          disabled={saving}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="partner-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Телефон
+                        </label>
+                        <input
+                          id="partner-phone"
+                          type="text"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                          disabled={saving}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <label htmlFor="partner-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Email
+                      </label>
+                      <input
+                        id="partner-email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                        disabled={saving}
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <label htmlFor="partner-address" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Адрес
+                      </label>
+                      <textarea
+                        id="partner-address"
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                        rows={2}
+                        disabled={saving}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                    <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
+                      Контактное лицо <span className="font-normal text-gray-500">(необязательно)</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <div>
+                        <label htmlFor="partner-contact-last" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Фамилия
+                        </label>
+                        <input
+                          id="partner-contact-last"
+                          type="text"
+                          value={formData.contactLastName}
+                          onChange={(e) => setFormData({ ...formData, contactLastName: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="Иванов"
+                          autoComplete="off"
+                          disabled={saving}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="partner-contact-first" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Имя
+                        </label>
+                        <input
+                          id="partner-contact-first"
+                          type="text"
+                          value={formData.contactFirstName}
+                          onChange={(e) => setFormData({ ...formData, contactFirstName: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="Иван"
+                          autoComplete="off"
+                          disabled={saving}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="partner-contact-middle" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Отчество
+                        </label>
+                        <input
+                          id="partner-contact-middle"
+                          type="text"
+                          value={formData.contactMiddleName}
+                          onChange={(e) => setFormData({ ...formData, contactMiddleName: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="Иванович"
+                          autoComplete="off"
+                          disabled={saving}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div>
+                        <label htmlFor="partner-contact-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Email
+                        </label>
+                        <input
+                          id="partner-contact-email"
+                          type="email"
+                          value={formData.contactEmail}
+                          onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="contact@example.com"
+                          autoComplete="off"
+                          disabled={saving}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="partner-contact-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Телефон
+                        </label>
+                        <input
+                          id="partner-contact-phone"
+                          type="tel"
+                          value={formData.contactPhone}
+                          onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="+7 (999) 123-45-67"
+                          autoComplete="off"
+                          disabled={saving}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label htmlFor="partner-contact-job" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Должность
+                      </label>
+                      <input
+                        id="partner-contact-job"
+                        type="text"
+                        value={formData.contactJobTitle}
+                        onChange={(e) => setFormData({ ...formData, contactJobTitle: e.target.value })}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                        placeholder="Например: менеджер по партнёрству"
+                        autoComplete="off"
+                        disabled={saving}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.isActive}
+                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                        className="mr-2"
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">Активна</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  disabled={saving}
+                  className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!formData.name.trim() || saving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? "Сохранение…" : "Сохранить"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -8,9 +8,11 @@ import { UserRound } from "lucide-react";
 interface ImpersonateButtonProps {
   userId: string;
   userEmail: string;
+  /** Подпись кнопки (по умолчанию «Войти») */
+  label?: string;
 }
 
-export default function ImpersonateButton({ userId, userEmail }: ImpersonateButtonProps) {
+export default function ImpersonateButton({ userId, userEmail, label = "Войти" }: ImpersonateButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -64,7 +66,7 @@ export default function ImpersonateButton({ userId, userEmail }: ImpersonateButt
       title="Войти от имени пользователя"
     >
       <UserRound className="h-4 w-4 shrink-0" aria-hidden />
-      <span>{loading ? "Вход…" : "Войти"}</span>
+      <span>{loading ? "Вход…" : label}</span>
     </button>
   );
 }

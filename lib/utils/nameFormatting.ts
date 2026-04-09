@@ -34,21 +34,3 @@ export function capitalizeName(name: string): string {
     .join(" ");
 }
 
-/**
- * Форматирует полное имя (ФИО)
- * Учитывает тюркские суффиксы "оглы" и "кызы" (остаются с маленькой буквы)
- */
-export function formatFullName(
-  lastName?: string | null,
-  firstName?: string | null,
-  middleName?: string | null
-): string {
-  const parts = [
-    lastName ? capitalizeName(lastName) : "",
-    firstName ? capitalizeName(firstName) : "",
-    middleName ? capitalizeName(middleName) : "",
-  ].filter(Boolean);
-
-  return parts.join(" ");
-}
-

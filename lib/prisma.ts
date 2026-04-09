@@ -28,7 +28,7 @@ function createPrismaClient(): PrismaClient {
       // ignore URL parse errors
     }
   }
-  return new PrismaClient({
+  const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     datasources: {
       db: {
@@ -36,12 +36,35 @@ function createPrismaClient(): PrismaClient {
       },
     },
   });
+
+  // Убедиться, что клиент соответствует текущей схеме (иначе prisma.partner === undefined → .findMany / .create падают)
+  const anyClient = client as unknown as { partner?: unknown };
+  if (typeof anyClient.partner === 'undefined') {
+    const msg =
+      'Сгенерированный Prisma Client не содержит модель Partner. Выполните в корне проекта: npx prisma generate и перезапустите dev-сервер (npm run dev).';
+    console.error('[prisma]', msg);
+    throw new Error(msg);
+  }
+
+  return client;
 }
 
 /** Единый экземпляр Prisma: ленивая инициализация при первом обращении. */
 function getPrismaClient(): PrismaClient {
   if (globalForPrisma.__prisma) {
-    return globalForPrisma.__prisma;
+    const cached = globalForPrisma.__prisma as PrismaClient & { partner?: unknown };
+    // После `prisma generate` с новыми моделями старый закэшированный клиент может не иметь
+    // делегатов (например partner) → prisma.partner.create падает с reading 'create'.
+    // Сбрасываем кэш и создаём клиент заново (достаточно перезапуска dev, но так надёжнее при HMR).
+    if (typeof cached.partner === "undefined") {
+      console.warn(
+        "[prisma] Кэш клиента устарел (нет модели partner). Пересоздаём PrismaClient — при необходимости выполните: npx prisma generate"
+      );
+      globalForPrisma.__prisma = undefined;
+      globalForPrisma.__prismaInitError = undefined;
+    } else {
+      return globalForPrisma.__prisma;
+    }
   }
   if (globalForPrisma.__prismaInitError) {
     throw globalForPrisma.__prismaInitError;
@@ -70,9 +93,14 @@ function getPrismaClient(): PrismaClient {
  * Экспорт Prisma: один экземпляр через globalThis (совместимо с Next.js + Turbopack).
  * При ошибке инициализации (нет DATABASE_URL или БД недоступна) ошибка кэшируется и пробрасывается при первом обращении.
  */
+/**
+ * Proxy с Reflect.get: при обращении через `prisma.partner` корректно отрабатывают геттеры Prisma
+ * (простой доступ [prop] в Turbopack/Next 16 иногда давал undefined у делегатов моделей).
+ */
 export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, prop: string | symbol) {
-    return (getPrismaClient() as unknown as Record<string | symbol, unknown>)[prop];
+  get(_target, prop: string | symbol, _receiver) {
+    const client = getPrismaClient();
+    return Reflect.get(client as object, prop, client);
   },
 });
 
