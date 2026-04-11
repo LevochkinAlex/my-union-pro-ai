@@ -34,6 +34,11 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 .env.production
+# любые варианты .env.* кроме шаблона для репозитория
+.env.*
+!.env.example
+*.env.bak
+.env*.bak
 
 # vercel
 .vercel
