@@ -14,7 +14,7 @@ sleep 2
 
 echo ""
 echo "Step 2: Pulling latest code..."
-git pull 2>&1 | head -10
+git pull origin main 2>&1 | head -10
 
 echo ""
 echo "Step 3: Checking version in package.json..."

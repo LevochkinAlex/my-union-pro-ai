@@ -14,7 +14,7 @@ pm2 delete my-union-pro || true
 
 echo ""
 echo "=== Pulling latest code ==="
-git pull
+git pull origin main
 
 echo ""
 echo "=== Installing dependencies ==="

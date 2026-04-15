@@ -23,7 +23,7 @@ echo "=== PM2 Status after restart ==="
 pm2 status
 echo ""
 echo "=== Pulling latest code ==="
-git pull
+git pull origin main
 echo ""
 echo "=== Building application ==="
 pnpm build

@@ -10,7 +10,7 @@ git status --short
 echo ""
 
 echo "=== Pulling latest changes ==="
-git pull
+git pull origin main
 echo ""
 
 echo "=== Installing dependencies ==="

@@ -1,6 +1,6 @@
 /**
  * Runtime security smoke for role-based access (prod).
- * Plain Node — GitHub Actions runs this without pnpm install (avoids lockfile/script flakes).
+ * Plain Node — CI can run this without pnpm install (avoids lockfile/script flakes).
  *
  * @see docs/SECURITY_SMOKE_NIGHTLY.md
  */

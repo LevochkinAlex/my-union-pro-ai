@@ -33,7 +33,7 @@ echo ""
 
 # Step 4: Pull latest code
 echo "📥 Step 4: Pulling latest code from git..."
-ssh_cmd "cd $PROJECT_DIR && git pull"
+ssh_cmd "cd $PROJECT_DIR && git pull origin main"
 echo ""
 
 # Step 5: Install dependencies if needed

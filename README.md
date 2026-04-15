@@ -19,7 +19,7 @@
 
 ```bash
 # 1. Клонировать репозиторий
-git clone git@github.com:usmanoffcom/my-union-pro-ai.git
+git clone git@bitbucket.org:usmanoff/my-union-pro-ai.git
 cd my-union-pro-ai
 
 # 2. Установить зависимости
@@ -304,7 +304,7 @@ bash scripts/server-install-chrome.sh
 
 ```bash
 cd /opt
-git clone git@github.com:usmanoffcom/my-union-pro-ai.git my-union-pro
+git clone git@bitbucket.org:usmanoff/my-union-pro-ai.git my-union-pro
 cd my-union-pro
 pnpm install
 ```

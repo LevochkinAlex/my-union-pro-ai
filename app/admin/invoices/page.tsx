@@ -20,6 +20,7 @@ export default function AdminInvoicesPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [offerFilter, setOfferFilter] = useState("");
   const [skip, setSkip] = useState(0);
   const limit = 30;
@@ -64,6 +65,31 @@ export default function AdminInvoicesPage() {
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setSkip(0);
+  };
+
+  const downloadInvoice = async (invoice: InvoiceItem) => {
+    setDownloadingId(invoice.id);
+    try {
+      const res = await fetch(`/api/admin/subscription/invoices/${invoice.id}/pdf`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || "Не удалось скачать счёт");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `schet-oferta-${invoice.offerNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Ошибка скачивания счёта. Проверьте платежный профиль организации.");
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
@@ -132,12 +158,15 @@ export default function AdminInvoicesPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
                   Дата
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
+                  PDF
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                     {offerFilter ? "Ни одного счёта не найдено" : "Счета ещё не выставлялись"}
                   </td>
                 </tr>
@@ -164,6 +193,16 @@ export default function AdminInvoicesPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                       {new Date(inv.createdAt).toLocaleString("ru-RU")}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm">
+                      <button
+                        type="button"
+                        onClick={() => downloadInvoice(inv)}
+                        disabled={downloadingId === inv.id}
+                        className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {downloadingId === inv.id ? "Скачивание..." : "Скачать PDF"}
+                      </button>
                     </td>
                   </tr>
                 ))

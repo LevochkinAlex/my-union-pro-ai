@@ -10,7 +10,7 @@ pm2 delete my-union-pro 2>&1
 
 echo ""
 echo "=== Step 3: Pulling latest code ==="
-git pull
+git pull origin main
 
 echo ""
 echo "=== Step 4: Installing dependencies ==="

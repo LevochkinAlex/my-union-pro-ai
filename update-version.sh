@@ -17,7 +17,7 @@ ssh_cmd() {
 
 # Step 1: Pull latest code
 echo "📥 Step 1: Pulling latest code..."
-ssh_cmd "cd $PROJECT_DIR && git pull"
+ssh_cmd "cd $PROJECT_DIR && git pull origin main"
 echo ""
 
 # Step 2: Check current version in package.json

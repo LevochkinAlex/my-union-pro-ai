@@ -1450,8 +1450,15 @@ export default function OrganizationsPage() {
                   onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                   className="mr-2"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Активна</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {formData.type === "PRIMARY" ? "Активна подписка (доступ к платформе)" : "Активна"}
+                </span>
               </label>
+              {formData.type === "PRIMARY" && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Если снять галочку, все пользователи этой организации будут видеть только раздел «Подписка и оплата».
+                </p>
+              )}
             </div>
 
                 </div>

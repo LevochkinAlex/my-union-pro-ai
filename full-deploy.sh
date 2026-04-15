@@ -29,7 +29,7 @@ sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no \
 cd /opt/my-union-pro
 
 echo "=== Step 1: Git Pull ==="
-git pull
+git pull origin main
 echo ""
 
 echo "=== Step 2: Installing dependencies ==="

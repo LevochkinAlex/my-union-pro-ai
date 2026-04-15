@@ -22,7 +22,7 @@ pm2 delete my-union-pro 2>/dev/null || echo "Процесс не найден и
 
 echo ""
 echo "=== 5. Обновление кода ==="
-git pull
+git pull origin main
 
 echo ""
 echo "=== 6. Пересборка проекта ==="

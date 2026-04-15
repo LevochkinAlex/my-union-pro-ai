@@ -1,6 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import type { SubscriptionStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
@@ -10,10 +11,12 @@ import TourGuideProvider from "@/components/dashboard/TourGuideProvider";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import DemoBanner from "@/components/dashboard/DemoBanner";
 import MaintenanceBanner from "@/components/dashboard/MaintenanceBanner";
+import SubscriptionLockGuard from "@/components/dashboard/SubscriptionLockGuard";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { getViewMode, getAvailableViewModes } from "@/lib/session-user";
 import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
+import { hasActiveAccess } from "@/lib/subscription";
 
 // Указываем, что layout динамический (использует getServerSession)
 export const dynamic = 'force-dynamic';
@@ -43,7 +46,20 @@ export default async function DashboardLayout({
   let isPPOHead = session.user.isPPOHead ?? false;
   let avatarUrl: string | null | undefined = undefined;
   let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
-  let dbUser: { membershipStatus?: string; unionMembershipStatus?: string; organizationId?: string | null } | null = null;
+  let dbUser: {
+    membershipStatus?: string;
+    unionMembershipStatus?: string;
+    organizationId?: string | null;
+    organization?: {
+      isActive: boolean;
+      type?: string;
+      subscription?: {
+        status: SubscriptionStatus;
+        trialEndsAt: Date | null;
+        periodEndsAt: Date | null;
+      } | null;
+    } | null;
+  } | null = null;
 
   // Demo chairman: force isApproved for menu building (meetings submenu)
   const isDemoChairmanUser = session.user.id === DEMO_USER_ID;
@@ -68,6 +84,19 @@ export default async function DashboardLayout({
             membershipStatus: true,
             unionMembershipStatus: true,
             organizationId: true,
+            organization: {
+              select: {
+                isActive: true,
+                type: true,
+                subscription: {
+                  select: {
+                    status: true,
+                    trialEndsAt: true,
+                    periodEndsAt: true,
+                  },
+                },
+              },
+            },
           },
         }),
         Promise.race([
@@ -136,6 +165,20 @@ export default async function DashboardLayout({
   const isExcluded = (dbMembershipStatus === "EXCLUDED" || dbUnionStatus === "REMOVED") && !isReApplying;
   const isApproved = dbMembershipStatus === "APPROVED" || dbUnionStatus === "ACCEPTED" || isDemoChairmanUser || isDemoMemberUser;
   const perm = staffPermissions?.permissions ?? {};
+  const isPrimaryOrganization = dbUser?.organization?.type === "PRIMARY";
+  const subscriptionAccessByPeriod =
+    isPrimaryOrganization &&
+    (dbUser?.organization?.subscription
+      ? hasActiveAccess(dbUser.organization.subscription)
+      : false);
+  const isSubscriptionAccessLocked =
+    !isDemoMemberUser &&
+    !isDemo &&
+    !!dbUser?.organizationId &&
+    (
+      dbUser.organization?.isActive === false ||
+      (isPrimaryOrganization && !subscriptionAccessByPeriod)
+    );
 
   // Создаем базовое меню
   let menuItems: Array<{
@@ -155,8 +198,22 @@ export default async function DashboardLayout({
     },
   ];
 
+  if (isSubscriptionAccessLocked) {
+    // При отключенной подписке организации оставляем только раздел оплаты.
+    menuItems = [
+      {
+        href: "/dashboard/subscription",
+        label: "Подписка",
+        icon: (
+          <svg key="icon-subscription-locked" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+        ),
+      },
+    ];
+  }
   // Исключённый член ППО: только Главная, Профиль, Мои скидки, Чат (без новостей, каталога скидок и др.)
-  if (isExcluded) {
+  else if (isExcluded) {
     menuItems.push({
       href: "/dashboard/discounts/my",
       label: "Мои скидки",
@@ -713,6 +770,7 @@ export default async function DashboardLayout({
   return (
     <TourGuideProvider>
       <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+        <SubscriptionLockGuard locked={isSubscriptionAccessLocked} />
         {/* Mobile Header and Menu */}
         <MobileLayout
           items={menuItems}
@@ -743,14 +801,19 @@ export default async function DashboardLayout({
                 {(session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID || (session.user as { isDemo?: boolean }).isDemo) && (
                   <DemoBanner />
                 )}
+                {isSubscriptionAccessLocked && (
+                  <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                    Доступ к разделам платформы ограничен: подписка организации неактивна или отключена администратором. Доступен только раздел «Подписка и оплата».
+                  </div>
+                )}
                 {children}
               </div>
             </div>
           </main>
         </div>
         
-        {/* Мини-чат виджет (синхронизирован с основным чатом ИИ-Ассистент) */}
-        <MiniChatWrapperConditional />
+        {/* Мини-чат виджет (при отключенной подписке скрываем вместе с остальными разделами) */}
+        {!isSubscriptionAccessLocked && <MiniChatWrapperConditional />}
       </div>
     </TourGuideProvider>
   );

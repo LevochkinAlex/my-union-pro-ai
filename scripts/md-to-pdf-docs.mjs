@@ -28,7 +28,7 @@ function getChromePath() {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
 
-const REPO_BASE = "https://github.com/usmanoffcom/my-union-pro-ai/blob/main";
+const REPO_BASE = "https://bitbucket.org/usmanoff/my-union-pro-ai/src/main";
 
 /**
  * Заменяет относительные ссылки в markdown на абсолютные URL репозитория.

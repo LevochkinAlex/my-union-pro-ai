@@ -108,7 +108,7 @@ sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 "g
 sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'EOF'
 cd /opt/my-union-pro
 echo "--- Pulling code ---"
-git pull
+git pull origin main
 echo "--- Version check ---"
 grep version package.json
 echo "--- Building ---"

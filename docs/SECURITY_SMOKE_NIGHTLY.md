@@ -1,13 +1,14 @@
-# Nightly Security Smoke (RBAC)
+# Security Smoke (RBAC, runtime)
 
-**Расписание отключено:** автоматический ночной запуск в workflow закомментирован (cookie-секреты протухают). Запуск только вручную: GitHub Actions → Nightly Security Smoke → Run workflow.
+Скрипт: `scripts/security-role-runtime-smoke.mjs`. Запуск: `pnpm test:security:runtime`.
 
-**GitHub Actions:** без `pnpm install` — только Node 20 и `node --test scripts/security-role-runtime-smoke.mjs`. Шаг **всегда завершается успешно** (`exit 0`): при падении тестов в лог пишется `::warning::`, но workflow **не краснеет** (нет ложных алертов из‑за протухших cookie). POST заседаний в CI отключён: `SEC_SMOKE_SKIP_MEETINGS_POST=1`.
+Раньше существовал ручной запуск через GitHub Actions; репозиторий перенесён на **Bitbucket**. Сейчас смок запускай **локально** или настрой **Bitbucket Pipelines** (если понадобится CI) с теми же переменными окружения, что перечислены ниже.
+
+При падении тестов в лог пишется предупреждение; для строгого режима см. `SEC_SMOKE_STRICT` в скрипте. POST заседаний в безопасном режиме CI можно отключить: `SEC_SMOKE_SKIP_MEETINGS_POST=1`.
 
 Локально полный прогон, включая POST meetings (осторожно, создаёт заседание):
 
 ```bash
-# без skip — нужны все cookie-секреты
 pnpm test:security:runtime
 ```
 
@@ -33,10 +34,10 @@ For strict mode (fail on missing env):
 SEC_SMOKE_STRICT=1 pnpm test:security:runtime
 ```
 
-## Required secrets for GitHub Actions
+## Переменные для CI (Bitbucket Pipelines и т.п.)
 
-If `SEC_SMOKE_BASE_URL` is not set, the nightly job is **skipped** (no failed run).  
-To run the smoke, set these repository secrets:
+Если `SEC_SMOKE_BASE_URL` не задан, job можно пропустить.  
+Для прогона смока задай переменные репозитория (или secured variables в Pipelines):
 
 - `SEC_SMOKE_BASE_URL` (for example: `https://myunion.pro`)
 - `SEC_SMOKE_COOKIE_REPORTS_ALLOW`

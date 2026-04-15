@@ -63,19 +63,15 @@ check-bot.mjs
 deploy-config.sh
 SERVER_ACCESS.md
 
-# Uploaded files (но сохраняем структуру папок)
-/public/uploads/news/*
-!/public/uploads/news/.gitkeep
+# Uploaded files live only on production server
+/public/uploads/**
+!/public/uploads/**/.gitkeep
 
-# PDF documents and uploaded files
+# PDF documents
 *.pdf
 # Статические PDF в репозитории (лендинг, демо)
 !public/offerta.pdf
 !public/demo/*.pdf
-/public/uploads/documents/*
-!/public/uploads/documents/.gitkeep
-/public/uploads/avatars/*
-!/public/uploads/avatars/.gitkeep
 
 # Export files
 document-templates-export.json

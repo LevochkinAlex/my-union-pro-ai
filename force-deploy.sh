@@ -22,7 +22,7 @@ set -e
 cd /opt/my-union-pro
 echo "=== Git Pull ==="
 git fetch origin
-git pull origin HEAD
+git pull origin main
 echo "=== Current commit ==="
 git log -1 --oneline
 echo "=== Removing old build ==="

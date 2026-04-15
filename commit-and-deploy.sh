@@ -41,7 +41,7 @@ echo "📥 Step 3: Deploying to server..."
 sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 << 'EOF'
 cd /opt/my-union-pro
 echo "=== Git Pull ==="
-git pull
+git pull origin main
 echo ""
 echo "=== Installing dependencies ==="
 pnpm install
