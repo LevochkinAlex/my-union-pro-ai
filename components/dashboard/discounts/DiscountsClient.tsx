@@ -111,12 +111,54 @@ export default function DiscountsClient({
     ).filter(Boolean);
   });
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [searchInput, setSearchInput] = useState(filters.search); // Локальное состояние для поля ввода
+  const [searchInput, setSearchInput] = useState(filters.search);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [partnerVenues, setPartnerVenues] = useState<import("@/types/discounts").DiscountItem[]>([]);
 
   // Синхронизируем searchInput с filters.search (при сбросе фильтров)
   useEffect(() => {
     setSearchInput(filters.search);
+  }, [filters.search]);
+
+  // Загрузка площадок партнёров (отдельная БД, не BestBenefits)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ limit: "50" });
+        if (filters.search) params.set("search", filters.search);
+        const res = await fetch(`/api/partner-venues/public?${params}`);
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const venues: import("@/types/discounts").DiscountItem[] = (json.venues ?? []).map(
+          (v: any, idx: number) => ({
+            id: -(idx + 1),
+            title: v.name,
+            description: v.conditions || v.description || null,
+            shortDescription: v.description || null,
+            discountValue: v.promoLabel || null,
+            promoCode: v.promoCode || null,
+            partnerUrl: v.website || null,
+            imageUrl: v.bannerUrl || null,
+            tags: [],
+            isPremium: false,
+            categories: [],
+            mainCategory: null,
+            cities: v.city ? [{ id: 0, name: v.city }] : [],
+            updatedAt: v.updatedAt || v.createdAt || null,
+            validUntil: null,
+            isPartnerVenue: true,
+            partnerVenueId: v.id,
+            partnerName: v.partner?.name ?? null,
+          })
+        );
+        if (!cancelled) setPartnerVenues(venues);
+      } catch (e) {
+        console.warn("[DiscountsClient] Failed to load partner venues:", e);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [filters.search]);
 
   // Автоматическая синхронизация с BestBenefits
@@ -902,9 +944,9 @@ export default function DiscountsClient({
       {/* Results */}
       <div>
         {/* Info Bar — compact inline */}
-        {allDiscounts.length > 0 && (
+        {(allDiscounts.length > 0 || partnerVenues.length > 0) && (
           <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-            Показано <span className="font-semibold text-gray-700 dark:text-gray-200">{allDiscounts.length}</span>{hasMore ? ' из доступных' : ''}
+            Показано <span className="font-semibold text-gray-700 dark:text-gray-200">{allDiscounts.length + (filters.view === "all" ? partnerVenues.length : 0)}</span>{hasMore ? ' из доступных' : ''}
           </p>
         )}
 
@@ -914,7 +956,7 @@ export default function DiscountsClient({
         ) : (
           <>
             <DiscountGrid
-              discounts={allDiscounts}
+              discounts={filters.view === "all" ? [...partnerVenues, ...allDiscounts] : allDiscounts}
               favorites={favorites}
               claimed={claimed}
               onFavorite={handleFavoriteToggle}
@@ -972,12 +1014,12 @@ function DiscountGrid({
     <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
       {discounts.map((discount) => (
         <DiscountCard
-          key={discount.id}
+          key={discount.isPartnerVenue ? `pv-${discount.partnerVenueId}` : discount.id}
           discount={discount}
-          isFavorite={favorites.includes(discount.id)}
-          isClaimed={claimed.includes(discount.id)}
-          onToggleFavorite={onFavorite}
-          onClaim={onClaim}
+          isFavorite={!discount.isPartnerVenue && favorites.includes(discount.id)}
+          isClaimed={!discount.isPartnerVenue && claimed.includes(discount.id)}
+          onToggleFavorite={discount.isPartnerVenue ? undefined : onFavorite}
+          onClaim={discount.isPartnerVenue ? undefined : onClaim}
           forceShowImage
           selectedCityId={selectedCityId}
         />

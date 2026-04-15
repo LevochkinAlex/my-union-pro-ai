@@ -19,6 +19,7 @@ export default async function AdminPartnersPage() {
           skip: 0,
           include: {
             linkedUser: { select: { id: true, email: true } },
+            cabinetUser: { select: { id: true, email: true } },
           },
         }),
         prisma.partner.count(),

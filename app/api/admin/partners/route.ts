@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
           { contactLastName: { contains: search, mode: "insensitive" } },
           { contactFirstName: { contains: search, mode: "insensitive" } },
           { linkedUser: { email: { contains: search, mode: "insensitive" } } },
+          { cabinetUser: { email: { contains: search, mode: "insensitive" } } },
         ],
       }
     : undefined;
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
         take: limit,
         include: {
           linkedUser: { select: { id: true, email: true } },
+          cabinetUser: { select: { id: true, email: true } },
         },
       }),
       prisma.partner.count({ where: searchWhere }),
@@ -175,6 +177,7 @@ export async function POST(request: NextRequest) {
         },
         include: {
           linkedUser: { select: { id: true, email: true } },
+          cabinetUser: { select: { id: true, email: true } },
         },
       })
     );

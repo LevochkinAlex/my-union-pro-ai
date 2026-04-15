@@ -27,7 +27,7 @@ function prismaErrorToMessage(e: unknown): string {
   return "Ошибка сохранения партнёра";
 }
 
-const linkedUserSelect = { id: true, email: true } as const;
+const partnerLinkedUserSelect = { id: true, email: true } as const;
 
 async function resolveLinkedUserId(raw: unknown): Promise<string | null | undefined> {
   if (raw === undefined) return undefined;
@@ -77,7 +77,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   try {
     const partner = await prisma.partner.findUnique({
       where: { id },
-      include: { linkedUser: { select: linkedUserSelect } },
+      include: {
+        linkedUser: { select: partnerLinkedUserSelect },
+        cabinetUser: { select: partnerLinkedUserSelect },
+      },
     });
     if (!partner) {
       return NextResponse.json({ error: "Партнёр не найден" }, { status: 404 });
@@ -159,7 +162,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       prisma.partner.update({
         where: { id },
         data,
-        include: { linkedUser: { select: linkedUserSelect } },
+        include: {
+          linkedUser: { select: partnerLinkedUserSelect },
+          cabinetUser: { select: partnerLinkedUserSelect },
+        },
       })
     );
     return NextResponse.json({ partner });
@@ -169,5 +175,46 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: "Партнёр не найден" }, { status: 404 });
     }
     return NextResponse.json({ error: prismaErrorToMessage(e) }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/admin/partners/[id]
+ * Полное удаление карточки партнёра: площадки (PartnerVenue), учётная запись кабинета (User с partnerRecordId),
+ * затем запись Partner. Связанный только через linkedUserId пользователь не удаляется.
+ */
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const superResult = await ensureSuperAdmin();
+  if (superResult.error) return superResult.error;
+
+  const { id: partnerId } = await context.params;
+  if (!partnerId) {
+    return NextResponse.json({ error: "Не указан id" }, { status: 400 });
+  }
+
+  const partner = await prisma.partner.findUnique({
+    where: { id: partnerId },
+    select: { id: true },
+  });
+  if (!partner) {
+    return NextResponse.json({ error: "Партнёр не найден" }, { status: 404 });
+  }
+
+  try {
+    await withPrismaRetry(() =>
+      prisma.$transaction(async (tx) => {
+        await tx.partnerVenue.deleteMany({ where: { partnerId } });
+        await tx.user.deleteMany({ where: { partnerRecordId: partnerId } });
+        await tx.partner.delete({ where: { id: partnerId } });
+      })
+    );
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[admin/partners/[id] DELETE]", e);
+    const msg =
+      e instanceof Prisma.PrismaClientKnownRequestError
+        ? `Ошибка БД (${e.code}). Возможно, у пользователя кабинета есть связанные данные, которые нужно удалить вручную.`
+        : prismaErrorToMessage(e);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -79,7 +79,10 @@ export default function DiscountCard({
   };
 
   const handleCardClick = () => {
-    // Передаем выбранный город через query параметр
+    if (discount.isPartnerVenue && discount.partnerVenueId) {
+      router.push(`/dashboard/discounts/partner/${discount.partnerVenueId}`);
+      return;
+    }
     const url = selectedCityId 
       ? `/dashboard/discounts/${discount.id}?cityId=${selectedCityId}`
       : `/dashboard/discounts/${discount.id}`;
@@ -102,9 +105,15 @@ export default function DiscountCard({
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="flex min-h-[160px] items-center justify-center bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-3 sm:p-6 text-center text-white dark:from-blue-600 dark:via-purple-600 dark:to-pink-600">
+          <div className={`flex min-h-[160px] items-center justify-center p-3 sm:p-6 text-center text-white ${
+            discount.isPartnerVenue
+              ? "bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 dark:from-indigo-700 dark:via-blue-700 dark:to-cyan-600"
+              : "bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-blue-600 dark:via-purple-600 dark:to-pink-600"
+          }`}>
             <div className="max-w-full px-2">
-              <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide opacity-80 truncate">Скидки BestBenefits</p>
+              <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide opacity-80 truncate">
+                {discount.isPartnerVenue ? (discount.partnerName || "Партнёр") : "Скидки BestBenefits"}
+              </p>
               <p className="mt-1 sm:mt-2 text-sm sm:text-lg font-bold line-clamp-2">{discount.title}</p>
             </div>
           </div>
@@ -112,6 +121,11 @@ export default function DiscountCard({
 
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2 sm:p-4">
           <div className="flex flex-col gap-1.5 sm:gap-2">
+            {discount.isPartnerVenue && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-600/90 px-2 sm:px-3 py-0.5 sm:py-1 text-xs font-semibold text-white shadow">
+                Партнёр
+              </span>
+            )}
             {discount.discountValue && (
               <span className="inline-flex items-center rounded-full bg-white/90 px-2 sm:px-3 py-0.5 sm:py-1 text-xs font-semibold text-blue-700 shadow dark:bg-gray-900/80 dark:text-blue-300">
                 {discount.discountValue}
@@ -132,7 +146,7 @@ export default function DiscountCard({
             )}
           </div>
 
-          <button
+          {!discount.isPartnerVenue && <button
             type="button"
             onClick={handleFavoriteToggle}
             aria-label={isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
@@ -153,16 +167,18 @@ export default function DiscountCard({
                 d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4A4.5 4.5 0 0112 6.09 4.5 4.5 0 0117.5 4C20 4 22 6 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
               />
             </svg>
-          </button>
+          </button>}
         </div>
       </div>
 
       {/* Content */}
       <div className="flex flex-1 flex-col gap-3 sm:gap-4 p-3 sm:p-4">
         <div className="space-y-1 sm:space-y-2">
-          {discount.mainCategory?.name && (
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300 truncate">
-              {discount.mainCategory.name}
+          {(discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name) && (
+            <p className={`text-xs font-semibold uppercase tracking-wide truncate ${
+              discount.isPartnerVenue ? "text-indigo-600 dark:text-indigo-300" : "text-blue-600 dark:text-blue-300"
+            }`}>
+              {discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name}
             </p>
           )}
           <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
@@ -252,7 +268,18 @@ export default function DiscountCard({
         })()}
 
         <div className="mt-auto space-y-2 pt-2">
-          {discount.partnerUrl && (
+          {discount.isPartnerVenue ? (
+            <button
+              type="button"
+              onClick={handleCardClick}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-800"
+            >
+              <span>Подробнее</span>
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              </svg>
+            </button>
+          ) : discount.partnerUrl && (
             <a
               href={discount.partnerUrl}
               target="_blank"

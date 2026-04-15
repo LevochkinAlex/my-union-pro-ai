@@ -1,0 +1,159 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
+import { ensurePartner } from "@/lib/partner-auth";
+import { Prisma } from "@prisma/client";
+
+type PatchBody = {
+  name?: unknown;
+  description?: unknown;
+  address?: unknown;
+  city?: unknown;
+  website?: unknown;
+  phone?: unknown;
+  email?: unknown;
+  bannerUrl?: unknown;
+  bannerAlt?: unknown;
+  promoCode?: unknown;
+  promoLabel?: unknown;
+  conditions?: unknown;
+};
+
+function optionalString(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t.length ? t : null;
+}
+
+async function getVenueForPartner(venueId: string, partnerId: string) {
+  return withPrismaRetry(() =>
+    prisma.partnerVenue.findFirst({
+      where: { id: venueId, partnerId },
+    })
+  );
+}
+
+/**
+ * GET /api/partner/venues/[id]
+ */
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = await ensurePartner();
+  if (auth.error) return auth.error;
+  const { id: partnerId } = auth.partner!;
+
+  const { id } = await context.params;
+  if (!id) {
+    return NextResponse.json({ error: "Не указан id" }, { status: 400 });
+  }
+
+  try {
+    const venue = await getVenueForPartner(id, partnerId);
+    if (!venue) {
+      return NextResponse.json({ error: "Площадка не найдена" }, { status: 404 });
+    }
+    return NextResponse.json({ venue });
+  } catch (e) {
+    console.error("[partner/venues/[id] GET]", e);
+    return NextResponse.json({ error: "Не удалось загрузить площадку" }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/partner/venues/[id]
+ */
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = await ensurePartner();
+  if (auth.error) return auth.error;
+  const { id: partnerId } = auth.partner!;
+
+  const { id } = await context.params;
+  if (!id) {
+    return NextResponse.json({ error: "Не указан id" }, { status: 400 });
+  }
+
+  let body: PatchBody;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Неверный JSON" }, { status: 400 });
+  }
+
+  const existing = await getVenueForPartner(id, partnerId);
+  if (!existing) {
+    return NextResponse.json({ error: "Площадка не найдена" }, { status: 404 });
+  }
+
+  if ("name" in body) {
+    if (typeof body.name !== "string") {
+      return NextResponse.json({ error: "Некорректное название" }, { status: 400 });
+    }
+    const name = body.name.trim();
+    if (!name) {
+      return NextResponse.json({ error: "Укажите название" }, { status: 400 });
+    }
+  }
+
+  const data: Prisma.PartnerVenueUpdateInput = {};
+  if ("name" in body && typeof body.name === "string") {
+    data.name = body.name.trim();
+  }
+  if ("description" in body) data.description = optionalString(body.description) ?? null;
+  if ("address" in body) data.address = optionalString(body.address) ?? null;
+  if ("city" in body) data.city = optionalString(body.city) ?? null;
+  if ("website" in body) data.website = optionalString(body.website) ?? null;
+  if ("phone" in body) data.phone = optionalString(body.phone) ?? null;
+  if ("email" in body) data.email = optionalString(body.email) ?? null;
+  if ("bannerUrl" in body) data.bannerUrl = optionalString(body.bannerUrl) ?? null;
+  if ("bannerAlt" in body) data.bannerAlt = optionalString(body.bannerAlt) ?? null;
+  if ("promoCode" in body) data.promoCode = optionalString(body.promoCode) ?? null;
+  if ("promoLabel" in body) data.promoLabel = optionalString(body.promoLabel) ?? null;
+  if ("conditions" in body) data.conditions = optionalString(body.conditions) ?? null;
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ venue: existing });
+  }
+
+  try {
+    const venue = await withPrismaRetry(() =>
+      prisma.partnerVenue.update({
+        where: { id },
+        data,
+      })
+    );
+    return NextResponse.json({ venue });
+  } catch (e) {
+    console.error("[partner/venues/[id] PATCH]", e);
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      return NextResponse.json({ error: "Ошибка сохранения площадки" }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Не удалось обновить площадку" }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/partner/venues/[id]
+ */
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = await ensurePartner();
+  if (auth.error) return auth.error;
+  const { id: partnerId } = auth.partner!;
+
+  const { id } = await context.params;
+  if (!id) {
+    return NextResponse.json({ error: "Не указан id" }, { status: 400 });
+  }
+
+  const existing = await getVenueForPartner(id, partnerId);
+  if (!existing) {
+    return NextResponse.json({ error: "Площадка не найдена" }, { status: 404 });
+  }
+
+  try {
+    await withPrismaRetry(() => prisma.partnerVenue.delete({ where: { id } }));
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[partner/venues/[id] DELETE]", e);
+    return NextResponse.json({ error: "Не удалось удалить площадку" }, { status: 500 });
+  }
+}

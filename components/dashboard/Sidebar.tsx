@@ -29,11 +29,12 @@ interface SidebarProps {
   userInitial: string;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  brandHref?: string;
   serverViewModes?: ViewModeOption[];
   serverViewMode?: string;
 }
 
-export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false, serverViewModes = [], serverViewMode }: SidebarProps) {
+export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false, brandHref, serverViewModes = [], serverViewMode }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [manuallyCollapsed, setManuallyCollapsed] = useState<string[]>([]); // Пункты, которые пользователь вручную свернул
@@ -80,7 +81,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
         {/* Logo - фиксированный верх */}
         <div className="flex-shrink-0 flex items-center px-4 py-4 border-b border-gray-200 dark:border-gray-700">
           <Link
-            href={isAdmin ? "/admin/dashboard" : "/dashboard"}
+            href={brandHref || (isAdmin ? "/admin/dashboard" : "/dashboard")}
             prefetch={false}
             className={`flex items-center gap-2 ${isCollapsed ? "justify-center" : ""}`}
           >

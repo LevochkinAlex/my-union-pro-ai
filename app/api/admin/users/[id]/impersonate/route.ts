@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { signIn } from "next-auth/react";
-
 /**
  * Вход от имени пользователя (impersonation)
  * POST /api/admin/users/[id]/impersonate

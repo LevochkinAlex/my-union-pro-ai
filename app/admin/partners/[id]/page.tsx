@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
-import { alertError, alertSuccess } from "@/lib/alert";
+import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
 
 type PartnerForm = {
   name: string;
@@ -43,6 +44,9 @@ const emptyForm = (): PartnerForm => ({
 });
 
 export default function PartnerEditPage() {
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+
   const params = useParams();
   const router = useRouter();
   const id = typeof params?.id === "string" ? params.id : "";
@@ -52,6 +56,8 @@ export default function PartnerEditPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formData, setFormData] = useState<PartnerForm>(emptyForm);
   const [linkedUserEmail, setLinkedUserEmail] = useState<string | null>(null);
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -83,10 +89,10 @@ export default function PartnerEditPage() {
         contactEmail: p.contactEmail ?? "",
         contactPhone: p.contactPhone ?? "",
         contactJobTitle: p.contactJobTitle ?? "",
-        linkedUserId: p.linkedUserId ?? p.linkedUser?.id ?? "",
+        linkedUserId: p.linkedUserId ?? p.linkedUser?.id ?? p.cabinetUser?.id ?? "",
         isActive: p.isActive !== false,
       });
-      setLinkedUserEmail(p.linkedUser?.email ?? null);
+      setLinkedUserEmail(p.cabinetUser?.email ?? p.linkedUser?.email ?? null);
     } catch {
       setLoadError("Ошибка сети");
     } finally {
@@ -123,7 +129,11 @@ export default function PartnerEditPage() {
           contactEmail: formData.contactEmail.trim() || null,
           contactPhone: formData.contactPhone.trim() || null,
           contactJobTitle: formData.contactJobTitle.trim() || null,
-          linkedUserId: formData.linkedUserId.trim() ? formData.linkedUserId.trim() : null,
+          ...(isSuperAdmin
+            ? {
+                linkedUserId: formData.linkedUserId.trim() ? formData.linkedUserId.trim() : null,
+              }
+            : {}),
           isActive: formData.isActive,
         }),
       });
@@ -133,14 +143,91 @@ export default function PartnerEditPage() {
         return;
       }
       alertSuccess("Изменения сохранены.", "Партнеры");
-      if (data.partner?.linkedUser?.email !== undefined) {
-        setLinkedUserEmail(data.partner.linkedUser.email);
+      const p = data.partner as {
+        cabinetUser?: { email?: string | null } | null;
+        linkedUser?: { email?: string | null } | null;
+      };
+      if (p?.cabinetUser?.email !== undefined || p?.linkedUser?.email !== undefined) {
+        setLinkedUserEmail(p.cabinetUser?.email ?? p.linkedUser?.email ?? null);
       }
       router.refresh();
     } catch {
       alertError("Ошибка сети", "Партнеры");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendRegistrationEmail = async () => {
+    const email = formData.email.trim().toLowerCase();
+    if (!email) {
+      alertError("Укажите email в поле «Email» (реквизиты юр. лица).", "Партнеры");
+      return;
+    }
+    setSendingInvite(true);
+    try {
+      const res = await fetch(`/api/admin/partners/${id}/send-registration-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sent?: boolean;
+        inviteUrl?: string;
+      };
+      if (!res.ok) {
+        alertError(typeof data.error === "string" ? data.error : "Не удалось отправить письмо", "Партнеры");
+        return;
+      }
+      if (data.sent === false) {
+        const link = typeof data.inviteUrl === "string" ? data.inviteUrl : "";
+        alertWarning(
+          link
+            ? `Почта не отправлена: на сервере не заданы переменные SMTP (SMTP_HOST, SMTP_USER, SMTP_PASSWORD) или SMTP вернул ошибку. Скопируйте ссылку и передайте партнёру вручную:\n\n${link}`
+            : "Почта не отправлена: проверьте настройки SMTP в .env.local.",
+          "Партнеры"
+        );
+      } else {
+        alertSuccess(
+          "Письмо с ссылкой на регистрацию кабинета партнёра отправлено на указанный email.",
+          "Партнеры"
+        );
+      }
+      await load();
+    } catch {
+      alertError("Ошибка сети", "Партнеры");
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const handleDeletePartner = async () => {
+    if (!isSuperAdmin) return;
+    const name = formData.name.trim() || "партнёр";
+    const agreed = await confirm(
+      `Будут безвозвратно удалены: карточка «${name}», все площадки (магазины) и учётная запись кабинета партнёра, если она была создана. Пользователь, привязанный только по полю «ID пользователя» без кабинета, останется в системе. После удаления можно снова создать партнёра с тем же email.\n\nПродолжить?`,
+      "Удалить партнёра и данные кабинета",
+      "Удалить",
+      "Отмена"
+    );
+    if (!agreed) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/partners/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alertError(typeof data.error === "string" ? data.error : "Не удалось удалить партнёра", "Партнеры");
+        return;
+      }
+      alertSuccess("Партнёр и связанные данные удалены.", "Партнеры");
+      router.push("/admin/partners");
+      router.refresh();
+    } catch {
+      alertError("Ошибка сети", "Партнеры");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -182,14 +269,29 @@ export default function PartnerEditPage() {
         <Link href="/admin/partners" className="text-blue-600 hover:underline dark:text-blue-400">
           ← К списку партнёров
         </Link>
-        {impersonateId && impersonateEmail ? (
-          <ImpersonateButton userId={impersonateId} userEmail={impersonateEmail} label="Войти как" />
+        {isSuperAdmin ? (
+          <button
+            type="button"
+            onClick={handleDeletePartner}
+            disabled={deleting || saving || loading}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? "Удаление…" : "Удалить партнёра и данные"}
+          </button>
         ) : null}
       </div>
 
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Редактирование партнёра</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">Измените данные и нажмите «Сохранить».</p>
+        {impersonateId ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <ImpersonateButton userId={impersonateId} userEmail={impersonateEmail || undefined} label="Войти как" />
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Просмотр кабинета от имени партнёра
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -277,6 +379,17 @@ export default function PartnerEditPage() {
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               disabled={saving}
             />
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              На этот адрес можно отправить письмо со ссылкой на регистрацию кабинета партнёра (карточка уже создана в админке).
+            </p>
+            <button
+              type="button"
+              onClick={handleSendRegistrationEmail}
+              disabled={saving || sendingInvite || !formData.email.trim()}
+              className="mt-3 inline-flex items-center rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
+            >
+              {sendingInvite ? "Отправка…" : "Отправить приглашение на регистрацию"}
+            </button>
           </div>
           <div className="mt-4">
             <label htmlFor="edit-partner-address" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -384,27 +497,29 @@ export default function PartnerEditPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
-          <h3 className="mb-2 text-base font-semibold text-gray-900 dark:text-white">
-            Вход от имени пользователя <span className="font-normal text-gray-500">(необязательно)</span>
-          </h3>
-          <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-            ID пользователя из админки. Нужен для кнопки «Войти как» в списке партнёров.
-          </p>
-          <label htmlFor="edit-linked-user" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            ID пользователя
-          </label>
-          <input
-            id="edit-linked-user"
-            type="text"
-            value={formData.linkedUserId}
-            onChange={(e) => setFormData({ ...formData, linkedUserId: e.target.value })}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-gray-600 dark:bg-gray-700"
-            placeholder="Оставьте пустым, чтобы сбросить привязку"
-            autoComplete="off"
-            disabled={saving}
-          />
-        </div>
+        {isSuperAdmin ? (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
+            <h3 className="mb-2 text-base font-semibold text-gray-900 dark:text-white">
+              Вход от имени пользователя <span className="font-normal text-gray-500">(необязательно)</span>
+            </h3>
+            <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+              Только для суперадмина. Для «Войти как» в списке партнёров используется кабинет по приглашению (если уже есть) или ID пользователя ниже (ручная привязка).
+            </p>
+            <label htmlFor="edit-linked-user" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              ID пользователя
+            </label>
+            <input
+              id="edit-linked-user"
+              type="text"
+              value={formData.linkedUserId}
+              onChange={(e) => setFormData({ ...formData, linkedUserId: e.target.value })}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm dark:border-gray-600 dark:bg-gray-700"
+              placeholder="Оставьте пустым, чтобы сбросить привязку"
+              autoComplete="off"
+              disabled={saving}
+            />
+          </div>
+        ) : null}
 
         <div>
           <label className="flex items-center">

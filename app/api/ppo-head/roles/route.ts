@@ -10,7 +10,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createDefaultRolesForOrganization } from "@/prisma/seed-staff-roles";
 import { checkUserPermissions } from "@/lib/staff-permissions";
-import { isRpoRoleTemplatesEnabled } from "@/lib/feature-flags";
 import { normalizeStaffPermissions } from "@/lib/staff-permission-matrix";
 
 // GET - получить список ролей организации
@@ -84,7 +83,7 @@ export async function GET(request: NextRequest) {
     const filteredRoles = roles.filter((r) => r.name !== "Член профкома.");
 
     return NextResponse.json({
-      readOnly: isRpoRoleTemplatesEnabled(),
+      readOnly: true,
       roles: filteredRoles.map((r) => ({
         ...r,
         permissions: normalizeStaffPermissions(r.permissions),
@@ -100,8 +99,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - создать новую роль
-export async function POST(request: NextRequest) {
+// POST — создание ролей в ППО отключено (шаблоны в кабинете РПО)
+export async function POST(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -109,77 +108,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
+    return NextResponse.json(
+      {
+        error:
+          "Создание ролей перенесено в кабинет РПО. В ППО доступно только назначение существующих ролей.",
+        denyReason: "RPO_ROLE_TEMPLATES_ENABLED",
       },
-    });
-
-    if (isRpoRoleTemplatesEnabled()) {
-      return NextResponse.json(
-        {
-          error:
-            "Создание ролей перенесено в кабинет РПО. В ППО доступно только назначение существующих ролей.",
-          denyReason: "RPO_ROLE_TEMPLATES_ENABLED",
-        },
-        { status: 403 }
-      );
-    }
-
-    const access = await checkUserPermissions(session.user.id, "staff_manage");
-    if (!access.hasAccess || !access.organizationId) {
-      return NextResponse.json(
-        {
-          error: "Недостаточно прав для создания роли",
-          requiredPermission: "staff_manage",
-          denyReason: access.denyReason || "MISSING_PERMISSION",
-        },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
-    const { name, description, permissions } = body;
-
-    if (!name || !permissions) {
-      return NextResponse.json(
-        { error: "Название и права обязательны" },
-        { status: 400 }
-      );
-    }
-
-    // Проверяем уникальность названия
-    const existingRole = await prisma.staffRole.findUnique({
-      where: {
-        organizationId_name: {
-          organizationId: access.organizationId,
-          name,
-        },
-      },
-    });
-
-    if (existingRole) {
-      return NextResponse.json(
-        { error: "Роль с таким названием уже существует" },
-        { status: 400 }
-      );
-    }
-
-    const role = await prisma.staffRole.create({
-      data: {
-        organizationId: access.organizationId,
-        name,
-        description,
-        permissions: normalizeStaffPermissions(permissions),
-        isSystem: false,
-        isActive: true,
-      },
-    });
-
-    return NextResponse.json({ role }, { status: 201 });
+      { status: 403 }
+    );
   } catch (error) {
     console.error("[API] Error creating role:", error);
     return NextResponse.json(

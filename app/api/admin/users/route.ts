@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { MembershipStatus, Prisma } from "@prisma/client";
+import { MembershipStatus, Prisma, UserRole } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { getOrgHeadScope } from "@/lib/org-head-permissions";
 import {
@@ -93,7 +93,11 @@ export async function GET(request: NextRequest) {
           ? { membershipStatus: "APPROVED" }
           : undefined;
 
-    const whereClauses: Prisma.UserWhereInput[] = [];
+    const whereClauses: Prisma.UserWhereInput[] = [
+      // Партнёры ведутся в /admin/partners — не дублировать в общем списке пользователей
+      { role: { not: UserRole.PARTNER } },
+      { partnerRecordId: null },
+    ];
     if (searchWhere) whereClauses.push(searchWhere);
     if (scopeWhere) whereClauses.push(scopeWhere);
     if (tabWhere) whereClauses.push(tabWhere);

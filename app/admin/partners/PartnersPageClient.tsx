@@ -42,6 +42,8 @@ export type PartnerRow = {
   contactJobTitle: string | null;
   linkedUserId: string | null;
   linkedUser?: { id: string; email: string | null } | null;
+  /** Учётка кабинета партнёра (User.partnerRecordId → Partner) */
+  cabinetUser?: { id: string; email: string | null } | null;
   isActive: boolean;
   createdAt: string;
 };
@@ -290,8 +292,14 @@ export default function PartnersPageClient({
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {partners.filter((p) => p?.id).map((p) => {
-                const impersonateId = p.linkedUser?.id ?? p.linkedUserId;
-                const impersonateEmail = p.linkedUser?.email?.trim() || "";
+                const impersonateId =
+                  p.cabinetUser?.id ?? p.linkedUser?.id ?? p.linkedUserId ?? null;
+                const impersonateEmail =
+                  p.cabinetUser?.email?.trim() ||
+                  p.linkedUser?.email?.trim() ||
+                  p.email?.trim() ||
+                  p.contactEmail?.trim() ||
+                  "";
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{p.name ?? "—"}</td>
@@ -321,13 +329,17 @@ export default function PartnersPageClient({
                         >
                           Редактировать
                         </Link>
-                        {impersonateId && impersonateEmail ? (
+                        {impersonateId ? (
                           <ImpersonateButton
                             userId={impersonateId}
-                            userEmail={impersonateEmail}
+                            userEmail={impersonateEmail || undefined}
                             label="Войти как"
                           />
-                        ) : null}
+                        ) : (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            Нет учётной записи
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

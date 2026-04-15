@@ -47,31 +47,34 @@ function isSmtpConfigured(): boolean {
   return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
 }
 
+export type SendEmailDispatchResult = { sent: boolean };
+
 /**
- * Универсальная функция для отправки email
- * В режиме разработки просто логирует email в консоль без реальной отправки
+ * Универсальная функция для отправки email.
+ * Реальная отправка через SMTP, если заданы SMTP_HOST, SMTP_USER и SMTP_PASSWORD
+ * (в том числе на localhost — чтобы можно было проверять интеграцию).
+ * Если SMTP не настроен — только лог в консоль, возвращает { sent: false }.
  */
-export async function sendEmail(options: SendEmailOptions): Promise<void> {
+export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDispatchResult> {
   console.log("[Email] Готово к отправке:");
   console.log("  To:", options.to);
   console.log("  Subject:", options.subject);
 
-  // В режиме разработки или если SMTP не настроен - просто логируем
-  if (isDevMode() || !isSmtpConfigured()) {
+  if (!isSmtpConfigured()) {
     console.log("\n" + "=".repeat(60));
-    console.log("📧 [DEV MODE] Email не отправлен (SMTP не настроен)");
+    console.log("📧 [Email] SMTP не настроен — письмо не отправлено по сети");
+    console.log("   Задайте SMTP_HOST, SMTP_USER, SMTP_PASSWORD в .env / .env.local");
     console.log("=".repeat(60));
     console.log("  To:", options.to);
     console.log("  Subject:", options.subject);
     console.log("  Text:", options.text?.substring(0, 200) + "...");
     console.log("=".repeat(60) + "\n");
-    return; // Не выбрасываем ошибку в dev режиме
+    return { sent: false };
   }
 
   try {
     const transporter = createEmailTransport();
-    
-    // Проверяем подключение
+
     await transporter.verify();
     console.log("[Email] ✅ SMTP сервер готов");
 
@@ -82,9 +85,9 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
       html: options.html,
       text: options.text,
       headers: {
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'Importance': 'high',
+        "X-Priority": "1",
+        "X-MSMail-Priority": "High",
+        Importance: "high",
       },
     });
 
@@ -97,6 +100,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     if (result.rejected && result.rejected.length > 0) {
       throw new Error(`Email отклонен: ${result.rejected.join(", ")}`);
     }
+    return { sent: true };
   } catch (error) {
     console.error("[Email] Ошибка отправки:", error);
     throw error;

@@ -21,6 +21,7 @@ interface MobileLayoutProps {
   userInitial: string;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  brandHref?: string;
   serverViewModes?: ViewModeOption[];
   serverViewMode?: string;
 }
@@ -30,6 +31,7 @@ export default function MobileLayout({
   userInitial,
   avatarUrl,
   isAdmin,
+  brandHref,
   serverViewModes = [],
   serverViewMode,
 }: MobileLayoutProps) {
@@ -37,7 +39,7 @@ export default function MobileLayout({
 
   return (
     <>
-      <MobileHeader onMenuClick={() => setIsMenuOpen(true)} />
+      <MobileHeader onMenuClick={() => setIsMenuOpen(true)} brandHref={brandHref} />
       <MobileMenu
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
@@ -45,6 +47,7 @@ export default function MobileLayout({
         userInitial={userInitial}
         avatarUrl={avatarUrl}
         isAdmin={isAdmin}
+        brandHref={brandHref}
         serverViewModes={serverViewModes}
         serverViewMode={serverViewMode}
       />
