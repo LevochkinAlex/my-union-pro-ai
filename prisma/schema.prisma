@@ -15,7 +15,7 @@ enum UserRole {
   REGIONAL_CHAIRMAN // Председатель регионального отделения
   FEDERAL_CHAIRMAN // Председатель федерации
   SUPER_ADMIN // Суперадмин
-  PARTNER // Партнёр (B2B / связка с Partner)
+  PARTNER // Партнёр (отдельный кабинет, не связан с членами)
 }
 
 // Статусы членства
@@ -294,6 +294,9 @@ model User {
 
   partnerLinkedAs Partner[] @relation("PartnerLinkedUser")
 
+  partnerRecordId String?  @unique
+  partnerRecord   Partner? @relation("PartnerCabinetUser", fields: [partnerRecordId], references: [id], onDelete: SetNull)
+
   @@index([email])
   @@index([phone])
   @@index([organizationId])
@@ -550,7 +553,7 @@ model Organization {
   @@index([sortOrder])
 }
 
-// Партнёры (карточки в админке). Опционально: пользователь для «Войти как» (явно задаётся суперадмином).
+// Партнёр-организация (карточка в админке + кабинет). Учётка PARTNER ссылается через User.partnerRecordId.
 model Partner {
   id String @id @default(cuid())
 
@@ -570,8 +573,14 @@ model Partner {
   contactPhone      String?
   contactJobTitle   String?
 
+  // Старая прямая привязка (legacy, используется в админке)
   linkedUserId String?
   linkedUser   User?   @relation("PartnerLinkedUser", fields: [linkedUserId], references: [id], onDelete: SetNull)
+
+  // Обратная сторона новой связи User.partnerRecordId → Partner
+  cabinetUser User? @relation("PartnerCabinetUser")
+
+  venues PartnerVenue[] @relation("PartnerVenues")
 
   isActive Boolean @default(true)
 
@@ -583,6 +592,39 @@ model Partner {
   @@index([isActive])
   @@index([createdAt])
   @@index([linkedUserId])
+}
+
+// Площадка / магазин партнёра (баннеры, промокоды, условия)
+model PartnerVenue {
+  id        String  @id @default(cuid())
+  partnerId String
+  partner   Partner @relation("PartnerVenues", fields: [partnerId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String? @db.Text
+  address     String? @db.Text
+  city        String?
+  website     String?
+  phone       String?
+  email       String?
+
+  bannerUrl   String?  @db.Text
+  bannerAlt   String?
+
+  promoCode   String?
+  promoLabel  String?
+  conditions  String?  @db.Text
+
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partnerId])
+  @@index([isActive])
+  @@index([city])
+  @@index([createdAt])
 }
 
 enum BillingEntityType {

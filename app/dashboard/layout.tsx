@@ -143,6 +143,11 @@ export default async function DashboardLayout({
 
   console.log("[dashboard/layout] FINAL userId:", session.user.id, "viewMode:", viewMode, "modes:", JSON.stringify(serverViewModes), "isImpersonating:", isImpersonating);
 
+  // Роль PARTNER: редирект в кабинет партнёра
+  if (dbUser && (dbUser as { role?: string }).role === "PARTNER") {
+    redirect("/partner-dashboard");
+  }
+
   // Редирект супер-админов в админ-панель (только если не в режиме impersonation)
   if (userRole === "SUPER_ADMIN" && !isImpersonating) {
     console.log("[dashboard/layout] Super admin detected, redirecting to /admin/dashboard");

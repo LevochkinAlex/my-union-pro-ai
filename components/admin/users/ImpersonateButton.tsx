@@ -7,7 +7,7 @@ import { UserRound } from "lucide-react";
 
 interface ImpersonateButtonProps {
   userId: string;
-  userEmail: string;
+  userEmail?: string | null;
   /** Подпись кнопки (по умолчанию «Войти») */
   label?: string;
 }
@@ -17,7 +17,8 @@ export default function ImpersonateButton({ userId, userEmail, label = "Войт
   const router = useRouter();
 
   const handleImpersonate = async () => {
-    if (!confirm(`Войти от имени пользователя ${userEmail}?`)) {
+    const who = userEmail?.trim() || userId;
+    if (!confirm(`Войти от имени пользователя ${who}?`)) {
       return;
     }
 
@@ -46,8 +47,8 @@ export default function ImpersonateButton({ userId, userEmail, label = "Войт
         throw new Error(result.error);
       }
 
-      // Редиректим в личный кабинет пользователя
-      router.push("/dashboard");
+      const role = data.targetUser?.role as string | undefined;
+      router.push(role === "PARTNER" ? "/partner-dashboard" : "/dashboard");
       router.refresh();
     } catch (error) {
       console.error("[Impersonate] Error:", error);

@@ -100,7 +100,13 @@ export interface DiscountItem {
   distanceKm?: number | null;
   updatedAt?: string | null;
   validUntil?: string | null;
-  options?: DiscountOption[] | null; // Варианты скидки (для выбора конкретного промокода)
+  options?: DiscountOption[] | null;
+  /** Партнёрская площадка (не BestBenefits) */
+  isPartnerVenue?: boolean;
+  /** CUID партнёрской площадки (для навигации) */
+  partnerVenueId?: string;
+  /** Название партнёра-организации */
+  partnerName?: string | null;
 }
 
 export interface DiscountSearchParams {

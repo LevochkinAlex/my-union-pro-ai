@@ -23,12 +23,13 @@ export default function ImpersonationBanner() {
       }
 
       const adminId = session.user.originalAdminId;
-      
+      /** До restore сессия ещё «партнёрская» — после restore role сменится */
+      const returnTo =
+        session.user.role === "PARTNER" ? "/admin/partners" : "/admin/users";
+
       console.log("[Stop Impersonation] Starting restore for admin:", adminId);
-      
-      // Восстанавливаем сессию админа через специальный провайдер
-      // Добавляем таймаут для запроса
-      const timeoutPromise = new Promise<never>((_, reject) => 
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Таймаут запроса")), 20000)
       );
 
@@ -36,7 +37,7 @@ export default function ImpersonationBanner() {
         adminId: adminId,
         restoreToken: "restore", // Токен не проверяется строго, только для совместимости
         redirect: false,
-        callbackUrl: "/admin/users",
+        callbackUrl: returnTo,
       });
 
       const result = await Promise.race([signInPromise, timeoutPromise]);
@@ -58,8 +59,7 @@ export default function ImpersonationBanner() {
       // Небольшая задержка для обновления сессии
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Редиректим в админ-панель
-      router.push("/admin/users");
+      router.push(returnTo);
     } catch (error) {
       console.error("[Stop Impersonation] Error:", error);
       const errorMessage = error instanceof Error 
@@ -95,7 +95,9 @@ export default function ImpersonationBanner() {
           />
         </svg>
         <span className="min-w-0 font-medium text-sm sm:text-base">
-          Режим просмотра: Вы просматриваете личный кабинет от имени пользователя
+          {session?.user?.role === "PARTNER"
+            ? "Режим просмотра: вы вошли в кабинет партнёра от имени пользователя"
+            : "Режим просмотра: вы просматриваете личный кабинет от имени пользователя"}
         </span>
       </div>
       <div className="flex w-full min-w-0 shrink-0 items-stretch gap-2 sm:w-auto sm:items-center sm:justify-start">

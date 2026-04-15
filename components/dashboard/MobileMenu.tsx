@@ -24,6 +24,7 @@ interface MobileMenuProps {
   userInitial: string;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  brandHref?: string;
   serverViewModes?: ViewModeOption[];
   serverViewMode?: string;
 }
@@ -41,6 +42,7 @@ export default function MobileMenu({
   userInitial,
   avatarUrl,
   isAdmin = false,
+  brandHref,
   serverViewModes = [],
   serverViewMode,
 }: MobileMenuProps) {
@@ -301,7 +303,7 @@ export default function MobileMenu({
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
             <Link
-              href={isAdmin ? "/admin/dashboard" : "/dashboard"}
+              href={brandHref || (isAdmin ? "/admin/dashboard" : "/dashboard")}
               prefetch={false}
               className="flex items-center gap-2"
               onClick={onClose}
