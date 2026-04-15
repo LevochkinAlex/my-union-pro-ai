@@ -22,10 +22,22 @@ export interface SendEmailOptions {
  * Создание транспорта для отправки email
  */
 function createEmailTransport() {
+  const host = process.env.SMTP_HOST || "smtp.mail.ru";
+  const port = parseInt(process.env.SMTP_PORT || "465", 10);
+  // 465 = implicit TLS, 25/2525/587 = STARTTLS (secure=false + requireTLS=true)
+  const secure =
+    process.env.SMTP_SECURE != null
+      ? process.env.SMTP_SECURE === "true"
+      : port === 465;
+
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.mail.ru",
-    port: parseInt(process.env.SMTP_PORT || "465"),
-    secure: true,
+    host,
+    port,
+    secure,
+    requireTLS: !secure,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD,
@@ -56,7 +68,15 @@ export type SendEmailDispatchResult = { sent: boolean };
  * Если SMTP не настроен — только лог в консоль, возвращает { sent: false }.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDispatchResult> {
+  const smtpHost = process.env.SMTP_HOST || "smtp.mail.ru";
+  const smtpPort = parseInt(process.env.SMTP_PORT || "465", 10);
+  const smtpSecure =
+    process.env.SMTP_SECURE != null
+      ? process.env.SMTP_SECURE === "true"
+      : smtpPort === 465;
+
   console.log("[Email] Готово к отправке:");
+  console.log("  SMTP:", `${smtpHost}:${smtpPort}`, `secure=${smtpSecure}`);
   console.log("  To:", options.to);
   console.log("  Subject:", options.subject);
 
