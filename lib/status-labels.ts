@@ -58,6 +58,7 @@ export function getUserRoleLabel(role?: string | null, isPPOHead?: boolean): str
     RPO_HEAD: "Председатель РПО",
     REGIONAL_CHAIRMAN: "Председатель РПО",
     FEDERAL_CHAIRMAN: "Председатель федерации",
+    PARTNER: "Партнёр",
     STAFF: "Сотрудник",
     UNION_MEMBER: "Член профсоюза",
   };

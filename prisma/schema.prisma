@@ -15,6 +15,7 @@ enum UserRole {
   REGIONAL_CHAIRMAN // Председатель регионального отделения
   FEDERAL_CHAIRMAN // Председатель федерации
   SUPER_ADMIN // Суперадмин
+  PARTNER // Партнёр (B2B / связка с Partner)
 }
 
 // Статусы членства
