@@ -14,7 +14,10 @@ interface EnvVariables {
   NEXT_PUBLIC_FIREBASE_PROJECT_ID?: string;
   NEXT_PUBLIC_FIREBASE_VAPID_PUBLIC_KEY?: string;
   FIREBASE_PRIVATE_KEY?: string;
-  OPENROUTER_API_KEY?: string;
+  FIREBASE_CLIENT_EMAIL?: string;
+  YANDEX_AI_STUDIO_API_KEY?: string;
+  YANDEX_CLOUD_FOLDER_ID?: string;
+  YANDEX_DEFAULT_MODEL?: string;
   RUNWAYML_API_KEY?: string;
   RUNWAYML_API_VERSION?: string;
   DADATA_API_KEY?: string;
@@ -255,20 +258,57 @@ export default function AdminSettingsPage() {
             />
           </div>
 
-          {/* OpenRouter API Key */}
+          {/* Yandex AI Studio — основной ИИ-провайдер */}
           <div>
             <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-              OpenRouter API Key
+              Yandex AI Studio — API Key
             </label>
             <input
               type="password"
-              value={envVariables.OPENROUTER_API_KEY || ""}
+              value={envVariables.YANDEX_AI_STUDIO_API_KEY || ""}
               onChange={(e) =>
-                setEnvVariables({ ...envVariables, OPENROUTER_API_KEY: e.target.value })
+                setEnvVariables({ ...envVariables, YANDEX_AI_STUDIO_API_KEY: e.target.value })
               }
-              placeholder="sk-or-v1-..."
+              placeholder="AQVN..."
               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Ключ сервис-аккаунта с ролью <code>ai.languageModels.user</code> в Yandex Cloud IAM.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+              Yandex Cloud Folder ID
+            </label>
+            <input
+              type="text"
+              value={envVariables.YANDEX_CLOUD_FOLDER_ID || ""}
+              onChange={(e) =>
+                setEnvVariables({ ...envVariables, YANDEX_CLOUD_FOLDER_ID: e.target.value })
+              }
+              placeholder="b1g..."
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Идентификатор папки (каталога) в Yandex Cloud, которому принадлежит сервис-аккаунт. Не путать с ID API-ключа или аккаунта.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+              Yandex модель по умолчанию
+            </label>
+            <input
+              type="text"
+              value={envVariables.YANDEX_DEFAULT_MODEL || ""}
+              onChange={(e) =>
+                setEnvVariables({ ...envVariables, YANDEX_DEFAULT_MODEL: e.target.value })
+              }
+              placeholder="yandexgpt"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Варианты: <code>yandexgpt</code>, <code>yandexgpt-lite</code>, <code>yandexgpt-32k</code>, <code>yandexgpt-5-pro</code>.
+            </p>
           </div>
 
           {/* RunwayML API Key */}

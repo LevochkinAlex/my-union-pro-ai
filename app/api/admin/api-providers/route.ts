@@ -47,32 +47,19 @@ function serializeProvider(provider: ApiProvider) {
   };
 }
 
-// Предустановленные модели для разных провайдеров
+// Предустановленные модели Yandex Foundation Models.
+// Каталог меняется редко, поэтому храним список локально и синхронизируем
+// вручную из админки кнопкой "Обновить модели Yandex".
+export const YANDEX_MODELS: string[] = [
+  "yandexgpt",
+  "yandexgpt-lite",
+  "yandexgpt-32k",
+  "yandexgpt-5-pro",
+  "yandexgpt-5-lite",
+];
+
 const DEFAULT_MODELS: Record<string, string[]> = {
-  openrouter: [
-    "openai/gpt-4o",
-    "openai/gpt-4o-mini",
-    "openai/gpt-4-turbo",
-    "openai/gpt-3.5-turbo",
-    "anthropic/claude-3.5-sonnet",
-    "anthropic/claude-3-opus",
-    "anthropic/claude-3-haiku",
-    "google/gemini-pro-1.5",
-    "meta-llama/llama-3.1-405b-instruct",
-    "meta-llama/llama-3.1-70b-instruct",
-  ],
-  openai: [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-3.5-turbo",
-  ],
-  anthropic: [
-    "claude-3-5-sonnet-20241022",
-    "claude-3-opus-20240229",
-    "claude-3-sonnet-20240229",
-    "claude-3-haiku-20240307",
-  ],
+  yandex: YANDEX_MODELS,
 };
 
 // GET - список всех провайдеров
@@ -89,43 +76,19 @@ export async function GET() {
       },
     });
 
-    // Если провайдеров нет, создаем дефолтные
+    // Если провайдеров нет, создаём единственный дефолтный — Yandex.
     if (providers.length === 0) {
-      const defaultProviders = [
-        {
-          name: "openrouter",
-          displayName: "OpenRouter",
-          description: "Универсальный провайдер с доступом к множеству моделей",
+      await prisma.apiProvider.create({
+        data: {
+          name: "yandex",
+          displayName: "Yandex Foundation Models",
+          description: "YandexGPT — основной ИИ-провайдер платформы (совместим с РФ-блокировками).",
           apiKey: null,
-          apiBaseUrl: "https://openrouter.ai/api/v1",
-          availableModels: JSON.stringify(DEFAULT_MODELS.openrouter),
+          apiBaseUrl: "https://llm.api.cloud.yandex.net/foundationModels/v1",
+          availableModels: JSON.stringify(DEFAULT_MODELS.yandex),
           isActive: true,
           isDefault: true,
         },
-        {
-          name: "openai",
-          displayName: "OpenAI",
-          description: "Официальный API OpenAI",
-          apiKey: null,
-          apiBaseUrl: "https://api.openai.com/v1",
-          availableModels: JSON.stringify(DEFAULT_MODELS.openai),
-          isActive: false,
-          isDefault: false,
-        },
-        {
-          name: "anthropic",
-          displayName: "Anthropic",
-          description: "Официальный API Anthropic (Claude)",
-          apiKey: null,
-          apiBaseUrl: "https://api.anthropic.com/v1",
-          availableModels: JSON.stringify(DEFAULT_MODELS.anthropic),
-          isActive: false,
-          isDefault: false,
-        },
-      ];
-
-      await prisma.apiProvider.createMany({
-        data: defaultProviders,
       });
 
       const createdProviders = await prisma.apiProvider.findMany({

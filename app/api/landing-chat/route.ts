@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOpenRouterConfig } from "@/lib/settings";
+import { callYandexChat, isYandexConfigured } from "@/lib/yandex-ai";
 import { COMPANY, CONTACTS } from "@/lib/constants/landing";
 import { prisma } from "@/lib/prisma";
+import { logAIUsage } from "@/lib/ai-usage";
 
 const LANDING_SYSTEM_PROMPT = `Ты — ИИ-помощник на лендинге платформы MyUnion Pro. Твоя цель: вести диалог с гостем, понять, кто он (председатель ППО, член профсоюза, представитель организации), уговорить попробовать демо, собрать имя и телефон, затем предложить зарегистрироваться (войти).
 
@@ -21,7 +22,7 @@ const LANDING_SYSTEM_PROMPT = `Ты — ИИ-помощник на лендин�
 - Отвечай кратко, дружелюбно, по делу. Без длинных списков, если не спросили. Пиши на «вы».`;
 
 /**
- * Гостевой чат на лендинге — без авторизации.
+ * Гостевой чат на лендинге — без авторизации. Через YandexGPT (RU-совместимо).
  * Бот: диалог → предложение демо по контексту → сбор имени и телефона → предложение войти/зарегистрироваться.
  */
 export async function POST(request: NextRequest) {
@@ -36,11 +37,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
     }
 
-    const { apiKey, model } = await getOpenRouterConfig();
-    if (!apiKey) {
+    if (!isYandexConfigured()) {
       return NextResponse.json(
         { error: "Сервис временно недоступен. Попробуйте позже." },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
@@ -55,45 +55,50 @@ export async function POST(request: NextRequest) {
       { role: "user", content: message },
     ];
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3004",
-        "X-Title": "MyUnion Pro Landing",
-      },
-      body: JSON.stringify({
-        model: model || "openai/gpt-4o-mini",
-        messages,
+    let aiMessage: string;
+    const startedAt = Date.now();
+    try {
+      // Лендинговый чат — короткие ответы про продукт. Лайт-модель
+      // достаточна и в 6x дешевле флагмана.
+      const result = await callYandexChat(messages, {
+        model: "yandexgpt-lite",
         temperature: 0.7,
-        max_tokens: 1024,
-      }),
-    });
+        maxTokens: 1024,
+      });
+      aiMessage = result.text;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[landing-chat] OpenRouter error:", response.status, errText);
+      void logAIUsage({
+        operation: "chat",
+        route: "landing-chat",
+        model: "yandexgpt-lite",
+        inputTokens: Number(result.usage?.inputTextTokens ?? 0),
+        outputTokens: Number(result.usage?.completionTokens ?? 0),
+        totalTokens: Number(result.usage?.totalTokens ?? 0),
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (err) {
+      console.error("[landing-chat] Yandex error:", err);
       return NextResponse.json(
         { error: "Сервис временно недоступен. Попробуйте позже." },
-        { status: 502 }
+        { status: 502 },
       );
     }
-
-    const data = await response.json();
-    const aiMessage = data?.choices?.[0]?.message?.content?.trim() || "";
 
     if (!aiMessage) {
       return NextResponse.json(
         { error: "Не удалось получить ответ. Попробуйте ещё раз." },
-        { status: 502 }
+        { status: 502 },
       );
     }
 
     // Лид-лог для будущей CRM-разработки: сохраняем диалог гостя в БД,
     // не создавая пользовательский чат и не требуя авторизации.
     try {
-      const conversation = [...conversationSlice, { role: "user", content: message }, { role: "assistant", content: aiMessage }];
+      const conversation = [
+        ...conversationSlice,
+        { role: "user", content: message },
+        { role: "assistant", content: aiMessage },
+      ];
       const phoneMatch = message.match(/(?:\+7|8)\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/);
       await prisma.systemLog.create({
         data: {
@@ -123,7 +128,7 @@ export async function POST(request: NextRequest) {
     console.error("[landing-chat] Error:", e);
     return NextResponse.json(
       { error: "Произошла ошибка. Попробуйте позже." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

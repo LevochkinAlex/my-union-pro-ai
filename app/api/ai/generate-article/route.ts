@@ -1,42 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getOpenRouterConfig } from "@/lib/settings";
+import { callYandexChat, isYandexConfigured } from "@/lib/yandex-ai";
+import { logAIUsage } from "@/lib/ai-usage";
 
 /**
- * POST /api/ai/generate-article - Сгенерировать статью с помощью AI
+ * POST /api/ai/generate-article — Сгенерировать статью с помощью ИИ (YandexGPT)
  */
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Не авторизован" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
     const { topic } = await request.json();
-
     if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Тема не может быть пустой" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Тема не может быть пустой" }, { status: 400 });
     }
 
-    // Получаем конфигурацию OpenRouter
-    const { apiKey, model } = await getOpenRouterConfig();
-
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "OpenRouter API не настроен" },
-        { status: 500 }
-      );
+    if (!isYandexConfigured()) {
+      return NextResponse.json({ error: "ИИ не настроен" }, { status: 500 });
     }
 
-    // Формируем промпт для генерации статьи
     const systemPrompt = `Ты - профессиональный копирайтер и контент-менеджер. Твоя задача - написать качественную, информативную и увлекательную статью по заданной теме.
 
 ТРЕБОВАНИЯ К СТАТЬЕ:
@@ -57,87 +43,45 @@ export async function POST(request: NextRequest) {
 
     const userPrompt = `Напиши подробную и интересную статью на тему: "${topic.trim()}"`;
 
-    // Убеждаемся, что используем рабочую модель
-    const finalModel = model && model !== "openrouter/auto" ? model : "openai/gpt-4o-mini";
+    console.log(`[ai/generate-article] Generating article on topic: "${topic}"`);
 
-    console.log(`[ai/generate-article] Generating article on topic: "${topic}" using model: ${finalModel}`);
+    const startedAt = Date.now();
+    const result = await callYandexChat(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      { model: "yandexgpt", temperature: 0.8, maxTokens: 4096 },
+    );
 
-    // Вызываем OpenRouter API
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3004",
-        "X-Title": "MyUnion Pro",
-      },
-      body: JSON.stringify({
-        model: finalModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.8,
-        max_tokens: 4096,
-      }),
+    void logAIUsage({
+      operation: "chat",
+      route: "ai/generate-article",
+      model: "yandexgpt",
+      inputTokens: Number(result.usage?.inputTextTokens ?? 0),
+      outputTokens: Number(result.usage?.completionTokens ?? 0),
+      totalTokens: Number(result.usage?.totalTokens ?? 0),
+      userId: session.user.id,
+      durationMs: Date.now() - startedAt,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = "Ошибка при обращении к AI";
-      
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.error?.message || errorData.error || errorMessage;
-        console.error("[ai/generate-article] OpenRouter API error:", errorData);
-      } catch {
-        console.error("[ai/generate-article] OpenRouter API error (raw):", errorText);
-      }
-      
-      return NextResponse.json(
-        { error: errorMessage },
-        { status: 500 }
-      );
-    }
-
-    const data = await response.json();
-    const generatedText = data.choices?.[0]?.message?.content;
-
-    if (!generatedText) {
-      return NextResponse.json(
-        { error: "AI не вернул текст статьи" },
-        { status: 500 }
-      );
-    }
-
-    // Очищаем текст от возможных артефактов
-    let finalText = generatedText.trim();
-    
-    // Удаляем общие вступления типа "Вот статья:", "Конечно!", и т.д.
+    let finalText = result.text.trim();
     finalText = finalText
-      .replace(/^(Вот|Конечно|Хорошо|Отлично)[^<]*(<|$)/i, '$2')
-      .replace(/^[^<]*статья[^<]*:/i, '')
+      .replace(/^(Вот|Конечно|Хорошо|Отлично)[^<]*(<|$)/i, "$2")
+      .replace(/^[^<]*статья[^<]*:/i, "")
       .trim();
 
-    // Если AI вернул текст без HTML, оборачиваем в параграфы
     if (!finalText.includes("<") && !finalText.includes(">")) {
-      const paragraphs = finalText.split(/\n\n+/).filter(p => p.trim());
-      finalText = paragraphs.map(p => `<p>${p.trim()}</p>`).join("");
+      const paragraphs = finalText.split(/\n\n+/).filter((p) => p.trim());
+      finalText = paragraphs.map((p) => `<p>${p.trim()}</p>`).join("");
     }
 
-    console.log(`[ai/generate-article] Successfully generated article (${finalText.length} chars)`);
+    console.log(`[ai/generate-article] ✅ Article (${finalText.length} chars)`);
 
-    return NextResponse.json({
-      success: true,
-      article: finalText,
-    });
-  } catch (error: any) {
+    return NextResponse.json({ success: true, article: finalText });
+  } catch (error: unknown) {
     console.error("[ai/generate-article] Error:", error);
-    const errorMessage = error?.message || "Ошибка при генерации статьи";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : "Ошибка при генерации статьи";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
-

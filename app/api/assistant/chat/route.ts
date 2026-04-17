@@ -8,7 +8,7 @@ import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhanced-search";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
 import { isDemoUserId, DEMO_NEWS_ORG_NAME } from "@/lib/demo";
-import type { ChatBot, ApiProvider } from "@prisma/client";
+import { callAI } from "@/lib/ai-call";
 
 /**
  * Простой чат-бот помощник для всех страниц
@@ -53,11 +53,12 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
-      if (!apiKey) {
+      const hasYandex =
+        !!process.env.YANDEX_AI_STUDIO_API_KEY && !!process.env.YANDEX_CLOUD_FOLDER_ID;
+      if (!hasYandex && !bot.apiProvider?.apiKey) {
         return NextResponse.json(
-          { error: "API ключ не настроен. Обратитесь к администратору." },
-          { status: 500 }
+          { error: "AI провайдер не настроен. Обратитесь к администратору." },
+          { status: 500 },
         );
       }
       const fakeUser = {
@@ -75,7 +76,10 @@ export async function POST(request: NextRequest) {
       ];
       let aiResponse: string;
       try {
-        aiResponse = await callAI(bot, messages);
+        aiResponse = await callAI(bot, messages, {
+          route: "assistant/chat:demo",
+          userId: session.user.id,
+        });
         if (!aiResponse?.trim()) aiResponse = "Извините, не удалось получить ответ. Попробуйте позже.";
       } catch (e: any) {
         aiResponse = e?.message?.includes("401") ? "Ошибка авторизации API." : "Ошибка при обращении к ИИ. Попробуйте позже.";
@@ -118,24 +122,22 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    const hasYandex =
+      !!process.env.YANDEX_AI_STUDIO_API_KEY && !!process.env.YANDEX_CLOUD_FOLDER_ID;
     console.log("[assistant/chat] ✅ Bot found:", {
       id: bot.id,
       name: bot.name,
       model: bot.model,
       hasApiProvider: !!bot.apiProvider,
-      apiProviderName: bot.apiProvider?.name || 'none',
-      hasApiKey: !!(bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY),
+      apiProviderName: bot.apiProvider?.name || "none",
+      hasYandex,
     });
-    
-    // Проверяем наличие API ключа
-    const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
-    if (!apiKey) {
-      console.error("[assistant/chat] ❌ No API key configured!");
-      console.error("[assistant/chat] Bot apiProvider:", bot.apiProvider?.name);
-      console.error("[assistant/chat] OPENROUTER_API_KEY env:", process.env.OPENROUTER_API_KEY ? "set" : "NOT SET");
+
+    if (!hasYandex && !bot.apiProvider?.apiKey) {
+      console.error("[assistant/chat] ❌ Yandex AI не настроен");
       return NextResponse.json(
-        { error: "API ключ не настроен. Обратитесь к администратору." },
-        { status: 500 }
+        { error: "AI провайдер не настроен. Обратитесь к администратору." },
+        { status: 500 },
       );
     }
 
@@ -239,11 +241,15 @@ export async function POST(request: NextRequest) {
     console.log("[assistant/chat] ========== CALLING AI ==========");
     console.log("[assistant/chat] Messages count:", messages.length);
     console.log("[assistant/chat] Bot model:", bot.model);
-    console.log("[assistant/chat] API provider:", bot.apiProvider?.name || "openrouter");
+    console.log("[assistant/chat] API provider:", bot.apiProvider?.name || "yandex");
     
     let aiResponse;
     try {
-      aiResponse = await callAI(bot, messages);
+      aiResponse = await callAI(bot, messages, {
+        route: "assistant/chat",
+        userId: session.user.id,
+        organizationId: (user as { organizationId?: string | null }).organizationId ?? null,
+      });
       console.log("[assistant/chat] ✅ AI response received, length:", aiResponse?.length);
       if (!aiResponse || aiResponse.trim().length === 0) {
         console.error("[assistant/chat] ❌ AI returned empty response!");
@@ -714,109 +720,5 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
   return prompt;
 }
 
-export async function callAI(bot: ChatBot & { apiProvider: ApiProvider | null }, messages: any[]): Promise<string> {
-  const providerName = bot.apiProvider?.name || "openrouter";
-  const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
-  const apiBaseUrl = bot.apiProvider?.apiBaseUrl || "https://openrouter.ai/api/v1/chat/completions";
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (providerName === "openrouter") {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-    headers["HTTP-Referer"] = process.env.NEXTAUTH_URL || "http://localhost:3004";
-    headers["X-Title"] = "MyUnion Pro";
-  } else if (providerName === "openai") {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-  } else if (providerName === "anthropic") {
-    headers["x-api-key"] = apiKey;
-    headers["anthropic-version"] = "2023-06-01";
-  }
-
-  // Используем более умную модель для качественных ответов
-  // Приоритет: настройка бота -> переменная окружения -> умная модель по умолчанию
-  const model = bot.model || process.env.DEFAULT_AI_MODEL || "openai/gpt-4o";
-
-  let requestBody: any;
-  let responseUrl: string;
-
-  if (providerName === "anthropic") {
-    responseUrl = apiBaseUrl || "https://api.anthropic.com/v1/messages";
-    requestBody = {
-      model,
-      max_tokens: 1024,
-      messages: messages.filter((m) => m.role !== "system"),
-      system: messages.find((m) => m.role === "system")?.content || "",
-    };
-  } else {
-    responseUrl = apiBaseUrl;
-    requestBody = {
-      model,
-      messages,
-      temperature: 0.7,
-      max_tokens: 1024,
-    };
-  }
-
-  console.log(`[callAI] ========== SENDING REQUEST TO ${providerName} ==========`);
-  console.log(`[callAI] URL: ${responseUrl}`);
-  console.log(`[callAI] Model: ${model}`);
-  console.log(`[callAI] Messages count: ${messages.length}`);
-  console.log(`[callAI] Has API key: ${!!apiKey}`);
-
-  const response = await fetch(responseUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(requestBody),
-  });
-
-  console.log(`[callAI] Response status: ${response.status} ${response.statusText}`);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[callAI] ❌ AI API error (${response.status}):`, errorText);
-    
-    // Пробуем распарсить JSON ошибки
-    let errorDetails = errorText;
-    try {
-      const errorJson = JSON.parse(errorText);
-      errorDetails = JSON.stringify(errorJson, null, 2);
-      console.error(`[callAI] Error details:`, errorJson);
-    } catch {
-      // Не JSON, используем как есть
-    }
-    
-    // Формируем понятное сообщение об ошибке
-    let errorMessage = `AI API error: ${response.status}`;
-    if (response.status === 401) {
-      errorMessage = "Ошибка авторизации API. Проверьте API ключ.";
-    } else if (response.status === 429) {
-      errorMessage = "Превышен лимит запросов. Попробуйте позже.";
-    } else if (response.status === 500 || response.status >= 502) {
-      errorMessage = "Сервис ИИ временно недоступен. Попробуйте позже.";
-    }
-    
-    throw new Error(errorMessage);
-  }
-
-  const data = await response.json();
-  console.log(`[callAI] ✅ Response received, keys:`, Object.keys(data));
-
-  let aiResponse: string;
-  if (providerName === "anthropic") {
-    aiResponse = data.content?.[0]?.text || "";
-  } else {
-    aiResponse = data.choices?.[0]?.message?.content || "";
-  }
-
-  if (!aiResponse || aiResponse.trim().length === 0) {
-    console.error(`[callAI] ❌ Empty response from AI!`);
-    console.error(`[callAI] Response data:`, JSON.stringify(data, null, 2).substring(0, 500));
-    throw new Error("ИИ вернул пустой ответ");
-  }
-
-  console.log(`[callAI] ✅ AI response length: ${aiResponse.length}`);
-  return aiResponse;
-}
+// callAI импортируется из lib/ai-call.ts (единый клиент с дефолтом на Yandex GPT).
 

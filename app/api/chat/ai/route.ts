@@ -332,9 +332,10 @@ export async function POST(request: NextRequest) {
       if (!bot) {
         throw new Error("Бот не настроен. Обратитесь к администратору.");
       }
-      const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
-      if (!apiKey) {
-        throw new Error("API ключ не настроен. Обратитесь к администратору.");
+      const hasYandex =
+        !!process.env.YANDEX_AI_STUDIO_API_KEY && !!process.env.YANDEX_CLOUD_FOLDER_ID;
+      if (!hasYandex && !bot.apiProvider?.apiKey) {
+        throw new Error("AI провайдер не настроен. Обратитесь к администратору.");
       }
 
       // Загрузка пользователя для системного промпта
@@ -381,7 +382,11 @@ export async function POST(request: NextRequest) {
         ...messagesForAI.slice(-10),
       ];
 
-      aiResponse = await callAI(bot, messages);
+      aiResponse = await callAI(bot, messages, {
+        route: "chat/ai",
+        userId,
+        organizationId: (user as { organizationId?: string | null } | null)?.organizationId ?? null,
+      });
 
       if (!aiResponse || aiResponse.trim().length === 0) {
         throw new Error("ИИ вернул пустой ответ");

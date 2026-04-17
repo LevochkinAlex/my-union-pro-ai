@@ -35,7 +35,7 @@ MyUnion Pro - это веб-приложение для управления п�
 - **Appeal Bot**: Бот для обработки обращений
 - **Main Chat Bot**: Основной помощник пользователя
 - **База знаний**: Векторный поиск по документам профсоюза
-- **OpenRouter/OpenAI**: Интеграция с AI моделями
+- **Yandex Foundation Models**: Основной провайдер ИИ (YandexGPT + text-embedding)
 
 ### 5. Новости и контент
 
@@ -85,7 +85,7 @@ MyUnion Pro - это веб-приложение для управления п�
 - **Telegram Bot API**: Отправка PIN-кодов
 - **DaData API**: Склонение ФИО
 - **BestBenefits API**: Каталог скидок
-- **OpenRouter/OpenAI**: AI модели
+- **Yandex Foundation Models**: основной ИИ (чаты, генерация, embeddings)
 
 ## Структура проекта
 
@@ -167,8 +167,9 @@ NEXTAUTH_SECRET=your-secret-key
 TELEGRAM_BOT_TOKEN=your-bot-token
 TELEGRAM_BOT_USERNAME=your-bot-username
 
-# AI
-OPENROUTER_API_KEY=your-api-key
+# AI (Yandex Foundation Models — основной провайдер ИИ платформы)
+YANDEX_AI_STUDIO_API_KEY=AQVN...
+YANDEX_CLOUD_FOLDER_ID=b1g...
 
 # DaData
 DADATA_API_KEY=your-api-key

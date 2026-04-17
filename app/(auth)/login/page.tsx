@@ -1,7 +1,7 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useState, useEffect, Suspense } from "react";
+import { useSession, signIn } from "next-auth/react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AuthTabs from "@/components/auth/AuthTabs";
@@ -16,6 +16,12 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [devMagicLink, setDevMagicLink] = useState<string | null>(null);
+  const [devPin, setDevPin] = useState<string | null>(null);
+  const [pin, setPin] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  const pinInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
@@ -49,6 +55,7 @@ function LoginForm() {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setInfo(null);
     setLoading(true);
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -76,12 +83,85 @@ function LoginForm() {
       if (data.devMode && data.magicLink) {
         setDevMagicLink(data.magicLink);
       }
+      if (data.devMode && data.devPin) {
+        setDevPin(data.devPin);
+      }
 
+      setPin("");
       setStep("email-sent");
+      // Фокусируем поле ввода кода сразу после рендера.
+      setTimeout(() => pinInputRef.current?.focus(), 50);
     } catch {
       setError("Ошибка сети. Проверьте подключение к интернету.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resending || !email) return;
+    setResending(true);
+    setError("");
+    setInfo(null);
+    try {
+      const response = await fetch("/api/auth/email/send-magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setError(data.error || "Не удалось отправить новый код");
+      } else {
+        setInfo("Отправили новый код на вашу почту");
+        setPin("");
+        if (data.devMode && data.magicLink) setDevMagicLink(data.magicLink);
+        if (data.devMode && data.devPin) setDevPin(data.devPin);
+        setTimeout(() => pinInputRef.current?.focus(), 50);
+      }
+    } catch {
+      setError("Ошибка сети. Проверьте подключение.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handlePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (verifying) return;
+    setError("");
+    setInfo(null);
+
+    const cleaned = pin.replace(/\D/g, "").slice(0, 6);
+    if (cleaned.length !== 6) {
+      setError("Введите 6 цифр кода из письма");
+      return;
+    }
+
+    setVerifying(true);
+    try {
+      const result = await signIn("email-pin", {
+        email,
+        pin: cleaned,
+        redirect: false,
+      });
+
+      if (!result || result.error || !result.ok) {
+        // CredentialsSignin — неверный код или истёк срок действия
+        setError("Неверный или истёкший код. Проверьте письмо или запросите новый код.");
+        setPin("");
+        setTimeout(() => pinInputRef.current?.focus(), 50);
+        return;
+      }
+
+      // Успех — в дашборд через жёсткий replace (чтобы назад нельзя было вернуться)
+      const raw = searchParams.get("callbackUrl");
+      const target = raw ? decodeURIComponent(raw) : "/dashboard";
+      window.location.replace(target.startsWith("/") ? target : "/dashboard");
+    } catch {
+      setError("Ошибка сети при проверке кода. Попробуйте ещё раз.");
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -114,54 +194,110 @@ function LoginForm() {
             )}
 
             {step === "email-sent" && (
-              <div className="text-center py-8">
-                <div className="mb-6">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-4">
-                    <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="py-4">
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-4">
+                    <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                    {devMagicLink ? "Режим разработки" : "Проверьте вашу почту"}
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+                    Введите код из письма
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    {devMagicLink ? (
-                      <>SMTP не настроен — перейдите по ссылке ниже.</>
-                    ) : (
-                      <>
-                        Мы отправили ссылку для входа на
-                        <br />
-                        <strong>{email}</strong>
-                      </>
-                    )}
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    Мы отправили 6-значный код на <strong>{email}</strong>
                   </p>
-
-                  {devMagicLink && (
-                    <div className="mt-4 mb-6">
-                      <a
-                        href={devMagicLink}
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-                      >
-                        Войти
-                      </a>
-                      <p className="mt-3 text-xs text-gray-500 dark:text-gray-500 break-all">{devMagicLink}</p>
-                    </div>
-                  )}
-
-                  <p className="text-sm text-gray-500 dark:text-gray-500">Ссылка действительна 15 минут</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep("input");
-                    setEmail("");
-                    setError("");
-                    setDevMagicLink(null);
-                  }}
-                  className="text-sm text-gray-600 hover:text-gray-700 dark:text-gray-400"
-                >
-                  Изменить email
-                </button>
+
+                <form onSubmit={handlePinSubmit} className="space-y-3">
+                  <input
+                    ref={pinInputRef}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="\d{6}"
+                    maxLength={6}
+                    value={pin}
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setPin(cleaned);
+                      setError("");
+                    }}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+                      if (pasted) {
+                        e.preventDefault();
+                        setPin(pasted);
+                        setError("");
+                      }
+                    }}
+                    placeholder="••••••"
+                    aria-label="Код из письма"
+                    className="w-full text-center text-3xl tracking-[0.6em] font-mono py-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={verifying || pin.length !== 6}
+                    className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {verifying ? "Проверяем..." : "Войти"}
+                  </button>
+                </form>
+
+                {info && (
+                  <p className="mt-4 text-sm text-green-700 dark:text-green-400 text-center">{info}</p>
+                )}
+
+                <p className="mt-5 text-center text-xs text-gray-500 dark:text-gray-400">
+                  Код и ссылка действительны 5 минут
+                </p>
+
+                <div className="mt-6 flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    disabled={resending}
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+                  >
+                    {resending ? "Отправляем..." : "Отправить новый код"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("input");
+                      setEmail("");
+                      setPin("");
+                      setError("");
+                      setInfo(null);
+                      setDevMagicLink(null);
+                      setDevPin(null);
+                    }}
+                    className="text-sm text-gray-600 hover:text-gray-700 dark:text-gray-400"
+                  >
+                    Изменить email
+                  </button>
+                </div>
+
+                {devMagicLink && (
+                  <div className="mt-6 p-4 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20">
+                    <p className="text-xs text-amber-800 dark:text-amber-300 mb-2">
+                      Режим разработки (SMTP не настроен)
+                    </p>
+                    {devPin && (
+                      <p className="font-mono text-sm text-gray-900 dark:text-white mb-2">
+                        PIN: <strong>{devPin}</strong>
+                      </p>
+                    )}
+                    <a
+                      href={devMagicLink}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      Войти по ссылке
+                    </a>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-500 break-all">{devMagicLink}</p>
+                  </div>
+                )}
               </div>
             )}
 

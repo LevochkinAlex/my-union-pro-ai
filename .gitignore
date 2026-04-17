@@ -63,6 +63,12 @@ check-bot.mjs
 deploy-config.sh
 SERVER_ACCESS.md
 
+# Firebase / Google service account credentials — НИКОГДА в git
+*firebase-adminsdk*.json
+serviceAccount*.json
+service-account*.json
+*.serviceaccount.json
+
 # Uploaded files live only on production server
 /public/uploads/**
 !/public/uploads/**/.gitkeep

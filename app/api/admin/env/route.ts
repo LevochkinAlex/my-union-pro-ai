@@ -12,11 +12,16 @@ const EDITABLE_ENV_VARS = [
   "SMTP_PORT",
   "SMTP_USER",
   "SMTP_FROM",
-  "OPENROUTER_API_KEY",
+  // Yandex Cloud AI Studio — основной ИИ-провайдер платформы
+  "YANDEX_AI_STUDIO_API_KEY",
+  "YANDEX_CLOUD_FOLDER_ID",
+  "YANDEX_DEFAULT_MODEL",
   "RUNWAYML_API_KEY",
   "RUNWAYML_API_VERSION",
   "DADATA_API_KEY",
   "DADATA_SECRET_KEY",
+  // Firebase Admin (FCM push) — credentials из env, hardcoded JSON запрещён
+  "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
   "NEXT_PUBLIC_FIREBASE_API_KEY",
   "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",

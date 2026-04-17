@@ -8,7 +8,7 @@
 - **Frontend**: Next.js 14+ (App Router), React, TypeScript, Tailwind CSS
 - **Backend**: Next.js API Routes, Prisma ORM, PostgreSQL
 - **Real-time**: WebSocket (Socket.IO) - кастомный сервер (`server/chat-server.ts`)
-- **AI**: OpenRouter API для AI-чата с поддержкой баз знаний (RAG)
+- **AI**: Yandex Foundation Models (YandexGPT + text-embedding) с поддержкой баз знаний (RAG)
 - **Auth**: NextAuth.js с поддержкой SMS, Email, Yandex OAuth
 - **Deployment**: PM2 на VDS (194.87.49.210). БД — PostgreSQL в VK Cloud (83.166.237.161, myunion_db).
 
@@ -336,7 +336,7 @@ Response: { success: boolean }
 
 ### API для AI
 - `POST /api/chat/[chatId]` - отправка сообщения AI
-- AI обрабатывается через OpenRouter API
+- AI обрабатывается через Yandex Foundation Models API
 - Контекст берется из `UserKnowledgeBase`
 
 ---

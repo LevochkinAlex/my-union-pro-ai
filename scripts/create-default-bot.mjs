@@ -64,57 +64,38 @@ const DEFAULT_SYSTEM_PROMPT = `Ты - умный, дружелюбный AI-по
   * Система автоматически подтянет данные руководителя из ФНС
 - Должность
 
-**Дополнительная информация** (заполняется через отдельные вкладки):
-- Профессии (можно добавить несколько с указанием опыта)
-- Образование (можно добавить несколько записей: уровень, заведение, год, специальность)
-- Семейное положение и дети (для поздравлений и подарков)
-- Награды (ведомственные, государственные, профсоюзные)
-- Обучение (семинары, курсы, школы актива)
-- Хобби и интересы
-
 **ПРАВИЛА ОБЩЕНИЯ:**
 
-1. **ДРУЖЕЛЮБНОСТЬ**: Будь вежливым, терпеливым и готовым помочь
-2. **ЧЕТКОСТЬ**: Давай точные и структурированные ответы
-3. **ЧЕСТНОСТЬ**: Если не знаешь ответа - честно скажи и предложи связаться с администрацией
-4. **ПЕРСОНАЛИЗАЦИЯ**: Используй имя пользователя, если оно известно
-5. **ПОМОЩЬ В НАВИГАЦИИ**: Подсказывай, где найти нужные разделы системы
-6. **НЕ СОБИРАЙ ДАННЫЕ**: Ты НЕ собираешь данные профиля! Просто направляй в раздел "Профиль"
+1. ДРУЖЕЛЮБНОСТЬ: Будь вежливым, терпеливым и готовым помочь
+2. ЧЁТКОСТЬ: Давай точные и структурированные ответы
+3. ЧЕСТНОСТЬ: Если не знаешь ответа — честно скажи и предложи связаться с администрацией
+4. ПЕРСОНАЛИЗАЦИЯ: Используй имя пользователя, если оно известно
+5. ПОМОЩЬ В НАВИГАЦИИ: Подсказывай, где найти нужные разделы системы
+6. НЕ СОБИРАЙ ДАННЫЕ: Ты НЕ собираешь данные профиля! Просто направляй в раздел "Профиль"
+7. НЕ упоминай название технологий (Yandex, OpenAI и т.п.) — говори «использую современные AI-технологии»
 
-**ЧАСТЫЕ ВОПРОСЫ:**
+Начни с приветствия: «Здравствуйте! Я ваш AI-помощник профсоюза МООП РЗ. Чем могу помочь?»`;
 
-- "Как вступить в профсоюз?" → Объясни про заполнение профиля и генерацию документов
-- "Где посмотреть скидки?" → Раздел "Скидки" в меню
-- "Как создать обращение?" → Раздел "Обращения" → кнопка "Создать обращение"
-- "Как заполнить профиль?" → Раздел "Профиль" → заполнить все обязательные поля → система сама сгенерирует документы
-- "Где мои документы?" → Раздел "Документы" в меню
+const YANDEX_PROVIDER = {
+  name: "yandex",
+  displayName: "Yandex Foundation Models",
+  description:
+    "YandexGPT — основной ИИ-провайдер платформы (совместим с РФ-блокировками).",
+  apiBaseUrl: "https://llm.api.cloud.yandex.net/foundationModels/v1",
+};
 
-**О ПРОФСОЮЗЕ МООП РЗ:**
-- Московская областная организация профсоюза работников здравоохранения
-- Защита прав медицинских работников
-- Социальная поддержка и льготы
-- Юридическая помощь
-- Организация мероприятий и отдыха
-
-Начни с приветствия: "Здравствуйте! Я ваш AI-помощник профсоюза МООП РЗ. Чем могу помочь? 😊"`;
-
-async function ensureOpenRouterProvider() {
+async function ensureYandexProvider() {
   return prisma.apiProvider.upsert({
-    where: { name: "openrouter" },
+    where: { name: YANDEX_PROVIDER.name },
     update: {
-      displayName: "OpenRouter",
-      description:
-        "Маркетплейс моделей, предоставляющий доступ к OpenAI, Anthropic, Google и другим LLM через единый API.",
-      apiBaseUrl: "https://openrouter.ai/api/v1/chat/completions",
+      displayName: YANDEX_PROVIDER.displayName,
+      description: YANDEX_PROVIDER.description,
+      apiBaseUrl: YANDEX_PROVIDER.apiBaseUrl,
       isActive: true,
       isDefault: true,
     },
     create: {
-      name: "openrouter",
-      displayName: "OpenRouter",
-      description:
-        "Маркетплейс моделей, предоставляющий доступ к OpenAI, Anthropic, Google и другим LLM через единый API.",
-      apiBaseUrl: "https://openrouter.ai/api/v1/chat/completions",
+      ...YANDEX_PROVIDER,
       isActive: true,
       isDefault: true,
     },
@@ -123,53 +104,34 @@ async function ensureOpenRouterProvider() {
 
 async function main() {
   try {
-    const provider = await ensureOpenRouterProvider();
+    const provider = await ensureYandexProvider();
 
-    // Проверяем, есть ли уже бот по умолчанию
     const existingBot = await prisma.chatBot.findFirst({
       where: { isDefault: true },
     });
 
+    const baseData = {
+      name: "Помощник профсоюза",
+      description: "Бот для помощи членам профсоюза",
+      systemPrompt: DEFAULT_SYSTEM_PROMPT,
+      tone: "professional",
+      temperature: 0.7,
+      maxTokens: 1000,
+      isActive: true,
+      isDefault: true,
+      model: "yandexgpt",
+      apiProviderId: provider.id,
+    };
+
     if (existingBot) {
-      console.log("Бот по умолчанию уже существует:", existingBot.name);
-      console.log("Обновляем существующего бота...");
-      
+      console.log("Обновляем существующего бота:", existingBot.name);
       await prisma.chatBot.update({
         where: { id: existingBot.id },
-        data: {
-          name: "Помощник профсоюза",
-          description: "Бот для помощи новым членам профсоюза в заполнении профиля",
-          systemPrompt: DEFAULT_SYSTEM_PROMPT,
-          tone: "professional",
-          temperature: 0.7,
-          maxTokens: 1000,
-          isActive: true,
-          isDefault: true,
-          model: "openai/gpt-4o-mini",
-          apiProviderId: provider.id,
-          providerOverride: null,
-        },
+        data: { ...baseData, providerOverride: null },
       });
-      
-      console.log("✅ Бот обновлен!");
+      console.log("✅ Бот обновлён");
     } else {
-      console.log("Создаем бота по умолчанию...");
-      
-      const bot = await prisma.chatBot.create({
-        data: {
-          name: "Помощник профсоюза",
-          description: "Бот для помощи новым членам профсоюза в заполнении профиля",
-          systemPrompt: DEFAULT_SYSTEM_PROMPT,
-          tone: "professional",
-          temperature: 0.7,
-          maxTokens: 1000,
-          isActive: true,
-          isDefault: true,
-          model: "openai/gpt-4o-mini",
-          apiProviderId: provider.id,
-        },
-      });
-      
+      const bot = await prisma.chatBot.create({ data: baseData });
       console.log("✅ Бот создан:", bot.id);
     }
   } catch (error) {
@@ -181,4 +143,3 @@ async function main() {
 }
 
 main();
-

@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
         systemPrompt: systemPrompt.trim(),
         tone: tone || "professional",
         context: context?.trim() || null,
-        model: model || "openai/gpt-4o-mini",
+        model: model || "yandexgpt",
         apiProviderId: providerId,
         providerOverride: cleanOverride,
         retrievalConfig: cleanRetrievalConfig,

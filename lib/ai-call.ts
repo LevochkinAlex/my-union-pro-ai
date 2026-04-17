@@ -1,137 +1,103 @@
 import type { ChatBot, ApiProvider } from "@prisma/client";
+import { callYandexChat, isYandexConfigured, type OpenAIStyleMessage } from "./yandex-ai";
+import { logAIUsage } from "./ai-usage";
 
 export type BotWithProvider = ChatBot & { apiProvider: ApiProvider | null };
 
+/**
+ * Контекст вызова — используется для учёта расходов (AIUsageEvent).
+ * Все поля опциональны. Если не указано — запись всё равно будет, но без разрезов.
+ */
+export interface CallAIContext {
+  route: string;
+  userId?: string | null;
+  organizationId?: string | null;
+}
+
+/**
+ * Единственная точка вызова LLM в платформе.
+ *
+ * Платформа работает из РФ — используем Yandex Foundation Models. Исторически
+ * поддерживались OpenRouter/OpenAI/Anthropic; эти провайдеры убраны, так как
+ * OpenRouter блокируется в РФ, а других транзакционных ИИ мы больше не держим.
+ *
+ * После успешного/неуспешного вызова пишем событие в AIUsageEvent
+ * (fire-and-forget, ошибка логирования не прерывает ответ).
+ */
 export async function callAI(
   bot: BotWithProvider,
-  messages: Array<{ role: string; content: string }>,
+  messages: OpenAIStyleMessage[],
+  context?: CallAIContext,
 ): Promise<string> {
-  const providerName = bot.apiProvider?.name || "openrouter";
-  const apiKey =
-    bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
-  const apiBaseUrl =
-    bot.apiProvider?.apiBaseUrl ||
-    "https://openrouter.ai/api/v1/chat/completions";
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (providerName === "openrouter") {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-    headers["HTTP-Referer"] =
-      process.env.NEXTAUTH_URL || "http://localhost:3004";
-    headers["X-Title"] = "MyUnion Pro";
-  } else if (providerName === "openai") {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-  } else if (providerName === "anthropic") {
-    headers["x-api-key"] = apiKey;
-    headers["anthropic-version"] = "2023-06-01";
+  if (!isYandexConfigured()) {
+    throw new Error(
+      "Yandex AI не настроен. Задайте YANDEX_AI_STUDIO_API_KEY и YANDEX_CLOUD_FOLDER_ID в окружении.",
+    );
   }
 
-  const model =
-    bot.model || process.env.DEFAULT_AI_MODEL || "openai/gpt-4o";
+  // Допускаем явный apiKey из настроек бота (провайдер в БД) — полезно, если
+  // у разных ботов разные лимиты/квоты в Yandex Cloud.
+  const apiKeyOverride = bot.apiProvider?.apiKey || undefined;
+  const model = bot.model || process.env.YANDEX_DEFAULT_MODEL || "yandexgpt";
+  const temperature =
+    typeof bot.temperature === "number" && bot.temperature >= 0 ? bot.temperature : 0.7;
+  const maxTokens =
+    typeof bot.maxTokens === "number" && bot.maxTokens > 0 ? bot.maxTokens : 2000;
 
-  let requestBody: any;
-  let responseUrl: string;
-
-  if (providerName === "anthropic") {
-    responseUrl =
-      apiBaseUrl || "https://api.anthropic.com/v1/messages";
-    requestBody = {
+  const startedAt = Date.now();
+  try {
+    const result = await callYandexChat(messages, {
       model,
-      max_tokens: 1024,
-      messages: messages.filter((m) => m.role !== "system"),
-      system:
-        messages.find((m) => m.role === "system")?.content || "",
-    };
-  } else {
-    responseUrl = apiBaseUrl;
-    requestBody = {
-      model,
-      messages,
-      temperature: 0.7,
-      max_tokens: 1024,
-    };
-  }
+      temperature,
+      maxTokens,
+      apiKey: apiKeyOverride,
+    });
 
-  console.log(
-    `[callAI] ========== SENDING REQUEST TO ${providerName} ==========`,
-  );
-  console.log(`[callAI] URL: ${responseUrl}`);
-  console.log(`[callAI] Model: ${model}`);
-  console.log(`[callAI] Messages count: ${messages.length}`);
-  console.log(`[callAI] Has API key: ${!!apiKey}`);
-
-  const response = await fetch(responseUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(requestBody),
-  });
-
-  console.log(
-    `[callAI] Response status: ${response.status} ${response.statusText}`,
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(
-      `[callAI] ❌ AI API error (${response.status}):`,
-      errorText,
+    const durationMs = Date.now() - startedAt;
+    console.log(
+      `[callAI] ✅ model=${result.modelVersion ?? model} len=${result.text.length} ${durationMs}ms`,
     );
 
-    try {
-      const errorJson = JSON.parse(errorText);
-      console.error(`[callAI] Error details:`, errorJson);
-    } catch {
-      // not JSON
-    }
+    void logAIUsage({
+      operation: "chat",
+      route: context?.route ?? "callAI",
+      model,
+      inputTokens: Number(result.usage?.inputTextTokens ?? 0),
+      outputTokens: Number(result.usage?.completionTokens ?? 0),
+      totalTokens: Number(result.usage?.totalTokens ?? 0),
+      userId: context?.userId ?? null,
+      organizationId: context?.organizationId ?? null,
+      botId: bot.id,
+      durationMs,
+      status: "ok",
+    });
 
-    let errorMessage = `AI API error: ${response.status}`;
-    if (response.status === 401) {
-      errorMessage = "Ошибка авторизации API. Проверьте API ключ.";
-    } else if (response.status === 429) {
-      errorMessage = "Превышен лимит запросов. Попробуйте позже.";
-    } else if (response.status === 500 || response.status >= 502) {
-      errorMessage =
-        "Сервис ИИ временно недоступен. Попробуйте позже.";
-    }
-
-    throw new Error(errorMessage);
+    return result.text;
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    void logAIUsage({
+      operation: "chat",
+      route: context?.route ?? "callAI",
+      model,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      userId: context?.userId ?? null,
+      organizationId: context?.organizationId ?? null,
+      botId: bot.id,
+      durationMs,
+      status: "error",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
   }
-
-  const data = await response.json();
-  console.log(
-    `[callAI] ✅ Response received, keys:`,
-    Object.keys(data),
-  );
-
-  let aiResponse: string;
-  if (providerName === "anthropic") {
-    aiResponse = data.content?.[0]?.text || "";
-  } else {
-    aiResponse = data.choices?.[0]?.message?.content || "";
-  }
-
-  if (!aiResponse || aiResponse.trim().length === 0) {
-    console.error(`[callAI] ❌ Empty response from AI!`);
-    console.error(
-      `[callAI] Response data:`,
-      JSON.stringify(data, null, 2).substring(0, 500),
-    );
-    throw new Error("ИИ вернул пустой ответ");
-  }
-
-  console.log(`[callAI] ✅ AI response length: ${aiResponse.length}`);
-  return aiResponse;
 }
 
 export function buildAssistantSystemPrompt(
   user: { firstName?: string | null; email?: string | null; organization?: { name?: string | null } | null },
   formattedSearchInfo: string,
 ): string {
-  const userName =
-    user.firstName || user.email?.split("@")[0] || "друг";
+  const userName = user.firstName || user.email?.split("@")[0] || "друг";
   const userOrg = user.organization?.name || "не указана";
 
   return `Ты умный и дружелюбный AI-ассистент платформы MyUnion. Ты можешь помочь с любыми вопросами.
@@ -141,7 +107,18 @@ export function buildAssistantSystemPrompt(
 
 У тебя есть доступ к базе данных профсоюзов с информацией о председателях, контактах и организациях.
 
-${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ:\n${formattedSearchInfo}\n\n### ИНСТРУКЦИИ:\n- Если выше есть информация о председателе - ОБЯЗАТЕЛЬНО назови его имя и должность\n- НИКОГДА не говори "не знаю" или "не имею информации", если данные есть выше\n- Если пользователь спрашивает про "наш председатель" или "у нас председатель" - используй данные для организации "${userOrg}"\n- Отвечай прямо, используя конкретные факты из данных выше` : "Дополнительная информация не найдена"}
+${
+  formattedSearchInfo
+    ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ:
+${formattedSearchInfo}
+
+### ИНСТРУКЦИИ:
+- Если выше есть информация о председателе - ОБЯЗАТЕЛЬНО назови его имя и должность
+- НИКОГДА не говори "не знаю" или "не имею информации", если данные есть выше
+- Если пользователь спрашивает про "наш председатель" или "у нас председатель" - используй данные для организации "${userOrg}"
+- Отвечай прямо, используя конкретные факты из данных выше`
+    : "Дополнительная информация не найдена"
+}
 
 ### ВОЗМОЖНОСТИ ПЛАТФОРМЫ MYUNION:
 - /dashboard - Главная: новости, скидки, обновления
@@ -202,7 +179,7 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
 - Будь полезным и дружелюбным
 - Только если информации НЕТ НИГДЕ - тогда честно скажи
 - НЕ генерируй документы, заявления
-- НЕ упоминай технических провайдеров (OpenRouter, OpenAI и т.д.)
+- НЕ упоминай технических провайдеров (Yandex, OpenAI и т.д.)
 - Если спросят про модель или технологию - отвечай общими фразами типа "использую современные AI-технологии"
 - НИКОГДА не упоминай название "BestBenefits" - говори только "партнеры" или "партнеры профсоюза"`;
 }

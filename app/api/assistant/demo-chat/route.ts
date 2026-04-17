@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isDemoUserId } from "@/lib/demo";
+import { callYandexChat, isYandexConfigured } from "@/lib/yandex-ai";
+import { logAIUsage } from "@/lib/ai-usage";
 
 const DEMO_SYSTEM_PROMPT = `Ты — ИИ-помощник платформы MyUnion Pro. Ты помогаешь членам профсоюза и председателям ППО.
 
@@ -26,56 +28,58 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const message = body?.message;
-    const history: Array<{ role: string; content: string }> = Array.isArray(body?.history) ? body.history : [];
+    const history: Array<{ role: string; content: string }> = Array.isArray(body?.history)
+      ? body.history
+      : [];
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
+    if (!isYandexConfigured()) {
       return NextResponse.json({
-        message: "ИИ-помощник временно недоступен в демо-режиме. Зарегистрируйтесь для полного доступа.",
+        message:
+          "ИИ-помощник временно недоступен в демо-режиме. Зарегистрируйтесь для полного доступа.",
       });
     }
 
-    const isOpenRouter = !process.env.OPENAI_API_KEY && !!process.env.OPENROUTER_API_KEY;
-    const baseUrl = isOpenRouter ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1";
-    const model = isOpenRouter ? "openai/gpt-4o-mini" : "gpt-4o-mini";
-
     const conversationSlice = history.slice(-10);
     const messages = [
-      { role: "system", content: DEMO_SYSTEM_PROMPT },
-      ...conversationSlice.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: message.trim() },
+      { role: "system" as const, content: DEMO_SYSTEM_PROMPT },
+      ...conversationSlice.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })),
+      { role: "user" as const, content: message.trim() },
     ];
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        ...(isOpenRouter ? { "HTTP-Referer": "https://myunion.pro", "X-Title": "MyUnion Pro Demo" } : {}),
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: 1000,
+    const startedAt = Date.now();
+    try {
+      // Для демо используем лёгкую модель — быстрее и дешевле
+      const result = await callYandexChat(messages, {
+        model: "yandexgpt-lite",
         temperature: 0.7,
-      }),
-    });
+        maxTokens: 1000,
+      });
 
-    if (!response.ok) {
-      console.error("[demo-chat] AI API error:", response.status);
+      void logAIUsage({
+        operation: "chat",
+        route: "assistant/demo-chat",
+        model: "yandexgpt-lite",
+        inputTokens: Number(result.usage?.inputTextTokens ?? 0),
+        outputTokens: Number(result.usage?.completionTokens ?? 0),
+        totalTokens: Number(result.usage?.totalTokens ?? 0),
+        userId: session.user.id,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return NextResponse.json({ message: result.text });
+    } catch (err) {
+      console.error("[demo-chat] Yandex error:", err);
       return NextResponse.json({
         message: "Не удалось получить ответ от ИИ. Попробуйте позже.",
       });
     }
-
-    const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content?.trim() || "Не удалось получить ответ.";
-
-    return NextResponse.json({ message: aiResponse });
   } catch (error) {
     console.error("[demo-chat] Error:", error);
     return NextResponse.json({

@@ -41,7 +41,9 @@ TELEGRAM_BOT_TOKEN="..."
 VK_ID_CLIENT_ID="..."
 YANDEX_CLIENT_ID="..."
 YANDEX_CLIENT_SECRET="..."
-OPENROUTER_API_KEY="..."
+# Yandex Cloud AI Studio — основной ИИ-провайдер
+YANDEX_AI_STUDIO_API_KEY="AQVN..."
+YANDEX_CLOUD_FOLDER_ID="b1g..."
 REDIS_URL="redis://localhost:6379"
 NEXT_PUBLIC_SOCKET_URL="http://localhost:3005"
 ```
@@ -340,8 +342,11 @@ SMTP_PASSWORD="пароль"
 # Firebase для push-уведомлений (JSON service account)
 FIREBASE_SERVICE_ACCOUNT='{"type":"service_account",...}'
 
-# OpenRouter для ИИ-ассистента
-OPENROUTER_API_KEY="sk-or-..."
+# Yandex Cloud AI Studio — основной ИИ-провайдер (чаты, ассистент, генерация)
+YANDEX_AI_STUDIO_API_KEY="AQVN..."
+YANDEX_CLOUD_FOLDER_ID="b1g..."
+# Опционально: модель по умолчанию (yandexgpt, yandexgpt-lite, yandexgpt-32k)
+YANDEX_DEFAULT_MODEL="yandexgpt"
 ```
 
 ### 4. БД: миграции

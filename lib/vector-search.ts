@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { generateEmbedding } from "@/lib/knowledge/embeddings";
+import { EMBEDDING_DIM, generateQueryEmbedding } from "@/lib/knowledge/embeddings";
 
 export interface RetrievedChunk {
   content: string;
@@ -9,20 +9,22 @@ export interface RetrievedChunk {
 }
 
 /**
- * Поиск релевантных chunks из базы знаний для бота
+ * Поиск релевантных chunks из базы знаний для бота.
+ *
+ * Использует Yandex `text-search-query` модель для вектора запроса и cosine
+ * similarity против `KnowledgeChunk.embedding`. Чанки с несовпадающей
+ * размерностью (устаревшие OpenRouter 1536/3072-dim) тихо пропускаются —
+ * их должен перегенерировать скрипт `scripts/regen-embeddings-yandex.mjs`.
  */
 export async function retrieveRelevantChunks(
   query: string,
   botId: string,
-  limit: number = 5
+  limit: number = 5,
 ): Promise<RetrievedChunk[]> {
   try {
-    // Получаем базы знаний, связанные с ботом
     const botKnowledgeBases = await prisma.chatBotKnowledgeBase.findMany({
       where: { chatBotId: botId },
-      include: {
-        knowledgeBase: true,
-      },
+      include: { knowledgeBase: true },
     });
 
     if (botKnowledgeBases.length === 0) {
@@ -32,8 +34,7 @@ export async function retrieveRelevantChunks(
 
     const knowledgeBaseIds = botKnowledgeBases.map((kb) => kb.knowledgeBaseId);
 
-    // Генерируем embedding для запроса
-    const queryEmbedding = await generateEmbedding(query);
+    const queryEmbedding = await generateQueryEmbedding(query);
     if (!queryEmbedding || queryEmbedding.length === 0) {
       console.warn("[vector-search] Failed to generate embedding for query");
       return [];
@@ -61,22 +62,22 @@ export async function retrieveRelevantChunks(
       return [];
     }
 
-    // Вычисляем косинусное сходство для каждого chunk
+    // Вычисляем косинусное сходство для каждого chunk, пропуская устаревшую размерность
+    let skippedWrongDim = 0;
     const chunksWithSimilarity = allChunks
       .map((chunk) => {
-        if (!chunk.embedding || chunk.embedding.length === 0) {
+        if (!chunk.embedding || chunk.embedding.length === 0) return null;
+        if (chunk.embedding.length !== queryEmbedding.length) {
+          skippedWrongDim++;
           return null;
         }
 
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: убеждаемся что content - строка
         let content = chunk.content;
-        if (typeof content !== 'string') {
-          console.warn(`[vector-search] ⚠️ Chunk content is not a string, type: ${typeof content}, chunkId: ${chunk.id}`);
-          // Если это объект или массив - сериализуем в JSON
-          if (content && typeof content === 'object') {
+        if (typeof content !== "string") {
+          if (content && typeof content === "object") {
             content = JSON.stringify(content, null, 2);
           } else {
-            content = String(content || '');
+            content = String(content || "");
           }
         }
 
@@ -91,6 +92,12 @@ export async function retrieveRelevantChunks(
       .filter((chunk) => chunk !== null)
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit) as RetrievedChunk[];
+
+    if (skippedWrongDim > 0) {
+      console.warn(
+        `[vector-search] skipped ${skippedWrongDim} chunks with legacy embedding dim (expected ${EMBEDDING_DIM}). Run regen-embeddings-yandex.mjs`,
+      );
+    }
 
     console.log(
       `[vector-search] Found ${chunksWithSimilarity.length} relevant chunks for query`

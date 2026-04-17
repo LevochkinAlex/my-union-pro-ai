@@ -630,8 +630,8 @@ PENDING_VERIFICATION → PROFILE_INCOMPLETE → DOCUMENTS_PENDING → APPROVED
 ### ИИ-ассистент
 
 - **API**: `/api/assistant/chat` и `/api/chat/ai`
-- **Провайдер**: OpenRouter (множество моделей)
-- **RAG**: поиск по базе знаний (векторные эмбеддинги в `KnowledgeChunk`)
+- **Провайдер**: Yandex Foundation Models (YandexGPT / YandexGPT-lite / yandexgpt-32k)
+- **RAG**: поиск по базе знаний (векторные эмбеддинги 256-dim в `KnowledgeChunk`)
 - **Настройка**: через админку — системный промт, модель, температура
 
 ### Уведомления

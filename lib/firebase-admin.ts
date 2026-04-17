@@ -1,34 +1,139 @@
 // Firebase Admin SDK initialization for server-side
-import { initializeApp, cert, getApps } from "firebase-admin/app";
-import { getMessaging } from "firebase-admin/messaging";
+//
+// Используется только для FCM push-уведомлений (web/mobile).
+// НЕ FIrestore / Auth / Storage.
+//
+// ВНИМАНИЕ: Всё берётся из env. Hardcoded приватные ключи, закоммиченные
+// JSON-ключи и прочее — НЕ ДОПУСКАЮТСЯ. Любой попавший в git приватный ключ
+// должен немедленно ротироваться в Google Cloud Console / Firebase.
+//
+// Ожидаемые env:
+//   FIREBASE_PROJECT_ID       (опционально, по умолчанию "myunion-c3187")
+//   FIREBASE_CLIENT_EMAIL     (обязательно)
+//   FIREBASE_PRIVATE_KEY      (обязательно, допускается экранирование \n)
+//
+// Если переменные не заданы, модуль не инициализирует Firebase, а отправка
+// push становится no-op (с warning в логах). Это нужно для локальной
+// разработки без секретов и чтобы не ронять весь процесс из-за отсутствия FCM.
 
-// Service Account credentials from environment or hardcoded
-const serviceAccount = {
-  type: "service_account",
-  project_id: "myunion-c3187",
-  private_key_id: "003d6de79e46870304bf7afdad316cd108917912",
-  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n") || "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJ9WyhJ6hrjDCa\nsH8HIvI/U/KCsTTYleS5TRXH5BfwzAEG/xGCpAQkK7KpopwML2C2zTX3aEiTqOvm\nlLTycwXK783hCIUVuo12yX7ZzeMonVq3Slc7+JWQbNQx/K7sm5s5sO6qZorfkkpj\n8GYOnNPU714415TJnPD/rAawgm9Q38OlO7LsDio1NbUoKLjnD8c/uN6zMRY8VXST\nNtuKpcPFc7CQgIHN3nhAvyEMWIPrC74U0HOjE+2sebDAdyVbotXNC2qqQSCKKmOn\npG35KZ/UaxA6RzI07L85ezafKQgdIQTm7+/gnywSQWfCGmUgj9jxlTn7qHH0q/RB\ntdnp36inAgMBAAECggEACKDPgS6qD3b/6DC/kV6VveauvWGnvqCsxgCvYqJYJkv4\n6t0aP09IwM8/602ZebXLRBQOIntJYOTLHnp4JPfzPxr+qNOndLWxiVBZ3VR7+3mG\nU77woIz7itEmqA1B34Ih+a8ZWANYgVO4Xn7gEiJZThQWt1P46DvBwHj15Wc1LUQt\nApN0T98Td3pl+oSj9+F0kvBctjfOnINP5w6iAKhrpMLhLKniiTSgvfRH29YIY3UE\nGra7Tk8JuBOIMqgu5OX5SM5oRqsbXpMr+8AvaGTLon7sXlmL+cYrTI8kEUeK6Q1l\nxOp2nxnrQZrJ63ql0kYqxkikV95nUz3j91wtZ3i10QKBgQDwHyvMGhQBENxxCfk9\ndSrv7sQ1fSWRQLEd0h+OgvFDmCng6dVm78Qcse0T8Vn9N7kpVEKk54NVjt9ddlg0\nuLRvdhLm1PVqJu6CsR6/0COAdCq/41MPxP0A3qCMyUhVOm9zRlsixSM9H1ix6CTy\nqgTwUSa3suQKiAbAxmL9AcoL0QKBgQDXUDieCcLG5xVavuvAMMh7ql0UpTTC/X7x\nHL+KBm6cLM02tYVHlngr5766/4UOhf2B3A/+29O9PFQSTQCwjbZ9o21EEiLUbw1h\nXidmS/gHwotWP6VyKfWpYxH6LLyvSJf7+G0NZ8xvEfSFZ5Sckxa0GoTjk20Yptca\nluCTjjSi9wKBgQCTIbZ3eJ87S/aXORJEiy/FFtuZHtbPGwGsER2O+EMXNPysOPuu\n+EmFf6ySJLgMRYGqhlvTqZw657GMFkDUBT1icsoAMQszgSlyYU9DHykxw3ySWZuC\ntSSFzOQ5f/hXaNfznW+obX07LaLuWB2Tp4QhMMh1lSLQJStmIelzuA3ykQKBgEJn\nZ062S+/0DM3z29lmMi6RmCtp2B/a9m9+IkR7P1nDJ3cb/ILbkSxZSKV7cJnOESUf\nrX84ZNET7gnG3dOVoRaWdHht73f81++TjisqetBJ25c6Adh3wGABQeYaLgcRKG55\na4ia3p3St8r86wRvCK17EEjvitHzgpuctJ5NWUZ5AoGBAJxOocs/41AQaC5FYU51\nJrtnYlLYRitV8nijRwXjZusQ29AL+iiBSZzP1trzc9OYsYLYn68/eKmaA4oSGO9k\nFhAbxdEZHXB40fm7NvZ680/iFhATEkWmhcKWUgugAbuxtfWpLIGHFxUEKi+zjgcP\ni88Omr88YcKqdSRTYcBU3+xq\n-----END PRIVATE KEY-----\n",
-  client_email: "firebase-adminsdk-fbsvc@myunion-c3187.iam.gserviceaccount.com",
-  client_id: "112624239560749922366",
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40myunion-c3187.iam.gserviceaccount.com",
-  universe_domain: "googleapis.com"
-};
+import { getApps, initializeApp, cert, type App } from "firebase-admin/app";
+import { getMessaging, type Messaging } from "firebase-admin/messaging";
 
-// Initialize Firebase Admin if not already initialized
-if (getApps().length === 0) {
+function readEnv(name: string): string | undefined {
+  const v = process.env[name];
+  if (!v) return undefined;
+  const trimmed = v.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function buildCredentials(): { projectId: string; clientEmail: string; privateKey: string } | null {
+  const projectId = readEnv("FIREBASE_PROJECT_ID") ?? "myunion-c3187";
+  const clientEmail = readEnv("FIREBASE_CLIENT_EMAIL");
+  const privateKeyRaw = readEnv("FIREBASE_PRIVATE_KEY");
+
+  if (!clientEmail || !privateKeyRaw) {
+    return null;
+  }
+
+  // В .env ключ хранится с экранированными переводами строк: "-----BEGIN...\\n..."
+  const privateKey = privateKeyRaw.replace(/\\n/g, "\n");
+  return { projectId, clientEmail, privateKey };
+}
+
+let app: App | null = null;
+let messagingInstance: Messaging | null = null;
+let initWarned = false;
+
+function getApp(): App | null {
+  if (app) return app;
+
+  const existing = getApps();
+  if (existing.length > 0) {
+    app = existing[0];
+    return app;
+  }
+
+  const creds = buildCredentials();
+  if (!creds) {
+    if (!initWarned) {
+      console.warn(
+        "[Firebase Admin] ⚠️ FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY не заданы — FCM push отключены",
+      );
+      initWarned = true;
+    }
+    return null;
+  }
+
   try {
-    initializeApp({
-      credential: cert(serviceAccount as any),
+    app = initializeApp({
+      credential: cert({
+        projectId: creds.projectId,
+        clientEmail: creds.clientEmail,
+        privateKey: creds.privateKey,
+      }),
+      projectId: creds.projectId,
     });
-    console.log("[Firebase Admin] ✅ Initialized successfully");
+    console.log("[Firebase Admin] ✅ Initialized (projectId:", creds.projectId + ")");
+    return app;
   } catch (error) {
     console.error("[Firebase Admin] ❌ Initialization error:", error);
+    return null;
   }
 }
 
-// Get messaging instance
-export const messaging = getMessaging();
+/**
+ * Возвращает Messaging или null, если Firebase не сконфигурирован.
+ * Все вызывающие места должны проверять на null и деградировать плавно.
+ */
+export function getMessagingOrNull(): Messaging | null {
+  if (messagingInstance) return messagingInstance;
+  const a = getApp();
+  if (!a) return null;
+  try {
+    messagingInstance = getMessaging(a);
+    return messagingInstance;
+  } catch (error) {
+    console.error("[Firebase Admin] getMessaging() error:", error);
+    return null;
+  }
+}
 
+/**
+ * Обратная совместимость: `messaging` как Messaging-прокси.
+ * При отсутствии конфигурации все методы no-op и возвращают пустые результаты.
+ * Это позволяет не переписывать все 4 вызывающих модуля разом.
+ */
+function createMessagingProxy(): Messaging {
+  const noopResponse = () => ({
+    responses: [] as unknown[],
+    successCount: 0,
+    failureCount: 0,
+  });
+  // Прокси: методы проверяют реальный messaging, иначе деградируют
+  return new Proxy({} as Messaging, {
+    get(_target, prop: string | symbol) {
+      const m = getMessagingOrNull();
+      if (m) {
+        const value = (m as unknown as Record<string | symbol, unknown>)[prop];
+        if (typeof value === "function") return (value as (...args: unknown[]) => unknown).bind(m);
+        return value;
+      }
+      // Возвращаем безопасные заглушки для наиболее часто вызываемых методов.
+      if (prop === "send") {
+        return async () => {
+          console.warn("[Firebase Admin] send(): FCM disabled, noop");
+          return "";
+        };
+      }
+      if (prop === "sendEachForMulticast" || prop === "sendMulticast") {
+        return async () => {
+          console.warn(`[Firebase Admin] ${String(prop)}(): FCM disabled, noop`);
+          return noopResponse();
+        };
+      }
+      return undefined;
+    },
+  });
+}
+
+export const messaging: Messaging = createMessagingProxy();

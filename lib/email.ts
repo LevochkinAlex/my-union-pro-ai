@@ -128,39 +128,69 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDis
 }
 
 /**
- * Отправляет Magic Link на email для авторизации
- * В режиме разработки выводит ссылку в консоль вместо отправки
+ * Отправляет письмо с 6-значным PIN + запасной magic-ссылкой на email для авторизации.
+ * В режиме разработки выводит ссылку и PIN в консоль вместо отправки.
  */
 export async function sendMagicLinkEmail(
   email: string,
   magicLink: string,
   isNewUser: boolean,
-  firstName?: string
+  firstName?: string,
+  pin?: string,
 ): Promise<SendEmailResult & { devMode?: boolean; magicLink?: string }> {
   const name = firstName ? `, ${firstName}` : "";
   const subject = isNewUser ? "Добро пожаловать в МойСоюз!" : "Вход в МойСоюз";
-  
-  // В режиме разработки или если SMTP не настроен - выводим ссылку в консоль
+  const hasPin = typeof pin === "string" && pin.length > 0;
+
+  // В режиме разработки или если SMTP не настроен - выводим ссылку и PIN в консоль
   if (isDevMode() || !isSmtpConfigured()) {
     console.log("\n" + "🔗".repeat(30));
-    console.log("🚀 [DEV MODE] MAGIC LINK ДЛЯ АВТОРИЗАЦИИ:");
+    console.log("🚀 [DEV MODE] КОД + MAGIC LINK ДЛЯ АВТОРИЗАЦИИ:");
     console.log("🔗".repeat(30));
     console.log("📧 Email:", email);
     console.log("👤 New User:", isNewUser);
+    if (hasPin) {
+      console.log("🔢 PIN:", pin);
+    }
     console.log("🔐 Magic Link:");
     console.log("\n  👉 " + magicLink + "\n");
     console.log("🔗".repeat(30) + "\n");
-    
+
     return {
       success: true,
       messageId: "dev-mode-" + Date.now(),
       devMode: true,
-      magicLink: magicLink, // Возвращаем ссылку для показа на фронте
+      magicLink: magicLink,
     };
   }
 
   try {
-    
+    const pinBlock = hasPin
+      ? `
+      <p style="margin: 0 0 12px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Введите этот код на странице входа:
+      </p>
+      <div style="text-align: center; margin: 16px 0 28px;">
+        <div style="display: inline-block; padding: 18px 28px; background: #f3f4f8; border: 1px solid #e0e0e0; border-radius: 10px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 32px; letter-spacing: 8px; font-weight: 700; color: #1f2937;">
+          ${pin}
+        </div>
+      </div>
+      <p style="margin: 0 0 20px; font-size: 13px; color: #666666;">
+        Код действителен <strong>5 минут</strong>. Никому не передавайте его.
+      </p>
+      <div style="margin: 28px 0; border-top: 1px dashed #e0e0e0;"></div>
+      <p style="margin: 0 0 16px; font-size: 14px; color: #666666;">
+        Не хотите вводить код вручную? Нажмите на кнопку ниже — мы войдём автоматически:
+      </p>
+      `
+      : `
+      <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #333333;">
+        ${isNewUser
+          ? "Мы рады видеть вас в МойСоюз! Нажмите кнопку ниже, чтобы завершить регистрацию и настроить свой профиль."
+          : "Нажмите кнопку ниже, чтобы войти в свой личный кабинет."}
+      </p>
+      `;
+
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -172,52 +202,48 @@ export async function sendMagicLinkEmail(
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
   <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
     <!-- Header -->
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center;">
-      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
-        ${isNewUser ? "👋 Добро пожаловать!" : "🎉 С возвращением!"}
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 36px 20px; text-align: center;">
+      <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 600;">
+        ${isNewUser ? "Добро пожаловать!" : "Вход в МойСоюз"}
       </h1>
     </div>
-    
+
     <!-- Content -->
-    <div style="padding: 40px 30px;">
+    <div style="padding: 36px 30px;">
       <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
         Привет${name}!
       </p>
-      
-      <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #333333;">
-        ${isNewUser 
-          ? "Мы рады видеть вас в МойСоюз! Нажмите кнопку ниже, чтобы завершить регистрацию и настроить свой профиль." 
-          : "Нажмите кнопку ниже, чтобы войти в свой личный кабинет."}
-      </p>
-      
+
+      ${pinBlock}
+
       <!-- Button -->
-      <div style="text-align: center; margin: 40px 0;">
-        <a href="${magicLink}" 
-           style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-          ${isNewUser ? "🚀 Завершить регистрацию" : "🔐 Войти в аккаунт"}
+      <div style="text-align: center; margin: 24px 0 16px;">
+        <a href="${magicLink}"
+           style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+          ${isNewUser ? "Завершить регистрацию" : "Войти в аккаунт"}
         </a>
       </div>
-      
-      <p style="margin: 30px 0 10px; font-size: 14px; color: #666666;">
-        Или скопируйте эту ссылку в браузер:
+
+      <p style="margin: 24px 0 8px; font-size: 13px; color: #666666;">
+        Или откройте эту ссылку вручную:
       </p>
-      <div style="padding: 12px; background-color: #f5f5f5; border-radius: 6px; word-break: break-all;">
-        <a href="${magicLink}" style="color: #667eea; text-decoration: none; font-size: 13px;">
+      <div style="padding: 10px 12px; background-color: #f5f5f5; border-radius: 6px; word-break: break-all;">
+        <a href="${magicLink}" style="color: #667eea; text-decoration: none; font-size: 12px;">
           ${magicLink}
         </a>
       </div>
-      
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+
+      <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #e0e0e0;">
         <p style="margin: 0; font-size: 13px; color: #999999; line-height: 1.6;">
-          ⏱ Эта ссылка действительна <strong>15 минут</strong><br>
-          ⚠️ Если вы не запрашивали это письмо, просто проигнорируйте его
+          ${hasPin ? "Код и ссылка действительны <strong>5 минут</strong>." : "Ссылка действительна <strong>5 минут</strong>."}<br>
+          Если вы не запрашивали это письмо — просто проигнорируйте его.
         </p>
       </div>
     </div>
-    
+
     <!-- Footer -->
-    <div style="background-color: #f8f8f8; padding: 20px 30px; text-align: center; border-top: 1px solid #e0e0e0;">
-      <p style="margin: 0 0 10px; font-size: 14px; color: #666666;">
+    <div style="background-color: #f8f8f8; padding: 18px 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+      <p style="margin: 0 0 8px; font-size: 14px; color: #666666;">
         <strong>МойСоюз</strong> — современная платформа для профсоюзов
       </p>
       <p style="margin: 0; font-size: 12px; color: #999999;">
@@ -233,14 +259,29 @@ export async function sendMagicLinkEmail(
     console.log("  To:", email);
     console.log("  Subject:", subject);
     console.log("  Magic Link:", magicLink);
+    console.log("  Has PIN:", hasPin);
     console.log("  Is New User:", isNewUser);
 
-    // Отправляем через SMTP
+    const textContent = [
+      `Привет${name}!`,
+      "",
+      hasPin
+        ? `Ваш код для входа: ${pin}\nВведите его на странице входа. Код действителен 5 минут.`
+        : (isNewUser
+          ? "Перейдите по ссылке ниже, чтобы завершить регистрацию."
+          : "Перейдите по ссылке ниже, чтобы войти в личный кабинет."),
+      "",
+      `Альтернатива — просто откройте ссылку:`,
+      magicLink,
+      "",
+      hasPin ? "Код и ссылка действительны 5 минут." : "Ссылка действительна 5 минут.",
+    ].join("\n");
+
     await sendEmail({
       to: email,
       subject,
       html: htmlContent,
-      text: `Привет${name}!\n\n${isNewUser ? "Мы рады видеть вас в МойСоюз! Перейдите по ссылке ниже, чтобы завершить регистрацию." : "Перейдите по ссылке ниже, чтобы войти в свой личный кабинет."}\n\n${magicLink}\n\nЭта ссылка действительна 15 минут.`,
+      text: textContent,
     });
 
     return {

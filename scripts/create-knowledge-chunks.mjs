@@ -1,150 +1,109 @@
-import { PrismaClient } from '@prisma/client';
-import dotenv from 'dotenv';
+import { PrismaClient } from "@prisma/client";
+import dotenv from "dotenv";
 
-dotenv.config({ path: './.env.local' });
+dotenv.config({ path: "./.env.local" });
 
 const prisma = new PrismaClient();
 
-// Функция для разбиения текста на chunks
+const FOLDER_ID = process.env.YANDEX_CLOUD_FOLDER_ID;
+const API_KEY = process.env.YANDEX_AI_STUDIO_API_KEY;
+const SLEEP_MS = 200;
+
+const KB_ID = process.argv[2] || process.env.KB_ID || null;
+
 function splitTextIntoChunks(text, chunkSize = 500, overlap = 100) {
   const chunks = [];
   let start = 0;
-  
   while (start < text.length) {
     const end = Math.min(start + chunkSize, text.length);
-    const chunk = text.substring(start, end);
-    chunks.push(chunk.trim());
+    chunks.push(text.substring(start, end).trim());
     start = end - overlap;
   }
-  
-  return chunks.filter(c => c.length > 50);
+  return chunks.filter((c) => c.length > 50);
 }
 
-// Функция для получения embeddings от OpenRouter
-async function getEmbedding(text) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    console.error('❌ OPENROUTER_API_KEY не установлен');
-    return null;
+async function getYandexDocEmbedding(text) {
+  if (!FOLDER_ID || !API_KEY) {
+    throw new Error("YANDEX_AI_STUDIO_API_KEY / YANDEX_CLOUD_FOLDER_ID не заданы");
   }
-
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/embeddings', {
-      method: 'POST',
+  const modelUri = `emb://${FOLDER_ID}/text-search-doc/latest`;
+  const response = await fetch(
+    "https://llm.api.cloud.yandex.net/foundationModels/v1/textEmbedding",
+    {
+      method: "POST",
       headers: {
-        'Authorization': 'Bearer ' + apiKey,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        Authorization: `Api-Key ${API_KEY}`,
       },
-      body: JSON.stringify({
-        model: 'openai/text-embedding-3-small',
-        input: text,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Ошибка API:', errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.data[0].embedding;
-  } catch (error) {
-    console.error('Ошибка получения embedding:', error);
-    return null;
+      body: JSON.stringify({ modelUri, text }),
+    },
+  );
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Yandex embedding ${response.status}: ${errText.slice(0, 200)}`);
   }
+  const data = await response.json();
+  if (!Array.isArray(data.embedding)) {
+    throw new Error("Yandex embedding: пустой ответ");
+  }
+  return data.embedding;
 }
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
-  try {
-    console.log('🔄 Начинаю создание chunks...\n');
-    
-    const docs = await prisma.knowledgeDocument.findMany({
-      where: {
-        knowledgeBaseId: 'cmhw6mwem0000p1j6qmjt3c59',
-        processingStatus: 'COMPLETED',
-      },
-    });
+  console.log("🔄 Создание chunks (Yandex embeddings, 256-dim)...");
 
-    console.log(`📄 Найдено ${docs.length} обработанных документов\n`);
+  const where = { processingStatus: "COMPLETED" };
+  if (KB_ID) where.knowledgeBaseId = KB_ID;
 
-    for (const doc of docs) {
-      console.log(`Обрабатываю: ${doc.fileName || doc.originalName}`);
-      
-      if (!doc.extractedText) {
-        console.log('  ⏭️  Пропускаю - нет текста\n');
-        continue;
-      }
+  const docs = await prisma.knowledgeDocument.findMany({ where });
+  console.log(`📄 Найдено ${docs.length} документов`);
 
-      // Разбиваем на chunks (меньший размер)
-      const textChunks = splitTextIntoChunks(doc.extractedText, 300, 50);
-      console.log(`  📑 Создано ${textChunks.length} фрагментов`);
-      
-      // Для коротких документов - создаем один chunk
-      if (doc.extractedText.length < 600) {
-        console.log(`  📝 Документ короткий, создаю один chunk`);
-        const embedding = await getEmbedding(doc.extractedText);
-        if (embedding) {
-          await prisma.knowledgeChunk.create({
-            data: {
-              knowledgeBaseId: doc.knowledgeBaseId,
-              documentId: doc.id,
-              content: doc.extractedText,
-              embedding: embedding,
-              chunkIndex: 0,
-              metadata: {
-                fileName: doc.fileName || doc.originalName,
-              },
-            },
-          });
-          console.log(`  ✅ Документ сохранен как один chunk\n`);
-        }
-        continue;
-      }
+  for (const doc of docs) {
+    console.log(`\n• ${doc.fileName || doc.originalName}`);
+    if (!doc.extractedText) {
+      console.log("  ⏭️  Нет текста");
+      continue;
+    }
 
-      // Создаем chunks в БД с embeddings
-      for (let i = 0; i < textChunks.length; i++) {
-        const chunk = textChunks[i];
-        console.log(`  🔄 Chunk ${i + 1}/${textChunks.length}...`);
-        
-        // Получаем embedding
-        const embedding = await getEmbedding(chunk);
-        if (!embedding) {
-          console.log(`  ❌ Не удалось получить embedding`);
-          continue;
-        }
+    const textChunks =
+      doc.extractedText.length < 600
+        ? [doc.extractedText]
+        : splitTextIntoChunks(doc.extractedText, 300, 50);
 
-        // Сохраняем chunk
+    for (let i = 0; i < textChunks.length; i++) {
+      const chunk = textChunks[i];
+      try {
+        const embedding = await getYandexDocEmbedding(chunk.slice(0, 8000));
         await prisma.knowledgeChunk.create({
           data: {
             knowledgeBaseId: doc.knowledgeBaseId,
             documentId: doc.id,
             content: chunk,
-            embedding: embedding,
+            embedding,
             chunkIndex: i,
-            metadata: {
-              fileName: doc.fileName || doc.originalName,
-            },
+            metadata: { fileName: doc.fileName || doc.originalName },
           },
         });
-        
-        console.log(`  ✅ Chunk ${i + 1} сохранен`);
+        await sleep(SLEEP_MS);
+      } catch (err) {
+        console.error(`  ❌ chunk ${i + 1}:`, err?.message ?? err);
       }
-      
-      console.log(`  ✅ Документ обработан\n`);
     }
-
-    const totalChunks = await prisma.knowledgeChunk.count({
-      where: { knowledgeBaseId: 'cmhw6mwem0000p1j6qmjt3c59' },
-    });
-
-    console.log(`\n🎉 Готово! Всего создано ${totalChunks} chunks`);
-  } catch (error) {
-    console.error('❌ Ошибка:', error);
-  } finally {
-    await prisma.$disconnect();
+    console.log(`  ✅ Сохранено ${textChunks.length} chunk(s)`);
   }
+
+  const totalWhere = KB_ID ? { knowledgeBaseId: KB_ID } : {};
+  const totalChunks = await prisma.knowledgeChunk.count({ where: totalWhere });
+  console.log(`\n🎉 Готово. Всего chunks в БД: ${totalChunks}`);
 }
 
-main();
-
+main()
+  .catch((err) => {
+    console.error("❌ FATAL:", err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

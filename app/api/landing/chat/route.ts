@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import { callYandexChat, isYandexConfigured } from "@/lib/yandex-ai";
+import { logAIUsage } from "@/lib/ai-usage";
 
 const SYSTEM_PROMPT = `Ты AI-ассистент платформы MyUnion Pro. Отвечай кратко и по делу.
 
@@ -25,40 +26,44 @@ const SYSTEM_PROMPT = `Ты AI-ассистент платформы MyUnion Pro
 
 Отвечай на русском языке. Будь дружелюбным и профессиональным.`;
 
+/**
+ * Гостевой лендинговый чат. Использует YandexGPT (RU совместимо).
+ * Формат ответа сохранён как SSE (`0:"chunk"\n`) — фронт не нужно трогать.
+ * Стриминг пока не включён: выдаём ответ одним чанком, этого достаточно
+ * для коротких маркетинговых ответов и предсказуемо работает за любым прокси.
+ */
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages } = (await req.json()) as {
+      messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+    };
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+    if (!isYandexConfigured()) {
+      return NextResponse.json({ error: "ИИ временно недоступен" }, { status: 503 });
+    }
+
+    const startedAt = Date.now();
+    const result = await callYandexChat(
+      [{ role: "system", content: SYSTEM_PROMPT }, ...(messages || [])],
+      { model: "yandexgpt-lite", temperature: 0.7, maxTokens: 500 },
+    );
+
+    void logAIUsage({
+      operation: "chat",
+      route: "landing/chat",
+      model: "yandexgpt-lite",
+      inputTokens: Number(result.usage?.inputTextTokens ?? 0),
+      outputTokens: Number(result.usage?.completionTokens ?? 0),
+      totalTokens: Number(result.usage?.totalTokens ?? 0),
+      durationMs: Date.now() - startedAt,
     });
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages,
-      ],
-      max_tokens: 500,
-      stream: true,
-    });
-
-    // Create a ReadableStream for SSE
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of completion) {
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-              // Format: 0:"content"
-              controller.enqueue(encoder.encode(`0:${JSON.stringify(content)}\n`));
-            }
-          }
-          controller.close();
-        } catch (error) {
-          controller.error(error);
-        }
+      start(controller) {
+        // Фронт ожидает формат "0:" + JSON.stringify(string) + "\n".
+        controller.enqueue(encoder.encode(`0:${JSON.stringify(result.text)}\n`));
+        controller.close();
       },
     });
 
@@ -66,14 +71,11 @@ export async function POST(req: Request) {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
       },
     });
   } catch (error) {
     console.error("Landing chat error:", error);
-    return NextResponse.json(
-      { error: "Ошибка при обработке запроса" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Ошибка при обработке запроса" }, { status: 500 });
   }
 }

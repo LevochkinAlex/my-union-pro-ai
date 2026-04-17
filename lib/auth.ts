@@ -156,6 +156,99 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    // Авторизация по 6-значному PIN-коду, отправленному на email.
+    // Пользователь остаётся в том же окне, куда запросил вход.
+    // После 5 неудачных попыток токен сжигается (защита от брутфорса).
+    CredentialsProvider({
+      id: "email-pin",
+      name: "EmailPin",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        pin: { label: "PIN", type: "text" },
+      },
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.email || !credentials?.pin) {
+          return null;
+        }
+
+        const email = String(credentials.email).trim().toLowerCase();
+        const pin = String(credentials.pin).trim();
+
+        if (!/^\d{6}$/.test(pin)) {
+          console.log("[Auth] email-pin: некорректный формат PIN");
+          return null;
+        }
+
+        try {
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (!user) {
+            console.log("[Auth] email-pin: пользователь не найден:", email);
+            return null;
+          }
+
+          // Берём САМЫЙ последний активный LoginToken с PIN для этого пользователя.
+          // Предыдущие коды гасятся при запросе нового PIN (см. send-magic-link),
+          // поэтому здесь мы ожидаем максимум один активный токен.
+          const tokenRecord = await prisma.loginToken.findFirst({
+            where: {
+              userId: user.id,
+              used: false,
+              expiresAt: { gt: new Date() },
+              pinHash: { not: null },
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          if (!tokenRecord || !tokenRecord.pinHash) {
+            console.log("[Auth] email-pin: активный PIN не найден");
+            return null;
+          }
+
+          if (tokenRecord.attempts >= 5) {
+            // Превышен лимит — сжигаем токен, чтобы потребовать новый код.
+            await prisma.loginToken.update({
+              where: { id: tokenRecord.id },
+              data: { used: true, usedAt: new Date() },
+            });
+            console.log("[Auth] email-pin: превышен лимит попыток, токен сожжён");
+            return null;
+          }
+
+          const ok = await bcrypt.compare(pin, tokenRecord.pinHash);
+          if (!ok) {
+            await prisma.loginToken.update({
+              where: { id: tokenRecord.id },
+              data: { attempts: { increment: 1 } },
+            });
+            console.log("[Auth] email-pin: неверный PIN, attempts=", tokenRecord.attempts + 1);
+            return null;
+          }
+
+          // Успешно — помечаем использованным и возвращаем пользователя.
+          await prisma.loginToken.update({
+            where: { id: tokenRecord.id },
+            data: { used: true, usedAt: new Date() },
+          });
+
+          const fullName =
+            [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
+
+          return {
+            id: user.id,
+            email: user.email || undefined,
+            name: fullName,
+            role: user.role,
+            membershipStatus: user.membershipStatus,
+            firstName: user.firstName ?? undefined,
+            lastName: user.lastName ?? undefined,
+            avatarUrl: user.avatarUrl,
+          };
+        } catch (error) {
+          console.error("[Auth] email-pin: ошибка:", error);
+          return null;
+        }
+      },
+    }),
     // Email/Password авторизация (для супер-админа и пользователей с паролем)
     CredentialsProvider({
       id: "email-password",

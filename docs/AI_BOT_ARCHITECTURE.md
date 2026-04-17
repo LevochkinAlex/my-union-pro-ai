@@ -48,8 +48,8 @@ AI-бот платформы MyUnion — это умный ассистент, �
 ┌─────────────────────────────────────────────────────────────────┐
 │                      AI PROVIDERS                                │
 ├─────────────────────────────────────────────────────────────────┤
-│  OpenRouter API         │  Доступ к разным моделям              │
-│  - Claude               │                                        │
+│  Yandex Foundation      │  YandexGPT + text-embedding (256-dim) │
+│  Models API             │                                        │
 │  - GPT-4                │                                        │
 │  - Gemini               │                                        │
 └─────────────────────────────────────────────────────────────────┘
@@ -242,8 +242,9 @@ function isOrganizationQuery(query: string): boolean {
 ## Переменные окружения
 
 ```env
-# AI Provider
-OPENROUTER_API_KEY=sk-or-v1-...
+# AI Provider — Yandex Foundation Models (основной)
+YANDEX_AI_STUDIO_API_KEY=AQVN...
+YANDEX_CLOUD_FOLDER_ID=b1g...
 
 # Веб-поиск
 TAVILY_API_KEY=tvly-...

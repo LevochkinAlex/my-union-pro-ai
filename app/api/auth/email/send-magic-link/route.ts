@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { sendMagicLinkEmail } from "@/lib/email";
+
+/**
+ * Генерирует 6-значный PIN-код (криптостойкий).
+ * Диапазон: 100000..999999 (всегда ровно 6 цифр).
+ */
+function generateEmailPin(): string {
+  // 900000 вариантов (100000..999999), первая цифра гарантированно не 0
+  const n = 100000 + crypto.randomInt(0, 900000);
+  return String(n);
+}
 
 /**
  * Проверяет, включен ли режим разработки
@@ -46,6 +57,7 @@ export async function POST(request: NextRequest) {
     let user: { id: string; firstName?: string | null } | null = null;
     let isNewUser = false;
     let token: string;
+    let pin: string = generateEmailPin();
     let dbAvailable = true;
 
     // Пробуем работать с БД
@@ -73,26 +85,39 @@ export async function POST(request: NextRequest) {
 
       console.log("[Email Auth] Пользователь найден:", user.id);
 
-      // Создаем одноразовый токен
+      // Гасим предыдущие не-использованные коды этого пользователя, чтобы был только один активный PIN.
+      // Без этого старый PIN мог бы тоже подойти, и это было бы менее безопасно.
+      await prisma.loginToken.updateMany({
+        where: {
+          userId: user.id,
+          used: false,
+        },
+        data: { used: true, usedAt: new Date() },
+      });
+
+      // Создаём одноразовый токен (для magic-ссылки) + 6-значный PIN (для ввода на сайте).
       token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
+      const pinHash = await bcrypt.hash(pin, 10);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 минут
 
       await prisma.loginToken.create({
         data: {
           token,
+          pinHash,
+          attempts: 0,
           userId: user.id,
           expiresAt,
         },
       });
 
-      console.log("[Email Auth] Токен создан, отправляем email");
+      console.log("[Email Auth] Токен+PIN созданы, отправляем email");
     } catch (dbError) {
       // В режиме разработки - продолжаем без БД
       if (isDevMode()) {
         console.warn("[Email Auth] ⚠️ БД недоступна, работаем в DEV режиме без БД");
         dbAvailable = false;
         isNewUser = true;
-        // Генерируем dev токен
+        // Генерируем dev токен и оставляем сгенерированный PIN
         token = `dev_${crypto.randomBytes(16).toString("hex")}`;
       } else {
         // В продакшене - выбрасываем ошибку
@@ -125,13 +150,21 @@ export async function POST(request: NextRequest) {
     if (!baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
       baseUrl = baseUrl.replace(/^http:/, "https:");
     }
-    const magicLink = `${baseUrl}/api/auth/email/verify?token=${token}`;
+    // ВАЖНО:
+    // Токен передаём в query (?token=...). Яндекс.Почта/часть почтовых сервисов
+    // оборачивают ссылки собственным редиректором и теряют hash-фрагмент,
+    // поэтому #hash здесь НЕ подходит.
+    // Защита от "сгорания" ссылки обеспечивается тем, что GET /auth/email/success
+    // ничего сам не делает — вход по токену выполняется только по явному клику
+    // пользователя (POST на NextAuth), которого не делают preview-боты.
+    const magicLink = `${baseUrl}/auth/email/success?token=${token}`;
 
     const emailSent = await sendMagicLinkEmail(
       normalizedEmail,
       magicLink,
       isNewUser,
-      user?.firstName || undefined
+      user?.firstName || undefined,
+      pin,
     );
 
     // Если письмо не отправлено, но есть magicLink (dev/SMTP off) — всё ок
@@ -152,33 +185,45 @@ export async function POST(request: NextRequest) {
 
     console.log("[Email Auth]", emailActuallySent ? "Email отправлен" : "Режим без отправки (показываем ссылку)");
 
-    // Формируем ответ
+    // Формируем ответ.
+    // Клиент должен показать поле ввода 6-значного кода; email кладём на клиент для последующего signIn("email-pin").
     const response: {
       success: boolean;
       message: string;
       isNewUser: boolean;
+      email: string;
+      pinRequired: boolean;
+      pinLength: number;
+      expiresInSec: number;
       devMode?: boolean;
       magicLink?: string;
+      devPin?: string;
       dbAvailable?: boolean;
     } = {
       success: true,
       message: emailActuallySent
-        ? "Письмо с ссылкой для входа отправлено на ваш email"
-        : "Используйте ссылку ниже для входа (SMTP не настроен)",
+        ? "Мы отправили 6-значный код и ссылку на ваш email"
+        : "SMTP не настроен — используйте код или ссылку ниже",
       isNewUser,
+      email: normalizedEmail,
+      pinRequired: true,
+      pinLength: 6,
+      expiresInSec: 5 * 60,
     };
 
-    // Добавляем magic link, когда письмо не отправлено (dev, SMTP не настроен)
+    // Добавляем magic link + PIN, когда письмо не отправлено (dev, SMTP не настроен)
     if (emailLibDevMode || isDevMode()) {
       response.devMode = true;
       response.magicLink = magicLink;
+      response.devPin = pin;
       response.dbAvailable = dbAvailable;
-      
+
       console.log("\n" + "🔗".repeat(30));
-      console.log("🚀 [DEV MODE] MAGIC LINK ДЛЯ АВТОРИЗАЦИИ:");
+      console.log("🚀 [DEV MODE] КОД + MAGIC LINK ДЛЯ АВТОРИЗАЦИИ:");
       console.log("🔗".repeat(30));
       console.log("📧 Email:", normalizedEmail);
       console.log("🗄️ DB Available:", dbAvailable);
+      console.log("🔢 PIN:", pin);
       console.log("🔐 Magic Link:");
       console.log("\n  👉 " + magicLink + "\n");
       console.log("🔗".repeat(30) + "\n");
