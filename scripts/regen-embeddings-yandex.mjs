@@ -91,8 +91,34 @@ async function processChunks({ modelName, fetchChunks, updateChunk }) {
       }
 
       try {
+        const startedAt = Date.now();
         const vec = await generateYandexDocEmbedding(text.slice(0, 8000));
         await updateChunk(chunk.id, vec);
+
+        // Учёт расходов: эмбеддинги через API не возвращают usage, оцениваем
+        // по длине текста (≈ 4 chars/token) и пишем событие в AIUsageEvent,
+        // чтобы админская аналитика отражала фактический расход бэкфилла.
+        const tokensEstimate = Math.max(1, Math.round(text.length / 4));
+        const costKopecks = Math.round((tokensEstimate * 0.01) / 10); // 0.01 ₽/1k = 0.001 коп/ток
+        try {
+          await prisma.aIUsageEvent.create({
+            data: {
+              provider: "yandex",
+              model: "text-search-doc",
+              operation: "embedding",
+              route: "script/regen-embeddings",
+              inputTokens: tokensEstimate,
+              outputTokens: 0,
+              totalTokens: tokensEstimate,
+              costKopecks,
+              durationMs: Date.now() - startedAt,
+              status: "ok",
+            },
+          });
+        } catch {
+          /* не ломаем миграцию, если пишем в AIUsageEvent */
+        }
+
         migrated++;
         if (migrated % 50 === 0) {
           console.log(`  migrated=${migrated} skipped=${skipped} errors=${errors}`);

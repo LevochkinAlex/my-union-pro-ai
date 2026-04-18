@@ -355,8 +355,20 @@ export default function AIUsagePage() {
       </div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        Стоимость рассчитана локально по тарифам Yandex Foundation Models. Реальные счета могут
-        отличаться из-за округления, групповых скидок и промо-периодов. Точный биллинг — в Yandex Cloud Console.
+        Стоимость оценочная: считается локально по тарифам Yandex Foundation Models
+        на момент вызова. Yandex в биллинге отдельно считает кэшированные входные
+        токены (по тому же тарифу), их API usage не возвращает — поэтому наша
+        итоговая сумма обычно совпадает с биллингом Yandex Cloud в пределах
+        нескольких процентов. Точные расходы — в{" "}
+        <a
+          href="https://console.yandex.cloud/billing/detailing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          Yandex Cloud Billing
+        </a>
+        .
       </p>
     </div>
   );

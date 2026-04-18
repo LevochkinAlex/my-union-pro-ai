@@ -14,21 +14,35 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Цены Yandex Foundation Models в рублях за 1000 токенов.
- * Источник: https://yandex.cloud/ru/docs/foundation-models/pricing
+ * Источник: Yandex Cloud Billing Detalization (фактические тарифы от апреля 2026).
  * Обновлено вручную; Yandex меняет прайс редко.
+ *
+ * Важные оговорки:
+ * 1. `yandexgpt/latest` сейчас реально ведёт на YandexGPT Pro 5, с тарифом
+ *    1.2 ₽/1k токенов на input/output/cached. Короткое имя `yandexgpt` в
+ *    нашей таблице соответствует этому тарифу.
+ * 2. Yandex отдельной строкой в биллинге показывает "кэшированные токены"
+ *    (cached input). API ответа НЕ возвращает их отдельно, поэтому в нашу
+ *    таблицу они попадают как обычные input tokens и считаются по тому же
+ *    тарифу 1.2 ₽/1k. Расхождение с официальным биллингом Yandex тут
+ *    минимальное, т.к. тариф одинаковый.
+ * 3. Эмбеддинги в нашей таблице стоят 0.01 ₽/1k. Фактический биллинг Yandex
+ *    показывает ~0.0102 ₽/1k — округлили до 0.01.
  */
 const YANDEX_PRICING_RUB_PER_1K: Record<
   string,
   { input: number; output: number }
 > = {
+  // Pro (флагман, /latest = GPT 5 Pro): 1.2 ₽/1k на input + output + cached
   yandexgpt: { input: 1.2, output: 1.2 },
-  "yandexgpt-lite": { input: 0.2, output: 0.2 },
   "yandexgpt-32k": { input: 1.2, output: 1.2 },
-  "yandexgpt-5-pro": { input: 1.5, output: 1.5 },
-  "yandexgpt-5-lite": { input: 0.4, output: 0.4 },
-  // Эмбеддинги: Yandex считает 0.02 руб / 1000 токенов (всегда input)
-  "text-search-doc": { input: 0.02, output: 0 },
-  "text-search-query": { input: 0.02, output: 0 },
+  "yandexgpt-5-pro": { input: 1.2, output: 1.2 },
+  // Lite: ~0.2 ₽/1k на input/output
+  "yandexgpt-lite": { input: 0.2, output: 0.2 },
+  "yandexgpt-5-lite": { input: 0.2, output: 0.2 },
+  // Эмбеддинги: 0.01 ₽/1k токенов (всегда input-only)
+  "text-search-doc": { input: 0.01, output: 0 },
+  "text-search-query": { input: 0.01, output: 0 },
 };
 
 /**
