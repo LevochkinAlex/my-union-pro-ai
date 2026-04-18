@@ -106,8 +106,10 @@ export default async function AdminLayout({
           />
         </svg>
       ),
+      // Клик по самому пункту "Искусственный интеллект" ведёт на Аналитику
+      // (основной кейс супер-админа), поэтому в subItems уже не дублируем
+      // /admin/ai-chat/usage — оставляем только реальные разделы.
       subItems: [
-        { href: "/admin/ai-chat/usage", label: "Аналитика и расходы" },
         { href: "/admin/ai-chat?tab=bots", label: "Чат-боты" },
         { href: "/admin/ai-chat?tab=knowledge", label: "Базы знаний" },
         { href: "/admin/ai-chat?tab=providers", label: "Провайдер и модели" },
