@@ -92,9 +92,12 @@ export default async function AdminLayout({
     {
       // Единая секция «Искусственный интеллект»: аналитика расходов,
       // боты, базы знаний и настройки провайдера. Подпункты `subItems`
-      // рендерятся раскрывающейся панелью в Sidebar. На момент перехода
-      // просто попадаем на страницу расходов — это самый частый кейс у супер-админа.
-      href: "/admin/ai-chat/usage",
+      // рендерятся раскрывающейся панелью в Sidebar.
+      //
+      // Верхний href ведёт на список баз знаний (дефолтный экран), а
+      // все 4 раздела доступны подпунктами — чтобы ключи не дублировались
+      // с верхним (было предупреждение React о duplicate key в dev-overlay).
+      href: "/admin/ai-chat",
       label: "Искусственный интеллект",
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,12 +109,10 @@ export default async function AdminLayout({
           />
         </svg>
       ),
-      // Клик по самому пункту "Искусственный интеллект" ведёт на Аналитику
-      // (основной кейс супер-админа), поэтому в subItems уже не дублируем
-      // /admin/ai-chat/usage — оставляем только реальные разделы.
       subItems: [
-        { href: "/admin/ai-chat?tab=bots", label: "Чат-боты" },
+        { href: "/admin/ai-chat/usage", label: "Аналитика и расходы" },
         { href: "/admin/ai-chat?tab=knowledge", label: "Базы знаний" },
+        { href: "/admin/ai-chat?tab=bots", label: "Чат-боты" },
         { href: "/admin/ai-chat?tab=providers", label: "Провайдер и модели" },
       ],
     },
