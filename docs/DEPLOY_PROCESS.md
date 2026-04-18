@@ -2,8 +2,10 @@
 
 ## Инфраструктура
 
-- **Сервер приложения (деплой):** 194.87.49.210 (VDS), приложение в `/opt/my-union-pro`, PM2.
-- **База данных:** VK Cloud PostgreSQL — хост 83.166.237.161, база `myunion_db`. Локальная разработка и прод подключаются к одной БД (DATABASE_URL в `.env.local` и на сервере указывает на VK Cloud).
+- **Сервер приложения:** `79.143.29.66` (Selectel, RU), приложение в `/opt/my-union-pro`, PM2 (`my-union-pro` + `my-union-socket`).
+- **База данных:** VK Cloud PostgreSQL — хост `83.166.237.161`, база `myunion_db`. Локальная разработка и прод подключаются к одной БД (DATABASE_URL в `.env.local` и на сервере указывает на VK Cloud).
+- **CDN:** VK Cloud CDN (`cdn.myunion.pro` → origin на этот же сервер). Cloudflare — только DNS.
+- **Деплой:** `./deploy.sh` с локальной машины по SSH-ключу `~/.ssh/myunion_vds`. Единая точка, без sshpass/паролей.
 
 ## Автоматические тесты перед деплоем
 
@@ -24,12 +26,9 @@ pnpm dotenv -e .env.local -- node scripts/test-tickets-api.mjs
 - ✅ **Успех**: Тест проходит, деплой продолжается
 - ❌ **Ошибка**: Тест не проходит, деплой прерывается
 
-### Скрипты деплоя с тестами:
+### Скрипт деплоя:
 
-- `commit-and-deploy.sh` - коммит, пуш и деплой с тестами
-- `deploy.sh` - деплой с тестами
-- `deploy-now.sh` - быстрый деплой с тестами
-- `scripts/deploy-production.sh` - продакшн деплой с тестами
+- `deploy.sh` — единая точка деплоя (git fetch + build + pm2 restart). Запуск: `./deploy.sh` или `./deploy.sh --push`. Параметризуется env `VDS_HOST`, `VDS_SSH_KEY`, `VDS_USER`, `VDS_PATH`.
 
 ### Ручной запуск теста:
 

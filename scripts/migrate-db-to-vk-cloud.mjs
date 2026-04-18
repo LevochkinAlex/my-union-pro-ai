@@ -7,11 +7,11 @@
  *   Сервер: обычно уже есть (postgresql-client).
  *
  * Запуск:
- *   OLD_DATABASE_URL="postgresql://USER:PASS@194.87.49.210:5432/myunion_db" \
+ *   OLD_DATABASE_URL="postgresql://USER:PASS@79.143.29.66:5432/myunion_db" \
  *   NEW_DATABASE_URL="postgresql://myadminunion:7v2YY%2C3G59T68zR5s@83.166.237.161:5432/myunion_db" \
  *   node scripts/migrate-db-to-vk-cloud.mjs
  *
- * Если с текущего сервера (194.87.49.210) — там уже есть доступ к локальной БД:
+ * Если с текущего сервера (79.143.29.66) — там уже есть доступ к локальной БД:
  *   OLD_DATABASE_URL="postgresql://postgres:PASS@localhost:5432/myunion_db" \
  *   NEW_DATABASE_URL="postgresql://myadminunion:7v2YY%2C3G59T68zR5s@83.166.237.161:5432/myunion_db" \
  *   node scripts/migrate-db-to-vk-cloud.mjs
@@ -138,7 +138,7 @@ function main() {
   console.log("\nДальше:");
   console.log("  1. Если таблиц > 0: обновите DATABASE_URL на сервере на NEW_DATABASE_URL и перезапустите pm2.");
   console.log("  2. Если таблиц 0: создайте БД в панели VK Cloud (см. docs/MIGRATION_VK_CLOUD.md) и запустите миграцию снова.");
-  console.log("  3. Добавьте IP 194.87.49.210 в белый список доступа в VK Cloud.");
+  console.log("  3. Добавьте IP 79.143.29.66 в белый список доступа в VK Cloud.");
 }
 
 main();

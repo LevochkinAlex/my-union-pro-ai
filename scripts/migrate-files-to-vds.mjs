@@ -9,7 +9,7 @@ const execAsync = promisify(exec);
 const prisma = new PrismaClient();
 
 // Конфигурация VDS из переменных окружения
-const VDS_HOST = process.env.VDS_STORAGE_HOST || process.env.VDS_HOST || "194.87.49.210";
+const VDS_HOST = process.env.VDS_STORAGE_HOST || process.env.VDS_HOST || "79.143.29.66";
 const VDS_USER = process.env.VDS_STORAGE_USER || process.env.VDS_USER || "root";
 const VDS_PASSWORD = process.env.VDS_STORAGE_PASSWORD || process.env.VDS_PASSWORD;
 const VDS_REMOTE_PATH = process.env.VDS_STORAGE_REMOTE_PATH || "/root/my-union-pro-ai/public/uploads";

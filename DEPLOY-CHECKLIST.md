@@ -1,91 +1,62 @@
 # Деплой и проверки
 
-**Репозиторий (приватный):** https://bitbucket.org/usmanoff/my-union-pro-ai
+**Репозиторий:** https://bitbucket.org/usmanoff/my-union-pro-ai
+**Прод-сервер:** `79.143.29.66` (Selectel, RU), путь `/opt/my-union-pro`
+**БД:** VK Cloud PostgreSQL (`83.166.237.161:5432`), подключение в `.env.local` сервера
+**CDN:** VK Cloud (`cdn.myunion.pro` → origin на этот же сервер)
+**Доступ:** по SSH-ключу `~/.ssh/myunion_vds` (пароли нигде не храним)
 
-## Отключение защиты веток (чтобы пушить без PR)
+## Быстрый деплой
 
-В **Bitbucket Cloud**: репозиторий → **Repository settings** → **Branch restrictions** (ограничения веток).
-
-1. Открой список правил для нужной ветки (**main**, **dev** и т.д.).
-2. Удали правило или отредактируй: сними требование pull request / запрет прямого пуша, если нужно пушить в ветку без PR.
-3. Сохрани изменения.
-
-После этого можно пушить в `main` и при необходимости выровнять dev:  
-`git push origin main` и при необходимости `git push origin main:dev --force`.
-
-## Доступ в ветку levochkin (пушить без PR)
-
-Чтобы пользователь мог сам пушить в ветку **levochkin** без создания PR:
-
-1. **Дать доступ к репозиторию:** **Repository settings** → **User and group access** → добавить пользователя с ролью **Write** (или выше).
-2. **Не включать жёсткие ограничения для `levochkin`:** в **Branch restrictions** не создавай отдельное правило, которое требует PR для этой ветки (или удали такое правило).
-3. **Если защита нужна только для main/dev**, создай ограничения только для `main` и при необходимости `dev`; ветка `levochkin` останется без лишних требований.
-
-Клонирование и работа с веткой:
+С локальной машины:
 
 ```bash
-git clone https://bitbucket.org/usmanoff/my-union-pro-ai.git
-cd my-union-pro-ai
-git checkout levochkin
-# правки...
-git add -A && git commit -m "описание" && git push origin levochkin
+./deploy.sh           # git fetch на сервере + build + pm2 restart
+./deploy.sh --push    # то же, но сначала git push origin main
 ```
 
-(SSH: `git clone git@bitbucket.org:usmanoff/my-union-pro-ai.git`)
+Скрипт читает необязательные env:
 
-## VDS: смена remote с GitHub на Bitbucket (один раз)
-
-На сервере в каталоге проекта:
-
-```bash
-cd /opt/my-union-pro
-git remote -v
-git remote set-url origin git@bitbucket.org:usmanoff/my-union-pro-ai.git
-# или HTTPS с app password:
-# git remote set-url origin https://bitbucket.org/usmanoff/my-union-pro-ai.git
-git fetch origin
-git branch -u origin/main main   # при необходимости
-```
-
-Убедись, что на VDS настроен доступ: **SSH-ключ** в Bitbucket (Personal settings → SSH keys) или **HTTPS + app password** (Repository → Clone → используй учётные данные с паролем приложения).
-
-## Актуальные скрипты
-
-| Скрипт | Назначение |
-|--------|------------|
-| **complete-deploy.sh** | Основной деплой: коммит, пуш, pull на сервере, build, restart PM2, проверка API. Запуск: `VDS_PASSWORD='...' ./complete-deploy.sh "Сообщение коммита"` |
-| **commit-and-deploy.sh** | Полный деплой с pre-deploy, миграциями Prisma и перезапуском my-union-pro + my-union-socket. Запуск: `VDS_PASSWORD='...' ./commit-and-deploy.sh "Сообщение"` |
-| **check-deploy-status.sh** | Только проверка: PM2, последний коммит, git status, наличие .next, HTTP myunion.pro. Запуск: `VDS_PASSWORD='...' ./check-deploy-status.sh` |
-
-Пароль не хранить в репозитории: `export VDS_PASSWORD='...'` перед запуском.
-
-- Сервер: **194.87.49.210**
-- Путь на сервере: **/opt/my-union-pro**
-- БД: **VK Cloud** (PostgreSQL), в `.env.local` на сервере задан `DATABASE_URL`
+- `VDS_HOST` — по умолчанию `79.143.29.66`
+- `VDS_SSH_KEY` — по умолчанию `~/.ssh/myunion_vds`
+- `VDS_USER` — по умолчанию `root`
+- `VDS_PATH` — по умолчанию `/opt/my-union-pro`
 
 ## Ручные команды на сервере
 
 ```bash
-ssh root@194.87.49.210
+ssh -i ~/.ssh/myunion_vds root@79.143.29.66
 cd /opt/my-union-pro
-git pull origin main
-pnpm install
-npx prisma migrate deploy   # при необходимости
-pnpm build
-pm2 restart my-union-pro
-pm2 restart my-union-socket
+git fetch origin main && git reset --hard origin/main
+pnpm install --frozen-lockfile      # если менялся lockfile
+pnpm prisma generate
+pnpm prisma migrate deploy          # при новых миграциях
+rm -rf .next && pnpm build
+pm2 restart my-union-pro --update-env
+pm2 restart my-union-socket --update-env
+pm2 save
 pm2 logs my-union-pro --lines 50
 ```
 
 ## Проверка после деплоя
 
-1. **Сайт:** https://myunion.pro — открывается, логин работает.
-2. **WebSocket:** в консоли браузера есть `[useChat] ✅ Socket connected`; сообщения приходят в реальном времени.
-3. **Push:** отправить сообщение с одного устройства — на другом приходит уведомление; клик открывает нужный чат.
-4. **Логи:** `ssh root@194.87.49.210 'pm2 logs my-union-pro --lines 100'`
+1. `curl -I https://myunion.pro` → `HTTP/2 200`
+2. Вход в `/login`, отправка magic link — работает.
+3. WebSocket: в консоли браузера `[useChat] ✅ Socket connected`.
+4. Админ-аналитика расходов ИИ: `/admin/ai-chat/usage` → события логируются.
 
-## Возможные проблемы
+## Типовые проблемы
 
-- **502:** приложение не поднялось после build — смотреть `pm2 logs my-union-pro --err`.
-- **WebSocket не подключается:** проверить `NEXT_PUBLIC_SOCKET_URL`, что my-union-socket запущен.
-- **Миграции:** при изменении схемы Prisma на сервере выполнить `npx prisma migrate deploy`.
+- **502** — приложение не поднялось: `pm2 logs my-union-pro --err`
+- **WebSocket не подключается** — проверь `NEXT_PUBLIC_SOCKET_URL` и `pm2 list` (должен быть `my-union-socket` online)
+- **Prisma migration not applied** — запусти вручную `pnpm prisma migrate deploy`
+- **SSL истёк** — `certbot renew --dry-run` на сервере (certbot уже установлен), после успешного renew `systemctl reload nginx`
+
+## Что делать, если остановился старый сервер
+
+- Если выключается/переезжает прод-сервер: обнови DNS в Cloudflare для
+  `myunion.pro`, `www.myunion.pro`, `cdn.myunion.pro` → новый IP.
+- После переноса проверь `.env.local` на новом сервере (VDS_HOST, VDS_STORAGE_HOST).
+- `/etc/letsencrypt/` копируется rsync'ом со старого, чтобы не терять
+  действующий сертификат и не натыкаться на rate-limit Let's Encrypt.
+- `public/uploads/` тоже копируются rsync'ом (легче, чем хранить на CDN).

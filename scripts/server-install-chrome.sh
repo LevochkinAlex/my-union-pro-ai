@@ -1,7 +1,7 @@
 #!/bin/bash
 # Установка Chrome/Chromium на VDS для генерации PDF (Puppeteer).
 # Запускать на сервере: bash scripts/server-install-chrome.sh
-# Либо через SSH: ssh root@194.87.49.210 'cd /opt/my-union-pro && bash scripts/server-install-chrome.sh'
+# Либо через SSH: ssh root@79.143.29.66 'cd /opt/my-union-pro && bash scripts/server-install-chrome.sh'
 
 set -e
 

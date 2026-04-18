@@ -203,7 +203,7 @@ ORM: **Prisma** — схема в `prisma/schema.prisma`.
 
 | Параметр | Значение |
 |----------|---------|
-| IP | `194.87.49.210` |
+| IP | `79.143.29.66` |
 | ОС | Ubuntu 24.04 |
 | Путь | `/opt/my-union-pro` |
 | Процессы | PM2: `my-union-pro` (порт 3000), `my-union-socket` (порт 3005) |
@@ -236,7 +236,7 @@ echo "export VDS_PASSWORD='пароль'" > vds.deploy.env
 git add -A && git commit -m "Fix: описание" && git push
 
 # На сервере
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 cd /opt/my-union-pro
 git pull origin main
 pnpm install
@@ -250,13 +250,13 @@ pm2 restart my-union-socket
 
 ```bash
 # Статус процессов
-ssh root@194.87.49.210 'pm2 list'
+ssh root@79.143.29.66 'pm2 list'
 
 # Логи
-ssh root@194.87.49.210 'pm2 logs my-union-pro --lines 50 --nostream'
+ssh root@79.143.29.66 'pm2 logs my-union-pro --lines 50 --nostream'
 
 # Ошибки
-ssh root@194.87.49.210 'pm2 logs my-union-pro --err --lines 20 --nostream'
+ssh root@79.143.29.66 'pm2 logs my-union-pro --err --lines 20 --nostream'
 
 # Полная проверка
 ./check-deploy-status.sh

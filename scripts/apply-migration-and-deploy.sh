@@ -4,7 +4,7 @@ set -e
 echo "🚀 Применяем миграцию и деплоим обновления..."
 
 # SSH подключение к серверу
-SSH_CMD="sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@194.87.49.210"
+SSH_CMD="sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@79.143.29.66"
 PROJECT_DIR="/opt/my-union-pro"
 
 # 1. Применяем миграцию БД

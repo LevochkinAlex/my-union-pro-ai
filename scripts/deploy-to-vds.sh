@@ -9,7 +9,7 @@ echo "🚀 Deploying MyUnion Pro to VDS..."
 
 # VDS server details (from .env or environment variables)
 # ⚠️ ВАЖНО: Не храните пароли в коде! Используйте переменные окружения!
-VDS_HOST="${VDS_HOST:-194.87.49.210}"
+VDS_HOST="${VDS_HOST:-79.143.29.66}"
 VDS_USER="${VDS_USER:-root}"
 VDS_PATH="${VDS_PATH:-/opt/my-union-pro}"
 VDS_PASSWORD="${VDS_PASSWORD:-YOUR_SSH_PASSWORD}"

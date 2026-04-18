@@ -2,7 +2,7 @@
 # Обновление переменных BestBenefits на проде (VDS) без полного деплоя.
 # Использование:
 #   export VDS_PASSWORD='...'
-#   export VDS_HOST='194.87.49.210'   # опционально
+#   export VDS_HOST='79.143.29.66'   # опционально
 #   export BB_PROFSOYUZY_TOKEN='...'
 #   bash scripts/update-bb-env-on-vds.sh
 #
@@ -12,7 +12,7 @@
 
 set -e
 
-VDS_HOST="${VDS_HOST:-194.87.49.210}"
+VDS_HOST="${VDS_HOST:-79.143.29.66}"
 VDS_USER="${VDS_USER:-root}"
 VDS_PASSWORD="${VDS_PASSWORD:-}"
 

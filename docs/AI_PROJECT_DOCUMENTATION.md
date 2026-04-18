@@ -10,7 +10,7 @@
 - **Real-time**: WebSocket (Socket.IO) - кастомный сервер (`server/chat-server.ts`)
 - **AI**: Yandex Foundation Models (YandexGPT + text-embedding) с поддержкой баз знаний (RAG)
 - **Auth**: NextAuth.js с поддержкой SMS, Email, Yandex OAuth
-- **Deployment**: PM2 на VDS (194.87.49.210). БД — PostgreSQL в VK Cloud (83.166.237.161, myunion_db).
+- **Deployment**: PM2 на VDS (79.143.29.66). БД — PostgreSQL в VK Cloud (83.166.237.161, myunion_db).
 
 ### ⚠️ ВАЖНО: Matrix удален полностью
 - Все упоминания Matrix удалены из кода
@@ -380,7 +380,7 @@ socket.data.userId = decoded.sub;
 ## 🚀 Деплой
 
 ### Сервер приложения
-- **Host**: 194.87.49.210
+- **Host**: 79.143.29.66
 - **Path**: `/opt/my-union-pro`
 - **PM2**: `my-union-pro` (Next.js), `my-union-socket` (WebSocket)
 
@@ -389,7 +389,7 @@ socket.data.userId = decoded.sub;
 
 ### Команды деплоя
 ```bash
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 cd /opt/my-union-pro
 git pull origin main
 pnpm install

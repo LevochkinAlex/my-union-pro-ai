@@ -21,12 +21,12 @@ echo ""
 # ⚠️ ВАЖНО: Используйте переменные окружения для паролей!
 # Установите VDS_PASSWORD в переменных окружения перед запуском
 VDS_PASSWORD="${VDS_PASSWORD:-YOUR_SSH_PASSWORD}"
-VDS_HOST="${VDS_HOST:-194.87.49.210}"
+VDS_HOST="${VDS_HOST:-79.143.29.66}"
 VDS_USER="${VDS_USER:-root}"
 
 if [ "$VDS_PASSWORD" = "YOUR_SSH_PASSWORD" ] || [ "$VDS_HOST" = "YOUR_SERVER_IP" ]; then
   echo "❌ Ошибка: Необходимо установить переменные окружения VDS_PASSWORD и VDS_HOST"
-  echo "Пример: export VDS_PASSWORD='your_password' && export VDS_HOST='194.87.49.210'"
+  echo "Пример: export VDS_PASSWORD='your_password' && export VDS_HOST='79.143.29.66'"
   exit 1
 fi
 

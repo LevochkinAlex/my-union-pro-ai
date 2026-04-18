@@ -33,15 +33,15 @@
 - Для обновления системных параметров просто редактировать поля и жать «Сохранить настройки».
 
 ## Доступ к продакшен-серверу
-- Host: `194.87.49.210` (`myunion.pro`)
-- SSH: `ssh root@194.87.49.210`
+- Host: `79.143.29.66` (`myunion.pro`)
+- SSH: `ssh root@79.143.29.66`
 - Пароль: `sAt,8?Bh+Ny_BW`
 - Путь к проекту: `/opt/my-union-pro`
 - PM2 процесс: `my-union-pro`
 
 ## Деплой (manual)
 ```bash
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 cd /opt/my-union-pro
 git pull origin main
 pnpm install

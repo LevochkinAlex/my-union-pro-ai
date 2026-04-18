@@ -14,7 +14,7 @@
 
 ```bash
 # На сервере
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 cd /opt/my-union-pro
 git pull
 node scripts/cleanup-and-migrate-to-matrix.mjs --confirm

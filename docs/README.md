@@ -22,22 +22,22 @@
 
 ### Деплой [[memory:12394644]]
 ```bash
-ssh -i ~/.ssh/myunion_vds root@194.87.49.210 'cd /opt/my-union-pro && git pull && pnpm build && pm2 restart my-union-pro'
+ssh -i ~/.ssh/myunion_vds root@79.143.29.66 'cd /opt/my-union-pro && git pull && pnpm build && pm2 restart my-union-pro'
 ```
 
 ### Синхронизация скидок
 ```bash
-ssh -i ~/.ssh/myunion_vds root@194.87.49.210 'cd /opt/my-union-pro && node scripts/sync-discounts.mjs'
+ssh -i ~/.ssh/myunion_vds root@79.143.29.66 'cd /opt/my-union-pro && node scripts/sync-discounts.mjs'
 ```
 
 ### Проверка логов
 ```bash
-ssh -i ~/.ssh/myunion_vds root@194.87.49.210 'pm2 logs my-union-pro --lines 50'
+ssh -i ~/.ssh/myunion_vds root@79.143.29.66 'pm2 logs my-union-pro --lines 50'
 ```
 
 ### Логи синхронизации скидок
 ```bash
-ssh -i ~/.ssh/myunion_vds root@194.87.49.210 'tail -50 /var/log/myunion/sync-discounts.log'
+ssh -i ~/.ssh/myunion_vds root@79.143.29.66 'tail -50 /var/log/myunion/sync-discounts.log'
 ```
 
 ## Инфраструктура
@@ -46,7 +46,7 @@ ssh -i ~/.ssh/myunion_vds root@194.87.49.210 'tail -50 /var/log/myunion/sync-dis
 |-----------|-----------|
 | Продакшн | https://myunion.pro |
 | CDN | https://cdn.myunion.pro |
-| VDS (сервер приложения) | 194.87.49.210 |
+| VDS (сервер приложения) | 79.143.29.66 |
 | БД PostgreSQL | VK Cloud 83.166.237.161, база myunion_db |
 | Проект на сервере | /opt/my-union-pro |
 | Grafana | https://myunion.pro/grafana/ |

@@ -13,7 +13,7 @@ if [ -f "$CONFIG_FILE" ]; then
   source "$CONFIG_FILE"
 fi
 
-SSH_HOST="${VDS_HOST:-root@194.87.49.210}"
+SSH_HOST="${VDS_HOST:-root@79.143.29.66}"
 SSH_PASSWORD="${VDS_PASSWORD:-}"
 DEPLOY_PATH="${VDS_DEPLOY_PATH:-/opt/my-union-pro}"
 ENCRYPTION_KEY="$1"

@@ -26,7 +26,7 @@ dotenv.config({ path: join(__dirname, "..", ".env.local") });
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DATABASE_URL?.replace('194.87.49.210', 'localhost') || process.env.DATABASE_URL,
+      url: process.env.DATABASE_URL?.replace('79.143.29.66', 'localhost') || process.env.DATABASE_URL,
     },
   },
 });

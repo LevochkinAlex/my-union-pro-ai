@@ -53,14 +53,14 @@
 
 | Термин | Что это значит |
 |--------|---------------|
-| **Сервер** | Компьютер, который работает 24/7 и отвечает на запросы пользователей. Наш сервер: `194.87.49.210`. |
+| **Сервер** | Компьютер, который работает 24/7 и отвечает на запросы пользователей. Наш сервер: `79.143.29.66`. |
 | **VDS** | Virtual Dedicated Server — виртуальный сервер, который мы арендуем. Как обычный компьютер, но в дата-центре. |
-| **SSH** | Способ подключиться к серверу удалённо через терминал. Команда: `ssh root@194.87.49.210`. |
+| **SSH** | Способ подключиться к серверу удалённо через терминал. Команда: `ssh root@79.143.29.66`. |
 | **Деплой (Deploy)** | Процесс «выгрузки» кода на сервер, чтобы пользователи увидели изменения. |
 | **PM2** | Менеджер процессов на сервере. Следит, чтобы приложение работало, и перезапускает его при падении. |
 | **Nginx** | Веб-сервер, который принимает запросы от пользователей и передаёт их нашему приложению. Как «приёмная» на входе. |
 | **SSL/HTTPS** | Шифрование трафика. Замочек в адресной строке = данные защищены. |
-| **DNS** | Система, которая превращает `myunion.pro` в IP-адрес `194.87.49.210`. |
+| **DNS** | Система, которая превращает `myunion.pro` в IP-адрес `79.143.29.66`. |
 | **CDN** | Content Delivery Network — раздача картинок и файлов из ближайшего к пользователю сервера. |
 
 ### Git и командная работа
@@ -160,7 +160,7 @@
 │                                                 │
 │  PostgreSQL (VK Cloud) — база данных            │
 │  Redis — кэш + очереди + pub/sub чата           │
-│  VDS (194.87.49.210) — сервер приложения        │
+│  VDS (79.143.29.66) — сервер приложения        │
 │  PM2 — менеджер процессов                       │
 │  Nginx — реверс-прокси + SSL                    │
 │  Bitbucket — хранение кода                      │
@@ -750,7 +750,7 @@ git push
 1. Открыть https://myunion.pro
 2. Войти под тестовым аккаунтом
 3. Проверить, что новый функционал работает
-4. Проверить логи: `ssh root@194.87.49.210 'pm2 logs my-union-pro --lines 20'`
+4. Проверить логи: `ssh root@79.143.29.66 'pm2 logs my-union-pro --lines 20'`
 
 ---
 
@@ -950,7 +950,7 @@ Cursor AI знает скрипты деплоя и выполнит `commit-and
 
 | Параметр | Значение |
 |----------|---------|
-| IP | 194.87.49.210 |
+| IP | 79.143.29.66 |
 | ОС | Ubuntu 24.04 |
 | Путь к проекту | `/opt/my-union-pro` |
 | Node.js процессы | PM2: `my-union-pro` (порт 3000), `my-union-socket` (порт 3005) |
@@ -1001,7 +1001,7 @@ echo "export VDS_PASSWORD='пароль'" > vds.deploy.env
 git add -A && git commit -m "Fix: описание" && git push
 
 # 2. Подключиться к серверу
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 
 # 3. На сервере:
 cd /opt/my-union-pro
@@ -1024,7 +1024,7 @@ pm2 logs my-union-pro --lines 20
    ├── Prisma валидация (prisma validate)
    └── API тесты (test-tickets-api.mjs)
 
-2. SSH на сервер (194.87.49.210)
+2. SSH на сервер (79.143.29.66)
    ├── git pull origin main
    ├── pnpm install
    ├── npx prisma generate
@@ -1042,13 +1042,13 @@ pm2 logs my-union-pro --lines 20
 
 ```bash
 # Статус процессов
-ssh root@194.87.49.210 'pm2 list'
+ssh root@79.143.29.66 'pm2 list'
 
 # Логи приложения (последние 50 строк)
-ssh root@194.87.49.210 'pm2 logs my-union-pro --lines 50 --nostream'
+ssh root@79.143.29.66 'pm2 logs my-union-pro --lines 50 --nostream'
 
 # Логи ошибок
-ssh root@194.87.49.210 'pm2 logs my-union-pro --err --lines 20 --nostream'
+ssh root@79.143.29.66 'pm2 logs my-union-pro --err --lines 20 --nostream'
 
 # Статус деплоя (отдельный скрипт)
 ./check-deploy-status.sh
@@ -1207,10 +1207,10 @@ pnpm lint             # Проверить код линтером
 pnpm prisma:migrate
 
 # На сервере: применить миграцию
-ssh root@194.87.49.210 'cd /opt/my-union-pro && npx prisma migrate deploy'
+ssh root@79.143.29.66 'cd /opt/my-union-pro && npx prisma migrate deploy'
 
 # Или: добавить колонку напрямую через SQL
-ssh root@194.87.49.210 'cd /opt/my-union-pro && npx dotenv -e .env.local -- npx prisma db execute --schema prisma/schema.prisma --stdin <<EOF
+ssh root@79.143.29.66 'cd /opt/my-union-pro && npx dotenv -e .env.local -- npx prisma db execute --schema prisma/schema.prisma --stdin <<EOF
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "newField" TEXT;
 EOF'
 ```
@@ -1231,7 +1231,7 @@ EOF'
 
 **Решение:**
 ```bash
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 pm2 list                          # Проверить статус
 pm2 logs my-union-pro --err       # Посмотреть ошибки
 pm2 restart my-union-pro          # Перезапустить
@@ -1265,7 +1265,7 @@ pnpm type-check         # Проверить типы
 
 **Решение:**
 ```bash
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 free -h                    # Проверить память
 pm2 stop all               # Остановить процессы для освобождения памяти
 cd /opt/my-union-pro
@@ -1318,7 +1318,7 @@ git checkout .
 **A:**
 ```bash
 # Через SSH
-ssh root@194.87.49.210 'pm2 logs my-union-pro --lines 50 --nostream'
+ssh root@79.143.29.66 'pm2 logs my-union-pro --lines 50 --nostream'
 
 # Или через скрипт
 ./check-deploy-status.sh
@@ -1328,7 +1328,7 @@ ssh root@194.87.49.210 'pm2 logs my-union-pro --lines 50 --nostream'
 
 **A:**
 ```bash
-ssh root@194.87.49.210
+ssh root@79.143.29.66
 nano /opt/my-union-pro/.env.local
 # Добавь переменную, сохрани (Ctrl+O, Ctrl+X)
 pm2 restart my-union-pro
