@@ -26,27 +26,39 @@ export async function GET(request: NextRequest) {
   // Все события в периоде — один запрос, дальше агрегируем в памяти.
   // Для наших объёмов (сотни событий / день) это быстрее и проще, чем
   // 5-6 отдельных groupBy с их синтаксическими ограничениями.
-  const events = await prisma.aIUsageEvent.findMany({
-    where: { createdAt: { gte: since } },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      createdAt: true,
-      provider: true,
-      model: true,
-      operation: true,
-      route: true,
-      inputTokens: true,
-      outputTokens: true,
-      totalTokens: true,
-      costKopecks: true,
-      userId: true,
-      botId: true,
-      durationMs: true,
-      status: true,
-      error: true,
-    },
-  });
+  const [events, firstEver, lastEver, totalEver] = await Promise.all([
+    prisma.aIUsageEvent.findMany({
+      where: { createdAt: { gte: since } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        createdAt: true,
+        provider: true,
+        model: true,
+        operation: true,
+        route: true,
+        inputTokens: true,
+        outputTokens: true,
+        totalTokens: true,
+        costKopecks: true,
+        userId: true,
+        botId: true,
+        durationMs: true,
+        status: true,
+        error: true,
+      },
+    }),
+    // Первое событие за всё время — нужно, чтобы показать «учёт ведётся с …»
+    prisma.aIUsageEvent.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    }),
+    prisma.aIUsageEvent.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+    prisma.aIUsageEvent.count(),
+  ]);
 
   const totals = {
     requests: events.length,
@@ -191,5 +203,11 @@ export async function GET(request: NextRequest) {
     topUsers,
     topBots,
     recent,
+    // Метаданные для подписи «учёт ведётся с …»
+    accounting: {
+      firstEventAt: firstEver?.createdAt?.toISOString() ?? null,
+      lastEventAt: lastEver?.createdAt?.toISOString() ?? null,
+      totalEventsAllTime: totalEver,
+    },
   });
 }

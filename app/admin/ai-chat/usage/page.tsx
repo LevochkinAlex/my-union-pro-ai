@@ -13,6 +13,11 @@ type UsageResponse = {
     costKopecks: number;
     errors: number;
   };
+  accounting?: {
+    firstEventAt: string | null;
+    lastEventAt: string | null;
+    totalEventsAllTime: number;
+  };
   byDay: Array<{ date: string; totalTokens: number; costKopecks: number; requests: number }>;
   byModel: Array<{ key: string; totalTokens: number; costKopecks: number; requests: number }>;
   byOperation: Array<{ key: string; totalTokens: number; costKopecks: number; requests: number }>;
@@ -175,7 +180,11 @@ export default function AIUsagePage() {
         <KpiCard
           label="Оценка стоимости"
           value={data ? formatCost(data.totals.costKopecks) : "—"}
-          sub="по тарифам Yandex"
+          sub={
+            data?.accounting?.firstEventAt
+              ? `учёт с ${new Date(data.accounting.firstEventAt).toLocaleDateString("ru-RU")}`
+              : "по тарифам Yandex"
+          }
           loading={loading}
           accent="green"
         />
@@ -355,11 +364,10 @@ export default function AIUsagePage() {
       </div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        Стоимость оценочная: считается локально по тарифам Yandex Foundation Models
-        на момент вызова. Yandex в биллинге отдельно считает кэшированные входные
-        токены (по тому же тарифу), их API usage не возвращает — поэтому наша
-        итоговая сумма обычно совпадает с биллингом Yandex Cloud в пределах
-        нескольких процентов. Точные расходы — в{" "}
+        Стоимость оценочная: считается локально по тарифам Yandex Foundation Models.
+        Runtime-вызовы (чат, виджет, лендинг, улучшение текста, эмбеддинги) логируются
+        автоматически. Для исторических расходов и сверки с фактическим биллингом
+        используйте импорт CSV из{" "}
         <a
           href="https://console.yandex.cloud/billing/detailing"
           target="_blank"
@@ -368,7 +376,12 @@ export default function AIUsagePage() {
         >
           Yandex Cloud Billing
         </a>
-        .
+        {" "}через команду{" "}
+        <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px] dark:bg-gray-800">
+          node scripts/import-yandex-billing-csv.mjs &lt;file.csv&gt;
+        </code>
+        . Скрипт добавляет только разницу между CSV и уже учтённым — повторный
+        запуск идемпотентен.
       </p>
     </div>
   );

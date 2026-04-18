@@ -69,6 +69,10 @@ serviceAccount*.json
 service-account*.json
 *.serviceaccount.json
 
+# Yandex Cloud Billing CSV — персональный экспорт с billing_account_id, не коммитим
+*yandex*billing*.csv
+20[0-9][0-9][0-9][0-9][0-9][0-9]-20[0-9][0-9][0-9][0-9][0-9][0-9].csv
+
 # Uploaded files live only on production server
 /public/uploads/**
 !/public/uploads/**/.gitkeep
