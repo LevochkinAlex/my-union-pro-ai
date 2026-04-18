@@ -122,27 +122,27 @@ export default function AIUsagePage() {
 
   return (
     <div className="space-y-6 min-w-0 w-full">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Аналитика расходов ИИ</h1>
           <p className="mt-1 text-gray-600 dark:text-gray-400">
             Расходы на Yandex Foundation Models в разрезе времени, моделей, пользователей и ботов.
             Каждый вызов чата и embedding логируется автоматически.
           </p>
         </div>
-        <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+        <div className="inline-flex shrink-0 self-start gap-0.5 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
           {[7, 30, 90, 180].map((d) => (
             <button
               key={d}
               type="button"
               onClick={() => setDays(d)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 days === d
                   ? "bg-white shadow-sm text-gray-900 dark:bg-gray-700 dark:text-white"
                   : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
               }`}
             >
-              {d} дней
+              {d} дн.
             </button>
           ))}
         </div>
