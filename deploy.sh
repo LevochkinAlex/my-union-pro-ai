@@ -48,9 +48,10 @@ if [[ "$PUSH_FIRST" == "1" ]]; then
   git push origin main
 fi
 
-ssh_cmd bash -s <<REMOTE
+# Кавычки у heredoc — иначе локальный bash подставляет \$CHROME_PATH и ломает set -u.
+ssh_cmd env VDS_PATH="$VDS_PATH" bash -s <<'REMOTE'
 set -e
-cd $VDS_PATH
+cd "$VDS_PATH"
 
 echo "--- git fetch/reset ---"
 git fetch origin main
@@ -66,7 +67,7 @@ fi
 # Puppeteer не кладёт Chrome в node_modules — без скачанного браузера падают PDF (повестка/протокол профкома).
 echo "--- Puppeteer Chrome (PDF) ---"
 CHROME_PATH=$(node -e "try { console.log(require('puppeteer').executablePath()); } catch (e) { console.log(''); }" 2>/dev/null || true)
-if [ -n "$CHROME_PATH" ] && [ -x "$CHROME_PATH" ]; then
+if [ -n "${CHROME_PATH:-}" ] && [ -x "$CHROME_PATH" ]; then
   echo "OK: $CHROME_PATH"
 else
   echo "Браузер не найден, ставим: npx puppeteer browsers install chrome"
