@@ -63,6 +63,16 @@ else
   echo "--- pnpm install skipped (lockfile unchanged) ---"
 fi
 
+# Puppeteer не кладёт Chrome в node_modules — без скачанного браузера падают PDF (повестка/протокол профкома).
+echo "--- Puppeteer Chrome (PDF) ---"
+CHROME_PATH=$(node -e "try { console.log(require('puppeteer').executablePath()); } catch (e) { console.log(''); }" 2>/dev/null || true)
+if [ -n "$CHROME_PATH" ] && [ -x "$CHROME_PATH" ]; then
+  echo "OK: $CHROME_PATH"
+else
+  echo "Браузер не найден, ставим: npx puppeteer browsers install chrome"
+  npx puppeteer browsers install chrome 2>&1 | tail -25
+fi
+
 echo "--- prisma generate ---"
 pnpm prisma generate 2>&1 | tail -3
 

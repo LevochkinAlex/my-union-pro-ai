@@ -174,6 +174,22 @@ async function resolveChromeExecutablePath(): Promise<string | undefined> {
   return undefined;
 }
 
+/** Сообщение для ответа API в проде, если PDF не собрался из‑за отсутствия Chrome/Puppeteer */
+export function getPdfChromeMissingHint(): string {
+  return (
+    "На сервере не найден браузер для печати PDF (Puppeteer). " +
+    "Администратору: на ВДС из каталога проекта выполнить «npx puppeteer browsers install chrome» " +
+    "или задать PUPPETEER_EXECUTABLE_PATH на системный Chromium/Chrome."
+  );
+}
+
+export function isLikelyMissingChromeForPdf(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return /Chrome не найден|Browser was not found|Could not find Chrome|Failed to launch the browser|No Chrome executable found|PUPPETEER_EXECUTABLE_PATH/i.test(
+    msg
+  );
+}
+
 /**
  * Генерирует PDF из HTML используя Puppeteer
  */

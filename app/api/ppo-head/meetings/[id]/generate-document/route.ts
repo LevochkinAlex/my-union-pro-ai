@@ -4,7 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentType, DocumentStatus, DocumentCategory } from "@prisma/client";
-import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
+import {
+  generatePDFFromHTML,
+  getPdfChromeMissingHint,
+  isLikelyMissingChromeForPdf,
+} from "@/lib/document-templates/renderer";
 import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { clearAllMeetingNotifications, notifyParticipantsAboutProtocolApproval } from "@/lib/notifications";
@@ -364,12 +368,17 @@ export async function POST(
       const fullPath = path.join(publicDir, fileName);
       await fs.writeFile(fullPath, pdfBuffer);
       filePath = `/generated-documents/${fileName}`;
-    } catch (pdfError: any) {
+    } catch (pdfError: unknown) {
       console.error("Ошибка генерации PDF:", pdfError);
+      const devDetail = pdfError instanceof Error ? pdfError.message : String(pdfError);
+      const prodDetail =
+        process.env.NODE_ENV !== "development" && isLikelyMissingChromeForPdf(pdfError)
+          ? getPdfChromeMissingHint()
+          : undefined;
       return NextResponse.json(
         {
           error: "Не удалось сформировать PDF документа",
-          details: process.env.NODE_ENV === "development" ? (pdfError?.message || String(pdfError)) : undefined,
+          details: process.env.NODE_ENV === "development" ? devDetail : prodDetail,
         },
         { status: 500 }
       );

@@ -47,6 +47,7 @@ pm2 logs my-union-pro --lines 50
 
 ## Типовые проблемы
 
+- **PDF повестки/протокола заседания профкома (500)** — на ВДС нет Chrome для Puppeteer. Один раз: `cd /opt/my-union-pro && npx puppeteer browsers install chrome` (или положите системный Chromium и задайте `PUPPETEER_EXECUTABLE_PATH` в `.env.local`). Скрипт `./deploy.sh` сам ставит браузер, если его ещё нет.
 - **502** — приложение не поднялось: `pm2 logs my-union-pro --err`
 - **WebSocket не подключается** — проверь `NEXT_PUBLIC_SOCKET_URL` и `pm2 list` (должен быть `my-union-socket` online)
 - **Prisma migration not applied** — запусти вручную `pnpm prisma migrate deploy`
