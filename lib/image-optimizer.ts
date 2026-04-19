@@ -173,6 +173,78 @@ export async function optimizeWithPreset(
 }
 
 /**
+ * Логотип партнёра: всегда WebP (ресайз по пресету avatar, сжатие).
+ * При сбое основного пайплайна — запасной encode через sharp.webp.
+ */
+export async function optimizePartnerLogoToWebp(input: Buffer): Promise<OptimizedImage> {
+  try {
+    return await optimizeImage(input, { ...IMAGE_PRESETS.avatar, format: "webp" });
+  } catch (e) {
+    console.warn("[image-optimizer] optimizePartnerLogoToWebp fallback:", e);
+    const originalSize = input.length;
+    const { maxWidth, maxHeight, quality } = IMAGE_PRESETS.avatar;
+    const metadata = await sharp(input).metadata();
+    let pipeline = sharp(input).rotate();
+    const needsResize =
+      (metadata.width && metadata.width > maxWidth) ||
+      (metadata.height && metadata.height > maxHeight);
+    if (needsResize) {
+      pipeline = pipeline.resize(maxWidth, maxHeight, {
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+    const outputBuffer = await pipeline.webp({ quality, effort: 4, smartSubsample: true }).toBuffer();
+    const outMeta = await sharp(outputBuffer).metadata();
+    return {
+      buffer: outputBuffer,
+      width: outMeta.width || 0,
+      height: outMeta.height || 0,
+      format: "webp",
+      size: outputBuffer.length,
+      originalSize,
+      savings: Math.round((1 - outputBuffer.length / originalSize) * 100),
+    };
+  }
+}
+
+/**
+ * Баннер площадки партнёра (16:9 / широкий): всегда WebP, пресет cover (1920×1080 max).
+ * При сбое основного пайплайна — запасной encode через sharp.webp.
+ */
+export async function optimizePartnerVenueBannerToWebp(input: Buffer): Promise<OptimizedImage> {
+  try {
+    return await optimizeImage(input, { ...IMAGE_PRESETS.cover, format: "webp" });
+  } catch (e) {
+    console.warn("[image-optimizer] optimizePartnerVenueBannerToWebp fallback:", e);
+    const originalSize = input.length;
+    const { maxWidth, maxHeight, quality } = IMAGE_PRESETS.cover;
+    const metadata = await sharp(input).metadata();
+    let pipeline = sharp(input).rotate();
+    const needsResize =
+      (metadata.width && metadata.width > maxWidth) ||
+      (metadata.height && metadata.height > maxHeight);
+    if (needsResize) {
+      pipeline = pipeline.resize(maxWidth, maxHeight, {
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+    const outputBuffer = await pipeline.webp({ quality, effort: 4, smartSubsample: true }).toBuffer();
+    const outMeta = await sharp(outputBuffer).metadata();
+    return {
+      buffer: outputBuffer,
+      width: outMeta.width || 0,
+      height: outMeta.height || 0,
+      format: "webp",
+      size: outputBuffer.length,
+      originalSize,
+      savings: Math.round((1 - outputBuffer.length / originalSize) * 100),
+    };
+  }
+}
+
+/**
  * Создаёт несколько версий изображения
  */
 export async function createImageVariants(

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { ensurePartner } from "@/lib/partner-auth";
 import { Prisma } from "@prisma/client";
+import { deletePartnerVenueBannerStoredFile } from "@/lib/partner-venue-banner-file";
 
 type PatchBody = {
   name?: unknown;
@@ -104,7 +105,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if ("website" in body) data.website = optionalString(body.website) ?? null;
   if ("phone" in body) data.phone = optionalString(body.phone) ?? null;
   if ("email" in body) data.email = optionalString(body.email) ?? null;
-  if ("bannerUrl" in body) data.bannerUrl = optionalString(body.bannerUrl) ?? null;
+  if ("bannerUrl" in body) {
+    const oldUrl = existing.bannerUrl ?? null;
+    if (body.bannerUrl === null) {
+      await deletePartnerVenueBannerStoredFile(oldUrl);
+      data.bannerUrl = null;
+    } else if (typeof body.bannerUrl === "string") {
+      const trimmed = body.bannerUrl.trim() || null;
+      if (trimmed !== oldUrl) {
+        await deletePartnerVenueBannerStoredFile(oldUrl);
+      }
+      data.bannerUrl = trimmed;
+    }
+  }
   if ("bannerAlt" in body) data.bannerAlt = optionalString(body.bannerAlt) ?? null;
   if ("promoCode" in body) data.promoCode = optionalString(body.promoCode) ?? null;
   if ("promoLabel" in body) data.promoLabel = optionalString(body.promoLabel) ?? null;
@@ -150,6 +163,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
   }
 
   try {
+    await deletePartnerVenueBannerStoredFile(existing.bannerUrl);
     await withPrismaRetry(() => prisma.partnerVenue.delete({ where: { id } }));
     return NextResponse.json({ ok: true });
   } catch (e) {

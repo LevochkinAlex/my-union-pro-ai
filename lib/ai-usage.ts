@@ -136,11 +136,3 @@ export async function logAIUsage(input: LogAIUsageInput): Promise<void> {
     console.warn("[ai-usage] failed to persist event:", err);
   }
 }
-
-/** Человекочитаемая строка стоимости из копеек */
-export function formatKopecks(kopecks: number): string {
-  const rub = kopecks / 100;
-  if (rub >= 1000) return rub.toFixed(0) + " ₽";
-  if (rub >= 1) return rub.toFixed(2) + " ₽";
-  return (rub * 100).toFixed(0) + " коп.";
-}

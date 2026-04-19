@@ -4,6 +4,7 @@
  */
 
 import { Queue, QueueEvents, Job } from "bullmq";
+import { getRedisOptions } from "./redis";
 
 // Queue names
 export const DOCUMENT_PROCESSING_QUEUE = "document-processing";
@@ -14,18 +15,19 @@ type BullQueue = Queue<DocumentProcessingJob, any, string>;
 let documentQueue: BullQueue | null = null;
 let documentQueueEvents: QueueEvents | null = null;
 
-function getConnectionOptions() {
-  const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
-  return {
-    connection: {
-      url: redisUrl,
-    },
-  };
+function getQueueConnection() {
+  const opts = getRedisOptions();
+  if (!opts) {
+    throw new Error(
+      "[Queue] Redis отключён (REDIS_URL=). Очередь документов недоступна — задайте REDIS_URL или уберите пустое значение.",
+    );
+  }
+  return opts;
 }
 
 export function getDocumentQueue(): BullQueue {
   if (!documentQueue) {
-    const connection = getConnectionOptions().connection;
+    const connection = getQueueConnection();
 
     documentQueue = new Queue(DOCUMENT_PROCESSING_QUEUE, {
       connection,

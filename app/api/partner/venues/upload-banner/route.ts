@@ -3,7 +3,7 @@ import path from "path";
 import { mkdir, writeFile } from "fs/promises";
 import { ensurePartner } from "@/lib/partner-auth";
 import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
-import { optimizeWithPreset, getMimeType } from "@/lib/image-optimizer";
+import { optimizePartnerVenueBannerToWebp, getMimeType } from "@/lib/image-optimizer";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 
 if (typeof window === "undefined") {
@@ -53,18 +53,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let optimizedBuffer = buffer;
-    let optimizedMime = mimeType;
-    let fileExtension = originalName.split(".").pop() || "jpg";
-
-    try {
-      const optimized = await optimizeWithPreset(buffer, "cover");
-      optimizedBuffer = optimized.buffer;
-      optimizedMime = getMimeType(optimized.format);
-      fileExtension = optimized.format;
-    } catch (optError) {
-      console.error("[partner/venues/upload-banner] Optimization failed:", optError);
-    }
+    const optimized = await optimizePartnerVenueBannerToWebp(buffer);
+    const optimizedBuffer = optimized.buffer;
+    const optimizedMime = getMimeType("webp");
+    const fileExtension = "webp";
 
     if (!isVDSStorageConfigured()) {
       const base64 = optimizedBuffer.toString("base64");

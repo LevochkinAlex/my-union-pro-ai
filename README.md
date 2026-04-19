@@ -52,11 +52,17 @@ NEXT_PUBLIC_SOCKET_URL="http://localhost:3005"
 # 4. Сгенерировать Prisma Client
 pnpm prisma:generate
 
-# 5. Запустить
+# 5. (Опционально) Redis — кэш и фоновые очереди; без него приложение работает, но в логах будут попытки подключения к localhost:6379.
+#    Либо запустите: brew install redis && redis-server
+#    Либо отключите явно в .env.local строкой: REDIS_URL=
+
+# 6. Запустить
 pnpm dev
 ```
 
 Открыть http://localhost:3004
+
+Если `pnpm` не найден в PATH: `corepack enable` или `npx pnpm install` / `npx pnpm dev`.
 
 ---
 

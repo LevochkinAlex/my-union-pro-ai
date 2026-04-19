@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { Prisma } from "@prisma/client";
+import { deletePartnerLogoStoredFile } from "@/lib/partner-logo-file";
 
 function prismaErrorToMessage(e: unknown): string {
   if (e instanceof Prisma.PrismaClientKnownRequestError) {
@@ -17,7 +18,15 @@ function prismaErrorToMessage(e: unknown): string {
     return `Ошибка БД (${e.code}). ${e.meta ? JSON.stringify(e.meta) : ""}`.trim();
   }
   if (e instanceof Prisma.PrismaClientValidationError) {
-    return "Некорректные данные для сохранения.";
+    const msg = e.message;
+    const staleClientHint =
+      /Unknown argument [`']?(ogrn|kpp|logoUrl)|Unknown field [`']?(ogrn|kpp|logoUrl)/i.test(msg)
+        ? " Частая причина — устаревший Prisma Client после обновления схемы: выполните npx prisma generate и перезапустите dev-сервер."
+        : "";
+    if (process.env.NODE_ENV === "development") {
+      return `Некорректные данные для сохранения.${staleClientHint}\n${msg}`;
+    }
+    return `Некорректные данные для сохранения.${staleClientHint}`;
   }
   if (e instanceof Error) {
     if (process.env.NODE_ENV === "development") {
@@ -48,7 +57,10 @@ type Body = {
   name?: string;
   description?: string;
   website?: string;
+  logoUrl?: string | null;
   inn?: string;
+  ogrn?: string;
+  kpp?: string;
   address?: string;
   phone?: string;
   email?: string;
@@ -133,7 +145,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (name !== undefined) data.name = name;
   if (body.description !== undefined) data.description = str(body.description);
   if (body.website !== undefined) data.website = str(body.website);
+  if (body.logoUrl !== undefined) {
+    const existing = await prisma.partner.findUnique({
+      where: { id },
+      select: { logoUrl: true },
+    });
+    const oldUrl = existing?.logoUrl ?? null;
+
+    if (body.logoUrl === null) {
+      await deletePartnerLogoStoredFile(oldUrl);
+      data.logoUrl = null;
+    } else if (typeof body.logoUrl === "string") {
+      const trimmed = body.logoUrl.trim() || null;
+      if (trimmed !== oldUrl) {
+        await deletePartnerLogoStoredFile(oldUrl);
+      }
+      data.logoUrl = trimmed;
+    }
+  }
   if (body.inn !== undefined) data.inn = str(body.inn);
+  if (body.ogrn !== undefined) data.ogrn = str(body.ogrn);
+  if (body.kpp !== undefined) data.kpp = str(body.kpp);
   if (body.address !== undefined) data.address = str(body.address);
   if (body.phone !== undefined) data.phone = str(body.phone);
   if (body.email !== undefined) data.email = str(body.email);

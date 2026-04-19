@@ -1,9 +1,8 @@
 /**
- * BestBenefits Organization API — создание пользователя и смена статуса.
+ * BestBenefits Organization API — создание пользователя.
  *
  * Актуальные URL (MyUnion), не использовать /api/profsoyuzy:
  * - POST https://bestbenefits.ru/api/myunion/create_user
- * - POST https://bestbenefits.ru/api/myunion/change_status
  */
 
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
@@ -12,7 +11,6 @@ import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 export const BB_MYUNION_ORG_API_BASE = "https://bestbenefits.ru/api/myunion";
 
 export const BB_MYUNION_CREATE_USER_URL = `${BB_MYUNION_ORG_API_BASE}/create_user`;
-export const BB_MYUNION_CHANGE_STATUS_URL = `${BB_MYUNION_ORG_API_BASE}/change_status`;
 
 function resolveOrgApiBase(): string {
   const fallback = BB_MYUNION_ORG_API_BASE;
@@ -44,21 +42,6 @@ interface CreateUserResponse {
     city_id?: number | null;
     status: string;
     created_at: string;
-  };
-}
-
-interface ChangeStatusParams {
-  id: string;
-  city?: number | null;
-}
-
-interface ChangeStatusResponse {
-  status: string;
-  message: string;
-  data?: {
-    id: string;
-    status: string;
-    city?: number | null;
   };
 }
 
@@ -142,30 +125,6 @@ export async function createBestBenefitsUser(
     return data;
   } catch (error) {
     console.error("[BestBenefits Users] Error creating user:", error);
-    throw error;
-  }
-}
-
-/**
- * Change user status in BestBenefits → POST .../myunion/change_status
- */
-export async function changeBestBenefitsUserStatus(
-  params: ChangeStatusParams,
-): Promise<ChangeStatusResponse> {
-  try {
-    const data = (await postToOrganizationApi("/change_status", {
-      id: params.id,
-      city: params.city ?? null,
-    })) as ChangeStatusResponse;
-
-    console.log(
-      "[BestBenefits Users] Status changed via myunion API:",
-      BB_MYUNION_CHANGE_STATUS_URL,
-    );
-    console.log("[BestBenefits Users] User:", data.data?.id);
-    return data;
-  } catch (error) {
-    console.error("[BestBenefits Users] Error changing status:", error);
     throw error;
   }
 }

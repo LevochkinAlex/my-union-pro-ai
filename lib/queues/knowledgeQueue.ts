@@ -131,6 +131,11 @@ export function getKnowledgeQueue() {
   }
 
   const connection = getRedisOptions();
+  if (!connection) {
+    throw new Error(
+      "[knowledgeQueue] Redis не настроен. Задайте REDIS_URL или уберите пустой REDIS_URL= для дефолта localhost:6379.",
+    );
+  }
   const queue = createQueue(connection);
   globalThis.__knowledgeQueue = queue;
 

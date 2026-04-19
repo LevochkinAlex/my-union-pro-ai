@@ -75,23 +75,3 @@ export function calculateDistanceKm(
 function degreesToRadians(value: number) {
   return (value * Math.PI) / 180;
 }
-
-export function findNearestCity(
-  position: { lat: number; lng: number },
-  cities: DiscountCity[]
-): DiscountCity | null {
-  let minDistance = Infinity;
-  let nearest: DiscountCity | null = null;
-
-  for (const city of cities) {
-    if (!city.coordinates) continue;
-    const distance = calculateDistanceKm(position, city.coordinates);
-    if (distance < minDistance) {
-      minDistance = distance;
-      nearest = city;
-    }
-  }
-
-  return nearest;
-}
-

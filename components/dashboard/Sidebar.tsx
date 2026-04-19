@@ -11,6 +11,7 @@ import ViewModeSwitch from "./ViewModeSwitch";
 import ChatUnreadBadge from "./ChatUnreadBadge";
 import NotificationUnreadBadge from "./NotificationUnreadBadge";
 import { useTour } from "./TourGuideProvider";
+import { withStableNavIconKey } from "@/lib/nav-icon";
 
 interface NavItem {
   href: string;
@@ -107,6 +108,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
           
           {/* Menu items */}
           {items.map((item) => {
+            const itemKey = `${item.href}::${item.label}`;
 
             const hasSubItems = item.subItems && item.subItems.length > 0;
             
@@ -133,7 +135,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
             const isExpanded = expandedItems.includes(item.href) || isAutoExpanded;
 
             return (
-              <div key={item.href}>
+              <div key={itemKey}>
                 {/* Main item */}
                 {hasSubItems ? (
                   <button
@@ -171,13 +173,13 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                     title={isCollapsed ? item.label : undefined}
                   >
                     <span className="flex-shrink-0 relative">
-                      {item.icon}
+                      {withStableNavIconKey(item.icon, item.href)}
                       {(item.href === '/dashboard/chat' || item.href === '/dashboard/chats/ppo-head') && <ChatUnreadBadge />}
                       {item.href === '/dashboard/notifications' && <NotificationUnreadBadge />}
                     </span>
                     {!isCollapsed && (
-                      <>
-                        <span className="flex-1 text-left">{item.label}</span>
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-1">
+                        <span className="min-w-0 flex-1 text-left">{item.label}</span>
                         <svg
                           className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none ${isExpanded ? "rotate-180" : ""}`}
                           fill="none"
@@ -187,7 +189,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
-                      </>
+                      </span>
                     )}
                   </button>
                 ) : (
@@ -206,7 +208,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                     title={isCollapsed ? item.label : undefined}
                   >
                     <span className="flex-shrink-0 relative">
-                      {item.icon}
+                      {withStableNavIconKey(item.icon, item.href)}
                       {(item.href === '/dashboard/chat' || item.href === '/dashboard/chats/ppo-head') && <ChatUnreadBadge />}
                       {item.href === '/dashboard/notifications' && <NotificationUnreadBadge />}
                     </span>
@@ -246,7 +248,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
                             return (
                               <Link
-                                key={subItem.href}
+                                key={`${subItem.href}::${subItem.label}`}
                                 href={subItem.href}
                                 prefetch={true}
                                 className={`block rounded-md px-2.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
@@ -331,7 +333,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
                     {/* Dropdown menu */}
                     {showMoreMenu && (
-                      <>
+                      <div className="contents">
                         <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
                         <div className="absolute left-full bottom-0 ml-2 z-50 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1">
                           {/* Profile */}
@@ -372,7 +374,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                             <span>Выйти</span>
                           </button>
                         </div>
-                      </>
+                      </div>
                     )}
                   </div>
                 </div>

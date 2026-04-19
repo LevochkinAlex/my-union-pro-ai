@@ -9,6 +9,7 @@ import { LogoIcon } from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useTour } from "@/components/dashboard/TourGuideProvider";
 import { safeFetchJson } from "@/lib/safe-fetch";
+import { withStableNavIconKey } from "@/lib/nav-icon";
 
 interface NavItem {
   href: string;
@@ -374,6 +375,7 @@ export default function MobileMenu({
             )}
             {/* Menu items - исключаем "Настройки" и "Профиль", они будут внизу */}
             {items.filter(item => item.href !== "/dashboard/settings" && item.href !== "/admin/settings" && item.href !== "/dashboard/profile").map((item) => {
+              const itemKey = `${item.href}::${item.label}`;
               const isExpanded = expandedItems.includes(item.href);
               const hasSubItems = item.subItems && item.subItems.length > 0;
               const isActive = isMainItemActive(item);
@@ -382,9 +384,9 @@ export default function MobileMenu({
                 : false;
 
               return (
-                <div key={item.href} className="space-y-1">
+                <div key={itemKey} className="space-y-1">
                   {hasSubItems ? (
-                    <>
+                    <div className="contents">
                       <button
                         type="button"
                         aria-expanded={isExpanded}
@@ -395,7 +397,7 @@ export default function MobileMenu({
                             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         }`}
                       >
-                        {item.icon}
+                        {withStableNavIconKey(item.icon, item.href)}
                         <span className="flex-1 text-left">{item.label}</span>
                         <svg
                           className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none ${
@@ -433,7 +435,7 @@ export default function MobileMenu({
                                 const isSubActive = isSubItemActive(subItem);
                                 return (
                                   <Link
-                                    key={subItem.href}
+                                    key={`${subItem.href}::${subItem.label}`}
                                     href={subItem.href}
                                     prefetch={false}
                                     onClick={onClose}
@@ -451,7 +453,7 @@ export default function MobileMenu({
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </>
+                    </div>
                   ) : (
                     <Link
                       href={item.href}
@@ -463,7 +465,7 @@ export default function MobileMenu({
                           : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                       }`}
                     >
-                      {item.icon}
+                      {withStableNavIconKey(item.icon, item.href)}
                       {item.label}
                     </Link>
                   )}
@@ -535,9 +537,11 @@ export default function MobileMenu({
                   className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   title="Настройки"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <g>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </g>
                   </svg>
                 </Link>
               )}

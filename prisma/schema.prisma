@@ -573,8 +573,11 @@ model Partner {
   name        String
   description String? @db.Text
   website     String?
+  logoUrl     String? @db.Text
 
   inn     String?
+  ogrn    String? // ОГРН юр. лица (13 цифр) или ОГРНИП (15)
+  kpp     String? // КПП (9 цифр), только для юр. лиц
   address String? @db.Text
   phone   String?
   email   String?

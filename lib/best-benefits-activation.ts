@@ -224,55 +224,6 @@ export async function activateBestBenefitsDiscount(
 }
 
 /**
- * Check if discount is activated for user
- * 
- * ✅ ИСПОЛЬЗУЕТСЯ ПРАВИЛЬНЫЙ ENDPOINT: GET /api/received
- */
-export async function checkDiscountActivation(
-  bestBenefitsUserId: string,
-  discountId: number,
-  password?: string
-): Promise<boolean> {
-  try {
-    // Use personal token if password provided
-    let token: string;
-    
-    if (password) {
-      token = await getUserBestBenefitsToken(bestBenefitsUserId, password);
-    } else {
-      // НЕ используем organization token - это может вернуть скидки от организации (p-crusader@yandex.ru)
-      console.warn("[BestBenefits Activation] ⚠️ No password provided - cannot check activation without personal token");
-      return false;
-    }
-
-    // ✅ Используем правильный endpoint согласно документации
-    const response = await fetch(
-      `${ACTIVATION_API_BASE}/received`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      }
-    );
-
-    if (!response.ok) {
-      console.warn("[BestBenefits Activation] Check failed:", response.status);
-      return false;
-    }
-
-    const data = await response.json();
-    const activatedProducts = data.data || [];
-    
-    return activatedProducts.some((p: any) => p.id === discountId);
-  } catch (error) {
-    console.error("[BestBenefits Activation] Check error:", error);
-    return false;
-  }
-}
-
-/**
  * Get all activated products for a user from BestBenefits
  * Returns array of activated discount IDs with promo codes
  * 

@@ -1,17 +1,28 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
+import PartnerLogoUpload from "@/components/admin/PartnerLogoUpload";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
+import {
+  arePartnerRequisitesValid,
+  partnerRequisitesDigits,
+  PARTNER_INN_MAX,
+  PARTNER_KPP_MAX,
+  PARTNER_OGRN_MAX,
+} from "@/lib/partner-requisites";
 
 type PartnerForm = {
   name: string;
   description: string;
   website: string;
+  logoUrl: string;
   inn: string;
+  ogrn: string;
+  kpp: string;
   address: string;
   phone: string;
   email: string;
@@ -29,7 +40,10 @@ const emptyForm = (): PartnerForm => ({
   name: "",
   description: "",
   website: "",
+  logoUrl: "",
   inn: "",
+  ogrn: "",
+  kpp: "",
   address: "",
   phone: "",
   email: "",
@@ -59,6 +73,11 @@ export default function PartnerEditPage() {
   const [sendingInvite, setSendingInvite] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const requisitesValid = useMemo(
+    () => arePartnerRequisitesValid(formData.inn, formData.ogrn, formData.kpp),
+    [formData.inn, formData.ogrn, formData.kpp]
+  );
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -79,7 +98,10 @@ export default function PartnerEditPage() {
         name: p.name ?? "",
         description: p.description ?? "",
         website: p.website ?? "",
-        inn: p.inn ?? "",
+        logoUrl: typeof p.logoUrl === "string" ? p.logoUrl : "",
+        inn: partnerRequisitesDigits(String(p.inn ?? ""), PARTNER_INN_MAX),
+        ogrn: partnerRequisitesDigits(String(p.ogrn ?? ""), PARTNER_OGRN_MAX),
+        kpp: partnerRequisitesDigits(String(p.kpp ?? ""), PARTNER_KPP_MAX),
         address: p.address ?? "",
         phone: p.phone ?? "",
         email: p.email ?? "",
@@ -110,8 +132,16 @@ export default function PartnerEditPage() {
       alertError("Укажите название партнёра.", "Партнеры");
       return;
     }
+    if (!arePartnerRequisitesValid(formData.inn, formData.ogrn, formData.kpp)) {
+      alertError(
+        "ИНН: 10 или 12 цифр (или пусто). ОГРН: 13 или 15 цифр (или пусто). КПП: 9 цифр (или пусто). Допускаются только цифры.",
+        "Партнеры"
+      );
+      return;
+    }
     setSaving(true);
     try {
+      const trimmedLogo = formData.logoUrl.trim();
       const res = await fetch(`/api/admin/partners/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -119,7 +149,12 @@ export default function PartnerEditPage() {
           name,
           description: formData.description.trim() || null,
           website: formData.website.trim() || null,
-          inn: formData.inn.trim() || null,
+          // Не передаём logoUrl, если пусто — иначе Prisma получает logoUrl: null при каждом сохранении
+          // (поле есть только в свежем client после prisma generate + перезапуск dev).
+          ...(trimmedLogo ? { logoUrl: trimmedLogo } : {}),
+          inn: formData.inn || null,
+          ogrn: formData.ogrn || null,
+          kpp: formData.kpp || null,
           address: formData.address.trim() || null,
           phone: formData.phone.trim() || null,
           email: formData.email.trim() || null,
@@ -337,9 +372,16 @@ export default function PartnerEditPage() {
           />
         </div>
 
+        <PartnerLogoUpload
+          partnerId={id}
+          value={formData.logoUrl}
+          onChange={(logoUrl) => setFormData((prev) => ({ ...prev, logoUrl }))}
+          disabled={saving}
+        />
+
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
           <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-white">Реквизиты юр. лица (фирмы/партнера)</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div>
               <label htmlFor="edit-partner-inn" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 ИНН
@@ -347,9 +389,78 @@ export default function PartnerEditPage() {
               <input
                 id="edit-partner-inn"
                 type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={PARTNER_INN_MAX}
                 value={formData.inn}
-                onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    inn: partnerRequisitesDigits(e.target.value, PARTNER_INN_MAX),
+                  })
+                }
+                className={`mt-1 block w-full rounded-md border px-3 py-2 dark:border-gray-600 dark:bg-gray-700 ${
+                  formData.inn.length > 0 &&
+                  formData.inn.length !== 10 &&
+                  formData.inn.length !== 12
+                    ? "border-amber-500 ring-1 ring-amber-500/30 dark:border-amber-600"
+                    : "border-gray-300"
+                }`}
+                placeholder="10 или 12 цифр"
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-partner-ogrn" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                ОГРН
+              </label>
+              <input
+                id="edit-partner-ogrn"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={PARTNER_OGRN_MAX}
+                value={formData.ogrn}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    ogrn: partnerRequisitesDigits(e.target.value, PARTNER_OGRN_MAX),
+                  })
+                }
+                className={`mt-1 block w-full rounded-md border px-3 py-2 dark:border-gray-600 dark:bg-gray-700 ${
+                  formData.ogrn.length > 0 &&
+                  formData.ogrn.length !== 13 &&
+                  formData.ogrn.length !== 15
+                    ? "border-amber-500 ring-1 ring-amber-500/30 dark:border-amber-600"
+                    : "border-gray-300"
+                }`}
+                placeholder="13 или 15 цифр"
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-partner-kpp" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                КПП
+              </label>
+              <input
+                id="edit-partner-kpp"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={PARTNER_KPP_MAX}
+                value={formData.kpp}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    kpp: partnerRequisitesDigits(e.target.value, PARTNER_KPP_MAX),
+                  })
+                }
+                className={`mt-1 block w-full rounded-md border px-3 py-2 dark:border-gray-600 dark:bg-gray-700 ${
+                  formData.kpp.length > 0 && formData.kpp.length !== 9
+                    ? "border-amber-500 ring-1 ring-amber-500/30 dark:border-amber-600"
+                    : "border-gray-300"
+                }`}
+                placeholder="9 цифр"
                 disabled={saving}
               />
             </div>
@@ -545,7 +656,7 @@ export default function PartnerEditPage() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={!formData.name.trim() || saving}
+          disabled={!formData.name.trim() || !requisitesValid || saving}
           className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? "Сохранение…" : "Сохранить"}

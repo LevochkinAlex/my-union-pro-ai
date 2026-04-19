@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { withStableNavIconKey } from "@/lib/nav-icon";
 import { usePathname } from "next/navigation";
 
 interface NavItem {
@@ -31,7 +32,7 @@ export default function SidebarNav({ items }: { items: NavItem[] }) {
                 : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
             }`}
           >
-            {item.icon}
+            {withStableNavIconKey(item.icon, item.href)}
             {item.label}
           </Link>
         );

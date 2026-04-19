@@ -57,6 +57,10 @@ async function getRedisClient(): Promise<Redis | null> {
     const { default: Redis } = await import("ioredis");
     const { getRedisOptions } = await import("./redis");
     const options = getRedisOptions();
+    if (!options) {
+      connectPromise = null;
+      return null;
+    }
     redisClient = new Redis({
       ...options,
       lazyConnect: true,

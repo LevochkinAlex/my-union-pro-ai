@@ -1,4 +1,4 @@
-import { cacheGet, cacheSet } from "./cache";
+import { cacheGet } from "./cache";
 
 interface PerformanceMetric {
   endpoint: string;
@@ -11,42 +11,7 @@ interface PerformanceMetric {
 }
 
 const METRICS_KEY = "performance:metrics";
-const MAX_METRICS = 1000; // Храним последние 1000 метрик
 const SLOW_QUERY_THRESHOLD = 500; // 500ms
-
-/**
- * Логирование метрики производительности (внутреннее, не экспортируется наружу).
- */
-async function logPerformanceMetric(metric: PerformanceMetric) {
-  try {
-    // Логируем медленные запросы
-    if (metric.duration > SLOW_QUERY_THRESHOLD) {
-      console.warn(
-        `[Performance] Slow query: ${metric.method} ${metric.endpoint} took ${metric.duration}ms`,
-        {
-          statusCode: metric.statusCode,
-          cacheHit: metric.cacheHit,
-          userId: metric.userId,
-        }
-      );
-    }
-
-    // Сохраняем метрику в Redis (опционально, для анализа)
-    const metrics = await getMetrics();
-    metrics.push(metric);
-
-    // Ограничиваем количество метрик
-    if (metrics.length > MAX_METRICS) {
-      metrics.shift(); // Удаляем старые метрики
-    }
-
-    // Сохраняем в кеш (TTL 1 час)
-    await cacheSet(METRICS_KEY, metrics, 3600);
-  } catch (error) {
-    // Не прерываем выполнение при ошибке логирования
-    console.error("[Performance] Error logging metric:", error);
-  }
-}
 
 /**
  * Получить метрики производительности (внутреннее, используется getPerformanceStats).

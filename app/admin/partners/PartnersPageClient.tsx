@@ -1,10 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
 import { alertError, alertSuccess } from "@/lib/alert";
+import {
+  arePartnerRequisitesValid,
+  isLooseEmailValid,
+  isPartnerInnComplete,
+  partnerRequisitesDigits,
+  PARTNER_INN_MAX,
+  PARTNER_KPP_MAX,
+  PARTNER_OGRN_MAX,
+} from "@/lib/partner-requisites";
 
 const PAGE_SIZE = 20;
 
@@ -13,6 +22,8 @@ type PartnerForm = {
   description: string;
   website: string;
   inn: string;
+  ogrn: string;
+  kpp: string;
   address: string;
   phone: string;
   email: string;
@@ -31,6 +42,8 @@ export type PartnerRow = {
   description: string | null;
   website: string | null;
   inn: string | null;
+  ogrn: string | null;
+  kpp: string | null;
   address: string | null;
   phone: string | null;
   email: string | null;
@@ -53,6 +66,8 @@ const emptyForm = (): PartnerForm => ({
   description: "",
   website: "",
   inn: "",
+  ogrn: "",
+  kpp: "",
   address: "",
   phone: "",
   email: "",
@@ -94,8 +109,19 @@ export default function PartnersPageClient({
   const skipFirstEmptySearchFetch = useRef(initialTotal > 0);
 
   const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState<PartnerForm>(emptyForm);
+  /** Явный lazy-init, чтобы состояние всегда было объектом формы (не ссылкой на factory). */
+  const [formData, setFormData] = useState<PartnerForm>(() => emptyForm());
   const [saving, setSaving] = useState(false);
+
+  /** Модалка «Создание»: как название — пока не заполнены обязательные поля, «Сохранить» неактивна */
+  const createFormCanSave = useMemo(() => {
+    if (!formData.name.trim()) return false;
+    if (!isPartnerInnComplete(formData.inn) || !arePartnerRequisitesValid(formData.inn, formData.ogrn, formData.kpp)) {
+      return false;
+    }
+    if (!isLooseEmailValid(formData.email)) return false;
+    return true;
+  }, [formData.name, formData.inn, formData.ogrn, formData.kpp, formData.email]);
 
   const loadPartners = useCallback(async (pageNum: number, searchQuery: string) => {
     setLoading(true);
@@ -165,9 +191,22 @@ export default function PartnersPageClient({
   };
 
   const handleSave = async () => {
+    if (!createFormCanSave) return;
     const name = formData.name.trim();
     if (!name) {
       alertError("Укажите название партнёра.", "Партнеры");
+      return;
+    }
+    if (!isPartnerInnComplete(formData.inn) || !arePartnerRequisitesValid(formData.inn, formData.ogrn, formData.kpp)) {
+      alertError(
+        "Укажите ИНН: 10 или 12 цифр. ОГРН: 13 или 15 цифр (или пусто). КПП: 9 цифр (или пусто). Допускаются только цифры.",
+        "Партнеры"
+      );
+      return;
+    }
+    const emailTrim = formData.email.trim();
+    if (!isLooseEmailValid(formData.email)) {
+      alertError("Укажите корректный email в поле «Email» (реквизиты юр. лица).", "Партнеры");
       return;
     }
     setSaving(true);
@@ -179,10 +218,12 @@ export default function PartnersPageClient({
           name,
           description: formData.description.trim() || undefined,
           website: formData.website.trim() || undefined,
-          inn: formData.inn.trim() || undefined,
+          inn: formData.inn.trim(),
+          ogrn: formData.ogrn.trim() || undefined,
+          kpp: formData.kpp.trim() || undefined,
           address: formData.address.trim() || undefined,
           phone: formData.phone.trim() || undefined,
-          email: formData.email.trim() || undefined,
+          email: emailTrim.toLowerCase(),
           contactLastName: formData.contactLastName.trim() || undefined,
           contactFirstName: formData.contactFirstName.trim() || undefined,
           contactMiddleName: formData.contactMiddleName.trim() || undefined,
@@ -470,18 +511,88 @@ export default function PartnersPageClient({
                     <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-white">
                       Реквизиты юр. лица (фирмы/партнера)
                     </h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                       <div>
                         <label htmlFor="partner-inn" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          ИНН
+                          ИНН *
                         </label>
                         <input
                           id="partner-inn"
                           type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={PARTNER_INN_MAX}
                           value={formData.inn}
-                          onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
-                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                          placeholder="10 цифр"
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              inn: partnerRequisitesDigits(e.target.value, PARTNER_INN_MAX),
+                            })
+                          }
+                          className={`mt-1 block w-full rounded-md border px-3 py-2 dark:border-gray-600 dark:bg-gray-700 ${
+                            formData.inn.length > 0 &&
+                            formData.inn.length !== 10 &&
+                            formData.inn.length !== 12
+                              ? "border-amber-500 ring-1 ring-amber-500/30 dark:border-amber-600"
+                              : "border-gray-300"
+                          }`}
+                          placeholder="10 или 12 цифр"
+                          disabled={saving}
+                          required
+                          aria-required
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="partner-ogrn" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          ОГРН
+                        </label>
+                        <input
+                          id="partner-ogrn"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={PARTNER_OGRN_MAX}
+                          value={formData.ogrn}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              ogrn: partnerRequisitesDigits(e.target.value, PARTNER_OGRN_MAX),
+                            })
+                          }
+                          className={`mt-1 block w-full rounded-md border px-3 py-2 dark:border-gray-600 dark:bg-gray-700 ${
+                            formData.ogrn.length > 0 &&
+                            formData.ogrn.length !== 13 &&
+                            formData.ogrn.length !== 15
+                              ? "border-amber-500 ring-1 ring-amber-500/30 dark:border-amber-600"
+                              : "border-gray-300"
+                          }`}
+                          placeholder="13 или 15 цифр"
+                          disabled={saving}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="partner-kpp" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          КПП
+                        </label>
+                        <input
+                          id="partner-kpp"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={PARTNER_KPP_MAX}
+                          value={formData.kpp}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              kpp: partnerRequisitesDigits(e.target.value, PARTNER_KPP_MAX),
+                            })
+                          }
+                          className={`mt-1 block w-full rounded-md border px-3 py-2 dark:border-gray-600 dark:bg-gray-700 ${
+                            formData.kpp.length > 0 && formData.kpp.length !== 9
+                              ? "border-amber-500 ring-1 ring-amber-500/30 dark:border-amber-600"
+                              : "border-gray-300"
+                          }`}
+                          placeholder="9 цифр"
                           disabled={saving}
                         />
                       </div>
@@ -501,15 +612,23 @@ export default function PartnersPageClient({
                     </div>
                     <div className="mt-4">
                       <label htmlFor="partner-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Email
+                        Email *
                       </label>
                       <input
                         id="partner-email"
                         type="email"
+                        autoComplete="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                        className={`mt-1 block w-full rounded-md border px-3 py-2 dark:border-gray-600 dark:bg-gray-700 ${
+                          formData.email.trim().length > 0 && !isLooseEmailValid(formData.email)
+                            ? "border-amber-500 ring-1 ring-amber-500/30 dark:border-amber-600"
+                            : "border-gray-300"
+                        }`}
+                        placeholder="name@company.ru"
                         disabled={saving}
+                        required
+                        aria-required
                       />
                     </div>
                     <div className="mt-4">
@@ -657,7 +776,7 @@ export default function PartnersPageClient({
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={!formData.name.trim() || saving}
+                  disabled={!createFormCanSave || saving}
                   className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? "Сохранение…" : "Сохранить"}

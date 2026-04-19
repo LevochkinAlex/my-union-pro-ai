@@ -53,6 +53,9 @@ export async function initSocketServer(httpServer: HttpServer) {
       const Redis = (await import("ioredis")).default;
       const { getRedisOptions } = await import("@/lib/redis");
       const redisOptions = getRedisOptions();
+      if (!redisOptions) {
+        console.warn("[Socket] ⚠️ Redis отключён (REDIS_URL=), adapter не используется");
+      } else {
       pubClient = new Redis(redisOptions);
       subClient = pubClient.duplicate();
 
@@ -65,6 +68,7 @@ export async function initSocketServer(httpServer: HttpServer) {
       });
 
       console.log("[Socket] ✅ Redis clients initialized for adapter");
+      }
     }
   } catch (error) {
     console.warn("[Socket] ⚠️ Redis adapter initialization failed, using in-memory mode:", error);

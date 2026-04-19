@@ -15,11 +15,17 @@ async function startWorker() {
   try {
     console.log("🚀 Starting document processor worker...");
 
+    const redisConn = getRedisOptions();
+    if (!redisConn) {
+      console.error("❌ REDIS_URL пустой — worker не запускается. Укажите Redis или уберите пустой REDIS_URL.");
+      process.exit(1);
+    }
+
     const worker = new Worker<DocumentProcessingJob>(
       DOCUMENT_PROCESSING_QUEUE,
       documentProcessorHandler,
       {
-        connection: getRedisOptions(),
+        connection: redisConn,
         concurrency: 1,
       }
     );

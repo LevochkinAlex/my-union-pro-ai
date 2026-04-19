@@ -33,40 +33,6 @@ export function getUserName(user: ChatUser | any | null | undefined): string {
 }
 
 /**
- * Получить инициалы пользователя
- * Умная логика: если есть и имя и фамилия - первые буквы обоих
- * Если только имя - первые 2 буквы имени (или первую если имя короткое)
- * Если только фамилия - первые 2 буквы фамилии
- */
-export function getInitials(user: ChatUser | any | null | undefined): string {
-  if (!user) return "П";
-  
-  const first = user.firstName?.trim() || "";
-  const last = user.lastName?.trim() || "";
-  
-  // Если есть и имя и фамилия - первые буквы обоих
-  if (first && last) {
-    return (first[0] + last[0]).toUpperCase();
-  }
-  
-  // Если только имя - первые 2 буквы или 1 если короткое
-  if (first) {
-    return first.length >= 2 
-      ? (first[0] + first[1]).toUpperCase() 
-      : first[0].toUpperCase();
-  }
-  
-  // Если только фамилия - первые 2 буквы
-  if (last) {
-    return last.length >= 2 
-      ? (last[0] + last[1]).toUpperCase() 
-      : last[0].toUpperCase();
-  }
-  
-  return "П";
-}
-
-/**
  * Получить URL файла с CDN
  */
 export function getFileUrl(filePath: string | null | undefined): string {

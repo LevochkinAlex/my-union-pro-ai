@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { Prisma } from "@prisma/client";
+import {
+  arePartnerRequisitesValid,
+  isLooseEmailValid,
+  isPartnerInnComplete,
+} from "@/lib/partner-requisites";
 
 function prismaErrorToMessage(e: unknown): string {
   if (e instanceof Prisma.PrismaClientKnownRequestError) {
@@ -14,7 +19,15 @@ function prismaErrorToMessage(e: unknown): string {
     return `Ошибка БД (${e.code}). ${e.meta ? JSON.stringify(e.meta) : ""}`.trim();
   }
   if (e instanceof Prisma.PrismaClientValidationError) {
-    return "Некорректные данные для сохранения.";
+    const msg = e.message;
+    const staleClientHint =
+      /Unknown argument [`']?(ogrn|kpp)|Unknown field [`']?(ogrn|kpp)/i.test(msg)
+        ? " Частая причина — устаревший Prisma Client после обновления схемы: выполните npx prisma generate и перезапустите dev-сервер."
+        : "";
+    if (process.env.NODE_ENV === "development") {
+      return `Некорректные данные для сохранения.${staleClientHint}\n${msg}`;
+    }
+    return `Некорректные данные для сохранения.${staleClientHint}`;
   }
   if (e instanceof Prisma.PrismaClientInitializationError || e instanceof Prisma.PrismaClientRustPanicError) {
     return "Нет подключения к базе данных. Проверьте DATABASE_URL и доступность сервера БД.";
@@ -56,6 +69,8 @@ export async function GET(request: NextRequest) {
         OR: [
           { name: { contains: search, mode: "insensitive" } },
           { inn: { contains: search, mode: "insensitive" } },
+          { ogrn: { contains: search, mode: "insensitive" } },
+          { kpp: { contains: search, mode: "insensitive" } },
           { email: { contains: search, mode: "insensitive" } },
           { phone: { contains: search, mode: "insensitive" } },
           { contactEmail: { contains: search, mode: "insensitive" } },
@@ -103,6 +118,8 @@ type Body = {
   description?: string;
   website?: string;
   inn?: string;
+  ogrn?: string;
+  kpp?: string;
   address?: string;
   phone?: string;
   email?: string;
@@ -135,6 +152,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Укажите название партнёра" }, { status: 400 });
   }
 
+  const innRaw = typeof body.inn === "string" ? body.inn.replace(/\D/g, "") : "";
+  const ogrnRaw = typeof body.ogrn === "string" ? body.ogrn.replace(/\D/g, "") : "";
+  const kppRaw = typeof body.kpp === "string" ? body.kpp.replace(/\D/g, "") : "";
+  if (!isPartnerInnComplete(innRaw) || !arePartnerRequisitesValid(innRaw, ogrnRaw, kppRaw)) {
+    return NextResponse.json(
+      {
+        error:
+          "Укажите ИНН (10 или 12 цифр). ОГРН и КПП — либо пусто, либо полная длина (ОГРН 13/15, КПП 9 цифр).",
+      },
+      { status: 400 }
+    );
+  }
+
+  const emailIn = typeof body.email === "string" ? body.email.trim() : "";
+  if (!isLooseEmailValid(emailIn)) {
+    return NextResponse.json({ error: "Укажите корректный email (реквизиты юр. лица)" }, { status: 400 });
+  }
+  const emailNormalized = emailIn.toLowerCase();
+
   const str = (v: unknown) => (typeof v === "string" ? v.trim() || null : null);
   const bool = (v: unknown) => (typeof v === "boolean" ? v : true);
 
@@ -162,10 +198,12 @@ export async function POST(request: NextRequest) {
           name,
           description: str(body.description),
           website: str(body.website),
-          inn: str(body.inn),
+          inn: innRaw,
+          ogrn: ogrnRaw || null,
+          kpp: kppRaw || null,
           address: str(body.address),
           phone: str(body.phone),
-          email: str(body.email),
+          email: emailNormalized,
           contactLastName: str(body.contactLastName),
           contactFirstName: str(body.contactFirstName),
           contactMiddleName: str(body.contactMiddleName),

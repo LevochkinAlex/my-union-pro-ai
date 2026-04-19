@@ -18,6 +18,7 @@ export default async function PartnerProfilePage() {
       partnerRecord: {
         select: {
           name: true,
+          logoUrl: true,
           description: true,
           inn: true,
           address: true,
@@ -68,6 +69,22 @@ export default async function PartnerProfilePage() {
         <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
           Информация об организации
         </h2>
+        {partner?.logoUrl ? (
+          <div className="mb-6 flex justify-center sm:justify-start">
+            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-900/50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={partner.logoUrl}
+                alt={
+                  partner.name
+                    ? `Логотип ${partner.name}`
+                    : "Логотип организации"
+                }
+                className="max-h-full max-w-full object-contain object-center"
+              />
+            </div>
+          </div>
+        ) : null}
         <dl className="divide-y divide-gray-100 dark:divide-gray-700">
           {infoRows.map((row) => (
             <div key={row.label} className="flex flex-col gap-1 py-3 sm:flex-row sm:gap-4">

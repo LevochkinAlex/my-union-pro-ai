@@ -4,8 +4,8 @@ import { getRedisOptions } from "./redis";
 let redisClient: Redis | null = null;
 let initPromise: Promise<void> | null = null;
 
-// Инициализируем Redis при загрузке модуля (на сервере)
-if (typeof window === "undefined") {
+// Инициализируем Redis при загрузке модуля (на сервере), если Redis не отключён (`REDIS_URL=`)
+if (typeof window === "undefined" && getRedisOptions() !== null) {
   initPromise = initRedisConnection();
 }
 
@@ -57,6 +57,9 @@ function getRedisClient(): Redis | null {
 
   try {
     const options = getRedisOptions();
+    if (!options) {
+      return null;
+    }
     redisClient = new Redis({
       ...options,
       retryStrategy: (times) => {

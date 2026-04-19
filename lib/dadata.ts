@@ -67,16 +67,6 @@ export interface ValidatedAddress {
 }
 
 /**
- * Результат проверки ФИО
- */
-export interface ValidatedName {
-  lastName: string;
-  firstName: string;
-  middleName?: string;
-  validated: boolean; // true если DaData успешно распознал ФИО
-}
-
-/**
  * Валидирует и стандартизирует адрес через DaData
  * Возвращает полный корректный адрес и город или null если не удалось распарсить
  */
@@ -172,23 +162,6 @@ export async function validateAddressWithDaData(address: string): Promise<Valida
 }
 
 /**
- * Формирует адрес в читаемом виде из компонентов
- */
-export function formatAddressFromComponents(data: DaDataResponse): string {
-  const parts: string[] = [];
-
-  // Собираем адрес по иерархии
-  if (data.region_with_type) parts.push(data.region_with_type);
-  if (data.city_with_type) parts.push(data.city_with_type);
-  if (data.street_with_type) parts.push(data.street_with_type);
-  if (data.house) parts.push(`д. ${data.house}`);
-  if (data.block) parts.push(`корп. ${data.block}`);
-  if (data.flat) parts.push(`кв. ${data.flat}`);
-
-  return parts.join(", ");
-}
-
-/**
  * Интерфейс для ответа DaData по ФИО
  */
 interface DaDataNameResponse {
@@ -202,105 +175,6 @@ interface DaDataNameResponse {
   patronymic?: string;
   gender?: string;
   qc?: string;
-}
-
-/**
- * Валидация и нормализация ФИО через DaData
- * Проверяет корректность написания и возвращает нормализованное ФИО
- */
-export async function validateNameWithDaData(fullName: string): Promise<ValidatedName | null> {
-  const token = getDaDataToken();
-  const secret = getDaDataSecret();
-
-  if (!token || !secret) {
-    console.warn("[dadata] DaData credentials not configured, skipping name validation");
-    
-    // Fallback: простой парсинг ФИО (сохраняет тюркские суффиксы "улы", "кызы", "оглы")
-    const parts = fullName.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return {
-        lastName: parts[0],
-        firstName: parts[1],
-        middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
-        validated: false,
-      };
-    }
-    return null;
-  }
-
-  try {
-    const response = await fetch(DADATA_CLEAN_NAME_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Token ${token}`,
-        "X-Secret": secret,
-      },
-      body: JSON.stringify([fullName]),
-    });
-
-    if (!response.ok) {
-      console.error("[dadata] Name validation failed:", response.statusText);
-      // Fallback (сохраняет тюркские суффиксы)
-      const parts = fullName.trim().split(/\s+/);
-      if (parts.length >= 2) {
-        return {
-          lastName: parts[0],
-          firstName: parts[1],
-          middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
-          validated: false,
-        };
-      }
-      return null;
-    }
-
-    const data: DaDataNameResponse[] = await response.json();
-    const nameData = data[0];
-
-    if (nameData && nameData.surname && nameData.name) {
-      console.log("[dadata] ✅ Name validated:", {
-        surname: nameData.surname,
-        name: nameData.name,
-        patronymic: nameData.patronymic,
-        gender: nameData.gender,
-        qc: nameData.qc,
-      });
-
-      return {
-        lastName: nameData.surname,
-        firstName: nameData.name,
-        middleName: nameData.patronymic || undefined,
-        validated: true,
-      };
-    }
-
-    // Если DaData не смог распознать - используем fallback (сохраняет тюркские суффиксы)
-    console.warn("[dadata] ⚠️ Name not recognized by DaData, using fallback");
-    const parts = fullName.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return {
-        lastName: parts[0],
-        firstName: parts[1],
-        middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
-        validated: false,
-      };
-    }
-
-    return null;
-  } catch (error) {
-    console.error("[dadata] Name validation error:", error);
-    // Fallback (сохраняет тюркские суффиксы)
-    const parts = fullName.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return {
-        lastName: parts[0],
-        firstName: parts[1],
-        middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
-        validated: false,
-      };
-    }
-    return null;
-  }
 }
 
 /**

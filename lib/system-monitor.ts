@@ -195,6 +195,13 @@ async function getRedisStats(): Promise<{
     const { Redis } = await import("ioredis");
 
     const options = getRedisOptions();
+    if (!options) {
+      return {
+        connected: false,
+        memory: 0,
+        keys: 0,
+      };
+    }
     const client = new Redis(options);
 
     try {
