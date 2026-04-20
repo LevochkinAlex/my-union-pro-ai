@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
-import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
+import { generatePDFFromHTML, getPublicPdfErrorDetail } from "@/lib/document-templates/renderer";
 import { DocumentType } from "@prisma/client";
 
 // Инициализируем VDS хранилище при загрузке модуля
@@ -278,13 +278,26 @@ export async function GET(
     // Для копий во «Входящих» (metadata.originalDocumentId) всегда отдаём актуальный файл оригинала
     let docToServe = document;
     const meta = document.metadata as { originalDocumentId?: string } | null;
+    // Копия во «Входящих»: подставляем актуальный оригинал. Раньше брали только при original.filePath —
+    // на проде файл PDF мог отсутствовать, а HTML жил в content — тогда просмотр падал.
     if (!downloadSigned && meta?.originalDocumentId && document.assignedToId) {
       const original = await prisma.document.findUnique({
         where: { id: meta.originalDocumentId },
         select: { id: true, filePath: true, content: true, type: true },
       });
-      if (original?.filePath) {
-        docToServe = { ...document, filePath: original.filePath, content: original.content, type: original.type } as typeof document;
+      if (original) {
+        const useContent =
+          original.content != null && String(original.content).trim().length > 0
+            ? original.content
+            : document.content;
+        if (original.filePath || useContent) {
+          docToServe = {
+            ...document,
+            filePath: original.filePath ?? document.filePath,
+            content: useContent,
+            type: original.type,
+          } as typeof document;
+        }
       }
     }
 
@@ -312,9 +325,13 @@ export async function GET(
 
     let fileBuffer: Buffer | null = null;
 
-    // Для повестки/протокола content — это HTML, не base64; для остальных — base64
-    const isMeetingDoc = docToServe.type === DocumentType.AGENDA || docToServe.type === DocumentType.PROTOCOL;
-    if (docToServe.content && !downloadSigned && !isMeetingDoc) {
+    // Повестка/протокол/постановление/выписка: в content хранится HTML для пересборки PDF; остальные типы — base64 файла
+    const isHtmlSourceDocument =
+      docToServe.type === DocumentType.AGENDA ||
+      docToServe.type === DocumentType.PROTOCOL ||
+      docToServe.type === DocumentType.RESOLUTION ||
+      docToServe.type === DocumentType.PROTOCOL_EXTRACT;
+    if (docToServe.content && !downloadSigned && !isHtmlSourceDocument) {
       // Документ хранится в базе данных как base64 (только для обычного файла)
       fileBuffer = Buffer.from(docToServe.content, "base64");
       console.log("[documents/download] Загружен из базы данных (base64), размер:", fileBuffer.length);
@@ -427,8 +444,8 @@ export async function GET(
               }
             }
             
-            // Для повестки/протокола с HTML в БД не возвращаем 404 — ниже сгенерируем PDF из content
-            if (isMeetingDoc && docToServe.content) {
+            // Для документов с HTML в БД не возвращаем 404 — ниже сгенерируем PDF из content
+            if (isHtmlSourceDocument && docToServe.content) {
               // не возвращаем 404, выходим из блока — сработает fallback генерации из HTML
             } else if (downloadSigned) {
               console.error("[documents/download] Подписанный документ не найден:");
@@ -467,7 +484,7 @@ export async function GET(
                   { status: 404 }
                 );
               }
-            } else if (!(isMeetingDoc && docToServe.content)) {
+            } else if (!(isHtmlSourceDocument && docToServe.content)) {
               return NextResponse.json(
                 { error: `Файл не найден: ${filePathToDownload}` },
                 { status: 404 }
@@ -492,15 +509,20 @@ export async function GET(
       }
     }
 
-    // На проде файл может отсутствовать (эфемерная ФС): для повестки/протокола генерируем PDF из HTML
-    if (!fileBuffer && docToServe.content && isMeetingDoc) {
+    // На проде файл может отсутствовать (эфемерная ФС): для повестки/протокола и др. с HTML — генерируем PDF
+    if (!fileBuffer && docToServe.content && isHtmlSourceDocument) {
       try {
         fileBuffer = await generatePDFFromHTML(docToServe.content);
         console.log("[documents/download] PDF сгенерирован из HTML (fallback для прода), размер:", fileBuffer.length);
       } catch (pdfErr) {
-        console.error("[documents/download] Ошибка генерации PDF из HTML:", pdfErr);
+        console.error("[documents/download] Ошибка генерации PDF из HTML:", pdfErr, "type:", docToServe.type, "contentLen:", docToServe.content?.length);
+        const devDetail = pdfErr instanceof Error ? pdfErr.message : String(pdfErr);
+        const prodDetail = getPublicPdfErrorDetail(pdfErr);
         return NextResponse.json(
-          { error: "Не удалось сформировать документ для просмотра" },
+          {
+            error: "Не удалось сформировать документ для просмотра",
+            details: process.env.NODE_ENV === "development" ? devDetail : prodDetail ?? undefined,
+          },
           { status: 500 }
         );
       }

@@ -249,6 +249,21 @@ export function getPublicPdfErrorDetail(error: unknown): string | undefined {
   return undefined;
 }
 
+/** Убирает мусор, при необходимости оборачивает фрагмент в полный документ (Puppeteer стабильнее с DOCTYPE). */
+export function normalizeHtmlForPdf(raw: string): string {
+  if (raw == null || typeof raw !== "string") {
+    throw new Error("HTML для PDF не задан");
+  }
+  let s = raw.replace(/\0/g, "").trim();
+  if (!s) {
+    throw new Error("HTML для PDF пуст");
+  }
+  if (!/^<!DOCTYPE/i.test(s) && !/^<html/i.test(s)) {
+    s = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8" /></head><body>${s}</body></html>`;
+  }
+  return s;
+}
+
 const PDF_MARGIN = { top: "2cm", right: "2cm", bottom: "2.2cm", left: "2cm" } as const;
 
 const DEFAULT_LAUNCH_ARGS = [
@@ -269,6 +284,7 @@ const DEFAULT_LAUNCH_ARGS = [
  * Генерирует PDF из HTML используя Puppeteer
  */
 export async function generatePDFFromHTML(html: string): Promise<Buffer> {
+  const normalized = normalizeHtmlForPdf(html);
   const executablePath = await resolveChromeExecutablePath();
   if (executablePath) {
     console.log(`[document-templates] Using Chrome: ${executablePath}`);
@@ -307,7 +323,7 @@ export async function generatePDFFromHTML(html: string): Promise<Buffer> {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
     page.setDefaultTimeout(60000);
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.setContent(normalized, { waitUntil: "domcontentloaded", timeout: 90000 });
 
     const basePdf = {
       format: "A4" as const,
