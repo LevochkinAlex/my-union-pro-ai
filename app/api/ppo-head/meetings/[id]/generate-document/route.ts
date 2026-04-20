@@ -4,11 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentType, DocumentStatus, DocumentCategory } from "@prisma/client";
-import {
-  generatePDFFromHTML,
-  getPdfChromeMissingHint,
-  isLikelyMissingChromeForPdf,
-} from "@/lib/document-templates/renderer";
+import { generatePDFFromHTML, getPublicPdfErrorDetail } from "@/lib/document-templates/renderer";
 import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { clearAllMeetingNotifications, notifyParticipantsAboutProtocolApproval } from "@/lib/notifications";
@@ -371,10 +367,7 @@ export async function POST(
     } catch (pdfError: unknown) {
       console.error("Ошибка генерации PDF:", pdfError);
       const devDetail = pdfError instanceof Error ? pdfError.message : String(pdfError);
-      const prodDetail =
-        process.env.NODE_ENV !== "development" && isLikelyMissingChromeForPdf(pdfError)
-          ? getPdfChromeMissingHint()
-          : undefined;
+      const prodDetail = process.env.NODE_ENV !== "development" ? getPublicPdfErrorDetail(pdfError) : undefined;
       return NextResponse.json(
         {
           error: "Не удалось сформировать PDF документа",

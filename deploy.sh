@@ -67,11 +67,21 @@ fi
 # Puppeteer не кладёт Chrome в node_modules — без скачанного браузера падают PDF (повестка/протокол профкома).
 echo "--- Puppeteer Chrome (PDF) ---"
 CHROME_PATH=$(node -e "try { console.log(require('puppeteer').executablePath()); } catch (e) { console.log(''); }" 2>/dev/null || true)
+CHROME_PATH=$(echo "$CHROME_PATH" | head -1 | tr -d '\r')
 if [ -n "${CHROME_PATH:-}" ] && [ -x "$CHROME_PATH" ]; then
   echo "OK: $CHROME_PATH"
 else
   echo "Браузер не найден, ставим: npx puppeteer browsers install chrome"
   npx puppeteer browsers install chrome 2>&1 | tail -25
+  CHROME_PATH=$(node -e "try { console.log(require('puppeteer').executablePath()); } catch (e) { console.log(''); }" 2>/dev/null || true)
+  CHROME_PATH=$(echo "$CHROME_PATH" | head -1 | tr -d '\r')
+fi
+if [ -n "${CHROME_PATH:-}" ] && [ -x "$CHROME_PATH" ]; then
+  if ! "$CHROME_PATH" --version >/dev/null 2>&1; then
+    echo "⚠️  Chrome не запускается (часто не хватает системных .so для PDF). Пример: apt-get install -y ca-certificates fonts-liberation libnss3 libatk1.0-0 libgbm1 libgtk-3-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libdrm2 libasound2 libpango-1.0-0 libcups2 libdbus-1-3 libglib2.0-0 || bash scripts/server-install-chrome.sh"
+  else
+    echo "Chrome smoke OK: $($CHROME_PATH --version 2>/dev/null | head -1)"
+  fi
 fi
 
 echo "--- prisma generate ---"

@@ -1,4 +1,7 @@
 import { User, Organization, DocumentTemplate } from "@prisma/client";
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
 import puppeteer from "puppeteer";
 import { declineNameToGenitive, declineNameToDative } from "../dadata";
 import type { TemplateVariables } from "./variables";
@@ -127,18 +130,51 @@ const LINUX_CHROME_PATHS = [
   "/snap/bin/chromium",
 ];
 
-async function resolveChromeExecutablePath(): Promise<string | undefined> {
-  const fs = await import("fs/promises");
-  let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+const LINUX_PUPPETEER_CACHE_ROOTS = [
+  () => path.join(os.homedir(), ".cache", "puppeteer", "chrome"),
+  "/root/.cache/puppeteer/chrome",
+];
 
-  const pathExists = async (p: string): Promise<boolean> => {
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Скачанный `npx puppeteer browsers install chrome` лежит в ~/.cache/puppeteer/chrome/<build>/chrome-linux64/chrome.
+ * На проде иногда homedir процесса ≠ root при установке браузера — перебираем типичные каталоги.
+ */
+async function discoverLinuxPuppeteerCachedChrome(): Promise<string | undefined> {
+  if (process.platform !== "linux") return undefined;
+
+  const seen = new Set<string>();
+  for (const rootRef of LINUX_PUPPETEER_CACHE_ROOTS) {
+    const root = typeof rootRef === "function" ? rootRef() : rootRef;
+    if (seen.has(root)) continue;
+    seen.add(root);
+    let dirs: string[];
     try {
-      await fs.access(p);
-      return true;
+      dirs = await fs.readdir(root);
     } catch {
-      return false;
+      continue;
     }
-  };
+    for (const dir of dirs) {
+      const candidate = path.join(root, dir, "chrome-linux64", "chrome");
+      if (await pathExists(candidate)) {
+        console.log(`[document-templates] Using Puppeteer cache Chrome: ${candidate}`);
+        return candidate;
+      }
+    }
+  }
+  return undefined;
+}
+
+async function resolveChromeExecutablePath(): Promise<string | undefined> {
+  let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
 
   if (executablePath && (await pathExists(executablePath))) {
     return executablePath;
@@ -152,6 +188,9 @@ async function resolveChromeExecutablePath(): Promise<string | undefined> {
   } catch {
     // игнорируем
   }
+
+  const cached = await discoverLinuxPuppeteerCachedChrome();
+  if (cached) return cached;
 
   if (process.platform === "darwin") {
     for (const p of MACOS_CHROME_PATHS) {
@@ -190,6 +229,42 @@ export function isLikelyMissingChromeForPdf(error: unknown): boolean {
   );
 }
 
+/** Краткая подсказка в ответе API (прод), если PDF упал по типовой причине */
+export function getPublicPdfErrorDetail(error: unknown): string | undefined {
+  if (isLikelyMissingChromeForPdf(error)) return getPdfChromeMissingHint();
+  const msg = error instanceof Error ? error.message : String(error);
+  if (
+    /error while loading shared libraries|cannot open shared object file|libnss3|libatk|libgbm|libdrm|libxkbcommon|libXcomposite|libXdamage|libXfixes|libxrandr|libcups|libasound|libgtk|libglib/i.test(
+      msg
+    )
+  ) {
+    return (
+      "На сервере не хватает системных библиотек для Chrome (PDF). " +
+      "Установите зависимости, например: apt-get install -y ca-certificates fonts-liberation libasound2 " +
+      "libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 " +
+      "libpango-1.0-0 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libxshmfence1 xdg-utils — " +
+      "или пакет google-chrome-stable с dl.google.com (подтянет зависимости)."
+    );
+  }
+  return undefined;
+}
+
+const PDF_MARGIN = { top: "2cm", right: "2cm", bottom: "2.2cm", left: "2cm" } as const;
+
+const DEFAULT_LAUNCH_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-accelerated-2d-canvas",
+  "--disable-gpu",
+  "--disable-software-rasterizer",
+  "--disable-extensions",
+  "--disable-background-timer-throttling",
+  "--disable-backgrounding-occluded-windows",
+  "--disable-renderer-backgrounding",
+  "--font-render-hinting=none",
+];
+
 /**
  * Генерирует PDF из HTML используя Puppeteer
  */
@@ -198,68 +273,68 @@ export async function generatePDFFromHTML(html: string): Promise<Buffer> {
   if (executablePath) {
     console.log(`[document-templates] Using Chrome: ${executablePath}`);
   } else {
-    console.warn(`[document-templates] No Chrome executable found. Set PUPPETEER_EXECUTABLE_PATH or install: npx puppeteer browsers install chrome`);
+    console.warn(
+      `[document-templates] No Chrome executable found. Set PUPPETEER_EXECUTABLE_PATH or install: npx puppeteer browsers install chrome`
+    );
   }
-  
-  const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
-    headless: true,
-    args: [
-      "--no-sandbox", 
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--disable-gpu",
-      "--disable-software-rasterizer",
-      "--disable-extensions",
-      "--disable-background-timer-throttling",
-      "--disable-backgrounding-occluded-windows",
-      "--disable-renderer-backgrounding",
-    ],
-  };
-  
-  if (executablePath) {
-    launchOptions.executablePath = executablePath;
-  }
-  
+
+  const buildLaunchOptions = (headless: boolean | "shell"): Parameters<typeof puppeteer.launch>[0] => ({
+    headless,
+    args: DEFAULT_LAUNCH_ARGS,
+    ...(executablePath ? { executablePath } : {}),
+  });
+
   let browser;
   try {
-    browser = await puppeteer.launch(launchOptions);
-  } catch (launchError) {
-    const msg = launchError instanceof Error ? launchError.message : String(launchError);
-    if (msg.includes("executablePath") || msg.includes("Browser was not found")) {
-      throw new Error(
-        "Chrome не найден. Установите Google Chrome или выполните: npx puppeteer browsers install chrome. " +
-        "Либо задайте PUPPETEER_EXECUTABLE_PATH в .env (путь к Chrome)."
-      );
+    browser = await puppeteer.launch(buildLaunchOptions("shell"));
+  } catch (shellErr) {
+    console.warn("[document-templates] headless=shell launch failed, retry headless=true:", shellErr);
+    try {
+      browser = await puppeteer.launch(buildLaunchOptions(true));
+    } catch (launchError) {
+      const msg = launchError instanceof Error ? launchError.message : String(launchError);
+      if (msg.includes("executablePath") || msg.includes("Browser was not found")) {
+        throw new Error(
+          "Chrome не найден. Установите Google Chrome или выполните: npx puppeteer browsers install chrome. " +
+            "Либо задайте PUPPETEER_EXECUTABLE_PATH в .env (путь к Chrome)."
+        );
+      }
+      throw launchError;
     }
-    throw launchError;
   }
-  
+
   try {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
     page.setDefaultTimeout(60000);
-    await page.setContent(html, { waitUntil: "load", timeout: 30000 });
-    
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      margin: {
-        top: "2cm",
-        right: "2cm",
-        bottom: "2.2cm",
-        left: "2cm",
-      },
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 45000 });
+
+    const basePdf = {
+      format: "A4" as const,
+      margin: PDF_MARGIN,
       printBackground: true,
-      displayHeaderFooter: true,
-      footerTemplate: `
+    };
+
+    try {
+      const pdfBuffer = await page.pdf({
+        ...basePdf,
+        displayHeaderFooter: true,
+        footerTemplate: `
         <div style="width: 100%; font-size: 10px; text-align: center; font-family: 'Times New Roman', Times, serif; color: #333;">
           <span class="pageNumber"></span> из <span class="totalPages"></span>
         </div>
       `,
-      headerTemplate: "<div></div>",
-    });
-    
-    return Buffer.from(pdfBuffer);
+        headerTemplate: "<div></div>",
+      });
+      return Buffer.from(pdfBuffer);
+    } catch (footerErr) {
+      console.warn("[document-templates] PDF with header/footer failed, retry without:", footerErr);
+      const pdfBuffer = await page.pdf({
+        ...basePdf,
+        displayHeaderFooter: false,
+      });
+      return Buffer.from(pdfBuffer);
+    }
   } finally {
     await browser.close();
   }
