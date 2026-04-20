@@ -30,37 +30,6 @@ export interface WorkplacePPOMapping {
   updatedAt: Date;
 }
 
-/**
- * Найти ППО по месту работы (название + ИНН)
- */
-export async function findPPOByWorkplace(
-  workplaceName: string,
-  workplaceInn: string
-): Promise<{
-  ppoOrganizationId: string;
-  ppoOrganization: {
-    id: string;
-    name: string;
-    type: string;
-    chairmanName: string | null;
-    chairmanJobTitle: string | null;
-  };
-} | null> {
-  const options = await findPPOsByWorkplace(workplaceName, workplaceInn);
-  const first = options[0];
-  if (!first) return null;
-  return {
-    ppoOrganizationId: first.id,
-    ppoOrganization: {
-      id: first.id,
-      name: first.name,
-      type: first.organizationType,
-      chairmanName: first.chairmanName,
-      chairmanJobTitle: first.chairmanJobTitle,
-    },
-  };
-}
-
 /** Элемент списка ППО по месту работы */
 export interface PPOOption {
   id: string;
@@ -334,50 +303,4 @@ export async function createOrUpdateWorkplacePPOMapping(
   });
 
   return mapping as WorkplacePPOMapping;
-}
-
-/**
- * Поиск ППО по части названия места работы (для подсказок)
- */
-export async function searchPPOByWorkplaceName(
-  query: string,
-  limit: number = 10
-): Promise<Array<{
-  workplaceName: string;
-  workplaceInn: string;
-  ppoOrganization: {
-    id: string;
-    name: string;
-  };
-}>> {
-  if (!query || query.length < 2) {
-    return [];
-  }
-
-  const mappings = await prisma.workplacePPOMapping.findMany({
-    where: {
-      workplaceName: {
-        contains: query,
-        mode: "insensitive",
-      },
-    },
-    take: limit,
-    include: {
-      ppoOrganization: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
-    orderBy: {
-      verified: "desc",
-    },
-  });
-
-  return mappings.map((m) => ({
-    workplaceName: m.workplaceName,
-    workplaceInn: m.workplaceInn,
-    ppoOrganization: m.ppoOrganization,
-  }));
 }

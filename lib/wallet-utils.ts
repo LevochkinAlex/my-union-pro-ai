@@ -25,36 +25,6 @@ export function detectPlatform(): 'ios' | 'android' | 'desktop' {
   return 'desktop';
 }
 
-/**
- * Определяет, поддерживает ли устройство Apple Wallet
- */
-export function supportsAppleWallet(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  
-  const platform = detectPlatform();
-  if (platform !== 'ios') {
-    return false;
-  }
-
-  // Проверяем наличие Apple Wallet
-  return typeof (window as any).AddPass !== 'undefined' || 
-         /iPhone|iPad|iPod/.test(window.navigator.userAgent);
-}
-
-/**
- * Определяет, поддерживает ли устройство Google Pay
- */
-export function supportsGoogleWallet(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  
-  const platform = detectPlatform();
-  return platform === 'android';
-}
-
 interface WalletDownloadOptions {
   imageBlob: Blob;
   imageDataUrl: string;

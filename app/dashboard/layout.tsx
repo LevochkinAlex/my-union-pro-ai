@@ -4,8 +4,8 @@ import { getServerSession } from "next-auth";
 import type { SubscriptionStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Sidebar from "@/components/dashboard/Sidebar";
 import MiniChatWrapperConditional from "@/components/dashboard/MiniChatWrapperConditional";
+import Sidebar from "@/components/dashboard/Sidebar";
 import MobileLayout from "@/components/dashboard/MobileLayout";
 import TourGuideProvider from "@/components/dashboard/TourGuideProvider";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
@@ -785,7 +785,6 @@ export default async function DashboardLayout({
           serverViewMode={viewMode}
         />
 
-        {/* Desktop Sidebar */}
         <Sidebar
           items={menuItems}
           userInitial={getUserInitial()}

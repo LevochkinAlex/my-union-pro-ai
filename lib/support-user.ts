@@ -6,7 +6,6 @@
 import { prisma } from "@/lib/prisma";
 
 const SUPPORT_EMAIL = process.env.SUPPORT_USER_EMAIL || "support@myunion.pro";
-const SUPPORT_DISPLAY_NAME = "Техподдержка";
 
 let cachedSupportUserId: string | null = null;
 
@@ -49,8 +48,4 @@ export async function getSupportUserId(): Promise<string | null> {
 
 export function getSupportEmail(): string {
   return SUPPORT_EMAIL;
-}
-
-export function getSupportDisplayName(): string {
-  return SUPPORT_DISPLAY_NAME;
 }

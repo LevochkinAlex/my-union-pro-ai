@@ -34,38 +34,11 @@ export function getViewMode(session: Session | null): string {
 }
 
 /**
- * ID организации председателя в текущем режиме (по viewMode).
- * Для MEMBER возвращает null.
- */
-export function getHeadOrganizationId(session: Session | null): string | null {
-  if (!session?.user) return null;
-  const u = session.user as SessionUserView;
-  const mode = u.viewMode || "MEMBER";
-  if (mode === "PPO_HEAD" && u.ppoHeadOrganizationId) return u.ppoHeadOrganizationId;
-  if (mode === "MPO_HEAD" && u.mpoHeadOrganizationId) return u.mpoHeadOrganizationId;
-  if (mode === "RPO_HEAD" && u.rpoHeadOrganizationId) return u.rpoHeadOrganizationId ?? null;
-  return null;
-}
-
-/**
  * Режим «председатель» (ППО, МПО или РПО) выбран в кабинете.
  */
 export function isChairmanView(session: Session | null): boolean {
   const mode = getViewMode(session);
   return mode === "PPO_HEAD" || mode === "MPO_HEAD" || mode === "RPO_HEAD";
-}
-
-/**
- * Есть ли у пользователя право хотя бы на один режим председателя (не только текущий viewMode).
- */
-export function canBeChairman(session: Session | null): boolean {
-  if (!session?.user) return false;
-  const u = session.user as SessionUserView;
-  return (
-    Boolean(u.isPPOHead && u.ppoHeadOrganizationId) ||
-    Boolean(u.isMPOHead && u.mpoHeadOrganizationId) ||
-    Boolean(u.isRPOHead && u.rpoHeadOrganizationId)
-  );
 }
 
 /**

@@ -3,7 +3,7 @@
  * Requires Redis connection
  */
 
-import { Queue, QueueEvents, Job } from "bullmq";
+import { Queue, QueueEvents } from "bullmq";
 import { getRedisOptions } from "./redis";
 
 // Queue names
@@ -70,31 +70,6 @@ export interface DocumentProcessingJob {
   userId?: string;
   knowledgeBaseId?: string;
   priority?: "low" | "normal" | "high";
-}
-
-/**
- * Add document to processing queue
- */
-export async function addDocumentToQueue(
-  data: DocumentProcessingJob,
-  priority?: "low" | "normal" | "high"
-): Promise<Job> {
-  const queue = getDocumentQueue();
-
-  // Map priority to Bull priority (higher = processed first)
-  const bullPriority = {
-    high: 10,
-    normal: 5,
-    low: 1,
-  }[priority || "normal"];
-
-  const job = await queue.add(data.documentId, data, {
-    priority: bullPriority,
-    jobId: `doc-${data.documentId}-${Date.now()}`,
-  });
-
-  console.log(`[Queue] Document ${data.documentId} added to queue:`, job.id);
-  return job;
 }
 
 /**

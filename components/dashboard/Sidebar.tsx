@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -35,7 +35,7 @@ interface SidebarProps {
   serverViewMode?: string;
 }
 
-export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false, brandHref, serverViewModes = [], serverViewMode }: SidebarProps) {
+function SidebarContent({ items, userInitial, avatarUrl, isAdmin = false, brandHref, serverViewModes = [], serverViewMode }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [manuallyCollapsed, setManuallyCollapsed] = useState<string[]>([]); // Пункты, которые пользователь вручную свернул
@@ -441,3 +441,22 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
   );
 }
 
+function SidebarSuspenseFallback() {
+  return (
+    <aside
+      className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 transition-all duration-300"
+      aria-hidden
+    >
+      <div className="flex h-full flex-col border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800" />
+    </aside>
+  );
+}
+
+/** useSearchParams требует Suspense в App Router — иначе возможен пустой экран при навигации/гидратации */
+export default function Sidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={<SidebarSuspenseFallback />}>
+      <SidebarContent {...props} />
+    </Suspense>
+  );
+}

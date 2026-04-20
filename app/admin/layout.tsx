@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Sidebar from "@/components/dashboard/Sidebar";
 import MobileLayout from "@/components/dashboard/MobileLayout";
+import Sidebar from "@/components/dashboard/Sidebar";
 
 export default async function AdminLayout({
   children,
@@ -200,7 +200,6 @@ export default async function AdminLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Mobile Header and Menu */}
       <MobileLayout
         items={adminMenuItems}
         userInitial={userInitial}
@@ -208,7 +207,6 @@ export default async function AdminLayout({
         isAdmin={true}
       />
 
-      {/* Desktop Sidebar */}
       <Sidebar
         items={adminMenuItems}
         userInitial={userInitial}

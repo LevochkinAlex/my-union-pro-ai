@@ -144,11 +144,9 @@ autoClosedAt DateTime?
 - Среднее время ответа председателя
 - Среднее время решения обращения
 
-### Функции аналитики
+### Аналитика в коде
 
-`lib/ticket-analytics.ts`:
-- `getTicketAnalytics()` - общая статистика по обращениям
-- `getOverdueTickets()` - список просроченных обращений
+Сводные метрики по обращениям можно строить запросами Prisma к модели `Ticket` (фильтр по `organizationId`, `status`, `isOverdue` и т.д.). Отдельного модуля-хелпера в репозитории нет.
 
 ## Настройка крон-задачи
 
@@ -203,27 +201,6 @@ npx prisma migrate dev --name add_ticket_deadline_tracking
 
 Или примените SQL вручную из файла:
 `prisma/migrations/20250122_add_ticket_deadline_tracking/migration.sql`
-
-## Примеры использования
-
-### Получение просроченных обращений
-
-```typescript
-import { getOverdueTickets } from "@/lib/ticket-analytics";
-
-const overdueTickets = await getOverdueTickets(organizationId);
-console.log(`Просрочено обращений: ${overdueTickets.length}`);
-```
-
-### Получение статистики
-
-```typescript
-import { getTicketAnalytics } from "@/lib/ticket-analytics";
-
-const analytics = await getTicketAnalytics(organizationId);
-console.log(`Просрочено: ${analytics.overdue}`);
-console.log(`Среднее время ответа: ${analytics.averageResponseTime} часов`);
-```
 
 ## Будущие улучшения
 

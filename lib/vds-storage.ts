@@ -481,49 +481,6 @@ export async function deleteFileFromVDS(fileKey: string): Promise<void> {
 }
 
 /**
- * Проверяет существование файла на VDS
- */
-export async function fileExistsOnVDS(fileKey: string): Promise<boolean> {
-  // SECURITY: Санитизация пути
-  try {
-    fileKey = sanitizeFileKey(fileKey);
-  } catch {
-    return false;
-  }
-  
-  if (!vdsConfig) {
-    return false;
-  }
-
-  const remoteFilePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
-
-  // Если мы на VDS, проверяем напрямую
-  if (isRunningOnVDS()) {
-    return existsSync(remoteFilePath);
-  }
-
-  try {
-    const command = buildSSHCommand(`test -f '${remoteFilePath}' && echo 'exists' || echo 'not found'`);
-    const { stdout } = await execAsync(command);
-    return stdout.trim() === "exists";
-  } catch (error) {
-    console.error("[vds-storage] Error checking file existence:", error);
-    return false;
-  }
-}
-
-/**
- * Получает публичный URL файла
- */
-export function getPublicUrl(fileKey: string): string | null {
-  if (!vdsConfig) {
-    return null;
-  }
-
-  return `${vdsConfig.publicUrl}/${fileKey}`;
-}
-
-/**
  * Определяет, настроено ли VDS хранилище
  */
 export function isVDSStorageConfigured(): boolean {

@@ -1022,6 +1022,7 @@ function DiscountGrid({
           onClaim={discount.isPartnerVenue ? undefined : onClaim}
           forceShowImage
           selectedCityId={selectedCityId}
+          hidePromoCode
         />
       ))}
     </div>

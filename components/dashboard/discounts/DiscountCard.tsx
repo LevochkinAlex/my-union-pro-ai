@@ -13,6 +13,8 @@ interface DiscountCardProps {
   onClaim?: (id: number) => void;
   forceShowImage?: boolean;
   selectedCityId?: number | null; // ID выбранного города для фильтрации отображения
+  /** Скрыть блок промокода (список каталога и т.п.) */
+  hidePromoCode?: boolean;
 }
 
 export default function DiscountCard({
@@ -23,15 +25,19 @@ export default function DiscountCard({
   onClaim,
   forceShowImage = false,
   selectedCityId = null,
+  hidePromoCode = false,
 }: DiscountCardProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [imageError, setImageError] = useState(false);
-  
+
+  const cities = discount.cities ?? [];
+  const categories = discount.categories ?? [];
+
   // Определяем города для отображения в карточке
   const displayCities = selectedCityId
-    ? discount.cities.filter((city) => city.id === selectedCityId)
-    : discount.cities;
+    ? cities.filter((city) => city.id === selectedCityId)
+    : cities;
 
   const citiesLabel = (() => {
     if (displayCities.length > 0) {
@@ -41,14 +47,14 @@ export default function DiscountCard({
     }
 
     // Глобальная скидка без привязки к конкретному городу
-    if (discount.cities.length === 0) {
+    if (cities.length === 0) {
       return "Все города";
     }
 
     // Fallback: показываем доступные города скидки, если локальный фильтр дал пусто
-    return discount.cities.length <= 3
-      ? discount.cities.map((city) => city.name).join(", ")
-      : `${discount.cities.slice(0, 3).map((city) => city.name).join(", ")} и ещё ${discount.cities.length - 3}`;
+    return cities.length <= 3
+      ? cities.map((city) => city.name).join(", ")
+      : `${cities.slice(0, 3).map((city) => city.name).join(", ")} и ещё ${cities.length - 3}`;
   })();
 
   const handleCopyPromo = async (e: React.MouseEvent) => {
@@ -210,9 +216,9 @@ export default function DiscountCard({
               <span className="truncate">До {formatDate(discount.validUntil)}</span>
             </div>
           )}
-          {discount.categories.length > 0 && (
+          {categories.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {discount.categories.slice(0, 2).map((category) => (
+              {categories.slice(0, 2).map((category) => (
                 <span
                   key={category.id}
                   className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200"
@@ -220,52 +226,55 @@ export default function DiscountCard({
                   {category.name}
                 </span>
               ))}
-              {discount.categories.length > 2 && (
+              {categories.length > 2 && (
                 <span className="inline-flex items-center rounded-full border border-gray-100 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                  +{discount.categories.length - 2}
+                  +{categories.length - 2}
                 </span>
               )}
             </div>
           )}
         </div>
 
-        {discount.promoCode && (() => {
-          // Проверяем, не является ли промокод специальным случаем
-          const isSpecialCase = discount.promoCode === "Штрихкод в купоне" ||
-            discount.promoCode.toLowerCase().includes("штрихкод") ||
-            discount.promoCode.toLowerCase().includes("barcode");
-          
-          // Если специальный случай, показываем инструкцию
-          if (isSpecialCase) {
+        {!hidePromoCode &&
+          discount.promoCode &&
+          (() => {
+            // Проверяем, не является ли промокод специальным случаем
+            const isSpecialCase =
+              discount.promoCode === "Штрихкод в купоне" ||
+              discount.promoCode.toLowerCase().includes("штрихкод") ||
+              discount.promoCode.toLowerCase().includes("barcode");
+
+            // Если специальный случай, показываем инструкцию
+            if (isSpecialCase) {
+              return (
+                <div className="inline-flex items-center rounded-lg border border-dashed border-gray-300 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-gray-600 dark:border-gray-600 dark:text-gray-400">
+                  <span className="truncate">Штрихкод в купоне</span>
+                </div>
+              );
+            }
+
             return (
-              <div className="inline-flex items-center rounded-lg border border-dashed border-gray-300 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-gray-600 dark:border-gray-600 dark:text-gray-400">
-                <span className="truncate">Штрихкод в купоне</span>
-              </div>
+              <button
+                type="button"
+                onClick={handleCopyPromo}
+                className={clsx(
+                  "inline-flex items-center justify-between rounded-lg border px-2.5 py-1.5 text-xs sm:text-sm font-medium transition",
+                  copied
+                    ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200"
+                    : "border-dashed border-gray-300 text-gray-700 hover:border-blue-300 hover:text-blue-700 dark:border-gray-600 dark:text-gray-200"
+                )}
+              >
+                <span className="truncate mr-2">
+                  <span className="hidden sm:inline">Промокод: </span>
+                  {discount.promoCode}
+                </span>
+                <svg className="h-4 w-4 flex-none" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M5 7a2 2 0 012-2h6a1 1 0 011 1v8a2 2 0 01-2 2H8a1 1 0 01-1-1V7H5z" />
+                  <path d="M9 3a2 2 0 00-2 2h6a2 2 0 012 2v6a2 2 0 001-1.732V5a2 2 0 00-2-2H9z" />
+                </svg>
+              </button>
             );
-          }
-          
-          return (
-            <button
-              type="button"
-              onClick={handleCopyPromo}
-              className={clsx(
-                "inline-flex items-center justify-between rounded-lg border px-2.5 py-1.5 text-xs sm:text-sm font-medium transition",
-                copied
-                  ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200"
-                  : "border-dashed border-gray-300 text-gray-700 hover:border-blue-300 hover:text-blue-700 dark:border-gray-600 dark:text-gray-200"
-              )}
-            >
-              <span className="truncate mr-2">
-                <span className="hidden sm:inline">Промокод: </span>
-                {discount.promoCode}
-              </span>
-              <svg className="h-4 w-4 flex-none" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M5 7a2 2 0 012-2h6a1 1 0 011 1v8a2 2 0 01-2 2H8a1 1 0 01-1-1V7H5z" />
-                <path d="M9 3a2 2 0 00-2 2h6a2 2 0 012 2v6a2 2 0 001-1.732V5a2 2 0 00-2-2H9z" />
-              </svg>
-            </button>
-          );
-        })()}
+          })()}
 
         <div className="mt-auto space-y-2 pt-2">
           {discount.isPartnerVenue ? (

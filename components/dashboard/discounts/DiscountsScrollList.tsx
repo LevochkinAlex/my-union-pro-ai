@@ -76,7 +76,7 @@ export default function DiscountsScrollList({ discounts }: DiscountsScrollListPr
           
           return (
             <div key={discount.id} className="flex-none w-[280px] sm:w-[320px] lg:w-[360px]">
-              <DiscountCard discount={discount} />
+              <DiscountCard discount={discount} hidePromoCode />
             </div>
           );
         })}

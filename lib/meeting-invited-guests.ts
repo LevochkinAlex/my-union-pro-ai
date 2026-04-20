@@ -37,10 +37,3 @@ export function mergeInvitedGuestParts(
   }
   return out;
 }
-
-export function mergeInvitedGuestsString(
-  storedText: string | null | undefined,
-  participants: ParticipantWithExternal[]
-): string {
-  return mergeInvitedGuestParts(storedText, participants).join(", ");
-}

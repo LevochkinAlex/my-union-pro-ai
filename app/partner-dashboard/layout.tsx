@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Sidebar from "@/components/dashboard/Sidebar";
 import MobileLayout from "@/components/dashboard/MobileLayout";
+import Sidebar from "@/components/dashboard/Sidebar";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 
 export default async function PartnerDashboardLayout({
