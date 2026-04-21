@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+/** Баннер о работах на платформе. Включить снова: true */
+const MAINTENANCE_BANNER_ENABLED = false;
+
 interface MaintenanceBannerProps {
   userId?: string;
 }
@@ -14,6 +17,7 @@ export default function MaintenanceBanner({ userId }: MaintenanceBannerProps) {
   );
 
   useEffect(() => {
+    if (!MAINTENANCE_BANNER_ENABLED) return;
     try {
       const isDismissed = window.localStorage.getItem(storageKey) === "1";
       if (isDismissed) {
@@ -24,7 +28,7 @@ export default function MaintenanceBanner({ userId }: MaintenanceBannerProps) {
     }
   }, [storageKey]);
 
-  if (dismissed) {
+  if (!MAINTENANCE_BANNER_ENABLED || dismissed) {
     return null;
   }
 

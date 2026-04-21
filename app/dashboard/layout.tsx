@@ -797,7 +797,7 @@ export default async function DashboardLayout({
         <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300 min-w-0 bg-gray-50 dark:bg-gray-900">
           {/* Impersonation Banner */}
           {isImpersonating && <ImpersonationBanner />}
-          {/* Временный баннер о модернизации для членов и председателей */}
+          {/* Баннер модернизации: включается в MaintenanceBanner.tsx (MAINTENANCE_BANNER_ENABLED) */}
           <MaintenanceBanner userId={session.user.id} />
           <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0 min-h-full">
           <div data-tour="main-content" className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0 bg-gray-50 dark:bg-gray-900 min-h-full">
