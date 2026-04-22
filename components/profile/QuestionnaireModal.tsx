@@ -1272,9 +1272,19 @@ export default function QuestionnaireModal({
           {/* Шаг 3: Генерация и загрузка документов */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Генерация и загрузка документов
-              </h3>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Генерация и загрузка документов
+                </h3>
+                {!isExistingMember && (
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    Сначала сформируйте заявления, распечатайте и подпишите их, затем загрузите сканы ниже.{" "}
+                    <span className="text-gray-500 dark:text-gray-500">
+                      Устав профсоюза — для ознакомления, блок в конце шага.
+                    </span>
+                  </p>
+                )}
+              </div>
 
               {/* Опция для действующих членов профсоюза */}
               <div className={`rounded-lg border p-4 transition-all ${
@@ -1354,52 +1364,6 @@ export default function QuestionnaireModal({
                   </button>
                 </div>
               )}
-
-              {/* Показываем устав (системный документ) - всегда видно */}
-              {!isExistingMember && documents
-                .filter(
-                  (doc) =>
-                    doc.id === "charter-system" ||
-                    (doc.type === "OTHER" &&
-                      (doc.title?.toLowerCase().includes("устав") ||
-                        doc.description?.toLowerCase().includes("устав")))
-                )
-                .map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-col sm:items-start sm:justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-white sm:text-base break-words">
-                          {doc.title}
-                        </h4>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 sm:text-sm break-words">
-                          {doc.description || doc.fileName}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2 flex-shrink-0 sm:ml-4">
-                        {(doc.mimeType === "application/pdf" || (doc.fileName && doc.fileName.toLowerCase().endsWith(".pdf"))) && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenForPrint(doc.id)}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-auto sm:px-4"
-                          >
-                            <Printer className="h-4 w-4 flex-shrink-0" />
-                            <span className="whitespace-nowrap">Открыть для печати</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
-                        >
-                          <Download className="h-4 w-4 flex-shrink-0" />
-                          <span className="whitespace-nowrap">Скачать</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
 
               {/* Блок с документами показываем только если НЕ действующий член */}
               {!isExistingMember && (
@@ -1625,6 +1589,58 @@ export default function QuestionnaireModal({
                   </div>
                 )
               )}
+
+              {/* Устав — в конце шага, второстепенно (не отвлекать от заявлений) */}
+              {!isExistingMember &&
+                documents
+                  .filter(
+                    (doc) =>
+                      doc.id === "charter-system" ||
+                      (doc.type === "OTHER" &&
+                        (doc.title?.toLowerCase().includes("устав") ||
+                          doc.description?.toLowerCase().includes("устав")))
+                  )
+                  .map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="rounded-lg border border-dashed border-gray-300 bg-gray-50/80 p-3 dark:border-gray-600 dark:bg-gray-800/40 sm:p-4"
+                    >
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        Для ознакомления
+                      </p>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 break-words">
+                            {doc.title}
+                          </h4>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 break-words">
+                            {doc.description || doc.fileName}
+                          </p>
+                        </div>
+                        <div className="flex flex-shrink-0 flex-wrap gap-2 sm:ml-4">
+                          {(doc.mimeType === "application/pdf" ||
+                            (doc.fileName && doc.fileName.toLowerCase().endsWith(".pdf"))) && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenForPrint(doc.id)}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 sm:px-4"
+                            >
+                              <Printer className="h-4 w-4 flex-shrink-0" />
+                              <span className="whitespace-nowrap">Печать</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
+                          >
+                            <Download className="h-4 w-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap">Скачать устав</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
             </div>
           )}
 
