@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 
 interface ModalProps {
   isOpen: boolean;
@@ -13,6 +13,8 @@ interface ModalProps {
 interface ModalSectionProps {
   children: React.ReactNode;
   className?: string;
+  /** Градиент внизу + кнопка «вниз», если контент длиннее области (анкета, длинные формы) */
+  scrollHint?: boolean;
 }
 
 function joinClasses(...parts: Array<string | undefined>) {
@@ -120,11 +122,116 @@ export const ModalHeader: React.FC<ModalSectionProps> = ({ children, className }
   </div>
 );
 
-export const ModalBody: React.FC<ModalSectionProps> = ({ children, className }) => (
-  <div className={joinClasses("min-h-0 flex-1 overflow-y-auto px-6 py-4", className)}>
-    {children}
-  </div>
-);
+export const ModalBody: React.FC<ModalSectionProps> = ({ children, className, scrollHint }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+
+  useEffect(() => {
+    if (!scrollHint) return;
+    const root = scrollRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel) return;
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        setMoreBelow(!entry.isIntersecting);
+      },
+      { root, threshold: 0, rootMargin: "0px 0px -4px 0px" }
+    );
+    const refreshIo = () => {
+      io.unobserve(sentinel);
+      io.observe(sentinel);
+    };
+    io.observe(sentinel);
+
+    let roRaf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(roRaf);
+      roRaf = requestAnimationFrame(refreshIo);
+    });
+    ro.observe(root);
+    const content = contentRef.current;
+    if (content) ro.observe(content);
+
+    const t = window.setTimeout(refreshIo, 300);
+    const t2 = window.setTimeout(refreshIo, 900);
+
+    return () => {
+      cancelAnimationFrame(roRaf);
+      io.disconnect();
+      ro.disconnect();
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+    };
+  }, [scrollHint]);
+
+  const scrollDownSmooth = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const delta = Math.min(320, Math.max(160, Math.round(el.clientHeight * 0.55)));
+    el.scrollBy({ top: delta, behavior: "smooth" });
+  };
+
+  if (!scrollHint) {
+    return (
+      <div className={joinClasses("min-h-0 flex-1 overflow-y-auto px-6 py-4", className)}>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        ref={scrollRef}
+        className={joinClasses("min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4", className)}
+        tabIndex={0}
+      >
+        <div ref={contentRef} className="min-w-0">
+          {children}
+        </div>
+        <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />
+      </div>
+      {moreBelow && (
+        <>
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-14 bg-gradient-to-t from-white via-white/90 to-transparent dark:from-gray-900 dark:via-gray-900/90"
+            aria-hidden
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-2 pt-8">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                scrollDownSmooth();
+              }}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-2xl border border-blue-200/90 bg-white/95 px-3 py-2 text-xs font-semibold text-blue-800 shadow-md ring-1 ring-black/5 backdrop-blur-sm transition hover:border-blue-300 hover:bg-blue-50/95 hover:shadow-lg active:scale-[0.98] dark:border-blue-700/70 dark:bg-gray-800/95 dark:text-blue-200 dark:ring-white/10 dark:hover:border-blue-600 dark:hover:bg-gray-700/90"
+              aria-label="Ниже ещё содержимое, прокрутить вниз"
+            >
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                <svg
+                  className="block size-4 text-blue-600 motion-safe:animate-bounce dark:text-blue-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
+              <span className="flex min-h-4 items-center select-none leading-none">Ещё ниже</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 export const ModalFooter: React.FC<ModalSectionProps> = ({ children, className }) => (
   <div

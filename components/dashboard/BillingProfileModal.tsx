@@ -174,7 +174,7 @@ export default function BillingProfileModal({ isOpen, onClose, onSaved }: Billin
           </p>
         </ModalHeader>
 
-        <ModalBody className="pb-4">
+        <ModalBody scrollHint className="pb-4">
         <div className="grid gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Тип плательщика</label>

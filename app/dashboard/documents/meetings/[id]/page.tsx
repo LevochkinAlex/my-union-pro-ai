@@ -4067,7 +4067,7 @@ export default function MeetingDetailPage({
             Разослать выписку
           </h3>
         </ModalHeader>
-        <ModalBody className="p-4">
+        <ModalBody scrollHint className="p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             Выберите одного или нескольких членов профсоюза — выписка будет отправлена им во Входящие. Список формируется из раздела «Члены профсоюза».
           </p>
@@ -4198,7 +4198,7 @@ export default function MeetingDetailPage({
             Просмотр документа
           </h3>
         </ModalHeader>
-        <ModalBody className="p-4">
+        <ModalBody scrollHint className="p-4">
           {pdfPreviewUrl && (
             <div className="w-full h-[80vh] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900">
               <iframe

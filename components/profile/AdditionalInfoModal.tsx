@@ -192,7 +192,7 @@ export default function AdditionalInfoModal({
           Заполните дополнительную информацию и награды
         </h2>
       </ModalHeader>
-      <ModalBody className="p-4 md:p-6">
+      <ModalBody scrollHint className="p-4 md:p-6">
         {loading ? (
           <div className="py-8 text-center text-gray-500 dark:text-gray-400">Загрузка...</div>
         ) : (

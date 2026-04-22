@@ -902,7 +902,7 @@ export default function QuestionnaireModal({
             Заполнение анкеты для вступления в профсоюз
           </h2>
         </ModalHeader>
-        <ModalBody className="p-3 sm:p-4 md:p-6 w-full">
+        <ModalBody scrollHint className="p-3 sm:p-4 md:p-6 w-full">
 
           {/* Прогресс */}
           <div className="mb-4 sm:mb-6">
