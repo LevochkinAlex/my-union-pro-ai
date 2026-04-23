@@ -70,7 +70,3 @@ export async function generateEmbedding(
 export async function generateQueryEmbedding(text: string): Promise<number[]> {
   return generateEmbedding(text, "query");
 }
-
-export async function generateDocEmbedding(text: string): Promise<number[]> {
-  return generateEmbedding(text, "doc");
-}

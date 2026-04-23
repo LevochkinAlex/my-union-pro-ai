@@ -482,11 +482,6 @@ async function runPostSendTasks(args: {
   }
 }
 
-// Функции для вызова из API (через HTTP или напрямую)
-export function emitToChat(chatId: string, event: string, data: any) {
-  io.to(chatId).emit(event as any, data);
-}
-
 httpServer.listen(PORT, () => {
   console.log(`\n🚀 Socket.io сервер запущен на порту ${PORT}\n`);
 });

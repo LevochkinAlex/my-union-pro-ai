@@ -54,14 +54,6 @@ export function partnerModerationIsApprovedWithoutTimestamp(
   return false;
 }
 
-/** Партнёр может показываться в публичном каталоге площадок */
-export function partnerModerationIsPublished(
-  status: string | null | undefined,
-  approvedAt: string | Date | null | undefined
-): boolean {
-  return String(status ?? "").trim() === "APPROVED" && !partnerModerationIsApprovedWithoutTimestamp(status, approvedAt);
-}
-
 const LABELS: Record<PartnerModerationStatus, string> = {
   DRAFT: "Черновик",
   NEW: "Новый",

@@ -25,7 +25,6 @@ export const DOCUMENT_ON_REVIEW_STATUSES = [
   "COMPLETED",
 ] as const;
 
-export type DocumentSubmittedStatus = (typeof DOCUMENT_SUBMITTED_STATUSES)[number];
 export type DocumentOnReviewStatus = (typeof DOCUMENT_ON_REVIEW_STATUSES)[number];
 
 /**

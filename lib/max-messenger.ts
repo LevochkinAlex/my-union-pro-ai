@@ -97,57 +97,6 @@ export async function sendPINViaMax(
 }
 
 /**
- * Получает информацию о MAX боте (для проверки токена)
- */
-export async function getMaxBotInfo() {
-  if (!MAX_BOT_TOKEN) {
-    return {
-      success: false,
-      error: "MAX_BOT_TOKEN не настроен",
-    };
-  }
-
-  const url = `${MAX_API_BASE}/getMe`;
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${MAX_BOT_TOKEN}`,
-      },
-    });
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      return {
-        success: false,
-        error: data.description || "Ошибка MAX Bot API",
-        details: data,
-      };
-    }
-
-    return {
-      success: true,
-      bot: data.result,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Валидирует MAX Chat ID (должен быть строкой)
- */
-export function validateMaxChatId(chatId: string | undefined): boolean {
-  if (!chatId) return false;
-  // MAX Chat ID - это строка (может быть числовым ID или username)
-  return typeof chatId === "string" && chatId.length > 0;
-}
-
-/**
  * Отправляет приветственное сообщение при первой привязке MAX
  */
 export async function sendMaxWelcomeMessage(maxId: string): Promise<MaxSendMessageResult> {
