@@ -15,7 +15,8 @@
 # 4. pnpm prisma migrate deploy (безопасно, только новые миграции)
 # 5. rm -rf .next && pnpm build
 # 6. pm2 restart my-union-pro && pm2 restart my-union-socket
-# 7. Быстрый smoke-test по https
+# 7. root crontab: скидки + проверка ЕГРЮЛ партнёров (scripts/setup-cron.sh)
+# 8. Быстрый smoke-test по https
 #
 # Необходимо, чтобы git уже был синхронизирован с bitbucket (делайте
 # commit+push заранее или используйте `./deploy.sh --push`).
@@ -101,6 +102,20 @@ pm2 save
 
 echo "--- pm2 list ---"
 pm2 list | head -7
+
+echo "--- root crontab (скидки + ЕГРЮЛ партнёры) ---"
+if [ "$(id -u)" -eq 0 ] && [ -f scripts/setup-cron.sh ]; then
+  set +e
+  APP_ROOT="$VDS_PATH" bash scripts/setup-cron.sh > /tmp/setup-cron-deploy.log 2>&1
+  cron_ec=$?
+  set -e
+  tail -35 /tmp/setup-cron-deploy.log
+  if [ "$cron_ec" -ne 0 ]; then
+    echo "⚠️  setup-cron.sh завершился с кодом $cron_ec (сборка и pm2 уже применены). Проверьте: crontab -l"
+  fi
+else
+  echo "⚠️  setup-cron.sh пропущен (нужен root и файл scripts/setup-cron.sh). На сервере: sudo APP_ROOT=$VDS_PATH bash $VDS_PATH/scripts/setup-cron.sh"
+fi
 REMOTE
 
 echo ""

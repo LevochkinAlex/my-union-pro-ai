@@ -18,8 +18,6 @@ function parseFullName(fullName: string): { lastName: string; firstName: string;
   };
 }
 
-export { type TemplateVariables, TEMPLATE_VARIABLES_FOR_EDITOR } from "./variables";
-
 /**
  * Извлекает переменные из пользователя для подстановки в шаблон
  */

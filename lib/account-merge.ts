@@ -5,25 +5,6 @@
 
 import { PrismaClient } from "@prisma/client";
 
-export function normalizePhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\(\)]/g, "");
-  if (cleaned.startsWith("8")) cleaned = "+7" + cleaned.slice(1);
-  if (cleaned.startsWith("7") && !cleaned.startsWith("+")) cleaned = "+" + cleaned;
-  return cleaned;
-}
-
-export function phoneVariants(phone: string): string[] {
-  const n = normalizePhone(phone);
-  const digits = n.replace(/\D/g, "").slice(-10);
-  return [
-    n,
-    digits,
-    "7" + digits,
-    "8" + digits,
-    "+7" + digits,
-  ].filter(Boolean);
-}
-
 export interface DuplicateGroup {
   reason: "phone" | "email" | "phone_history";
   value: string;

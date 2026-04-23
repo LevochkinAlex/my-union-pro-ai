@@ -11,9 +11,13 @@
 С локальной машины:
 
 ```bash
-./deploy.sh           # git fetch на сервере + build + pm2 restart
+./deploy.sh           # git fetch на сервере + build + pm2 restart + root crontab (скидки + ЕГРЮЛ партнёры)
 ./deploy.sh --push    # то же, но сначала git push origin main
 ```
+
+После `./deploy.sh` на сервере от **root** автоматически выполняется `APP_ROOT=$VDS_PATH bash scripts/setup-cron.sh`. Все три задания идут в **`CRON_TZ=UTC`**: ЕГРЮЛ партнёров — **`0 2 * * *`** (02:00 UTC ≈ 05:00 МСК).
+
+На **localhost** по расписанию ничего не крутится (нет серверного crontab): проверка вручную — `npm run cron:partner-liquidation`.
 
 Скрипт читает необязательные env:
 

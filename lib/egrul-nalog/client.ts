@@ -200,8 +200,3 @@ export async function lookupEgrulByInnOrOgrn(
   const err: EgrulLookupErr = { ok: false, error: lastErr || "Неизвестная ошибка ЕГРЮЛ" };
   return err;
 }
-
-/** Для тестов / принудительного сброса кэша */
-export function clearEgrulClientCache(): void {
-  cache.clear();
-}

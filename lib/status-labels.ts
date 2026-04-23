@@ -90,27 +90,6 @@ export const MARITAL_STATUS_LABELS: Record<string, string> = {
   WIDOWED: "Вдовец/вдова",
 };
 
-export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  MEMBERSHIP_APPLICATION: "Заявление о вступлении",
-  CONTRIBUTION_APPLICATION: "Заявление о взносах",
-  MEETING_PROTOCOL: "Протокол",
-  OTHER: "Другой",
-};
-
-export const APPEAL_STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "Ожидание", cls: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-  IN_PROGRESS: { label: "В работе", cls: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-  RESOLVED: { label: "Решено", cls: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-  REJECTED: { label: "Отклонено", cls: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
-  CLOSED: { label: "Закрыто", cls: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200" },
-};
-
-export const BEST_BENEFITS_STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "Активен",
-  PENDING: "Ожидание",
-  INACTIVE: "Неактивен",
-};
-
 /** Подписи статусов документов для отображения в UI */
 export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Черновик",
@@ -130,16 +109,6 @@ export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
 export function getDocumentStatusLabel(status?: string | null): string {
   const key = (status || "").toUpperCase();
   return DOCUMENT_STATUS_LABELS[key] || (status || "—");
-}
-
-export function getDocumentStatusInfo(doc: { status: string; signedFilePath?: string | null }): { text: string; color: string } {
-  if (doc.status === "SIGNED" || doc.signedFilePath) {
-    return { text: "Подписан", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" };
-  }
-  if (doc.status === "GENERATED") {
-    return { text: "Сформирован", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" };
-  }
-  return { text: getDocumentStatusLabel(doc.status), color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" };
 }
 
 export function getEffectiveMemberStatus(membershipStatus: string, unionMembershipStatus?: string | null): string {

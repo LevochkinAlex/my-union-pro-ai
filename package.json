@@ -55,6 +55,7 @@
     "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts",
     "sync:discounts": "dotenv -e .env.local -- node scripts/sync-discounts.mjs",
     "sync:all-users-discounts": "dotenv -e .env.local -- tsx scripts/sync-all-users-discounts.ts",
+    "cron:partner-liquidation": "dotenv -e .env.local -- tsx scripts/run-partner-liquidation-cron.ts",
     "bb:reset-all-passwords": "dotenv -e .env.local -- tsx scripts/reset-all-bb-user-passwords.ts",
     "sync:channel-posts-to-news": "dotenv -e .env.local -- tsx scripts/sync-channel-posts-to-news.ts",
     "fix:news-cover-images": "dotenv -e .env.local -- tsx scripts/fix-news-cover-image-paths.ts",

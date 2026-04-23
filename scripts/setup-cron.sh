@@ -23,27 +23,43 @@ fi
 mkdir -p /var/log/myunion
 touch /var/log/myunion/sync-discounts.log
 touch /var/log/myunion/sync-user-discounts.log
+touch /var/log/myunion/partner-liquidation.log
 chmod 644 /var/log/myunion/sync-discounts.log
 chmod 644 /var/log/myunion/sync-user-discounts.log
+chmod 644 /var/log/myunion/partner-liquidation.log
 
-# Удаляем старые cron-задания связанные со скидками
-echo -e "${YELLOW}Очистка старых cron-заданий...${NC}"
-crontab -l 2>/dev/null | grep -v "sync-discounts\|sync-user-discounts\|cron-sync" | crontab - 2>/dev/null || true
+# Удаляем старые задания MyUnion: блок с маркерами + устаревшие строки без маркеров
+echo -e "${YELLOW}Очистка старых cron-заданий MyUnion...${NC}"
+crontab -l 2>/dev/null | awk '
+  /^# --- MYUNION_CRON start ---$/ { skip=1; next }
+  /^# --- MYUNION_CRON end ---$/ { skip=0; next }
+  !skip { print }
+' | grep -v "sync-discounts\|sync-user-discounts\|cron-sync\|run-partner-liquidation-cron\|check-partner-liquidation" | crontab - 2>/dev/null || true
 
-# 1. Синхронизация каталога скидок — 03:00 МСК (00:00 UTC)
-CRON_CATALOG="0 0 * * * cd /opt/my-union-pro && /usr/bin/node scripts/sync-discounts.mjs >> /var/log/myunion/sync-discounts.log 2>&1"
+# Каталог приложения на сервере (deploy.sh передаёт APP_ROOT=VDS_PATH)
+APP_ROOT="${APP_ROOT:-/opt/my-union-pro}"
 
-# 2. Синхронизация скидок пользователей — 04:00 МСК (01:00 UTC), после каталога
-CRON_USERS="0 1 * * * cd /opt/my-union-pro && pnpm exec tsx scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1"
+# CRON_TZ=UTC: расписание не зависит от TZ сервера (часто Europe/Moscow).
+# tsx из node_modules — чтобы не зависеть от PATH (pnpm в cron часто недоступен).
+MYUNION_BLOCK=$(cat <<EOF
+# --- MYUNION_CRON start ---
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+SHELL=/bin/bash
+CRON_TZ=UTC
+0 0 * * * cd $APP_ROOT && /usr/bin/node scripts/sync-discounts.mjs >> /var/log/myunion/sync-discounts.log 2>&1
+0 1 * * * cd $APP_ROOT && ./node_modules/.bin/tsx scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1
+# ЕГРЮЛ / ликвидация партнёров: каждый день в 02:00 UTC (поля: мин час день месяц день_недели)
+0 2 * * * cd $APP_ROOT && ./node_modules/.bin/tsx scripts/run-partner-liquidation-cron.ts >> /var/log/myunion/partner-liquidation.log 2>&1
+# --- MYUNION_CRON end ---
+EOF
+)
 
-# 3. Проверка ликвидации партнёров (ЕГРЮЛ) — 05:00 МСК (02:00 UTC); подставьте CRON_SECRET
-# CRON_PARTNER_LIQ='0 2 * * * curl -fsS "https://ВАШ_ДОМЕН/api/cron/check-partner-liquidation?secret=$CRON_SECRET" >> /var/log/myunion/partner-liquidation.log 2>&1'
+{ crontab -l 2>/dev/null; echo "$MYUNION_BLOCK"; } | crontab -
 
-(crontab -l 2>/dev/null; echo "$CRON_CATALOG"; echo "$CRON_USERS") | crontab -
-
-echo -e "${GREEN}Cron-задания добавлены:${NC}"
-echo -e "  ${YELLOW}0 0 * * * - Каталог скидок (03:00 МСК)${NC}"
-echo -e "  ${YELLOW}0 1 * * * - Скидки пользователей (04:00 МСК)${NC}"
+echo -e "${GREEN}Cron-задания добавлены (CRON_TZ=UTC):${NC}"
+echo -e "  ${YELLOW}0 0 — каталог скидок (03:00 МСК)${NC}"
+echo -e "  ${YELLOW}0 1 — скидки пользователей (04:00 МСК)${NC}"
+echo -e "  ${YELLOW}0 2 — ЕГРЮЛ партнёров (02:00 UTC, 05:00 МСК)${NC}"
 
 # Проверяем cron
 echo -e "\n${GREEN}Текущие cron-задания:${NC}"
@@ -53,6 +69,8 @@ echo -e "\n${GREEN}=== Настройка завершена ===${NC}"
 echo -e "Логи:"
 echo -e "  /var/log/myunion/sync-discounts.log"
 echo -e "  /var/log/myunion/sync-user-discounts.log"
+echo -e "  /var/log/myunion/partner-liquidation.log"
 echo -e "\nРучной запуск:"
 echo -e "  pnpm sync:discounts"
 echo -e "  pnpm sync:all-users-discounts"
+echo -e "  pnpm cron:partner-liquidation"
