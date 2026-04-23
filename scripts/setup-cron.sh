@@ -36,6 +36,9 @@ CRON_CATALOG="0 0 * * * cd /opt/my-union-pro && /usr/bin/node scripts/sync-disco
 # 2. Синхронизация скидок пользователей — 04:00 МСК (01:00 UTC), после каталога
 CRON_USERS="0 1 * * * cd /opt/my-union-pro && pnpm exec tsx scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1"
 
+# 3. Проверка ликвидации партнёров (ЕГРЮЛ) — 05:00 МСК (02:00 UTC); подставьте CRON_SECRET
+# CRON_PARTNER_LIQ='0 2 * * * curl -fsS "https://ВАШ_ДОМЕН/api/cron/check-partner-liquidation?secret=$CRON_SECRET" >> /var/log/myunion/partner-liquidation.log 2>&1'
+
 (crontab -l 2>/dev/null; echo "$CRON_CATALOG"; echo "$CRON_USERS") | crontab -
 
 echo -e "${GREEN}Cron-задания добавлены:${NC}"

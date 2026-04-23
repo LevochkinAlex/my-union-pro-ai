@@ -112,7 +112,10 @@ export default function PartnersPageClient({
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(initialTotal === 0);
   const [loadError, setLoadError] = useState<string | null>(serverError);
-  const skipFirstEmptySearchFetch = useRef(initialTotal > 0);
+  /** Дедупликация эффекта загрузки (React 18 Strict Mode вызывает useEffect дважды с тем же search). */
+  const lastInitiatedListFetchKey = useRef<string | null>(null);
+  /** Только первый маунт: можно пропустить клиентский fetch для пустого поиска, если SSR уже отдал данные. */
+  const maySkipInitialClientFetchRef = useRef(true);
 
   const [isCreating, setIsCreating] = useState(false);
   /** Явный lazy-init, чтобы состояние всегда было объектом формы (не ссылкой на factory). */
@@ -129,9 +132,8 @@ export default function PartnersPageClient({
     return true;
   }, [formData.name, formData.inn, formData.ogrn, formData.kpp, formData.email]);
 
-  const loadPartners = useCallback(async (pageNum: number, searchQuery: string) => {
+  const loadPartners = useCallback(async (pageNum: number, searchQuery: string): Promise<boolean> => {
     setLoading(true);
-    setLoadError(null);
     try {
       const params = new URLSearchParams();
       params.set("page", String(pageNum));
@@ -148,32 +150,53 @@ export default function PartnersPageClient({
         setPartners([]);
         setTotal(0);
         setTotalPages(1);
-        return;
+        return false;
       }
+      setLoadError(null);
       setPartners(data.partners || []);
       setTotal(data.total ?? 0);
       setTotalPages(Math.max(1, data.totalPages ?? 1));
       setPage(data.page ?? pageNum);
+      return true;
     } catch {
       setLoadError("Ошибка сети");
       setPartners([]);
       setTotal(0);
       setTotalPages(1);
+      return false;
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (skipFirstEmptySearchFetch.current && search === "") {
-      skipFirstEmptySearchFetch.current = false;
-      if (initialTotal > 0) {
-        setLoading(false);
-        return;
-      }
+    const fetchKey = `p1|${search}`;
+    if (lastInitiatedListFetchKey.current === fetchKey) {
+      return;
     }
-    loadPartners(1, search);
-  }, [search, loadPartners]);
+
+    // Успешный SSR уже отдал первую страницу — не дублируем GET на первом маунте с пустым поиском,
+    // иначе при ошибке второго запроса список затирается (мигание «данные → ошибка»).
+    if (
+      maySkipInitialClientFetchRef.current &&
+      !serverError &&
+      search === "" &&
+      initialTotal > 0
+    ) {
+      maySkipInitialClientFetchRef.current = false;
+      lastInitiatedListFetchKey.current = fetchKey;
+      return;
+    }
+    maySkipInitialClientFetchRef.current = false;
+
+    lastInitiatedListFetchKey.current = fetchKey;
+
+    void loadPartners(1, search).then((ok) => {
+      if (ok === false) {
+        lastInitiatedListFetchKey.current = null;
+      }
+    });
+  }, [search, loadPartners, initialTotal, serverError]);
 
   const goToPage = (p: number) => {
     const next = Math.max(1, Math.min(p, totalPages));
@@ -358,10 +381,7 @@ export default function PartnersPageClient({
                   p.contactEmail?.trim() ||
                   "";
                 return (
-                  <tr
-                    key={p.id}
-                    className="transition-colors hover:bg-gray-950/[0.035] dark:hover:bg-white/[0.04]"
-                  >
+                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="min-w-0 px-6 py-4 text-center text-sm font-medium text-gray-900 dark:text-white">
                       <span className="inline-block max-w-full break-words">{p.name ?? "—"}</span>
                     </td>
@@ -403,6 +423,7 @@ export default function PartnersPageClient({
                             userId={impersonateId}
                             userEmail={impersonateEmail || undefined}
                             label="Войти как"
+                            disabled={(p.moderationStatus ?? "") === "BLOCKED"}
                           />
                         ) : (
                           <span className="whitespace-nowrap text-xs text-gray-400 dark:text-gray-500">

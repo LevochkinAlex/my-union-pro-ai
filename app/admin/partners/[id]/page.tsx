@@ -81,6 +81,14 @@ export default function PartnerEditPage() {
   const [deleting, setDeleting] = useState(false);
   const [moderationStatus, setModerationStatus] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
+  const [checkingLiquidation, setCheckingLiquidation] = useState(false);
+
+  const canCheckEgrulRequisites = useMemo(() => {
+    const digits = (s: string) => s.replace(/\D/g, "");
+    const innD = digits(formData.inn);
+    const ogrD = digits(formData.ogrn);
+    return ogrD.length === 13 || ogrD.length === 15 || innD.length === 10 || innD.length === 12;
+  }, [formData.inn, formData.ogrn]);
 
   const requisitesValid = useMemo(
     () => arePartnerRequisitesValid(formData.inn, formData.ogrn, formData.kpp),
@@ -164,6 +172,52 @@ export default function PartnerEditPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleCheckLiquidation = async () => {
+    if (!id || !isSuperAdmin || !canCheckEgrulRequisites) return;
+    setCheckingLiquidation(true);
+    try {
+      const res = await fetch(`/api/admin/partners/${id}/check-liquidation`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        blocked?: number;
+        processed?: number;
+        updatedStatusOnly?: number;
+        errors?: string[];
+      };
+      if (!res.ok) {
+        alertError(typeof data.error === "string" ? data.error : "Не удалось выполнить проверку", "ЕГРЮЛ");
+        return;
+      }
+      const parts = [
+        `Проверено записей: ${data.processed ?? 0}`,
+        `Заблокировано: ${data.blocked ?? 0}`,
+        `Обновлений статуса в реестре: ${data.updatedStatusOnly ?? 0}`,
+      ];
+      if (data.errors?.length) {
+        parts.push(`Предупреждения: ${data.errors.length}`);
+      }
+      const body = parts.join(". ");
+      const blocked = data.blocked ?? 0;
+      const updatedStatusOnly = data.updatedStatusOnly ?? 0;
+      const processed = data.processed ?? 0;
+      if (blocked > 0) {
+        alertError(body, "Проверка ЕГРЮЛ");
+      } else if (processed > 0 && blocked === 0 && updatedStatusOnly === 0) {
+        alertWarning(
+          `${body}\n\nПовторите проверку через 10 минут`,
+          "Проверка ЕГРЮЛ"
+        );
+      } else {
+        alertSuccess(body, "Проверка ЕГРЮЛ");
+      }
+      await load();
+    } catch {
+      alertError("Ошибка сети при обращении к серверу", "ЕГРЮЛ");
+    } finally {
+      setCheckingLiquidation(false);
+    }
+  };
 
   const handleSave = async () => {
     const name = formData.name.trim();
@@ -384,14 +438,29 @@ export default function PartnerEditPage() {
           ← К списку партнёров
         </Link>
         {isSuperAdmin ? (
-          <button
-            type="button"
-            onClick={handleDeletePartner}
-            disabled={deleting || saving || loading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {deleting ? "Удаление…" : "Удалить партнёра и данные"}
-          </button>
+          <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-[min(100%,20rem)]">
+            <button
+              type="button"
+              onClick={handleDeletePartner}
+              disabled={deleting || saving || loading}
+              className="inline-flex w-full min-h-[2.5rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {deleting ? "Удаление…" : "Удалить партнёра и данные"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCheckLiquidation}
+              disabled={checkingLiquidation || !canCheckEgrulRequisites}
+              className="inline-flex w-full min-h-[2.5rem] items-center justify-center whitespace-nowrap rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+              title={
+                canCheckEgrulRequisites
+                  ? "Запросить актуальные сведения в ЕГРЮЛ по ИНН/ОГРН"
+                  : "Нужны ИНН (10 или 12 цифр) или ОГРН (13 или 15 цифр)"
+              }
+            >
+              {checkingLiquidation ? "Проверка…" : "Проверить статус организации"}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -412,7 +481,12 @@ export default function PartnerEditPage() {
         ) : null}
         {impersonateId ? (
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <ImpersonateButton userId={impersonateId} userEmail={impersonateEmail || undefined} label="Войти как" />
+            <ImpersonateButton
+              userId={impersonateId}
+              userEmail={impersonateEmail || undefined}
+              label="Войти как"
+              disabled={(moderationStatus ?? "") === "BLOCKED"}
+            />
             <span className="text-xs text-gray-500 dark:text-gray-400">
               Просмотр кабинета от имени партнёра
             </span>

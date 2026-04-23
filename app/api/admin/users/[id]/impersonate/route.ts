@@ -35,6 +35,8 @@ export async function POST(
         role: true,
         membershipStatus: true,
         avatarUrl: true,
+        partnerRecordId: true,
+        partnerRecord: { select: { moderationStatus: true } },
       },
     });
 
@@ -42,6 +44,19 @@ export async function POST(
       return NextResponse.json(
         { error: "Пользователь не найден" },
         { status: 404 }
+      );
+    }
+
+    if (
+      targetUser.role === "PARTNER" &&
+      targetUser.partnerRecord?.moderationStatus === "BLOCKED"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Кабинет партнёра заблокирован (например, ликвидация по данным ЕГРЮЛ). Вход от имени недоступен.",
+        },
+        { status: 403 }
       );
     }
 

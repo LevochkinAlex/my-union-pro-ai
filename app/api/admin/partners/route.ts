@@ -7,42 +7,7 @@ import {
   isLooseEmailValid,
   isPartnerInnComplete,
 } from "@/lib/partner-requisites";
-
-function prismaErrorToMessage(e: unknown): string {
-  if (e instanceof Prisma.PrismaClientKnownRequestError) {
-    if (e.code === "P2021") {
-      return "Таблица Partner в базе не создана. Выполните в проекте: npx prisma db push (или prisma migrate deploy).";
-    }
-    if (e.code === "P2002") {
-      return "Запись с такими уникальными данными уже существует.";
-    }
-    return `Ошибка БД (${e.code}). ${e.meta ? JSON.stringify(e.meta) : ""}`.trim();
-  }
-  if (e instanceof Prisma.PrismaClientValidationError) {
-    const msg = e.message;
-    const staleClientHint =
-      /Unknown argument [`']?(ogrn|kpp)|Unknown field [`']?(ogrn|kpp)/i.test(msg)
-        ? " Частая причина — устаревший Prisma Client после обновления схемы: выполните npx prisma generate и перезапустите dev-сервер."
-        : "";
-    if (process.env.NODE_ENV === "development") {
-      return `Некорректные данные для сохранения.${staleClientHint}\n${msg}`;
-    }
-    return `Некорректные данные для сохранения.${staleClientHint}`;
-  }
-  if (e instanceof Prisma.PrismaClientInitializationError || e instanceof Prisma.PrismaClientRustPanicError) {
-    return "Нет подключения к базе данных. Проверьте DATABASE_URL и доступность сервера БД.";
-  }
-  if (e instanceof Error) {
-    const msg = e.message;
-    if (/closed|connection|ECONNREFUSED|timeout/i.test(msg)) {
-      return "Соединение с базой данных разорвано. Повторите попытку.";
-    }
-    if (process.env.NODE_ENV === "development") {
-      return msg;
-    }
-  }
-  return "Ошибка сохранения партнёра";
-}
+import { partnerListPrismaErrorToUserMessage } from "@/lib/prisma-partner-list-error-message";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
@@ -87,7 +52,10 @@ export async function GET(request: NextRequest) {
     const [partners, total] = await Promise.all([
       prisma.partner.findMany({
         where: searchWhere,
-        orderBy: { createdAt: "desc" },
+        orderBy: [
+          { liquidationAutoBlockedAt: { sort: "desc", nulls: "last" } },
+          { createdAt: "desc" },
+        ],
         skip,
         take: limit,
         include: {
@@ -109,7 +77,11 @@ export async function GET(request: NextRequest) {
     });
   } catch (e) {
     console.error("[admin/partners GET]", e);
-    return NextResponse.json({ error: "Ошибка загрузки партнёров" }, { status: 500 });
+    const error = partnerListPrismaErrorToUserMessage(
+      e,
+      "Не удалось подключиться к базе данных. Проверьте сеть и DATABASE_URL. Список можно обновить позже."
+    );
+    return NextResponse.json({ error }, { status: 500 });
   }
 }
 
@@ -224,7 +196,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ partner });
   } catch (e) {
     console.error("[admin/partners POST]", e);
-    const message = prismaErrorToMessage(e);
+    const message = partnerListPrismaErrorToUserMessage(e, "Ошибка сохранения партнёра");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

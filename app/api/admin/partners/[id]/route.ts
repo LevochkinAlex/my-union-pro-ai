@@ -315,7 +315,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   let moderationAppliedViaRaw = false;
+  let moderationPrevRow: PartnerModerationRow | null = null;
   if (body.moderationStatus !== undefined) {
+    moderationPrevRow = await readPartnerModerationRowFromDb(id).catch(() => null);
     if (typeof body.moderationStatus !== "string" || !MODERATION_STATUSES.has(body.moderationStatus)) {
       return NextResponse.json({ error: "Некорректный moderationStatus" }, { status: 400 });
     }
@@ -343,6 +345,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       } catch (e) {
         console.error("[admin/partners/[id] PATCH] moderationStatus SQL:", e);
         return NextResponse.json({ error: prismaErrorToMessage(e) }, { status: 500 });
+      }
+    }
+
+    if (
+      applyModeration &&
+      moderationPrevRow?.moderationStatus === "BLOCKED" &&
+      body.moderationStatus !== "BLOCKED"
+    ) {
+      try {
+        await prisma.partner.update({
+          where: { id },
+          data: { liquidationAutoBlockedAt: null },
+        });
+      } catch (e) {
+        console.error("[admin/partners/[id] PATCH] clear liquidationAutoBlockedAt:", e);
       }
     }
   }

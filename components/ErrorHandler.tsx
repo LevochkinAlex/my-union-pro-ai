@@ -130,7 +130,10 @@ export default function ErrorHandler() {
             errorString.includes("Minified React error #423") ||
             errorString.includes("Minified React error #425") ||
             errorString.includes("Hydration failed") ||
-            errorString.includes("hydrating the entire root")
+            errorString.includes("hydrating the entire root") ||
+            // React dev: предупреждение о key не должно ронять dev-overlay из‑за перехвата console.error
+            errorString.includes('Each child in a list should have a unique "key" prop') ||
+            errorString.includes("unique \"key\" prop")
           )
         ) {
           // Suppress these errors in console

@@ -1,4 +1,5 @@
 import { prisma, withPrismaRetry } from "@/lib/prisma";
+import { partnerListPrismaErrorToUserMessage } from "@/lib/prisma-partner-list-error-message";
 import PartnersPageClient, { type PartnerRow } from "./PartnersPageClient";
 
 const PAGE_SIZE = 20;
@@ -14,7 +15,10 @@ export default async function AdminPartnersPage() {
     const [partners, total] = await withPrismaRetry(() =>
       Promise.all([
         prisma.partner.findMany({
-          orderBy: { createdAt: "desc" },
+          orderBy: [
+            { liquidationAutoBlockedAt: { sort: "desc", nulls: "last" } },
+            { createdAt: "desc" },
+          ],
           take: PAGE_SIZE,
           skip: 0,
           include: {
@@ -29,8 +33,10 @@ export default async function AdminPartnersPage() {
     initialTotal = total;
   } catch (e) {
     console.error("[admin/partners] Prisma:", e);
-    serverError =
-      "Не удалось подключиться к базе данных. Проверьте сеть и DATABASE_URL. Список можно обновить позже.";
+    serverError = partnerListPrismaErrorToUserMessage(
+      e,
+      "Не удалось подключиться к базе данных. Проверьте сеть и DATABASE_URL. Список можно обновить позже."
+    );
   }
 
   return (

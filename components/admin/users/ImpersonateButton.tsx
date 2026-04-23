@@ -10,13 +10,21 @@ interface ImpersonateButtonProps {
   userEmail?: string | null;
   /** Подпись кнопки (по умолчанию «Войти») */
   label?: string;
+  /** Например, карточка партнёра в статусе «Заблокирован» — вход от имени запрещён */
+  disabled?: boolean;
 }
 
-export default function ImpersonateButton({ userId, userEmail, label = "Войти" }: ImpersonateButtonProps) {
+export default function ImpersonateButton({
+  userId,
+  userEmail,
+  label = "Войти",
+  disabled = false,
+}: ImpersonateButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleImpersonate = async () => {
+    if (disabled) return;
     const who = userEmail?.trim() || userId;
     if (!confirm(`Войти от имени пользователя ${who}?`)) {
       return;
@@ -62,9 +70,13 @@ export default function ImpersonateButton({ userId, userEmail, label = "Войт
     <button
       type="button"
       onClick={handleImpersonate}
-      disabled={loading}
+      disabled={loading || disabled}
       className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 hover:text-green-700 dark:text-green-400 dark:hover:bg-green-950/30 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      title="Войти от имени пользователя"
+      title={
+        disabled
+          ? "Вход от имени недоступен (учётная запись или партнёр заблокированы)"
+          : "Войти от имени пользователя"
+      }
     >
       <UserRound className="h-4 w-4 shrink-0" aria-hidden />
       <span className="whitespace-nowrap">{loading ? "Вход…" : label}</span>

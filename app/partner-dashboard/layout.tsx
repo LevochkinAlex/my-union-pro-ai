@@ -23,11 +23,20 @@ export default async function PartnerDashboardLayout({
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { role: true, firstName: true, lastName: true },
+    select: {
+      role: true,
+      firstName: true,
+      lastName: true,
+      partnerRecord: { select: { moderationStatus: true } },
+    },
   });
 
   if (!user || user.role !== "PARTNER") {
     redirect("/dashboard");
+  }
+
+  if (user.partnerRecord?.moderationStatus === "BLOCKED") {
+    redirect("/login?partnerBlocked=1");
   }
 
   const userInitial =

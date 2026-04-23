@@ -386,7 +386,7 @@ export default function MobileMenu({
               return (
                 <div key={itemKey} className="space-y-1">
                   {hasSubItems ? (
-                    <div className="contents">
+                    <div className="flex flex-col gap-1">
                       <button
                         type="button"
                         aria-expanded={isExpanded}

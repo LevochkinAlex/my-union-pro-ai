@@ -611,6 +611,13 @@ model Partner {
   /// Суперадмин впервые открыл страницу редактирования карточки партнёра
   adminPartnerCardFirstSeenAt DateTime?
 
+  /// Последняя строка статуса из ответа ЕГРЮЛ/ЕГРИП (перезаписывается при каждой успешной выборке)
+  egrulStatusText String? @db.Text
+  /// Время последней попытки проверки ЕГРЮЛ (cron или кнопка в админке)
+  egrulCheckedAt DateTime?
+  /// Когда карточка автоматически переведена в BLOCKED из‑за ликвидации (пин вверху списка партнёров)
+  liquidationAutoBlockedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -620,6 +627,8 @@ model Partner {
   @@index([createdAt])
   @@index([linkedUserId])
   @@index([moderationStatus])
+  @@index([liquidationAutoBlockedAt])
+  @@index([egrulCheckedAt])
 }
 
 /// Статус карточки партнёра (модерация)
