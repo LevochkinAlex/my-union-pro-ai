@@ -211,6 +211,7 @@ export async function POST(request: NextRequest) {
           contactPhone: str(body.contactPhone),
           contactJobTitle: str(body.contactJobTitle),
           isActive: bool(body.isActive),
+          moderationStatus: "DRAFT",
           ...(linkedUserId ? { linkedUser: { connect: { id: linkedUserId } } } : {}),
         },
         include: {

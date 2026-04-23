@@ -151,6 +151,7 @@ export default function DiscountsClient({
             isPartnerVenue: true,
             partnerVenueId: v.id,
             partnerName: v.partner?.name ?? null,
+            partnerLogoUrl: v.partner?.logoUrl ?? null,
           })
         );
         if (!cancelled) setPartnerVenues(venues);

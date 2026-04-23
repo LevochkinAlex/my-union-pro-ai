@@ -107,6 +107,8 @@ export interface DiscountItem {
   partnerVenueId?: string;
   /** Название партнёра-организации */
   partnerName?: string | null;
+  /** Логотип партнёра (URL), для карточек площадок */
+  partnerLogoUrl?: string | null;
 }
 
 export interface DiscountSearchParams {

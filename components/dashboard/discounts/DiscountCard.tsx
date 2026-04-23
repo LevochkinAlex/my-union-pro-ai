@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import type { DiscountItem } from "@/types/discounts";
@@ -30,6 +30,11 @@ export default function DiscountCard({
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [partnerLogoError, setPartnerLogoError] = useState(false);
+
+  useEffect(() => {
+    setPartnerLogoError(false);
+  }, [discount.partnerVenueId, discount.partnerLogoUrl]);
 
   const cities = discount.cities ?? [];
   const categories = discount.categories ?? [];
@@ -180,16 +185,49 @@ export default function DiscountCard({
       {/* Content */}
       <div className="flex flex-1 flex-col gap-3 sm:gap-4 p-3 sm:p-4">
         <div className="space-y-1 sm:space-y-2">
-          {(discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name) && (
-            <p className={`text-xs font-semibold uppercase tracking-wide truncate ${
-              discount.isPartnerVenue ? "text-indigo-600 dark:text-indigo-300" : "text-blue-600 dark:text-blue-300"
-            }`}>
-              {discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name}
-            </p>
-          )}
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
-            {discount.title}
-          </h3>
+          <div
+            className={clsx(
+              "min-w-0",
+              discount.isPartnerVenue &&
+                discount.partnerLogoUrl &&
+                !partnerLogoError &&
+                "flex items-start gap-3 sm:gap-4"
+            )}
+          >
+            {discount.isPartnerVenue &&
+              discount.partnerLogoUrl &&
+              !partnerLogoError && (
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-white sm:h-14 sm:w-14 dark:border-gray-600 dark:bg-gray-900"
+                  aria-hidden
+                >
+                  <img
+                    src={discount.partnerLogoUrl}
+                    alt=""
+                    className="max-h-full max-w-full object-contain p-1"
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => setPartnerLogoError(true)}
+                  />
+                </div>
+              )}
+            <div className="min-w-0 flex-1 space-y-1 sm:space-y-2">
+              {(discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name) && (
+                <p
+                  className={`text-xs font-semibold uppercase tracking-wide truncate ${
+                    discount.isPartnerVenue
+                      ? "text-indigo-600 dark:text-indigo-300"
+                      : "text-blue-600 dark:text-blue-300"
+                  }`}
+                >
+                  {discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name}
+                </p>
+              )}
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
+                {discount.title}
+              </h3>
+            </div>
+          </div>
           {discount.shortDescription && (
             <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
               {discount.shortDescription}
@@ -277,18 +315,7 @@ export default function DiscountCard({
           })()}
 
         <div className="mt-auto space-y-2 pt-2">
-          {discount.isPartnerVenue ? (
-            <button
-              type="button"
-              onClick={handleCardClick}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-800"
-            >
-              <span>Подробнее</span>
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-            </button>
-          ) : discount.partnerUrl && (
+          {!discount.isPartnerVenue && discount.partnerUrl && (
             <a
               href={discount.partnerUrl}
               target="_blank"

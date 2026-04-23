@@ -56,16 +56,117 @@ function isDevMode(): boolean {
  * Проверяет, настроен ли SMTP
  */
 function isSmtpConfigured(): boolean {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
+  const h = (process.env.SMTP_HOST ?? "").trim();
+  const u = (process.env.SMTP_USER ?? "").trim();
+  const p = (process.env.SMTP_PASSWORD ?? "").trim();
+  return Boolean(h && u && p);
 }
 
-export type SendEmailDispatchResult = { sent: boolean };
+export type SendEmailDispatchResult = { sent: boolean; /** Просмотр письма в Ethereal (только dev, без SMTP/Resend) */ previewUrl?: string };
+
+/** Кэш учётки Ethereal на процесс Node — не плодим аккаунты на каждое письмо */
+let etherealDevCredentials: { user: string; pass: string } | null = null;
+
+function normalizeSmtpAddress(addr: string): string {
+  return String(addr)
+    .replace(/[<>]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function smtpAcceptedRecipient(result: { accepted?: unknown[] }, to: string): boolean {
+  const want = normalizeSmtpAddress(to);
+  const list = result.accepted ?? [];
+  if (list.length === 0) return false;
+  return list.some((a) => normalizeSmtpAddress(String(a)) === want);
+}
+
+/**
+ * Отправка через Resend HTTP API (без nodemailer), если задан RESEND_API_KEY.
+ * Удобно для dev, когда SMTP не поднят. From: RESEND_FROM или дефолт Resend для тестов.
+ */
+/**
+ * В development, если нет SMTP и Resend — отправка через бесплатный Ethereal (nodemailer).
+ * Письмо не приходит на реальный ящик; ссылка previewUrl открывает HTML в браузере.
+ */
+async function trySendViaEtherealDev(options: SendEmailOptions): Promise<SendEmailDispatchResult> {
+  if (!isDevMode()) return { sent: false };
+  if ((process.env.DISABLE_DEV_ETHEREAL_EMAIL ?? "").trim() === "1") {
+    return { sent: false };
+  }
+  try {
+    if (!etherealDevCredentials) {
+      const acc = await nodemailer.createTestAccount();
+      etherealDevCredentials = { user: acc.user, pass: acc.pass };
+      console.log("[Email] Ethereal: выдан тестовый SMTP-логин для dev:", acc.user);
+    }
+    const transporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      secure: false,
+      auth: etherealDevCredentials,
+    });
+    const result = await transporter.sendMail({
+      from: `"МойСоюз Dev" <${etherealDevCredentials.user}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+    if (result.rejected && result.rejected.length > 0) {
+      return { sent: false };
+    }
+    const previewUrl = nodemailer.getTestMessageUrl(result) ?? undefined;
+    if (previewUrl) {
+      console.log("\n[Email] Ethereal — откройте письмо в браузере:\n", previewUrl, "\n");
+    }
+    return { sent: true, previewUrl };
+  } catch (e) {
+    console.error("[Email] Ethereal (dev) не удалось:", e);
+    return { sent: false };
+  }
+}
+
+async function trySendViaResend(options: SendEmailOptions): Promise<boolean> {
+  const key = (process.env.RESEND_API_KEY ?? "").trim();
+  if (!key) return false;
+
+  const from = (process.env.RESEND_FROM ?? "").trim() || "onboarding@resend.dev";
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [normalizeSmtpAddress(options.to)],
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      }),
+    });
+    const bodyText = await res.text();
+    if (!res.ok) {
+      console.error("[Email] Resend HTTP ошибка:", res.status, bodyText.slice(0, 500));
+      return false;
+    }
+    console.log("[Email] ✅ Отправлено через Resend:", bodyText.slice(0, 200));
+    return true;
+  } catch (e) {
+    console.error("[Email] Resend запрос не удался:", e);
+    return false;
+  }
+}
 
 /**
  * Универсальная функция для отправки email.
- * Реальная отправка через SMTP, если заданы SMTP_HOST, SMTP_USER и SMTP_PASSWORD
- * (в том числе на localhost — чтобы можно было проверять интеграцию).
- * Если SMTP не настроен — только лог в консоль, возвращает { sent: false }.
+ * 1) SMTP, если заданы SMTP_HOST, SMTP_USER и SMTP_PASSWORD
+ * 2) иначе Resend, если задан RESEND_API_KEY
+ * 3) иначе в development — Ethereal (реальная отправка на тестовый SMTP + previewUrl)
+ * 4) иначе только лог, { sent: false }
  */
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDispatchResult> {
   const smtpHost = process.env.SMTP_HOST || "smtp.mail.ru";
@@ -81,9 +182,18 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDis
   console.log("  Subject:", options.subject);
 
   if (!isSmtpConfigured()) {
+    if (await trySendViaResend(options)) {
+      return { sent: true };
+    }
+    const ethereal = await trySendViaEtherealDev(options);
+    if (ethereal.sent) {
+      return ethereal;
+    }
     console.log("\n" + "=".repeat(60));
-    console.log("📧 [Email] SMTP не настроен — письмо не отправлено по сети");
-    console.log("   Задайте SMTP_HOST, SMTP_USER, SMTP_PASSWORD в .env / .env.local");
+    console.log(
+      "📧 [Email] Нет SMTP, Resend и (вне dev) Ethereal — письмо не отправлено. В dev включите NODE_ENV=development или задайте SMTP_* / RESEND_API_KEY"
+    );
+    console.log("   Задайте SMTP_* или RESEND_API_KEY (+ опционально RESEND_FROM) в .env.local");
     console.log("=".repeat(60));
     console.log("  To:", options.to);
     console.log("  Subject:", options.subject);
@@ -111,7 +221,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDis
       },
     });
 
-    console.log("[Email] ✅ Email отправлен:", {
+    console.log("[Email] SMTP ответ sendMail:", {
       messageId: result.messageId,
       accepted: result.accepted,
       rejected: result.rejected,
@@ -119,6 +229,13 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDis
 
     if (result.rejected && result.rejected.length > 0) {
       throw new Error(`Email отклонен: ${result.rejected.join(", ")}`);
+    }
+    if (!smtpAcceptedRecipient(result, options.to)) {
+      console.error(
+        "[Email] SMTP не вернул адрес получателя в accepted — считаем, что письмо не доставлено:",
+        { to: options.to, accepted: result.accepted }
+      );
+      return { sent: false };
     }
     return { sent: true };
   } catch (error) {

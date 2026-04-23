@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
+import type { PartnerModerationStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { deletePartnerLogoStoredFile } from "@/lib/partner-logo-file";
+import {
+  partnerModerationIsApprovedWithoutTimestamp,
+  partnerModerationShouldStayDraft,
+  partnerModerationStatusNeedsAdminReview,
+} from "@/lib/partner-moderation-status";
+
+/** Не кэшировать ответ: статус может смениться при открытии формы */
+export const dynamic = "force-dynamic";
 
 function prismaErrorToMessage(e: unknown): string {
   if (e instanceof Prisma.PrismaClientKnownRequestError) {
@@ -20,7 +29,9 @@ function prismaErrorToMessage(e: unknown): string {
   if (e instanceof Prisma.PrismaClientValidationError) {
     const msg = e.message;
     const staleClientHint =
-      /Unknown argument [`']?(ogrn|kpp|logoUrl)|Unknown field [`']?(ogrn|kpp|logoUrl)/i.test(msg)
+      /Unknown argument [`']?(ogrn|kpp|logoUrl|moderationStatus)|Unknown field [`']?(ogrn|kpp|logoUrl|moderationStatus)/i.test(
+        msg
+      )
         ? " Частая причина — устаревший Prisma Client после обновления схемы: выполните npx prisma generate и перезапустите dev-сервер."
         : "";
     if (process.env.NODE_ENV === "development") {
@@ -53,6 +64,58 @@ async function resolveLinkedUserId(raw: unknown): Promise<string | null | undefi
   return id;
 }
 
+/** Явный список: в dev-сборке Next/Turbopack `Object.values(PartnerModerationStatus)` из @prisma/client может быть undefined */
+const PARTNER_MODERATION_STATUS_VALUES = [
+  "DRAFT",
+  "NEW",
+  "UNDER_REVIEW",
+  "APPROVED",
+  "BLOCKED",
+  "RETURNED",
+] as const satisfies readonly PartnerModerationStatus[];
+
+const MODERATION_STATUSES = new Set<string>(PARTNER_MODERATION_STATUS_VALUES);
+
+type PartnerModerationRow = { moderationStatus: string; moderationApprovedAt: Date | null };
+
+/** SQL: поле есть в БД, но сгенерированный Client может быть старым — Prisma.update тогда падает с Unknown argument */
+async function setPartnerModerationStatusInDb(partnerId: string, nextStatus: string): Promise<void> {
+  if (!MODERATION_STATUSES.has(nextStatus)) {
+    throw new Error("Некорректный moderationStatus");
+  }
+  if (nextStatus === "APPROVED") {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Partner" SET "moderationStatus" = $1::"PartnerModerationStatus", "moderationApprovedAt" = NOW(), "updatedAt" = NOW() WHERE "id" = $2`,
+      nextStatus,
+      partnerId
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Partner" SET "moderationStatus" = $1::"PartnerModerationStatus", "moderationApprovedAt" = NULL, "updatedAt" = NOW() WHERE "id" = $2`,
+      nextStatus,
+      partnerId
+    );
+  }
+}
+
+async function readPartnerModerationRowFromDb(partnerId: string): Promise<PartnerModerationRow | null> {
+  const rows = await prisma.$queryRawUnsafe<PartnerModerationRow[]>(
+    `SELECT "moderationStatus"::text AS "moderationStatus", "moderationApprovedAt" FROM "Partner" WHERE "id" = $1 LIMIT 1`,
+    partnerId
+  );
+  return rows[0] ?? null;
+}
+
+function partnerJsonWithModerationRow<T extends { id: string }>(
+  partner: T,
+  row: PartnerModerationRow | null
+): T & { moderationStatus: string; moderationApprovedAt: Date | null } {
+  if (!row) {
+    return { ...partner, moderationStatus: "DRAFT", moderationApprovedAt: null };
+  }
+  return { ...partner, moderationStatus: row.moderationStatus, moderationApprovedAt: row.moderationApprovedAt };
+}
+
 type Body = {
   name?: string;
   description?: string;
@@ -72,6 +135,7 @@ type Body = {
   contactJobTitle?: string;
   isActive?: boolean;
   linkedUserId?: string | null;
+  moderationStatus?: string;
 };
 
 /**
@@ -87,7 +151,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   }
 
   try {
-    const partner = await prisma.partner.findUnique({
+    let partner = await prisma.partner.findUnique({
       where: { id },
       include: {
         linkedUser: { select: partnerLinkedUserSelect },
@@ -97,10 +161,75 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     if (!partner) {
       return NextResponse.json({ error: "Партнёр не найден" }, { status: 404 });
     }
-    return NextResponse.json({ partner });
+
+    await prisma.partner.updateMany({
+      where: { id, adminPartnerCardFirstSeenAt: null },
+      data: { adminPartnerCardFirstSeenAt: new Date() },
+    });
+    partner =
+      (await prisma.partner.findUnique({
+        where: { id },
+        include: {
+          linkedUser: { select: partnerLinkedUserSelect },
+          cabinetUser: { select: partnerLinkedUserSelect },
+        },
+      })) ?? partner;
+
+    const rowBefore = await readPartnerModerationRowFromDb(id).catch(() => null);
+    const ms0 =
+      rowBefore?.moderationStatus ??
+      (partner.moderationStatus as string | null | undefined) ??
+      "NEW";
+    const approvedAt0 = rowBefore?.moderationApprovedAt ?? null;
+    const draftLocked = partnerModerationShouldStayDraft({
+      moderationStatus: ms0,
+      cabinetInviteSentAt: partner.cabinetInviteSentAt,
+      cabinetInviteFirstOpenAt: partner.cabinetInviteFirstOpenAt,
+      adminPartnerCardFirstSeenAt: partner.adminPartnerCardFirstSeenAt,
+    });
+    const needsOpenReview =
+      !draftLocked &&
+      (partnerModerationStatusNeedsAdminReview(ms0) ||
+        partnerModerationIsApprovedWithoutTimestamp(ms0, approvedAt0));
+
+    // Админ открыл страницу редактирования → «На проверке» (дублируется PATCH на клиенте при необходимости)
+    if (needsOpenReview) {
+      try {
+        await setPartnerModerationStatusInDb(id, "UNDER_REVIEW");
+        const refreshed = await prisma.partner.findUnique({
+          where: { id },
+          include: {
+            linkedUser: { select: partnerLinkedUserSelect },
+            cabinetUser: { select: partnerLinkedUserSelect },
+          },
+        });
+        if (refreshed) partner = refreshed;
+      } catch (transitionErr) {
+        console.error("[admin/partners/[id] GET] →UNDER_REVIEW failed:", transitionErr);
+      }
+    }
+    const row = await readPartnerModerationRowFromDb(id).catch(() => null);
+    const partnerOut = partnerJsonWithModerationRow(partner, row);
+    return NextResponse.json(
+      { partner: partnerOut },
+      { headers: { "Cache-Control": "private, no-store, max-age=0, must-revalidate" } }
+    );
   } catch (e) {
     console.error("[admin/partners/[id] GET]", e);
-    return NextResponse.json({ error: "Ошибка загрузки партнёра" }, { status: 500 });
+    const detail = e instanceof Error ? e.message : String(e);
+    const hint =
+      /moderationStatus|moderationApprovedAt|cabinetInviteSentAt|cabinetInviteFirstOpenAt|adminPartnerCardFirstSeenAt|PartnerModerationStatus|P2022|does not exist/i.test(
+        detail
+      )
+        ? " Выполните на сервере: npx prisma migrate deploy"
+        : "";
+    return NextResponse.json(
+      {
+        error: `Ошибка загрузки партнёра.${hint}`,
+        ...(process.env.NODE_ENV === "development" ? { detail } : {}),
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -185,8 +314,57 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       : { disconnect: true };
   }
 
+  let moderationAppliedViaRaw = false;
+  if (body.moderationStatus !== undefined) {
+    if (typeof body.moderationStatus !== "string" || !MODERATION_STATUSES.has(body.moderationStatus)) {
+      return NextResponse.json({ error: "Некорректный moderationStatus" }, { status: 400 });
+    }
+
+    let applyModeration = true;
+    if (body.moderationStatus === "UNDER_REVIEW") {
+      const gatePartner = await prisma.partner.findUnique({
+        where: { id },
+        select: {
+          moderationStatus: true,
+          cabinetInviteSentAt: true,
+          cabinetInviteFirstOpenAt: true,
+          adminPartnerCardFirstSeenAt: true,
+        },
+      });
+      if (gatePartner && partnerModerationShouldStayDraft(gatePartner)) {
+        applyModeration = false;
+      }
+    }
+
+    if (applyModeration) {
+      try {
+        await setPartnerModerationStatusInDb(id, body.moderationStatus);
+        moderationAppliedViaRaw = true;
+      } catch (e) {
+        console.error("[admin/partners/[id] PATCH] moderationStatus SQL:", e);
+        return NextResponse.json({ error: prismaErrorToMessage(e) }, { status: 500 });
+      }
+    }
+  }
+
   if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "Нет полей для обновления" }, { status: 400 });
+    if (!moderationAppliedViaRaw && body.moderationStatus === undefined) {
+      return NextResponse.json({ error: "Нет полей для обновления" }, { status: 400 });
+    }
+    const partnerOnly = await prisma.partner.findUnique({
+      where: { id },
+      include: {
+        linkedUser: { select: partnerLinkedUserSelect },
+        cabinetUser: { select: partnerLinkedUserSelect },
+      },
+    });
+    if (!partnerOnly) {
+      return NextResponse.json({ error: "Партнёр не найден" }, { status: 404 });
+    }
+    const rowOnly = await readPartnerModerationRowFromDb(id).catch(() => null);
+    return NextResponse.json({
+      partner: partnerJsonWithModerationRow(partnerOnly, rowOnly),
+    });
   }
 
   try {
@@ -200,7 +378,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         },
       })
     );
-    return NextResponse.json({ partner });
+    const rowAfter = await readPartnerModerationRowFromDb(id).catch(() => null);
+    return NextResponse.json({
+      partner: partnerJsonWithModerationRow(partner, rowAfter),
+    });
   } catch (e) {
     console.error("[admin/partners/[id] PATCH]", e);
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {

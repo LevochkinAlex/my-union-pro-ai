@@ -1,0 +1,14 @@
+---
+description: Restart Next dev server when needed and verify fixes locally
+alwaysApply: true
+---
+
+# Dev server: restart and verify
+
+When a change is only trustworthy after a **fresh Node/Next process** or fresh Prisma client, **restart the dev server yourself** (stop the running `npm run dev`, then start it again from the project root). Do not only tell the user to restart.
+
+Typical triggers: `npx prisma generate` or migrate, edits to `.env*`, `next.config.*`, middleware, or fixes for errors that suggest a **stale bundle** (e.g. Prisma `Unknown argument` for a field that exists in `schema.prisma`).
+
+After restart, **verify** the fix: confirm the server starts without errors in the terminal, then check the affected path (e.g. `curl` to the API route you changed, or the user’s scenario). Do not treat server-side fixes as done without this check when verification is feasible in the environment.
+
+If the session has no running dev server and the task does not require it, skip restart; do not restart after every trivial UI-only edit when HMR is enough.

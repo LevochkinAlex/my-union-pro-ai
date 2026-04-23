@@ -600,6 +600,17 @@ model Partner {
 
   isActive Boolean @default(true)
 
+  /// Статус модерации (админ-список и процесс согласования)
+  moderationStatus PartnerModerationStatus @default(DRAFT)
+  /// Заполняется только при явном «Одобрить» в админке (публичные площадки — при APPROVED и непустой дате)
+  moderationApprovedAt DateTime?
+  /// Админ отправил приглашение на регистрацию кабинета (письмо / ссылка из админки)
+  cabinetInviteSentAt DateTime?
+  /// Партнёр впервые открыл страницу регистрации по ссылке из приглашения (проверка токена)
+  cabinetInviteFirstOpenAt DateTime?
+  /// Суперадмин впервые открыл страницу редактирования карточки партнёра
+  adminPartnerCardFirstSeenAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -608,6 +619,17 @@ model Partner {
   @@index([isActive])
   @@index([createdAt])
   @@index([linkedUserId])
+  @@index([moderationStatus])
+}
+
+/// Статус карточки партнёра (модерация)
+enum PartnerModerationStatus {
+  DRAFT // Черновик: не отправлено на модерацию
+  NEW // Новая: не проверена
+  UNDER_REVIEW // На проверке: админ открыл карточку
+  APPROVED // Одобрена
+  BLOCKED // Заблокирована
+  RETURNED // Возвращено на доработку
 }
 
 // Площадка / магазин партнёра (баннеры, промокоды, условия)
@@ -624,15 +646,15 @@ model PartnerVenue {
   phone       String?
   email       String?
 
-  bannerUrl   String?  @db.Text
-  bannerAlt   String?
+  bannerUrl String? @db.Text
+  bannerAlt String?
 
-  promoCode   String?
-  promoLabel  String?
-  conditions  String?  @db.Text
+  promoCode  String?
+  promoLabel String?
+  conditions String? @db.Text
 
-  isActive  Boolean  @default(true)
-  sortOrder Int      @default(0)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

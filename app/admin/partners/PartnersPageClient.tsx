@@ -14,6 +14,10 @@ import {
   PARTNER_KPP_MAX,
   PARTNER_OGRN_MAX,
 } from "@/lib/partner-requisites";
+import {
+  getPartnerModerationStatusLabel,
+  partnerModerationStatusBadgeClass,
+} from "@/lib/partner-moderation-status";
 
 const PAGE_SIZE = 20;
 
@@ -58,6 +62,8 @@ export type PartnerRow = {
   /** Учётка кабинета партнёра (User.partnerRecordId → Partner) */
   cabinetUser?: { id: string; email: string | null } | null;
   isActive: boolean;
+  /** Статус модерации (PartnerModerationStatus) */
+  moderationStatus?: string;
   createdAt: string;
 };
 
@@ -315,20 +321,30 @@ export default function PartnersPageClient({
           <table className="w-full min-w-[1024px]">
             <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                <th className="min-w-0 px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
                   Название
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">ИНН</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Email</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Телефон</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                <th className="w-[1%] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                  ИНН
+                </th>
+                <th className="w-[1%] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                  Email
+                </th>
+                <th className="w-[1%] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                  Телефон
+                </th>
+                <th className="w-[1%] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
                   Контактное лицо
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Статус</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                <th className="w-[1%] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                  Статус
+                </th>
+                <th className="w-[1%] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
                   Дата создания
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Действия</th>
+                <th className="w-[1%] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                  Действия
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -342,31 +358,43 @@ export default function PartnersPageClient({
                   p.contactEmail?.trim() ||
                   "";
                 return (
-                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{p.name ?? "—"}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{p.inn ?? "—"}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{p.email ?? "—"}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{p.phone ?? "—"}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{formatContactFio(p)}</td>
-                    <td className="px-6 py-4 text-sm">
+                  <tr
+                    key={p.id}
+                    className="transition-colors hover:bg-gray-950/[0.035] dark:hover:bg-white/[0.04]"
+                  >
+                    <td className="min-w-0 px-6 py-4 text-center text-sm font-medium text-gray-900 dark:text-white">
+                      <span className="inline-block max-w-full break-words">{p.name ?? "—"}</span>
+                    </td>
+                    <td className="w-[1%] whitespace-nowrap px-6 py-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                      {p.inn ?? "—"}
+                    </td>
+                    <td className="w-[1%] whitespace-nowrap px-6 py-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                      {p.email ?? "—"}
+                    </td>
+                    <td className="w-[1%] whitespace-nowrap px-6 py-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                      {p.phone ?? "—"}
+                    </td>
+                    <td className="w-[1%] whitespace-nowrap px-6 py-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                      {formatContactFio(p)}
+                    </td>
+                    <td className="w-[1%] whitespace-nowrap px-6 py-4 text-center text-sm align-middle">
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          p.isActive
-                            ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
-                            : "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200"
-                        }`}
+                        className={`inline-flex w-max max-w-none whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${partnerModerationStatusBadgeClass(
+                          p.moderationStatus ?? "DRAFT"
+                        )}`}
+                        title={getPartnerModerationStatusLabel(p.moderationStatus ?? "DRAFT")}
                       >
-                        {p.isActive !== false ? "Активна" : "Неактивна"}
+                        {getPartnerModerationStatusLabel(p.moderationStatus ?? "DRAFT")}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                    <td className="w-[1%] whitespace-nowrap px-6 py-4 text-center text-sm text-gray-600 dark:text-gray-400">
                       {p.createdAt ? new Date(p.createdAt).toLocaleDateString("ru-RU") : "—"}
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex flex-wrap items-center gap-3">
+                    <td className="w-[1%] px-6 py-4 text-center text-sm align-middle">
+                      <div className="flex flex-col items-center justify-center gap-2">
                         <Link
                           href={`/admin/partners/${p.id}`}
-                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                          className="inline-flex flex-nowrap items-center justify-center whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30 dark:hover:text-blue-300"
                         >
                           Редактировать
                         </Link>
@@ -377,7 +405,7 @@ export default function PartnersPageClient({
                             label="Войти как"
                           />
                         ) : (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                          <span className="whitespace-nowrap text-xs text-gray-400 dark:text-gray-500">
                             Нет учётной записи
                           </span>
                         )}

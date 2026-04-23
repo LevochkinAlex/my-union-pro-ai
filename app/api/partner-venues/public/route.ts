@@ -20,9 +20,15 @@ export async function GET(request: NextRequest) {
     const venueId = searchParams.get("venueId")?.trim();
     if (venueId) {
       const venue = await prisma.partnerVenue.findFirst({
-        where: { id: venueId, isActive: true, partner: { isActive: true } },
+        where: {
+          id: venueId,
+          isActive: true,
+          partner: { isActive: true, moderationStatus: "APPROVED", moderationApprovedAt: { not: null } },
+        },
         include: {
-          partner: { select: { id: true, name: true, description: true, website: true } },
+          partner: {
+            select: { id: true, name: true, description: true, website: true, logoUrl: true },
+          },
         },
       });
       if (!venue) {
@@ -39,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     const where: any = {
       isActive: true,
-      partner: { isActive: true },
+      partner: { isActive: true, moderationStatus: "APPROVED", moderationApprovedAt: { not: null } },
     };
 
     if (city) {
@@ -77,6 +83,7 @@ export async function GET(request: NextRequest) {
               name: true,
               description: true,
               website: true,
+              logoUrl: true,
             },
           },
         },

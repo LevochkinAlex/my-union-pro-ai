@@ -14,6 +14,13 @@ import {
   PARTNER_KPP_MAX,
   PARTNER_OGRN_MAX,
 } from "@/lib/partner-requisites";
+import {
+  getPartnerModerationStatusLabel,
+  partnerModerationIsApprovedWithoutTimestamp,
+  partnerModerationShouldStayDraft,
+  partnerModerationStatusBadgeClass,
+  partnerModerationStatusNeedsAdminReview,
+} from "@/lib/partner-moderation-status";
 
 type PartnerForm = {
   name: string;
@@ -72,6 +79,8 @@ export default function PartnerEditPage() {
   const [linkedUserEmail, setLinkedUserEmail] = useState<string | null>(null);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [moderationStatus, setModerationStatus] = useState<string | null>(null);
+  const [approving, setApproving] = useState(false);
 
   const requisitesValid = useMemo(
     () => arePartnerRequisitesValid(formData.inn, formData.ogrn, formData.kpp),
@@ -114,7 +123,37 @@ export default function PartnerEditPage() {
         linkedUserId: p.linkedUserId ?? p.linkedUser?.id ?? p.cabinetUser?.id ?? "",
         isActive: p.isActive !== false,
       });
+      const statusFromApi =
+        typeof p.moderationStatus === "string" && p.moderationStatus.trim()
+          ? p.moderationStatus.trim()
+          : "DRAFT";
+      setModerationStatus(statusFromApi);
       setLinkedUserEmail(p.cabinetUser?.email ?? p.linkedUser?.email ?? null);
+
+      // Надёжно: после открытия формы выставляем «На проверке» через PATCH (GET может кэшироваться / переход в GET мог не сохраниться)
+      const draftGatePayload = {
+        moderationStatus: statusFromApi,
+        cabinetInviteSentAt: p.cabinetInviteSentAt as string | Date | null | undefined,
+        cabinetInviteFirstOpenAt: p.cabinetInviteFirstOpenAt as string | Date | null | undefined,
+        adminPartnerCardFirstSeenAt: p.adminPartnerCardFirstSeenAt as string | Date | null | undefined,
+      };
+      if (
+        !partnerModerationShouldStayDraft(draftGatePayload) &&
+        (partnerModerationStatusNeedsAdminReview(statusFromApi) ||
+          partnerModerationIsApprovedWithoutTimestamp(statusFromApi, p.moderationApprovedAt))
+      ) {
+        const patchRes = await fetch(`/api/admin/partners/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ moderationStatus: "UNDER_REVIEW" }),
+        });
+        const patchData = (await patchRes.json().catch(() => ({}))) as {
+          partner?: { moderationStatus?: string };
+        };
+        if (patchRes.ok && typeof patchData.partner?.moderationStatus === "string") {
+          setModerationStatus(patchData.partner.moderationStatus);
+        }
+      }
     } catch {
       setLoadError("Ошибка сети");
     } finally {
@@ -203,6 +242,7 @@ export default function PartnerEditPage() {
     try {
       const res = await fetch(`/api/admin/partners/${id}/send-registration-email`, {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
@@ -210,22 +250,36 @@ export default function PartnerEditPage() {
         error?: string;
         sent?: boolean;
         inviteUrl?: string;
+        previewUrl?: string;
       };
+      const link = typeof data.inviteUrl === "string" ? data.inviteUrl : "";
+      const sentOk = data.sent === true;
+
       if (!res.ok) {
-        alertError(typeof data.error === "string" ? data.error : "Не удалось отправить письмо", "Партнеры");
+        const err =
+          typeof data.error === "string" && data.error.trim()
+            ? data.error.trim()
+            : "Не удалось отправить письмо";
+        alertError(
+          link ? `${err}\n\nСсылка для партнёра:\n${link}` : err,
+          "Партнеры"
+        );
         return;
       }
-      if (data.sent === false) {
-        const link = typeof data.inviteUrl === "string" ? data.inviteUrl : "";
-        alertWarning(
-          link
-            ? `Почта не отправлена: на сервере не заданы переменные SMTP (SMTP_HOST, SMTP_USER, SMTP_PASSWORD) или SMTP вернул ошибку. Скопируйте ссылку и передайте партнёру вручную:\n\n${link}`
-            : "Почта не отправлена: проверьте настройки SMTP в .env.local.",
+      if (sentOk) {
+        const preview =
+          typeof data.previewUrl === "string" && data.previewUrl.trim() ? data.previewUrl.trim() : "";
+        alertSuccess(
+          preview
+            ? `Письмо ушло через тестовый Ethereal (режим разработки). Откройте ссылку, чтобы увидеть письмо в браузере:\n\n${preview}\n\nДля отправки на реальный ящик задайте в .env.local SMTP_* или RESEND_API_KEY.`
+            : "Письмо с ссылкой на регистрацию кабинета партнёра отправлено на указанный email. Если письма нет во «Входящих», проверьте папку «Спам».",
           "Партнеры"
         );
       } else {
-        alertSuccess(
-          "Письмо с ссылкой на регистрацию кабинета партнёра отправлено на указанный email.",
+        alertWarning(
+          link
+            ? `Письмо по сети не отправлено (нет рабочих SMTP или Resend, либо SMTP не подтвердил доставку). Скопируйте ссылку и передайте партнёру:\n\n${link}`
+            : "Письмо не отправлено: задайте в .env.local SMTP_HOST, SMTP_USER, SMTP_PASSWORD или RESEND_API_KEY (см. лог сервера).",
           "Партнеры"
         );
       }
@@ -234,6 +288,31 @@ export default function PartnerEditPage() {
       alertError("Ошибка сети", "Партнеры");
     } finally {
       setSendingInvite(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!isSuperAdmin || !id) return;
+    setApproving(true);
+    try {
+      const res = await fetch(`/api/admin/partners/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moderationStatus: "APPROVED" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alertError(typeof data.error === "string" ? data.error : "Не удалось одобрить", "Партнеры");
+        return;
+      }
+      setModerationStatus("APPROVED");
+      alertSuccess("Статус партнёра: «Одобрен».", "Партнеры");
+      await load();
+      router.refresh();
+    } catch {
+      alertError("Ошибка сети", "Партнеры");
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -319,6 +398,18 @@ export default function PartnerEditPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Редактирование партнёра</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">Измените данные и нажмите «Сохранить».</p>
+        {moderationStatus ? (
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            Статус модерации:{" "}
+            <span
+              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${partnerModerationStatusBadgeClass(
+                moderationStatus
+              )}`}
+            >
+              {getPartnerModerationStatusLabel(moderationStatus)}
+            </span>
+          </p>
+        ) : null}
         {impersonateId ? (
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <ImpersonateButton userId={impersonateId} userEmail={impersonateEmail || undefined} label="Войти как" />
@@ -646,10 +737,20 @@ export default function PartnerEditPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {isSuperAdmin && moderationStatus && moderationStatus !== "APPROVED" ? (
+          <button
+            type="button"
+            onClick={handleApprove}
+            disabled={saving || approving}
+            className="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white shadow transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {approving ? "Одобрение…" : "Одобрить партнёра"}
+          </button>
+        ) : null}
         <Link
           href="/admin/partners"
-          className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           Отмена
         </Link>
@@ -657,7 +758,7 @@ export default function PartnerEditPage() {
           type="button"
           onClick={handleSave}
           disabled={!formData.name.trim() || !requisitesValid || saving}
-          className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[120px]"
         >
           {saving ? "Сохранение…" : "Сохранить"}
         </button>

@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   const partner = await prisma.partner.findUnique({
     where: { id: partnerId },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, cabinetInviteSentAt: true },
   });
 
   if (!partner) {
@@ -72,7 +72,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   await prisma.partner.update({
     where: { id: partnerId },
-    data: { email: rawEmail },
+    data: {
+      email: rawEmail,
+      ...(partner.cabinetInviteSentAt ? {} : { cabinetInviteSentAt: new Date() }),
+    },
   });
 
   let token: string;
@@ -89,7 +92,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const inviteUrl = `${baseUrl()}/register/partner?invite=${encodeURIComponent(token)}`;
 
   try {
-    const { sent } = await sendEmail({
+    const { sent, previewUrl } = await sendEmail({
       to: rawEmail,
       subject: "Регистрация кабинета партнёра — МойСоюз",
       html: `
@@ -106,11 +109,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     return NextResponse.json({
       ok: true,
-      sent,
+      sent: Boolean(sent),
+      previewUrl: previewUrl ?? undefined,
       inviteUrl: sent ? undefined : inviteUrl,
       message: sent
         ? "Письмо отправлено"
-        : "SMTP не настроен — письмо не отправлено; ссылка в ответе для ручной передачи",
+        : "Почта не отправлена (SMTP/Resend); ссылка в ответе для ручной передачи",
     });
   } catch (e) {
     console.error("[send-registration-email] sendEmail", e);
@@ -120,6 +124,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           e instanceof Error
             ? `Ошибка отправки почты: ${e.message}`
             : "Не удалось отправить письмо. Проверьте настройки SMTP.",
+        sent: false,
+        inviteUrl,
       },
       { status: 502 }
     );

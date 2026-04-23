@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
           name: companyName,
           contactFirstName: name,
           email,
+          moderationStatus: "NEW",
         },
       });
 

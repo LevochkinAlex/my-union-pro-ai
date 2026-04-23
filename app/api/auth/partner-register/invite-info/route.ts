@@ -57,6 +57,15 @@ export async function GET(request: NextRequest) {
     .join(" ")
     .trim();
 
+  try {
+    await prisma.partner.updateMany({
+      where: { id: payload.partnerId, cabinetInviteFirstOpenAt: null },
+      data: { cabinetInviteFirstOpenAt: new Date() },
+    });
+  } catch (e) {
+    console.error("[partner-register/invite-info] cabinetInviteFirstOpenAt", e);
+  }
+
   return NextResponse.json({
     ok: true,
     email: payload.email,
