@@ -116,7 +116,8 @@ async function trySendViaEtherealDev(options: SendEmailOptions): Promise<SendEma
     if (result.rejected && result.rejected.length > 0) {
       return { sent: false };
     }
-    const previewUrl = nodemailer.getTestMessageUrl(result) ?? undefined;
+    const rawPreview = nodemailer.getTestMessageUrl(result);
+    const previewUrl = typeof rawPreview === "string" ? rawPreview : undefined;
     if (previewUrl) {
       console.log("\n[Email] Ethereal — откройте письмо в браузере:\n", previewUrl, "\n");
     }
