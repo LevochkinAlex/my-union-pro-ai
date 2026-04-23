@@ -245,25 +245,6 @@ export async function optimizePartnerVenueBannerToWebp(input: Buffer): Promise<O
 }
 
 /**
- * Создаёт несколько версий изображения
- */
-export async function createImageVariants(
-  input: Buffer | string
-): Promise<{
-  thumbnail: OptimizedImage;
-  medium: OptimizedImage;
-  original: OptimizedImage;
-}> {
-  const [thumbnail, medium, original] = await Promise.all([
-    optimizeImage(input, IMAGE_PRESETS.thumbnail),
-    optimizeImage(input, IMAGE_PRESETS.post),
-    optimizeImage(input, IMAGE_PRESETS.full),
-  ]);
-
-  return { thumbnail, medium, original };
-}
-
-/**
  * Проверяет, является ли файл изображением
  */
 export function isImageFile(filename: string): boolean {

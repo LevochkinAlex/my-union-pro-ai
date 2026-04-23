@@ -89,12 +89,6 @@ export function getTariffByKey(key: string): TariffPlan | undefined {
   return TARIFF_PLANS.find((p) => p.key === key);
 }
 
-export function getTariffByMemberCount(members: number): TariffPlan | undefined {
-  const withLimit = TARIFF_PLANS.filter((p) => p.memberLimit != null) as (TariffPlan & { memberLimit: number })[];
-  const suitable = withLimit.filter((p) => p.memberLimit >= members).sort((a, b) => a.memberLimit - b.memberLimit);
-  return suitable[0] ?? TARIFF_PLANS.find((p) => p.key === "UNLIMITED");
-}
-
 export function getRatesForMemberCount(members: number): { sixMonthRate: number; yearRate: number } {
   const normalized = Math.max(1, Math.floor(members));
   return getBandRates(normalized);

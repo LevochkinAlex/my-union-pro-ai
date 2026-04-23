@@ -355,7 +355,6 @@ export async function POST(
     }
 
     // Рассылка копий постановлений во «Входящие» участникам не выполняется (по требованию).
-    // Не вызывать assignResolutionsToParticipantsAndNotify.
 
     await clearAllMeetingNotifications(meetingId).catch((err) =>
       console.warn("[resolutions/create] clearAllMeetingNotifications:", err)

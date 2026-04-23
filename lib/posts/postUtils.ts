@@ -1,18 +1,3 @@
-import { getFileUrlWithCDN } from "@/lib/cdn";
-
-/**
- * Формирует URL превью изображения с поддержкой CDN
- */
-export function getPreviewUrl(imageUrl: string): string {
-  if (!imageUrl) return "";
-
-  if (imageUrl.startsWith("data:")) {
-    return imageUrl;
-  }
-
-  return getFileUrlWithCDN(imageUrl, true);
-}
-
 /**
  * Форматирует время для отображения
  */
@@ -43,18 +28,5 @@ export function getInitials(user: any): string {
   const first = user.firstName?.[0]?.toUpperCase() || "";
   const last = user.lastName?.[0]?.toUpperCase() || "";
   return first + last || "?";
-}
-
-/**
- * Извлекает обычный текст из HTML
- */
-export function getPlainText(html: string): string {
-  if (typeof document === "undefined") {
-    return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  }
-
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  return div.textContent || div.innerText || "";
 }
 

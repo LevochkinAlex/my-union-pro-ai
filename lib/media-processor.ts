@@ -96,32 +96,6 @@ export async function detectFileType(buffer: Buffer, originalName?: string): Pro
 }
 
 /**
- * Получает метаданные изображения (размеры, формат)
- */
-export async function getImageMetadata(buffer: Buffer): Promise<{
-  width: number;
-  height: number;
-  format: string;
-  size: number;
-} | null> {
-  try {
-    const metadata = await sharp(buffer).metadata();
-    if (metadata.width && metadata.height) {
-      return {
-        width: metadata.width,
-        height: metadata.height,
-        format: metadata.format || 'unknown',
-        size: buffer.length,
-      };
-    }
-    return null;
-  } catch (error) {
-    // Если Sharp не может обработать файл, это не изображение или неподдерживаемый формат
-    return null;
-  }
-}
-
-/**
  * Обрабатывает медиа-файл: определяет тип, конвертирует при необходимости, оптимизирует
  */
 export async function processMediaFile(
@@ -245,39 +219,3 @@ export async function processMediaFile(
     size: processedBuffer.length,
   };
 }
-
-/**
- * Проверяет, является ли файл изображением
- */
-export function isImage(mimeType: string): boolean {
-  return mimeType.startsWith('image/');
-}
-
-/**
- * Проверяет, является ли файл видео
- */
-export function isVideo(mimeType: string): boolean {
-  return mimeType.startsWith('video/');
-}
-
-/**
- * Проверяет, поддерживается ли формат для обработки
- */
-export function isSupportedFormat(mimeType: string): boolean {
-  const supported = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'image/heic',
-    'image/heif',
-    'image/bmp',
-    'image/tiff',
-    'image/svg+xml',
-    'video/mp4',
-    'video/webm',
-    'video/quicktime',
-  ];
-  return supported.includes(mimeType);
-}
-
