@@ -40,16 +40,16 @@ crontab -l 2>/dev/null | awk '
 APP_ROOT="${APP_ROOT:-/opt/my-union-pro}"
 
 # CRON_TZ=UTC: расписание не зависит от TZ сервера (часто Europe/Moscow).
-# tsx из node_modules — чтобы не зависеть от PATH (pnpm в cron часто недоступен).
+# Явный /usr/bin/node + tsx/dist/cli.mjs: шим .bin/tsx вызывает «node» из PATH — в cron часто пусто/другой Node.
 MYUNION_BLOCK=$(cat <<EOF
 # --- MYUNION_CRON start ---
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 SHELL=/bin/bash
 CRON_TZ=UTC
 0 0 * * * cd $APP_ROOT && /usr/bin/node scripts/sync-discounts.mjs >> /var/log/myunion/sync-discounts.log 2>&1
-0 1 * * * cd $APP_ROOT && ./node_modules/.bin/tsx scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1
+0 1 * * * cd $APP_ROOT && /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1
 # ЕГРЮЛ / ликвидация партнёров: каждый день в 02:00 UTC (поля: мин час день месяц день_недели)
-0 2 * * * cd $APP_ROOT && ./node_modules/.bin/tsx scripts/run-partner-liquidation-cron.ts >> /var/log/myunion/partner-liquidation.log 2>&1
+0 2 * * * cd $APP_ROOT && /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/run-partner-liquidation-cron.ts >> /var/log/myunion/partner-liquidation.log 2>&1
 # --- MYUNION_CRON end ---
 EOF
 )

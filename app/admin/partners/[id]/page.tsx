@@ -184,6 +184,10 @@ export default function PartnerEditPage() {
         processed?: number;
         updatedStatusOnly?: number;
         errors?: string[];
+        /** true = запрос к ФНС без кэша клиента (ручная кнопка) */
+        egrulFreshRequest?: boolean;
+        /** После скана карточка в BLOCKED (новая блокировка или уже была). */
+        partnerIsBlocked?: boolean;
       };
       if (!res.ok) {
         alertError(typeof data.error === "string" ? data.error : "Не удалось выполнить проверку", "ЕГРЮЛ");
@@ -192,7 +196,7 @@ export default function PartnerEditPage() {
       const parts = [
         `Проверено записей: ${data.processed ?? 0}`,
         `Заблокировано: ${data.blocked ?? 0}`,
-        `Обновлений статуса в реестре: ${data.updatedStatusOnly ?? 0}`,
+        `Обновлений текста статуса в карточке: ${data.updatedStatusOnly ?? 0}`,
       ];
       if (data.errors?.length) {
         parts.push(`Предупреждения: ${data.errors.length}`);
@@ -201,15 +205,43 @@ export default function PartnerEditPage() {
       const blocked = data.blocked ?? 0;
       const updatedStatusOnly = data.updatedStatusOnly ?? 0;
       const processed = data.processed ?? 0;
-      if (blocked > 0) {
-        alertError(body, "Проверка ЕГРЮЛ");
-      } else if (processed > 0 && blocked === 0 && updatedStatusOnly === 0) {
-        alertWarning(
-          `${body}\n\nПовторите проверку через 10 минут`,
-          "Проверка ЕГРЮЛ"
+      const fresh = data.egrulFreshRequest === true;
+      const partnerIsBlocked = data.partnerIsBlocked === true;
+      /** Ручная проверка без блокировки: явный зелёный текст + фраза в конце */
+      const egrulNotBlockedStyle = {
+        messageClassName: "font-semibold text-green-900 dark:text-green-100",
+      } as const;
+      const egrulBlockedStyle = {
+        messageClassName: "font-semibold text-red-950 dark:text-red-100",
+      } as const;
+      const egrulOkTail = "\n\nОграничений нет";
+      const egrulNoLineChangeHint =
+        "Запрос к ЕГРЮЛ выполнен (без кэша). Текст статуса в карточке уже совпадал с ответом реестра — изменений строки статуса нет.";
+
+      if (partnerIsBlocked || blocked > 0) {
+        const lines = [body];
+        const alreadyBlockedNoNewBlock = partnerIsBlocked && blocked === 0;
+        if (alreadyBlockedNoNewBlock && fresh && processed > 0) {
+          lines.push(egrulNoLineChangeHint);
+        }
+        if (data.errors?.length) {
+          lines.push(...(data.errors ?? []).slice(0, 5));
+        }
+        lines.push("Партнер заблокирован");
+        alertError(lines.join("\n\n"), "Проверка ЕГРЮЛ", egrulBlockedStyle);
+      } else if ((data.errors?.length ?? 0) > 0) {
+        const errText = [body, ...(data.errors ?? []).slice(0, 5)].join("\n");
+        alertWarning(errText, "Проверка ЕГРЮЛ");
+      } else if (fresh && processed > 0 && updatedStatusOnly === 0) {
+        alertSuccess(
+          `${body}\n\n${egrulNoLineChangeHint}${egrulOkTail}`,
+          "Проверка ЕГРЮЛ",
+          egrulNotBlockedStyle
         );
+      } else if (processed > 0 && blocked === 0 && updatedStatusOnly === 0) {
+        alertWarning(`${body}\n\nПовторите проверку через 10 минут`, "Проверка ЕГРЮЛ");
       } else {
-        alertSuccess(body, "Проверка ЕГРЮЛ");
+        alertSuccess(`${body}${egrulOkTail}`, "Проверка ЕГРЮЛ", egrulNotBlockedStyle);
       }
       await load();
     } catch {

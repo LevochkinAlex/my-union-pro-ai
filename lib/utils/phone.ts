@@ -99,20 +99,3 @@ export function isValidPhone(phone: string | null | undefined): boolean {
   return digits.length >= 10 && digits.length <= 12;
 }
 
-/**
- * Маскирует телефон для отображения
- * +7 (***) ***-**-86
- */
-export function maskPhone(phone: string | null | undefined): string {
-  if (!phone) return "";
-  
-  const digits = getPhoneDigits(phone);
-  
-  if (digits.length >= 10) {
-    const last2 = digits.slice(-2);
-    return `+7 (***) ***-**-${last2}`;
-  }
-  
-  return "***";
-}
-

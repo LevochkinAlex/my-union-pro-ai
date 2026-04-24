@@ -19,6 +19,8 @@
 
 На **localhost** по расписанию ничего не крутится (нет серверного crontab): проверка вручную — `npm run cron:partner-liquidation`.
 
+Если на проде слот 02:00 UTC / 05:00 МСК «молчит»: смотрите **`/var/log/myunion/partner-liquidation.log`** и **`crontab -l`**. Крон должен вызывать **`/usr/bin/node …/node_modules/tsx/dist/cli.mjs`** (после `setup-cron.sh` из репозитория); переменные — из **`.env.local`** в каталоге приложения (`scripts/load-env-local-first.ts`).
+
 Скрипт читает необязательные env:
 
 - `VDS_HOST` — по умолчанию `79.143.29.66`

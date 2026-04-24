@@ -9,7 +9,7 @@
  * Cron: GET /api/cron/sync-user-discounts?secret=CRON_SECRET
  */
 
-import "dotenv/config";
+import "./load-env-local-first";
 import { prisma } from "../lib/prisma";
 import { runSyncAllUsersDiscounts } from "../lib/discount-sync-all-users";
 

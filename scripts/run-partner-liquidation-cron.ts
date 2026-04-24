@@ -7,7 +7,7 @@
  * Требует DATABASE_URL и остальные переменные как у приложения (.env.local).
  */
 
-import "dotenv/config";
+import "./load-env-local-first";
 import { runPartnerLiquidationCronJob } from "../lib/partner-liquidation-cron-job";
 import { prisma } from "../lib/prisma";
 

@@ -153,10 +153,11 @@ export async function lookupEgrulByInnOrOgrn(
   const cacheKey = `${ogrnDigits || "noogrn"}|${innDigits || "noinn"}`;
   if (options?.bypassCache) {
     cache.delete(cacheKey);
-  }
-  const hit = cache.get(cacheKey);
-  if (hit && hit.expires > Date.now()) {
-    return hit.result;
+  } else {
+    const hit = cache.get(cacheKey);
+    if (hit && hit.expires > Date.now()) {
+      return hit.result;
+    }
   }
 
   let lastErr: string | null = null;

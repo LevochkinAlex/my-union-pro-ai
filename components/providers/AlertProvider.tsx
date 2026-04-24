@@ -15,6 +15,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     onConfirm?: () => void;
     onCancel?: () => void;
     autoClose?: number;
+    messageClassName?: string;
   }>({
     isOpen: false,
     message: "",
@@ -66,6 +67,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
         onConfirm={handleConfirm}
         onCancel={handleCancel}
         autoClose={alertState.autoClose}
+        messageClassName={alertState.messageClassName}
       />
     </>
   );

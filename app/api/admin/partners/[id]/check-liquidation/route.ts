@@ -38,9 +38,19 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     skipEgrulCache: true,
   });
 
+  const after = await prisma.partner.findUnique({
+    where: { id },
+    select: { moderationStatus: true },
+  });
+  const partnerIsBlocked = after?.moderationStatus === "BLOCKED";
+
   return NextResponse.json({
     success: true,
     partnerId: id,
+    /** Ручная проверка всегда идёт в ФНС без in-memory кэша клиента (см. skipEgrulCache). */
+    egrulFreshRequest: true,
+    /** После скана партнёр в BLOCKED (в т.ч. уже был заблокирован и проверка подтвердила). */
+    partnerIsBlocked,
     ...result,
     errors: result.errors.slice(0, 10),
   });

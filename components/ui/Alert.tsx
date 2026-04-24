@@ -5,6 +5,19 @@ import { createPortal } from "react-dom";
 
 export type AlertType = "info" | "success" | "warning" | "error";
 
+export type ShowAlertOptions = {
+  title?: string;
+  message: string;
+  type?: AlertType;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  autoClose?: number;
+  /** Доп. классы для текста сообщения (например усиленный зелёный для ЕГРЮЛ). */
+  messageClassName?: string;
+};
+
 interface AlertProps {
   isOpen: boolean;
   onClose: () => void;
@@ -16,6 +29,7 @@ interface AlertProps {
   onConfirm?: () => void;
   onCancel?: () => void;
   autoClose?: number; // Автозакрытие через N миллисекунд
+  messageClassName?: string;
 }
 
 export function Alert({
@@ -29,6 +43,7 @@ export function Alert({
   onConfirm,
   onCancel,
   autoClose,
+  messageClassName,
 }: AlertProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -170,7 +185,9 @@ export function Alert({
                     {title}
                   </h3>
                 )}
-                <p className={`text-sm leading-relaxed whitespace-pre-line ${config.textColor}`}>
+                <p
+                  className={`text-sm leading-relaxed whitespace-pre-line ${config.textColor} ${messageClassName ?? ""}`.trim()}
+                >
                   {message}
                 </p>
               </div>
@@ -215,31 +232,12 @@ export function Alert({
 
 // Хук для удобного использования
 export function useAlert() {
-  const [alertState, setAlertState] = useState<{
-    isOpen: boolean;
-    title?: string;
-    message: string;
-    type?: AlertType;
-    confirmText?: string;
-    cancelText?: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-    autoClose?: number;
-  }>({
+  const [alertState, setAlertState] = useState<ShowAlertOptions & { isOpen: boolean }>({
     isOpen: false,
     message: "",
   });
 
-  const showAlert = (options: {
-    title?: string;
-    message: string;
-    type?: AlertType;
-    confirmText?: string;
-    cancelText?: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-    autoClose?: number;
-  }) => {
+  const showAlert = (options: ShowAlertOptions) => {
     setAlertState({
       isOpen: true,
       ...options,
@@ -262,6 +260,7 @@ export function useAlert() {
       onConfirm={alertState.onConfirm}
       onCancel={alertState.onCancel}
       autoClose={alertState.autoClose}
+      messageClassName={alertState.messageClassName}
     />
   );
 
@@ -273,31 +272,13 @@ export function useAlert() {
 }
 
 // Глобальная функция для замены alert()
-let globalAlertHandler: ((options: {
-  title?: string;
-  message: string;
-  type?: AlertType;
-  confirmText?: string;
-  cancelText?: string;
-  onConfirm?: () => void;
-  onCancel?: () => void;
-  autoClose?: number;
-}) => void) | null = null;
+let globalAlertHandler: ((options: ShowAlertOptions) => void) | null = null;
 
 export function setGlobalAlertHandler(handler: typeof globalAlertHandler) {
   globalAlertHandler = handler;
 }
 
-export function showAlert(options: {
-  title?: string;
-  message: string;
-  type?: AlertType;
-  confirmText?: string;
-  cancelText?: string;
-  onConfirm?: () => void;
-  onCancel?: () => void;
-  autoClose?: number;
-}) {
+export function showAlert(options: ShowAlertOptions) {
   if (globalAlertHandler) {
     globalAlertHandler(options);
   } else {
