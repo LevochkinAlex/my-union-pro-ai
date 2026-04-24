@@ -24,9 +24,9 @@
 1. **Запись в crontab (root):** после `./deploy.sh` вызывается `setup-cron.sh`. Если деплой не под root — один раз:  
    `APP_ROOT=/opt/my-union-pro bash /opt/my-union-pro/scripts/setup-cron.sh`  
    Проверка: `crontab -l` — строка с `run-partner-liquidation-cron.ts` и блок `# --- MYUNION_CRON`.
-2. **Переменные:** в `/opt/my-union-pro` нужны **`.env.local`** (и при необходимости `.env`) с **`DATABASE_URL`**. Скрипты крона первым делом подгружают env через **`scripts/load-env-local-first.ts`** (строка в crontab: `cd $APP_ROOT && …` — `cwd` = каталог приложения).
-3. **Логи и ручной прогон:** `tail -50 /var/log/myunion/partner-liquidation.log`; вручную:  
-   `cd /opt/my-union-pro && ./node_modules/.bin/tsx scripts/run-partner-liquidation-cron.ts`
+2. **Переменные:** в `/opt/my-union-pro` нужны **`.env.local`** (и при необходимости `.env`) с **`DATABASE_URL`**. В crontab для tsx-заданий вызывается **`dotenv -c`** (каскад как у Next), плюс в коде остаётся **`scripts/load-env-local-first.ts`** при ручном `tsx` без обёртки.
+3. **Логи и ручной прогон:** `tail -50 /var/log/myunion/partner-liquidation.log`; вручную (как в crontab, с каскадом env):  
+   `cd /opt/my-union-pro && ./node_modules/.bin/dotenv -c -- /usr/bin/node ./node_modules/tsx/dist/cli.mjs scripts/run-partner-liquidation-cron.ts`
 4. **Время:** **`CRON_TZ=UTC`**, слот **`0 2 * * *`** = 02:00 UTC ≈ 05:00 МСК (не путать с локальным TZ сервера).
 
 Скрипт читает необязательные env:
