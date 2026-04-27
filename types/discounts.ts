@@ -109,6 +109,9 @@ export interface DiscountItem {
   partnerName?: string | null;
   /** Логотип партнёра (URL), для карточек площадок */
   partnerLogoUrl?: string | null;
+  /** Коды услуги площадки (`lib/partner-venue-service-taxonomy`) */
+  partnerServiceCategoryCode?: string | null;
+  partnerServiceCode?: string | null;
 }
 
 export interface DiscountSearchParams {

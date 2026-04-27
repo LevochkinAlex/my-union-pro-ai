@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import type { DiscountItem } from "@/types/discounts";
+import {
+  getPartnerVenueCategoryBadgeBg,
+  getPartnerVenueServiceLabels,
+} from "@/lib/partner-venue-service-taxonomy";
 
 interface DiscountCardProps {
   discount: DiscountItem;
@@ -43,6 +47,22 @@ export default function DiscountCard({
   const displayCities = selectedCityId
     ? cities.filter((city) => city.id === selectedCityId)
     : cities;
+
+  const partnerServiceInfo =
+    discount.isPartnerVenue
+      ? getPartnerVenueServiceLabels(
+          discount.partnerServiceCategoryCode,
+          discount.partnerServiceCode
+        )
+      : null;
+  const partnerServiceBadgeBg = discount.isPartnerVenue
+    ? getPartnerVenueCategoryBadgeBg(discount.partnerServiceCategoryCode)
+    : "bg-indigo-600/90";
+
+  const partnerServicePillClass = clsx(
+    "inline-flex w-fit max-w-[55%] shrink-0 items-center truncate whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-none text-white shadow",
+    partnerServiceBadgeBg
+  );
 
   const citiesLabel = (() => {
     if (displayCities.length > 0) {
@@ -133,7 +153,7 @@ export default function DiscountCard({
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2 sm:p-4">
           <div className="flex flex-col gap-1.5 sm:gap-2">
             {discount.isPartnerVenue && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-600/90 px-2 sm:px-3 py-0.5 sm:py-1 text-xs font-semibold text-white shadow">
+              <span className="inline-flex w-fit shrink-0 self-start items-center whitespace-nowrap rounded-full bg-indigo-600/90 px-2 py-0.5 text-xs font-semibold leading-none text-white shadow">
                 Партнёр
               </span>
             )}
@@ -236,12 +256,20 @@ export default function DiscountCard({
         </div>
 
         <div className="space-y-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {discount.isPartnerVenue && partnerServiceInfo?.service && (
+              <span
+                className={partnerServicePillClass}
+                title={partnerServiceInfo.service}
+              >
+                {partnerServiceInfo.service}
+              </span>
+            )}
             <svg className="h-4 w-4 flex-none text-gray-400 dark:text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.105 0 2-.672 2-1.5S13.105 8 12 8s-2 .672-2 1.5.895 1.5 2 1.5z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22s7-4.35 7-11.5S16.418 2 12 2 5 5.35 5 10.5 12 22 12 22z" />
             </svg>
-            <span className="truncate flex-1">{citiesLabel}</span>
+            <span className="min-w-0 flex-1 truncate">{citiesLabel}</span>
             {discount.distanceKm && (
               <span className="text-xs text-gray-400 dark:text-gray-500 flex-none">~{discount.distanceKm} км</span>
             )}

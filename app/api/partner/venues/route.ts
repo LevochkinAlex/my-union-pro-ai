@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { ensurePartner } from "@/lib/partner-auth";
 import { Prisma } from "@prisma/client";
+import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
 
 type CreateBody = {
   name?: unknown;
@@ -16,6 +17,10 @@ type CreateBody = {
   promoCode?: unknown;
   promoLabel?: unknown;
   conditions?: unknown;
+  eventAt?: unknown;
+  remainingSlots?: unknown;
+  serviceCategoryCode?: unknown;
+  serviceCode?: unknown;
 };
 
 function optionalString(v: unknown): string | null | undefined {
@@ -95,6 +100,77 @@ export async function POST(request: NextRequest) {
   assignOptionalString(data, "promoCode", body.promoCode);
   assignOptionalString(data, "promoLabel", body.promoLabel);
   assignOptionalString(data, "conditions", body.conditions);
+
+  if ("eventAt" in body) {
+    if (body.eventAt === null || body.eventAt === "") {
+      data.eventAt = null;
+    } else if (typeof body.eventAt === "string") {
+      const trimmed = body.eventAt.trim();
+      if (!trimmed) {
+        data.eventAt = null;
+      } else {
+        const d = new Date(trimmed);
+        if (Number.isNaN(d.getTime())) {
+          return NextResponse.json({ error: "Некорректная дата и время" }, { status: 400 });
+        }
+        data.eventAt = d;
+      }
+    } else {
+      return NextResponse.json({ error: "Некорректная дата и время" }, { status: 400 });
+    }
+  }
+
+  if ("remainingSlots" in body) {
+    if (body.remainingSlots === null || body.remainingSlots === "") {
+      data.remainingSlots = null;
+    } else if (typeof body.remainingSlots === "number" && Number.isInteger(body.remainingSlots)) {
+      if (body.remainingSlots < 1 || body.remainingSlots > 999) {
+        return NextResponse.json({ error: "«Осталось мест»: укажите число от 001 до 999 или неограничено" }, { status: 400 });
+      }
+      data.remainingSlots = body.remainingSlots;
+    } else if (typeof body.remainingSlots === "string") {
+      const t = body.remainingSlots.trim();
+      if (!t) {
+        data.remainingSlots = null;
+      } else {
+        const n = parseInt(t, 10);
+        if (!Number.isFinite(n) || n < 1 || n > 999) {
+          return NextResponse.json({ error: "«Осталось мест»: укажите число от 001 до 999 или неограничено" }, { status: 400 });
+        }
+        data.remainingSlots = n;
+      }
+    } else {
+      return NextResponse.json({ error: "Некорректное значение поля «Осталось мест»" }, { status: 400 });
+    }
+  }
+
+  if ("serviceCategoryCode" in body || "serviceCode" in body) {
+    if (!("serviceCategoryCode" in body) || !("serviceCode" in body)) {
+      return NextResponse.json(
+        { error: "Поля serviceCategoryCode и serviceCode нужно передавать вместе" },
+        { status: 400 }
+      );
+    }
+    const norm = (v: unknown): string | null | "bad" => {
+      if (v === null || v === undefined) return null;
+      if (typeof v !== "string") return "bad";
+      const t = v.trim();
+      return t.length ? t : null;
+    };
+    const cat = norm(body.serviceCategoryCode);
+    const srv = norm(body.serviceCode);
+    if (cat === "bad" || srv === "bad") {
+      return NextResponse.json({ error: "Некорректная категория или услуга" }, { status: 400 });
+    }
+    if (!isValidPartnerVenueServicePair(cat, srv)) {
+      return NextResponse.json(
+        { error: "Выберите корректную пару «категория услуг» и «услуга» или очистите оба поля" },
+        { status: 400 }
+      );
+    }
+    data.serviceCategoryCode = cat;
+    data.serviceCode = srv;
+  }
 
   try {
     const venue = await withPrismaRetry(() => prisma.partnerVenue.create({ data }));

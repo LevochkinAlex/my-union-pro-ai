@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { getPartnerVenueServiceLabels } from "@/lib/partner-venue-service-taxonomy";
 import { useParams, useRouter } from "next/navigation";
 
 interface PartnerVenueDetail {
@@ -16,6 +17,10 @@ interface PartnerVenueDetail {
   promoCode: string | null;
   promoLabel: string | null;
   conditions: string | null;
+  eventAt: string | null;
+  remainingSlots: number | null;
+  serviceCategoryCode?: string | null;
+  serviceCode?: string | null;
   createdAt: string;
   partner: {
     id: string;
@@ -163,6 +168,49 @@ export default function PartnerVenueDetailPage() {
                   <span>{venue.city}</span>
                 </div>
               )}
+              {venue.eventAt && (
+                <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span>
+                    {new Date(venue.eventAt).toLocaleString("ru-RU", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
+              {venue.remainingSlots != null &&
+                venue.remainingSlots >= 1 &&
+                venue.remainingSlots <= 999 && (
+                  <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">Осталось мест:</span>
+                    <span>{String(venue.remainingSlots).padStart(3, "0")}</span>
+                  </div>
+                )}
+              {(() => {
+                const svc = getPartnerVenueServiceLabels(
+                  venue.serviceCategoryCode,
+                  venue.serviceCode
+                );
+                if (!svc) return null;
+                return (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">Услуга:</span>
+                    <span>{svc.category}</span>
+                    <span className="text-gray-400">·</span>
+                    <span>{svc.service}</span>
+                  </div>
+                );
+              })()}
             </div>
 
             {venue.promoLabel && (

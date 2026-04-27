@@ -152,6 +152,8 @@ export default function DiscountsClient({
             partnerVenueId: v.id,
             partnerName: v.partner?.name ?? null,
             partnerLogoUrl: v.partner?.logoUrl ?? null,
+            partnerServiceCategoryCode: v.serviceCategoryCode ?? null,
+            partnerServiceCode: v.serviceCode ?? null,
           })
         );
         if (!cancelled) setPartnerVenues(venues);

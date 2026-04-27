@@ -4,7 +4,6 @@ import { SessionProvider } from "next-auth/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { HeroUIProvider } from "@heroui/react";
 import FirebasePushInit from "./firebase-push-init";
-import { LanguageProvider } from "@/lib/language-context";
 import { AlertProvider } from "./providers/AlertProvider";
 import { ToastProvider } from "./ui/Toast";
 import ErrorHandler from "./ErrorHandler";
@@ -21,16 +20,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange={false}
       >
         <HeroUIProvider>
-          <LanguageProvider>
-            <AlertProvider>
-              <ToastProvider>
-                <ErrorHandler />
-                <FirebasePushInit />
-                {children}
-                <CookieBanner />
-              </ToastProvider>
-            </AlertProvider>
-          </LanguageProvider>
+          <AlertProvider>
+            <ToastProvider>
+              <ErrorHandler />
+              <FirebasePushInit />
+              {children}
+              <CookieBanner />
+            </ToastProvider>
+          </AlertProvider>
         </HeroUIProvider>
       </NextThemesProvider>
     </SessionProvider>

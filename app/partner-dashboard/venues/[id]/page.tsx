@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import VenueBannerUpload from "@/components/partner/VenueBannerUpload";
+import RemainingSlotsSelect from "@/components/partner/RemainingSlotsSelect";
+import PartnerVenueServiceFields from "@/components/partner/PartnerVenueServiceFields";
+import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
+import { datetimeLocalValueToIso, isoToDatetimeLocalValue } from "@/lib/datetime-local-form";
 
 interface VenueData {
   id: string;
@@ -19,6 +23,10 @@ interface VenueData {
   promoLabel: string | null;
   conditions: string | null;
   isActive: boolean;
+  eventAt: string | null;
+  remainingSlots?: number | null;
+  serviceCategoryCode?: string | null;
+  serviceCode?: string | null;
 }
 
 export default function EditVenuePage() {
@@ -44,6 +52,10 @@ export default function EditVenuePage() {
     promoLabel: "",
     conditions: "",
     isActive: true,
+    eventAt: "",
+    remainingSlots: "",
+    serviceCategoryCode: "",
+    serviceCode: "",
   });
 
   const fetchVenue = useCallback(async () => {
@@ -52,6 +64,14 @@ export default function EditVenuePage() {
       if (res.ok) {
         const json = await res.json();
         const data: VenueData = json.venue ?? json;
+        const catRaw = (data.serviceCategoryCode ?? "").trim();
+        const srvRaw = (data.serviceCode ?? "").trim();
+        let cat = catRaw;
+        let srv = srvRaw;
+        if (!isValidPartnerVenueServicePair(cat || null, srv || null)) {
+          cat = "";
+          srv = "";
+        }
         setForm({
           name: data.name || "",
           description: data.description || "",
@@ -65,6 +85,16 @@ export default function EditVenuePage() {
           promoLabel: data.promoLabel || "",
           conditions: data.conditions || "",
           isActive: data.isActive,
+          eventAt: isoToDatetimeLocalValue(data.eventAt ?? undefined),
+          remainingSlots:
+            data.remainingSlots != null &&
+            Number.isInteger(data.remainingSlots) &&
+            data.remainingSlots >= 1 &&
+            data.remainingSlots <= 999
+              ? String(data.remainingSlots)
+              : "",
+          serviceCategoryCode: cat,
+          serviceCode: srv,
         });
       } else if (res.status === 404) {
         setError("Площадка не найдена");
@@ -83,7 +113,7 @@ export default function EditVenuePage() {
   }, [fetchVenue]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
     if (type === "checkbox") {
@@ -103,14 +133,39 @@ export default function EditVenuePage() {
       return;
     }
 
+    const cat = form.serviceCategoryCode.trim();
+    const srv = form.serviceCode.trim();
+    if ((cat && !srv) || (!cat && srv)) {
+      setError("Выберите и категорию услуг, и услугу — или оставьте оба поля пустыми.");
+      return;
+    }
+    if (cat && srv && !isValidPartnerVenueServicePair(cat, srv)) {
+      setError("Некорректная пара «категория услуг» и «услуга».");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
     try {
+      const { eventAt: eventAtLocal, remainingSlots: slotsRaw, ...rest } = form;
+      const remainingSlotsPayload =
+        slotsRaw === ""
+          ? null
+          : (() => {
+              const n = parseInt(slotsRaw, 10);
+              return Number.isFinite(n) && n >= 1 && n <= 999 ? n : null;
+            })();
       const res = await fetch(`/api/partner/venues/${venueId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...rest,
+          eventAt: datetimeLocalValueToIso(eventAtLocal),
+          remainingSlots: remainingSlotsPayload,
+          serviceCategoryCode: cat || null,
+          serviceCode: srv || null,
+        }),
       });
 
       if (res.ok) {
@@ -209,6 +264,16 @@ export default function EditVenuePage() {
               />
             </div>
 
+            <PartnerVenueServiceFields
+              categoryValue={form.serviceCategoryCode}
+              serviceValue={form.serviceCode}
+              onCategoryChange={(categoryId) =>
+                setForm((prev) => ({ ...prev, serviceCategoryCode: categoryId, serviceCode: "" }))
+              }
+              onServiceChange={(serviceId) => setForm((prev) => ({ ...prev, serviceCode: serviceId }))}
+              disabled={saving}
+            />
+
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Описание
@@ -247,6 +312,32 @@ export default function EditVenuePage() {
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
+
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="edit-venue-event-at"
+                className="flex flex-wrap items-baseline gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                <span>Дата и время проведения</span>
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(необязательно.)</span>
+              </label>
+              <input
+                id="edit-venue-event-at"
+                type="datetime-local"
+                name="eventAt"
+                value={form.eventAt}
+                onChange={handleChange}
+                className="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:[color-scheme:dark]"
+              />
+            </div>
+
+            <RemainingSlotsSelect
+              id="edit-venue-remaining-slots"
+              name="remainingSlots"
+              value={form.remainingSlots}
+              onChange={handleChange}
+              disabled={saving}
+            />
 
             <div className="sm:col-span-2">
               <label className="flex items-center gap-2 cursor-pointer">

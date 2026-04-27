@@ -10,6 +10,3 @@ export const EDUCATION_LEVELS = [
   "Аспирантура",
   "Докторантура",
 ] as const;
-
-export type EducationLevel = typeof EDUCATION_LEVELS[number];
-

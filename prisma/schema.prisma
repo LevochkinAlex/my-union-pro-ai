@@ -662,6 +662,17 @@ model PartnerVenue {
   promoLabel String?
   conditions String? @db.Text
 
+  /// Дата и время проведения (мероприятие / акция на площадке)
+  eventAt DateTime?
+
+  /// Осталось мест: null — неограничено, 1–999 — число свободных мест
+  remainingSlots Int?
+
+  /// Код категории услуг (`lib/partner-venue-service-taxonomy`)
+  serviceCategoryCode String?
+  /// Код услуги внутри категории
+  serviceCode         String?
+
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 

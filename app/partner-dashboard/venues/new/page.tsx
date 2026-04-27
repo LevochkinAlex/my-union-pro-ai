@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import VenueBannerUpload from "@/components/partner/VenueBannerUpload";
+import RemainingSlotsSelect from "@/components/partner/RemainingSlotsSelect";
+import PartnerVenueServiceFields from "@/components/partner/PartnerVenueServiceFields";
+import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
+import { datetimeLocalValueToIso } from "@/lib/datetime-local-form";
 
 export default function NewVenuePage() {
   const router = useRouter();
@@ -22,10 +26,14 @@ export default function NewVenuePage() {
     promoCode: "",
     promoLabel: "",
     conditions: "",
+    eventAt: "",
+    remainingSlots: "",
+    serviceCategoryCode: "",
+    serviceCode: "",
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -37,14 +45,39 @@ export default function NewVenuePage() {
       return;
     }
 
+    const cat = form.serviceCategoryCode.trim();
+    const srv = form.serviceCode.trim();
+    if ((cat && !srv) || (!cat && srv)) {
+      setError("Выберите и категорию услуг, и услугу — или оставьте оба поля пустыми.");
+      return;
+    }
+    if (cat && srv && !isValidPartnerVenueServicePair(cat, srv)) {
+      setError("Некорректная пара «категория услуг» и «услуга».");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
     try {
+      const { eventAt: eventAtLocal, remainingSlots: slotsRaw, ...rest } = form;
+      const remainingSlotsPayload =
+        slotsRaw === ""
+          ? null
+          : (() => {
+              const n = parseInt(slotsRaw, 10);
+              return Number.isFinite(n) && n >= 1 && n <= 999 ? n : null;
+            })();
       const res = await fetch("/api/partner/venues", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...rest,
+          eventAt: datetimeLocalValueToIso(eventAtLocal),
+          remainingSlots: remainingSlotsPayload,
+          serviceCategoryCode: cat || null,
+          serviceCode: srv || null,
+        }),
       });
 
       if (res.ok) {
@@ -97,6 +130,16 @@ export default function NewVenuePage() {
               />
             </div>
 
+            <PartnerVenueServiceFields
+              categoryValue={form.serviceCategoryCode}
+              serviceValue={form.serviceCode}
+              onCategoryChange={(categoryId) =>
+                setForm((prev) => ({ ...prev, serviceCategoryCode: categoryId, serviceCode: "" }))
+              }
+              onServiceChange={(serviceId) => setForm((prev) => ({ ...prev, serviceCode: serviceId }))}
+              disabled={saving}
+            />
+
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Описание
@@ -138,6 +181,32 @@ export default function NewVenuePage() {
                 placeholder="ул. Примерная, д. 1"
               />
             </div>
+
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="new-venue-event-at"
+                className="flex flex-wrap items-baseline gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                <span>Дата и время проведения</span>
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(необязательно.)</span>
+              </label>
+              <input
+                id="new-venue-event-at"
+                type="datetime-local"
+                name="eventAt"
+                value={form.eventAt}
+                onChange={handleChange}
+                className="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:[color-scheme:dark]"
+              />
+            </div>
+
+            <RemainingSlotsSelect
+              id="new-venue-remaining-slots"
+              name="remainingSlots"
+              value={form.remainingSlots}
+              onChange={handleChange}
+              disabled={saving}
+            />
           </div>
         </div>
 

@@ -108,33 +108,54 @@ export const prisma = new Proxy({} as PrismaClient, {
  * Обертка для Prisma запросов с обработкой ошибок подключения
  * КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убран Promise.race с таймаутом - он вызывал 503 ошибки
  */
+/** Сброс закэшированного клиента после обрыва соединения (Closed / idle timeout у провайдера). */
+async function resetPrismaAfterConnectionLoss(): Promise<void> {
+  try {
+    const c = globalForPrisma.__prisma;
+    if (c) {
+      await c.$disconnect();
+    }
+  } catch {
+    /* ignore */
+  }
+  globalForPrisma.__prisma = undefined;
+  globalForPrisma.__prismaInitError = undefined;
+}
+
 export async function withPrismaRetry<T>(
   operation: () => Promise<T>,
   maxRetries: number = 3,
   delay: number = 500
 ): Promise<T> {
   let lastError: any;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error: any) {
       lastError = error;
+      const msg =
+        String(error?.message ?? "") +
+        (error?.cause != null ? ` ${String((error as { cause?: unknown }).cause)}` : "");
       const isConnectionError =
-        error?.code === 'P1001' ||
-        error?.code === 'P1002' ||
-        error?.code === 'P1008' ||
-        error?.code === 'P1017' ||
-        error?.message?.includes('ECONNREFUSED') ||
-        error?.message?.includes('ENOTFOUND') ||
-        error?.message?.includes('Connection') ||
-        error?.message?.includes('connect');
+        error?.code === "P1001" ||
+        error?.code === "P1002" ||
+        error?.code === "P1008" ||
+        error?.code === "P1017" ||
+        msg.includes("ECONNREFUSED") ||
+        msg.includes("ENOTFOUND") ||
+        msg.includes("Connection") ||
+        msg.includes("connect") ||
+        msg.includes("kind: Closed") ||
+        msg.includes("connection closed") ||
+        error?.kind === "Closed";
       if (isConnectionError && attempt < maxRetries) {
         const retryDelay = delay * Math.pow(2, attempt);
-        console.warn(`[prisma] Connection error (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${retryDelay}ms...`, {
-          code: error?.code,
-          message: error?.message?.substring(0, 100),
-        });
+        console.warn(
+          `[prisma] Connection error (attempt ${attempt + 1}/${maxRetries + 1}), reconnecting in ${retryDelay}ms...`,
+          { code: error?.code, message: msg.substring(0, 120) }
+        );
+        await resetPrismaAfterConnectionLoss();
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
         continue;
       }
