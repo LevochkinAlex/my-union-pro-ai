@@ -38,7 +38,8 @@ export default function DiscountCard({
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [bannerDecoded, setBannerDecoded] = useState(false);
+  /** Партнёр: баннер в шапке не загрузился — пробуем логотип в той же рамке */
+  const [partnerBannerHeroFailed, setPartnerBannerHeroFailed] = useState(false);
   const [partnerLogoError, setPartnerLogoError] = useState(false);
 
   useEffect(() => {
@@ -47,8 +48,62 @@ export default function DiscountCard({
 
   useEffect(() => {
     setImageError(false);
-    setBannerDecoded(false);
-  }, [discount.imageUrl, discount.id, discount.partnerVenueId]);
+    setPartnerBannerHeroFailed(false);
+  }, [discount.imageUrl, discount.id, discount.partnerVenueId, discount.partnerLogoUrl]);
+
+  const partnerVenueBannerUrl =
+    discount.isPartnerVenue && discount.imageUrl?.trim()
+      ? discount.imageUrl.trim()
+      : null;
+  const partnerLogoUrlVal =
+    discount.isPartnerVenue && discount.partnerLogoUrl?.trim()
+      ? discount.partnerLogoUrl.trim()
+      : null;
+
+  const partnerHeroImgSrc =
+    discount.isPartnerVenue &&
+    partnerVenueBannerUrl &&
+    !partnerBannerHeroFailed
+      ? partnerVenueBannerUrl
+      : discount.isPartnerVenue && partnerLogoUrlVal
+        ? partnerLogoUrlVal
+        : null;
+
+  const heroImgSrc =
+    discount.isPartnerVenue === true
+      ? partnerHeroImgSrc
+      : discount.imageUrl ?? null;
+
+  /** Логотип уже в верхнем блоке (нет баннера) — не дублируем в тексте карточки */
+  const partnerLogoShownInHero =
+    discount.isPartnerVenue &&
+    !partnerVenueBannerUrl &&
+    Boolean(partnerLogoUrlVal) &&
+    !partnerBannerHeroFailed &&
+    !imageError;
+
+  const heroIsPartnerLogoOnly =
+    Boolean(discount.isPartnerVenue) &&
+    !partnerVenueBannerUrl &&
+    Boolean(partnerLogoUrlVal);
+
+  const partnerPlaceholderShowsTitles =
+    discount.isPartnerVenue &&
+    !partnerVenueBannerUrl &&
+    !partnerLogoUrlVal;
+
+  const handleHeroImgError = () => {
+    if (
+      discount.isPartnerVenue &&
+      partnerVenueBannerUrl &&
+      partnerLogoUrlVal &&
+      !partnerBannerHeroFailed
+    ) {
+      setPartnerBannerHeroFailed(true);
+      return;
+    }
+    setImageError(true);
+  };
 
   const cities = discount.cities ?? [];
   const categories = discount.categories ?? [];
@@ -154,18 +209,17 @@ export default function DiscountCard({
       className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
       {/* Image/Header */}
       <div className={mediaFrameClass}>
-        {discount.imageUrl && !imageError ? (
+        {heroImgSrc && !imageError ? (
           <img
-            src={discount.imageUrl}
+            src={heroImgSrc}
             alt={discount.title}
             className={clsx(
-              "relative z-10 h-full w-full object-cover transition-opacity duration-300 ease-out",
-              bannerDecoded ? "opacity-100" : "opacity-0"
+              "relative z-10 h-full w-full",
+              heroIsPartnerLogoOnly ? "object-contain bg-white/[0.08] object-center p-4" : "object-cover object-center"
             )}
             loading={eagerBanner ? "eager" : "lazy"}
             decoding={eagerBanner ? "sync" : "async"}
-            onLoad={() => setBannerDecoded(true)}
-            onError={() => setImageError(true)}
+            onError={discount.isPartnerVenue === true ? handleHeroImgError : () => setImageError(true)}
           />
         ) : (
           <div
@@ -181,15 +235,19 @@ export default function DiscountCard({
                   Скидки BestBenefits
                 </p>
               )}
-              <p className="mt-0.5 text-sm font-bold leading-snug line-clamp-2 sm:text-base">
-                {discount.title}
-              </p>
-              {discount.isPartnerVenue && (
-                <p className="mt-1 text-[10px] opacity-90 line-clamp-1 sm:text-xs">
-                  {partnerEyebrowText ||
-                    discount.partnerName ||
-                    "Партнёр"}
-                </p>
+              {(discount.isPartnerVenue !== true ||
+                partnerPlaceholderShowsTitles ||
+                imageError) && (
+                <>
+                  <p className="mt-0.5 text-sm font-bold leading-snug line-clamp-2 sm:text-base">
+                    {discount.title}
+                  </p>
+                  {discount.isPartnerVenue && (
+                    <p className="mt-1 text-[10px] opacity-90 line-clamp-1 sm:text-xs">
+                      {partnerEyebrowText || discount.partnerName || "Партнёр"}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -261,7 +319,8 @@ export default function DiscountCard({
           >
             {discount.isPartnerVenue &&
               discount.partnerLogoUrl &&
-              !partnerLogoError && (
+              !partnerLogoError &&
+              !partnerLogoShownInHero && (
                 <div
                   className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-white sm:h-14 sm:w-14 dark:border-gray-600 dark:bg-gray-900"
                   aria-hidden
@@ -429,7 +488,7 @@ export default function DiscountCard({
                 />
               </svg>
             </button>
-            {discount.partnerUrl && (
+            {!discount.isPartnerVenue && discount.partnerUrl ? (
               <a
                 href={discount.partnerUrl}
                 target="_blank"
@@ -439,7 +498,7 @@ export default function DiscountCard({
               >
                 Сайт партнёра
               </a>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

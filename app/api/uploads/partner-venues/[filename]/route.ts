@@ -45,17 +45,17 @@ export async function GET(
     const ext = path.extname(filename).toLowerCase();
     const contentType = MIME_TYPES[ext] || "application/octet-stream";
 
-    let fileBuffer: Buffer | null = null;
+    const fileKey = `partner-venues/${filename}`;
 
-    if (isVDSStorageConfigured()) {
+    /** Сначала локальный public/ — тот же путь, что при fallback после upload; избегает лишних SSH/HTTP к VDS */
+    let fileBuffer: Buffer | null = await tryLocalFile(filename);
+
+    if (!fileBuffer && isVDSStorageConfigured()) {
       try {
-        const fileKey = `partner-venues/${filename}`;
         fileBuffer = await getFileFromVDS(fileKey);
-      } catch {
-        fileBuffer = await tryLocalFile(filename);
+      } catch (e) {
+        console.warn("[uploads/partner-venues] VDS read failed, file:", filename, e);
       }
-    } else {
-      fileBuffer = await tryLocalFile(filename);
     }
 
     if (!fileBuffer) {

@@ -38,6 +38,8 @@ export default function PartnerVenueDetailPage() {
   const [venue, setVenue] = useState<PartnerVenueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  /** Баннер в БД есть, но картинка не загрузилась (404, битый файл) */
+  const [bannerLoadFailed, setBannerLoadFailed] = useState(false);
 
   const loadVenue = useCallback(async () => {
     try {
@@ -62,6 +64,10 @@ export default function PartnerVenueDetailPage() {
   useEffect(() => {
     loadVenue();
   }, [loadVenue]);
+
+  useEffect(() => {
+    setBannerLoadFailed(false);
+  }, [venue?.id, venue?.bannerUrl]);
 
   const handleCopyPromo = async () => {
     if (!venue?.promoCode || !navigator?.clipboard) return;
@@ -118,13 +124,16 @@ export default function PartnerVenueDetailPage() {
         </button>
 
         <div className="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-gray-800">
-          {venue.bannerUrl && (
-            <div className="relative w-full bg-gray-100 dark:bg-gray-700">
+          {venue.bannerUrl && !bannerLoadFailed ? (
+            <div className="relative w-full min-h-[200px] bg-gray-100 dark:bg-gray-700">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={venue.bannerUrl}
                 alt={venue.name}
-                className="w-full h-auto max-h-96 object-cover"
+                className="h-auto w-full min-h-[200px] max-h-96 object-cover"
+                loading="eager"
+                decoding="async"
+                onError={() => setBannerLoadFailed(true)}
               />
               <div className="absolute left-3 top-3">
                 <span className="inline-flex items-center rounded-full bg-indigo-600/90 px-3 py-1 text-xs font-semibold text-white shadow">
@@ -132,9 +141,9 @@ export default function PartnerVenueDetailPage() {
                 </span>
               </div>
             </div>
-          )}
+          ) : null}
 
-          {!venue.bannerUrl && (
+          {(!venue.bannerUrl || bannerLoadFailed) && (
             <div className="flex min-h-[200px] items-center justify-center bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 p-8 text-center text-white">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide opacity-80">
@@ -146,7 +155,7 @@ export default function PartnerVenueDetailPage() {
           )}
 
           <div className="p-4 sm:p-6 md:p-8">
-            {venue.bannerUrl && (
+            {venue.bannerUrl && !bannerLoadFailed && (
               <h1 className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl md:text-3xl">
                 {venue.name}
               </h1>
