@@ -293,6 +293,16 @@ pnpm bb:reset-all-passwords -- --execute --only-with-bb-id
 
 4. **Options** - Не все скидки с вариантами имеют поле `options` в API.
 
+## Прод: актуальные строки в `.env.local`
+
+Чтобы на VDS явно были те же ключи, что в шаблоне (не полагаться только на дефолты в коде), с машины с SSH к root:
+
+```bash
+bash scripts/ensure-vds-bb-catalog-env.sh
+```
+
+Скрипт дописывает **`BEST_BENEFITS_API_URL`** и **`BESTBENEFITS_CATALOG_MAX_PAGES`**, не меняет `BB_PROFSOYUZY_TOKEN` и остальные переменные, делает бэкап `.env.local` и перезапускает PM2.
+
 ## Мониторинг
 
 ### Логи
