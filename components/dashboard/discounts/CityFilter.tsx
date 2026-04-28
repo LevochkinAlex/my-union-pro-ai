@@ -9,6 +9,16 @@ interface CityFilterProps {
   onChange: (cityId: number | null) => void;
 }
 
+/** Нормализация для сопоставления названия города при вводе (ё/е, регистр). */
+function normalizeCityQuery(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ");
+}
+
 export default function CityFilter({ cities, value, onChange }: CityFilterProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -28,9 +38,11 @@ export default function CityFilter({ cities, value, onChange }: CityFilterProps)
   );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalizeCityQuery(query);
     if (!q) return sortedCities.slice(0, 80);
-    return sortedCities.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 80);
+    return sortedCities
+      .filter((c) => normalizeCityQuery(c.name).includes(q))
+      .slice(0, 80);
   }, [sortedCities, query]);
 
   useEffect(() => {

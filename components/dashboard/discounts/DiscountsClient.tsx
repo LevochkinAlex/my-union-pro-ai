@@ -5,6 +5,7 @@ import DiscountCard from "./DiscountCard";
 import CityFilter from "./CityFilter";
 import { mapPartnerVenuesToDiscountItems } from "@/lib/partner-venue-discount-mapper";
 import type {
+  DiscountCity,
   DiscountItem,
   DiscountPreferenceResponse,
   DiscountSearchResult,
@@ -91,6 +92,10 @@ export default function DiscountsClient({
     }),
   });
   const [data, setData] = useState<DiscountSearchResult>(safeInitialData);
+  /** Справочник городов в селекте: не затирать пустым ответом BB при поиске (только глобальные офферы → extractCities пустой) */
+  const [cityPickerOptions, setCityPickerOptions] = useState<DiscountCity[]>(() =>
+    Array.isArray(safeInitialData.cities) && safeInitialData.cities.length > 0 ? safeInitialData.cities : []
+  );
   const [allDiscounts, setAllDiscounts] = useState(safeInitialData.discounts || []);
   const [hasMore, setHasMore] = useState(
     safeInitialData.meta?.hasMore ?? 
@@ -309,7 +314,10 @@ export default function DiscountsClient({
         }
         
         setData(payload);
-        
+        if (payload.cities && payload.cities.length > 0) {
+          setCityPickerOptions(payload.cities);
+        }
+
         if (append) {
           // Добавляем новые скидки к существующим и обновляем hasMore
           setAllDiscounts(prev => {
@@ -916,7 +924,7 @@ export default function DiscountsClient({
 
           <div className="sm:w-72 lg:w-80">
             <CityFilter
-              cities={data.cities || []}
+              cities={cityPickerOptions}
               value={filters.cityId}
               onChange={(cityId) =>
                 updateFilters({
