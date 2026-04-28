@@ -2,7 +2,8 @@
 /**
  * Синхронизация каталога скидок с BestBenefits (cron / ручной запуск).
  * Запуск: pnpm sync:discounts
- * На VDS: dotenv -c -- tsx scripts/sync-discounts.ts (см. setup-cron.sh)
+ * На VDS: каждые 15 мин через crontab (scripts/setup-cron.sh) или вручную: dotenv -c -- tsx scripts/sync-discounts.ts
+ * Опционально HTTP: wget/curl на GET /api/cron/sync-discounts?secret=CRON_SECRET (тот же скрипт удобнее).
  */
 
 import { config } from "dotenv";

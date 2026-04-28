@@ -115,6 +115,8 @@ const nextConfig = {
     minimumCacheTTL: 60,
     // Увеличиваем лимит для base64 изображений
     unoptimized: false,
+    /** Разрешённые значения quality для <Image /> (Next 16; по умолчанию только 75) */
+    qualities: [75, 90],
   },
 };
 
@@ -154,10 +156,7 @@ module.exports = withSentryConfig(
     // Automatically tree-shake Sentry logger statements to reduce bundle size
     disableLogger: true,
 
-    // Enables automatic instrumentation of Vercel Cron Monitors.
-    // See the following for more information:
-    // https://docs.sentry.io/product/crons/
-    // https://vercel.com/docs/cron-jobs
-    automaticVercelMonitors: true,
+    // Sentry: не подключаем мониторинг кронов платформы-хостинга (кроны только на VDS)
+    automaticVercelMonitors: false,
   }
 );

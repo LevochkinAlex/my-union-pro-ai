@@ -13,9 +13,10 @@ import {
 import { attachCoordinatesToCities, calculateDistanceKm, getCityCoordinates } from "@/lib/geo";
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 import { getAllRussianCities } from "@/lib/constants/russian-regions";
-import { getDiscountsFromLocalDB } from "@/lib/fetch-discounts-from-db";
+import { getDiscountsFromLocalDB, getDiscountsSupplementForSearch } from "@/lib/fetch-discounts-from-db";
 import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
 import { resolveBestBenefitsCatalogProductsUrl } from "@/lib/best-benefits-catalog-url";
+import { bestBenefitsSearchQueryVariants, normalizeDiscountSearchInput } from "@/lib/discount-search-query";
 
 const SAMPLE_FILE = path.join(process.cwd(), "public", "best_benefits", "sample-discounts.json");
 const USE_REAL_API = process.env.USE_REAL_BB_API === "true";
@@ -129,9 +130,20 @@ export async function fetchBestBenefitsDiscounts(
   // При выборе города запрашиваем больше скидок за раз, иначе API может отдавать только 20 и hasMore=false
   const baseLimit = params.limit ?? 20;
   const limitWhenCity = Math.min(100, Math.max(baseLimit, 50));
+  const normalizedSearch =
+    params.search?.trim()?.length
+      ? normalizeDiscountSearchInput(params.search as string)
+      : undefined;
+  const hasSearch = Boolean(normalizedSearch);
   const sanitizedParams = {
     ...params,
-    limit: (params.cityId || params.cityName) && !params.search ? limitWhenCity : baseLimit,
+    search: normalizedSearch,
+    // Поиск в BB часто даёт неполную выдачу; запрашиваем больше строк + дополняем из локальной БД
+    limit: hasSearch
+      ? Math.min(100, Math.max(baseLimit, 50))
+      : (params.cityId || params.cityName) && !hasSearch
+        ? limitWhenCity
+        : baseLimit,
     page: params.page ?? 1,
   };
 
@@ -174,7 +186,43 @@ export async function fetchBestBenefitsDiscounts(
         }),
       ]);
 
-      const result = await normalizeResponse(remoteData, sanitizedParams, { source: "remote", fetchedAt: new Date().toISOString() });
+      let mergedRemote: BestBenefitsResponse = remoteData;
+      if (hasSearch) {
+        try {
+          const remoteRows = mergedRemote.data ?? [];
+          const remoteIds = remoteRows.map((d: BestBenefitsDiscount) => Number(d.id)).filter(Number.isFinite);
+          const slots = Math.max(0, 100 - remoteRows.length);
+          const extras = await getDiscountsSupplementForSearch(
+            sanitizedParams.search!.trim(),
+            remoteIds,
+            slots
+          );
+          if (extras.length > 0) {
+            mergedRemote = {
+              ...mergedRemote,
+              data: [...remoteRows, ...extras.map(localDiscountItemToBbRaw)],
+              meta: mergedRemote.meta
+                ? {
+                    ...mergedRemote.meta,
+                    total: Math.max(
+                      mergedRemote.meta.total ?? 0,
+                      remoteRows.length + extras.length
+                    ),
+                  }
+                : mergedRemote.meta,
+            };
+            console.log("[best-benefits] Search supplement from local DB:", {
+              query: sanitizedParams.search,
+              remoteCount: remoteRows.length,
+              added: extras.length,
+            });
+          }
+        } catch (supErr) {
+          console.warn("[best-benefits] Local search supplement failed:", supErr);
+        }
+      }
+
+      const result = await normalizeResponse(mergedRemote, sanitizedParams, { source: "remote", fetchedAt: new Date().toISOString() });
 
       // Подставляем полный справочник городов из /api/cities
       if (fullCities.length > 0) {
@@ -247,6 +295,71 @@ function localDiscountItemToBbRaw(d: DiscountItem): BestBenefitsDiscount {
     end: d.validUntil ?? undefined,
     options: d.options?.length ? d.options : undefined,
   };
+}
+
+/** Объединяет ответы /api/search по нескольким query без дубликатов id. */
+function mergeBbSearchResponses(parts: BestBenefitsResponse[]): BestBenefitsResponse {
+  const byId = new Map<number, unknown>();
+  let maxTotal = 0;
+  for (const r of parts) {
+    for (const d of r.data ?? []) {
+      const id = Number((d as unknown as { id?: unknown }).id);
+      if (!Number.isFinite(id)) continue;
+      if (!byId.has(id)) byId.set(id, d);
+    }
+    const t = r.meta?.total;
+    if (typeof t === "number" && Number.isFinite(t)) maxTotal = Math.max(maxTotal, t);
+  }
+  const data = [...byId.values()] as BestBenefitsDiscount[];
+  const m0 = parts[0]?.meta;
+  return {
+    data,
+    meta: {
+      ...m0,
+      total: Math.max(maxTotal, data.length),
+      per_page: m0?.per_page ?? data.length,
+      current_page: m0?.current_page ?? 1,
+      last_page: m0?.last_page ?? 1,
+    },
+  } as BestBenefitsResponse;
+}
+
+async function fetchBestBenefitsSearchOne(
+  token: string,
+  queryText: string,
+  params: DiscountSearchParams
+): Promise<BestBenefitsResponse | null> {
+  const searchUrl = "https://bestbenefits.ru/api/search";
+  const searchParams = new URLSearchParams();
+  searchParams.set("query", queryText);
+  if (params.page) searchParams.set("page", String(params.page));
+  if (params.limit) searchParams.set("per_page", String(params.limit));
+  const url = `${searchUrl}?${searchParams.toString()}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`[best-benefits] /search HTTP ${response.status}`, { query: queryText });
+      return null;
+    }
+    return (await response.json()) as BestBenefitsResponse;
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
 }
 
 async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefitsResponse> {
@@ -377,75 +490,53 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     }
   }
 
-  // Если есть поисковый запрос, используем /search endpoint
+  // Если есть поисковый запрос — несколько вариантов query (с пробелами и слитно), ответы сливаем.
   if (params.search && params.search.trim().length > 0) {
     try {
-      const searchUrl = "https://bestbenefits.ru/api/search";
-      const searchParams = new URLSearchParams();
-      searchParams.set("query", params.search.trim());
-      
-      // ⚠️ НЕ применяем фильтр по городу при поиске
-      // API поиска вернет все релевантные скидки, включая глобальные
-      // Фильтрация по городу (если нужна) произойдет на клиенте
-      // if (params.cityName) {
-      //   searchParams.set("city", params.cityName);
-      // }
-      
-      if (params.page) searchParams.set("page", String(params.page));
-      if (params.limit) searchParams.set("per_page", String(params.limit));
+      const variants = bestBenefitsSearchQueryVariants(params.search);
+      console.log("[best-benefits] /search variants:", variants);
 
-      const url = `${searchUrl}?${searchParams.toString()}`;
-      console.log("[best-benefits] Using /search endpoint:", url);
+      const settled = await Promise.allSettled(
+        variants.map((q) => fetchBestBenefitsSearchOne(token, q, params))
+      );
 
-      // Добавляем таймаут для всех запросов к BestBenefits API
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
-      
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-      } catch (error: any) {
-        clearTimeout(timeoutId);
-        if (error.name === 'AbortError') {
-          console.warn("[best-benefits] /search endpoint timeout after 15s, falling back to /products");
-          // Fallback to /products endpoint
-          throw new Error("Search timeout");
-        }
-        throw error;
+      const ok: BestBenefitsResponse[] = [];
+      for (const s of settled) {
+        if (s.status === "fulfilled" && s.value) ok.push(s.value);
       }
 
-      if (response.ok) {
-        const data = (await response.json()) as BestBenefitsResponse;
-        console.log("[best-benefits] Search результаты:", {
-          query: params.search,
-          found: data?.data?.length ?? 0,
-          total: data?.meta?.total,
-          page: data?.meta?.current_page,
-          lastPage: data?.meta?.last_page,
-          hasMore: data?.meta?.current_page && data?.meta?.last_page 
-            ? data?.meta?.current_page < data?.meta?.last_page 
-            : false,
+      const allRejected = settled.every((s) => s.status === "rejected");
+      const allTimeout = settled.every(
+        (s) =>
+          s.status === "rejected" &&
+          (s.reason?.name === "AbortError" ||
+            String((s.reason as Error)?.message ?? "").toLowerCase().includes("timeout"))
+      );
+
+      if (ok.length > 0) {
+        const merged = ok.length === 1 ? ok[0] : mergeBbSearchResponses(ok);
+        const n = merged.data?.length ?? 0;
+        console.log("[best-benefits] Search merged:", {
+          queries: variants,
+          found: n,
+          total: merged.meta?.total,
         });
-        return data;
-      } else {
-        console.warn("[best-benefits] /search endpoint failed, falling back to /products");
+        if (n > 0) {
+          return merged;
+        }
+      }
+
+      if (allRejected && allTimeout) {
+        console.warn("[best-benefits] /search all variants timed out, falling back to /products");
+        throw new Error("Search timeout");
       }
     } catch (error: any) {
-      // Если ошибка поиска (включая таймаут), продолжаем к /products endpoint
-      if (error.message === "Search timeout" || error.message?.includes("timeout")) {
-        console.warn("[best-benefits] /search endpoint timeout, falling back to /products");
-      } else if (error.message !== "Search timeout") {
-        // Пробрасываем ошибку если это не таймаут
+      if (error.message === "Search timeout" || error.message?.includes?.("timeout")) {
+        console.warn("[best-benefits] /search timeout, falling back to /products");
+      } else {
+        console.warn("[best-benefits] /search failed:", error);
+      }
+      if (!(error.message === "Search timeout" || error.message?.includes?.("timeout"))) {
         throw error;
       }
     }

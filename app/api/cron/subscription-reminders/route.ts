@@ -7,12 +7,9 @@ import { RENEWAL_REMINDER_DAYS } from "@/lib/constants/tariffs";
 const CRON_SECRET = process.env.CRON_SECRET;
 
 function validateCronRequest(request: NextRequest): boolean {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader === `Bearer ${CRON_SECRET}`) return true;
-  const url = new URL(request.url);
-  if (url.searchParams.get("secret") === CRON_SECRET) return true;
-  if (request.headers.get("x-vercel-cron") === "true") return true;
-  return false;
+  if (!CRON_SECRET) return false;
+  if (request.headers.get("authorization") === `Bearer ${CRON_SECRET}`) return true;
+  return new URL(request.url).searchParams.get("secret") === CRON_SECRET;
 }
 
 /**

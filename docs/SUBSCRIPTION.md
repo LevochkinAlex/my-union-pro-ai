@@ -30,7 +30,7 @@
 ## Напоминания о продлении
 
 - **GET /api/cron/subscription-reminders** — крон: за 7 дней до окончания подписки/триала отправляет председателю push и email с ссылкой на `/dashboard/subscription`.
-- Вызов: с заголовком `Authorization: Bearer <CRON_SECRET>` или query `?secret=<CRON_SECRET>`, либо от Vercel Cron (`x-vercel-cron: true`). Рекомендуется вызывать раз в день.
+- Вызов: `Authorization: Bearer <CRON_SECRET>` или `?secret=<CRON_SECRET>`. С VDS поднимите `curl`/`wget` из crontab или systemd timer. Достаточно раз в день.
 
 ## Суперадмин
 
@@ -55,5 +55,5 @@
 ## Дальнейшие шаги
 
 1. Подключить реальную платёжную систему и заменить мок в `POST /api/subscription/checkout`.
-2. Настроить вызов крона напоминаний (например, Vercel Cron или внешний cron) раз в день.
+2. Настроить вызов крона напоминаний на VDS (`crontab` / systemd timer, `curl` с `CRON_SECRET`) раз в день.
 3. При необходимости — автоматически переводить подписку в EXPIRED по `periodEndsAt`/`trialEndsAt` (фоновый job) и при необходимости вызывать `applyMemberLimit` при истечении.

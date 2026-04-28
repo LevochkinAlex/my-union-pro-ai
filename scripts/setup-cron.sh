@@ -42,12 +42,13 @@ APP_ROOT="${APP_ROOT:-/opt/my-union-pro}"
 # CRON_TZ=UTC: расписание не зависит от TZ сервера (часто Europe/Moscow).
 # Явный /usr/bin/node + tsx/dist/cli.mjs: шим .bin/tsx вызывает «node» из PATH — в cron часто пусто/другой Node.
 # tsx-скрипты оборачиваем в `dotenv -c`: тот же каскад .env / .env.local, что у `pnpm start` (иначе DATABASE_URL пустой).
+# Каталог скидок: каждые 15 минут (импорт с BB на VDS через tsx).
 MYUNION_BLOCK=$(cat <<EOF
 # --- MYUNION_CRON start ---
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 SHELL=/bin/bash
 CRON_TZ=UTC
-0 0 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-discounts.ts >> /var/log/myunion/sync-discounts.log 2>&1
+*/15 * * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-discounts.ts >> /var/log/myunion/sync-discounts.log 2>&1
 0 1 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1
 # ЕГРЮЛ / ликвидация партнёров: каждый день в 02:00 UTC (поля: мин час день месяц день_недели)
 0 2 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/run-partner-liquidation-cron.ts >> /var/log/myunion/partner-liquidation.log 2>&1
@@ -58,7 +59,7 @@ EOF
 { crontab -l 2>/dev/null; echo "$MYUNION_BLOCK"; } | crontab -
 
 echo -e "${GREEN}Cron-задания добавлены (CRON_TZ=UTC):${NC}"
-echo -e "  ${YELLOW}0 0 — каталог скидок (03:00 МСК)${NC}"
+echo -e "  ${YELLOW}*/15 — каталог скидок (каждые 15 мин, полный импорт с BB)${NC}"
 echo -e "  ${YELLOW}0 1 — скидки пользователей (04:00 МСК)${NC}"
 echo -e "  ${YELLOW}0 2 — ЕГРЮЛ партнёров (02:00 UTC, 05:00 МСК)${NC}"
 

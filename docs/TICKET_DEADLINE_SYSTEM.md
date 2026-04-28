@@ -78,7 +78,6 @@ autoClosedAt DateTime?
 **Авторизация:**
 - Заголовок `Authorization: Bearer {CRON_SECRET}`
 - Query параметр `?secret={CRON_SECRET}`
-- Заголовок `x-vercel-cron: true` (для Vercel Cron)
 
 **Ответ:**
 ```json
@@ -148,35 +147,19 @@ autoClosedAt DateTime?
 
 Сводные метрики по обращениям можно строить запросами Prisma к модели `Ticket` (фильтр по `organizationId`, `status`, `isOverdue` и т.д.). Отдельного модуля-хелпера в репозитории нет.
 
-## Настройка крон-задачи
+## Настройка крон-задачи (VDS)
 
-### Vercel Cron
+Добавьте в `crontab` (или systemd timer) вызовы к вашему приложению с `CRON_SECRET`:
 
-Добавьте в `vercel.json`:
+```bash
+# каждый час — проверка просрочки
+0 * * * * curl -fsS "https://ваш-домен/api/cron/check-ticket-deadlines?secret=$CRON_SECRET" >>/var/log/myunion/ticket-deadlines.log 2>&1
 
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/check-ticket-deadlines",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/check-ticket-deadlines",
-      "schedule": "0 * * * *"
-    }
-  ]
-}
+# ежедневно в 06:00 UTC (09:00 МСК) — напоминания
+0 6 * * * curl -fsS "https://ваш-домен/api/cron/check-ticket-deadlines?secret=$CRON_SECRET" >>/var/log/myunion/ticket-deadlines.log 2>&1
 ```
 
-- Первая задача: ежедневно в 9:00 МСК (6:00 UTC)
-- Вторая задача: каждый час для проверки просрочки
-
-### Другие платформы
-
-Настройте cron-задачи для вызова:
-- `GET /api/cron/check-ticket-deadlines?secret={CRON_SECRET}` - каждый час
-- `GET /api/cron/check-ticket-deadlines?secret={CRON_SECRET}` - ежедневно в 9:00 МСК
+Подставьте реальный URL и способ передачи секрета (переменная окружения в шелле или отдельный файл с правами `600`).
 
 ## Уведомления
 

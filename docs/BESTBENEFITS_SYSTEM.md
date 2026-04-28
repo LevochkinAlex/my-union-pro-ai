@@ -8,7 +8,7 @@
 
 | Данные | Таблица | Синхронизация |
 |--------|---------|---------------|
-| Каталог скидок | `Discount`, `DiscountCategory` | Cron 03:00 МСК |
+| Каталог скидок | `Discount`, `DiscountCategory` | **Каждые 15 мин** (cron на VDS, `setup-cron.sh`) |
 | Активированные скидки | `DiscountActivation` | Cron 04:00 МСК + при открытии страницы |
 | Избранное | `DiscountPreference.filters.favorites` | По действию пользователя |
 
@@ -64,14 +64,24 @@ model DiscountFavorite {
 
 ### Автоматическая (Cron)
 
-Настройка: `bash scripts/setup-cron.sh` на VDS.
+Каталог импортируется из BB **каждые 15 минут** (строчка `*/15 * * * *` в crontab).
 
-| Время (МСК) | Задача | Скрипт / API |
-|-------------|--------|--------------|
-| 03:00 | Каталог скидок | `sync-discounts.ts` (через `tsx` + `dotenv -c`, см. `setup-cron.sh`) |
-| 04:00 | Скидки пользователей | `sync-all-users-discounts.ts` |
+**Настройка на VDS (основной способ):** один раз от root:
 
-Оба задания запускаются автоматически. Скидки пользователей синхронизируются **ежедневно в фоне**, даже если пользователь не заходил в приложение.
+```bash
+bash scripts/setup-cron.sh
+```
+
+Проверка: `crontab -l` — должна быть строка с `sync-discounts.ts` каждые 15 минут. Лог: `/var/log/myunion/sync-discounts.log`.
+
+По желанию можно дергать тот же импорт через `GET /api/cron/sync-discounts?secret=CRON_SECRET` из внешнего cron-демона на том же сервере или с другого хоста; для каталога проще полагаться на `tsx scripts/sync-discounts.ts`, как задаёт скрипт выше — он не требует поднятого HTTP.
+
+| Интервал (UTC) | Задача | Скрипт / API |
+|------------------|--------|--------------|
+| `*/15` | Каталог скидок | `sync-discounts.ts` или `GET /api/cron/sync-discounts` |
+| `0 1 * * *` | Скидки пользователей | `sync-all-users-discounts.ts` |
+
+Скидки пользователей по-прежнему подтягиваются **ежесуточно** в фоне. Ручной синк при входе сохранён.
 
 **Каталог BB:** загрузка идёт постранично (`per_page=100`). Логика остановки — по `meta.current_page` / `meta.last_page`, при отсутствии полей — по `meta.total`, затем по `links.next`, иначе по «полной порции» как у простого REST. Лимит страниц по умолчанию **500** (~50 000 позиций); при необходимости задайте **`BESTBENEFITS_CATALOG_MAX_PAGES`** (макс. 5000 в коде). Итог последнего прогона каталога: `SyncLog` (`type: DISCOUNTS`), поле **`metadata`**: `{ catalogCount, pagesFetched, truncatedByCap }`. Для админа: **`GET /api/discounts/sync-all`** — в ответе поле **`lastCatalogSync`** (последняя запись лога).
 

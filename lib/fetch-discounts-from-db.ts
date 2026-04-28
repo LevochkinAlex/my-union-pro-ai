@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { discountSearchLikePatterns } from "@/lib/discount-search-query";
 import type {
   DiscountSearchParams,
   DiscountSearchResult,
@@ -8,8 +9,27 @@ import type {
   DiscountCategory,
 } from "@/types/discounts";
 
+/** Совпадение по заголовку, описаниям, тегам, категории, ссылке (Часто название партнёра только в partnerUrl или JSON категорий). */
+function discountTextMatchSql(searchRaw: string): Prisma.Sql {
+  const patterns = discountSearchLikePatterns(searchRaw);
+  if (patterns.length === 0) {
+    return Prisma.sql`false`;
+  }
+  const clauses: Prisma.Sql[] = [];
+  for (const pattern of patterns) {
+    clauses.push(Prisma.sql`"title" ILIKE ${pattern}`);
+    clauses.push(Prisma.sql`COALESCE("description", '') ILIKE ${pattern}`);
+    clauses.push(Prisma.sql`COALESCE("shortDescription", '') ILIKE ${pattern}`);
+    clauses.push(Prisma.sql`COALESCE("tags"::text, '') ILIKE ${pattern}`);
+    clauses.push(Prisma.sql`COALESCE("mainCategoryName", '') ILIKE ${pattern}`);
+    clauses.push(Prisma.sql`COALESCE("partnerUrl", '') ILIKE ${pattern}`);
+    clauses.push(Prisma.sql`COALESCE("categories"::text, '') ILIKE ${pattern}`);
+  }
+  return Prisma.sql`(${Prisma.join(clauses, " OR ")})`;
+}
+
 /**
- * Загружает скидки из локальной БД (таблица Discount, заполняется кроном sync-discounts).
+ * Загружает скидки из локальной БД (таблица Discount; синхронизация каталога каждые 15 мин на VDS: `scripts/sync-discounts.ts` + cron).
  * Используется как fallback, когда BestBenefits API недоступен или возвращает ошибку.
  * Возвращает null при ошибке или если в БД нет скидок.
  */
@@ -46,17 +66,6 @@ export async function getDiscountsFromLocalDB(
     }
     if (premiumOnly) {
       where.isPremium = true;
-    }
-    if (search) {
-      where.AND = [
-        {
-          OR: [
-            { title: { contains: search, mode: "insensitive" } },
-            { description: { contains: search, mode: "insensitive" } },
-            { shortDescription: { contains: search, mode: "insensitive" } },
-          ],
-        },
-      ];
     }
 
     // При фильтре по городу: считаем и выбираем скидки с фильтром по cities в БД,
@@ -102,6 +111,60 @@ export async function getDiscountsFromLocalDB(
       }
       if (categoryIds.length > 0) {
         baseConditions.push(Prisma.sql`"mainCategoryId" = ANY(${categoryIds})`);
+      }
+      if (premiumOnly) {
+        baseConditions.push(Prisma.sql`"isPremium" = true`);
+      }
+      const whereSql = Prisma.join(baseConditions, " AND ");
+
+      const [countResult, rows] = await Promise.all([
+        prisma.$queryRaw<[{ count: bigint }]>(
+          Prisma.sql`SELECT count(*)::int AS count FROM "Discount" WHERE ${whereSql}`
+        ),
+        prisma.$queryRaw<
+          Array<{
+            id: number;
+            title: string;
+            description: string | null;
+            shortDescription: string | null;
+            discountValue: string | null;
+            partnerUrl: string | null;
+            imageUrl: string | null;
+            tags: unknown;
+            isPremium: boolean;
+            categories: unknown;
+            mainCategoryId: number | null;
+            mainCategoryName: string | null;
+            cities: unknown;
+            options: unknown;
+            bbUpdatedAt: Date | null;
+            validUntil: Date | null;
+          }>
+        >(
+          Prisma.sql`
+            SELECT id, title, description, "shortDescription", "discountValue", "partnerUrl", "imageUrl",
+                   tags, "isPremium", categories, "mainCategoryId", "mainCategoryName", cities, options,
+                   "bbUpdatedAt", "validUntil"
+            FROM "Discount"
+            WHERE ${whereSql}
+            ORDER BY "isPremium" DESC, "lastSyncedAt" DESC
+            LIMIT ${limit} OFFSET ${(page - 1) * limit}
+          `
+        ),
+      ]);
+      total = Number(countResult[0]?.count ?? 0);
+      discounts = rows;
+    } else if (search) {
+      const baseConditions: Prisma.Sql[] = [
+        Prisma.sql`"isActive" = true`,
+        Prisma.sql`("validUntil" IS NULL OR "validUntil" >= NOW())`,
+        discountTextMatchSql(search),
+      ];
+      if (ids && ids.length > 0) {
+        baseConditions.push(Prisma.sql`"id" IN (${Prisma.join(ids)})`);
+      }
+      if (categoryIds.length > 0) {
+        baseConditions.push(Prisma.sql`"mainCategoryId" IN (${Prisma.join(categoryIds)})`);
       }
       if (premiumOnly) {
         baseConditions.push(Prisma.sql`"isPremium" = true`);
@@ -227,5 +290,86 @@ export async function getDiscountsFromLocalDB(
   } catch (error) {
     console.error("[fetch-discounts-from-db] Error:", error);
     return null;
+  }
+}
+
+/**
+ * Дополняет выдачу BestBenefits `/api/search` карточками из локальной синхронизации,
+ * если по заголовку/описанию/тегам в БД есть совпадения, которых нет в ответе BB.
+ */
+export async function getDiscountsSupplementForSearch(
+  search: string,
+  excludeIds: number[],
+  take: number
+): Promise<DiscountItem[]> {
+  try {
+    const s = search.trim();
+    if (!take || !s) return [];
+    const baseConditions: Prisma.Sql[] = [
+      Prisma.sql`"isActive" = true`,
+      Prisma.sql`("validUntil" IS NULL OR "validUntil" >= NOW())`,
+      discountTextMatchSql(s),
+    ];
+    if (excludeIds.length > 0) {
+      baseConditions.push(Prisma.sql`"id" NOT IN (${Prisma.join(excludeIds)})`);
+    }
+    const whereSql = Prisma.join(baseConditions, " AND ");
+
+    type Row = {
+      id: number;
+      title: string;
+      description: string | null;
+      shortDescription: string | null;
+      discountValue: string | null;
+      partnerUrl: string | null;
+      imageUrl: string | null;
+      tags: unknown;
+      isPremium: boolean;
+      categories: unknown;
+      mainCategoryId: number | null;
+      mainCategoryName: string | null;
+      cities: unknown;
+      options: unknown;
+      bbUpdatedAt: Date | null;
+      validUntil: Date | null;
+    };
+
+    const rows = await prisma.$queryRaw<Row[]>(
+      Prisma.sql`
+        SELECT id, title, description, "shortDescription", "discountValue", "partnerUrl", "imageUrl",
+               tags, "isPremium", categories, "mainCategoryId", "mainCategoryName", cities, options,
+               "bbUpdatedAt", "validUntil"
+        FROM "Discount"
+        WHERE ${whereSql}
+        ORDER BY "isPremium" DESC, "lastSyncedAt" DESC
+        LIMIT ${take}
+      `
+    );
+
+    return rows.map(
+      (d): DiscountItem => ({
+        id: d.id,
+        title: d.title,
+        description: d.description,
+        shortDescription: d.shortDescription,
+        discountValue: d.discountValue,
+        promoCode: null,
+        partnerUrl: d.partnerUrl,
+        imageUrl: d.imageUrl,
+        tags: (d.tags as string[]) || [],
+        isPremium: d.isPremium,
+        categories: (d.categories as any[]) || [],
+        mainCategory: d.mainCategoryId
+          ? { id: d.mainCategoryId, name: d.mainCategoryName || "" }
+          : null,
+        cities: (d.cities as any[]) || [],
+        options: (d.options as any[]) || null,
+        updatedAt: d.bbUpdatedAt?.toISOString() || null,
+        validUntil: d.validUntil?.toISOString() || null,
+      })
+    );
+  } catch (error) {
+    console.error("[fetch-discounts-from-db] getDiscountsSupplementForSearch:", error);
+    return [];
   }
 }

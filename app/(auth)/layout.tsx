@@ -22,21 +22,21 @@ export default function AuthLayout({
       {/* Right side - Gradient background */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700">
         <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px)',
-            backgroundSize: '24px 24px'
-          }}></div>
+          <div
+            className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.1)_1px,transparent_1px)] [background-size:24px_24px]"
+            aria-hidden
+          />
         </div>
         <div className="relative z-10 flex items-center justify-center w-full p-12">
           <div className="text-center text-white max-w-md">
             {/* Логотип MyUnion */}
             <div className="mb-8">
-              <Image 
-                src="/Logo_dark_theme.svg" 
-                alt="MyUnion Pro" 
-                width={128}
+              <Image
+                src="/Logo_dark_theme.svg"
+                alt="MyUnion Pro"
+                width={256}
                 height={64}
-                className="h-16 w-auto mx-auto"
+                className="mx-auto h-16 w-auto"
               />
             </div>
             

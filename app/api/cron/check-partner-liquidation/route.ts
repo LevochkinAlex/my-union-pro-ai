@@ -4,18 +4,16 @@ import { runPartnerLiquidationCronJob } from "@/lib/partner-liquidation-cron-job
 const CRON_SECRET = process.env.CRON_SECRET;
 
 function validateCronRequest(request: NextRequest): boolean {
-  if (request.headers.get("x-vercel-cron") === "true") return true;
   if (!CRON_SECRET) return false;
   if (request.headers.get("authorization") === `Bearer ${CRON_SECRET}`) return true;
   const url = new URL(request.url);
-  if (url.searchParams.get("secret") === CRON_SECRET) return true;
-  return false;
+  return url.searchParams.get("secret") === CRON_SECRET;
 }
 
 /**
  * GET /api/cron/check-partner-liquidation
  * Ежедневная проверка ИНН/ОГРН партнёров в ЕГРЮЛ; при ликвидации — BLOCKED.
- * Авторизация: CRON_SECRET (Bearer или ?secret=), либо x-vercel-cron: true.
+ * Авторизация: CRON_SECRET (`Authorization: Bearer …` или `?secret=`).
  *
  * На VDS предпочтительно: `scripts/run-partner-liquidation-cron.ts` из crontab (без HTTP).
  */

@@ -9,28 +9,22 @@ import { resolveBestBenefitsCatalogProductsUrl } from "@/lib/best-benefits-catal
 import crypto from "crypto";
 const CRON_SECRET = process.env.CRON_SECRET;
 
+/** Долгая загрузка каталога BB; на VDS с PM2/Node обычно не ограничена, на serverless — лимит платформы. */
+export const maxDuration = 300;
+
 /**
- * Проверяет авторизацию cron запроса
+ * Авторизация: CRON_SECRET в заголовке `Authorization: Bearer` или query `?secret=`.
  */
 function validateCronRequest(request: NextRequest): boolean {
-  // 0. Вызов от Vercel Cron
-  const vercelCron = request.headers.get("x-vercel-cron");
-  if (vercelCron === "true") {
-    return true;
-  }
-
-  // Без секрета не валидируем пользовательские запросы
   if (!CRON_SECRET) {
     return false;
   }
 
-  // 1. Проверка секретного ключа в заголовке
   const authHeader = request.headers.get("authorization");
   if (authHeader === `Bearer ${CRON_SECRET}`) {
     return true;
   }
 
-  // 2. Проверка секретного ключа в query параметре
   const url = new URL(request.url);
   const secretParam = url.searchParams.get("secret");
   if (secretParam === CRON_SECRET) {
@@ -159,8 +153,8 @@ export async function GET(request: NextRequest) {
   // Проверяем авторизацию
   if (!validateCronRequest(request)) {
     if (!CRON_SECRET) {
-      console.error("[cron] CRON_SECRET not configured (and request is not x-vercel-cron)");
-      return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
+      console.error("[cron] CRON_SECRET не задан в окружении");
+      return NextResponse.json({ error: "Cron not configured (CRON_SECRET)" }, { status: 500 });
     }
     console.warn("[cron] Unauthorized cron request");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

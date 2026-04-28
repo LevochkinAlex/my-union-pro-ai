@@ -115,7 +115,7 @@ main().catch((e) => {
   if (msg.includes("401") || msg.includes("Unauthorized")) {
     console.error(
       "\n→ BestBenefits вернул 401: орг-токен в .env отклонён (истёк или не для API myunion/create_user).\n" +
-        "  Возьмите актуальный токен у BestBenefits для интеграции МойСоюз, обновите BB_PROFSOYUZY_TOKEN (и Vercel Production), затем снова:\n" +
+        "  Возьмите актуальный токен у BestBenefits для интеграции МойСоюз, обновите BB_PROFSOYUZY_TOKEN на сервере (.env / окружение), затем снова:\n" +
         "  pnpm tsx scripts/sync-one-user-to-bb.ts <email>",
     );
   }

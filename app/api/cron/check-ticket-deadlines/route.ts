@@ -8,23 +8,10 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * Проверяет авторизацию cron запроса
  */
 function validateCronRequest(request: NextRequest): boolean {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader === `Bearer ${CRON_SECRET}`) {
-    return true;
-  }
-
+  if (!CRON_SECRET) return false;
+  if (request.headers.get("authorization") === `Bearer ${CRON_SECRET}`) return true;
   const url = new URL(request.url);
-  const secretParam = url.searchParams.get("secret");
-  if (secretParam === CRON_SECRET) {
-    return true;
-  }
-
-  const vercelCron = request.headers.get("x-vercel-cron");
-  if (vercelCron === "true") {
-    return true;
-  }
-
-  return false;
+  return url.searchParams.get("secret") === CRON_SECRET;
 }
 
 /**

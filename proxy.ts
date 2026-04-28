@@ -7,7 +7,8 @@ function isCorsOrigin(origin: string | null): boolean {
   return !!origin && CORS_ORIGINS.some((o) => origin.startsWith(o));
 }
 
-export function middleware(request: NextRequest) {
+/** Было middleware.ts — переименовано в proxy (Next.js 16+). CORS только для локальной разработки / API. */
+export function proxy(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   if (request.method === "OPTIONS" && isCorsOrigin(origin)) {

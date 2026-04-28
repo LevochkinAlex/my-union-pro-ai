@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import type { DiscountItem } from "@/types/discounts";
@@ -41,6 +41,19 @@ export default function DiscountCard({
   /** Партнёр: баннер в шапке не загрузился — пробуем логотип в той же рамке */
   const [partnerBannerHeroFailed, setPartnerBannerHeroFailed] = useState(false);
   const [partnerLogoError, setPartnerLogoError] = useState(false);
+  /** Соотношение сторон героя из файла — рамка подстраивается, без полей при object-contain */
+  const [heroNaturalAspect, setHeroNaturalAspect] = useState<string | null>(null);
+  const heroImgRef = useRef<HTMLImageElement | null>(null);
+  const mediaFrameRef = useRef<HTMLDivElement | null>(null);
+
+  const syncHeroNaturalAspectFromEl = useCallback((el: HTMLImageElement | null) => {
+    if (!el) return;
+    const w = el.naturalWidth;
+    const h = el.naturalHeight;
+    if (w > 0 && h > 0) {
+      setHeroNaturalAspect(`${w} / ${h}`);
+    }
+  }, []);
 
   useEffect(() => {
     setPartnerLogoError(false);
@@ -74,6 +87,30 @@ export default function DiscountCard({
       ? partnerHeroImgSrc
       : discount.imageUrl ?? null;
 
+  useLayoutEffect(() => {
+    if (!heroImgSrc || imageError) {
+      setHeroNaturalAspect(null);
+      return;
+    }
+    const el = heroImgRef.current;
+    if (!el) return;
+    syncHeroNaturalAspectFromEl(el);
+    if (el.complete) return;
+    const onLoadSync = () => syncHeroNaturalAspectFromEl(el);
+    el.addEventListener("load", onLoadSync);
+    return () => el.removeEventListener("load", onLoadSync);
+  }, [heroImgSrc, imageError, syncHeroNaturalAspectFromEl]);
+
+  useLayoutEffect(() => {
+    const frame = mediaFrameRef.current;
+    if (!frame) return;
+    if (heroNaturalAspect) {
+      frame.style.aspectRatio = heroNaturalAspect;
+    } else {
+      frame.style.removeProperty("aspect-ratio");
+    }
+  }, [heroNaturalAspect]);
+
   /** Логотип уже в верхнем блоке (нет баннера) — не дублируем в тексте карточки */
   const partnerLogoShownInHero =
     discount.isPartnerVenue &&
@@ -103,6 +140,7 @@ export default function DiscountCard({
       return;
     }
     setImageError(true);
+    setHeroNaturalAspect(null);
   };
 
   const cities = discount.cities ?? [];
@@ -199,31 +237,44 @@ export default function DiscountCard({
     handleCardClick();
   };
 
-  /** Единая высота превью: карточки BB и партнёров выглядят одинаково в сетке */
-  const mediaFrameClass =
-    "relative h-[140px] w-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 sm:h-[160px] dark:from-gray-900 dark:to-gray-800";
+  /** Пока грузится картинка — 16:9; после onLoad — фактическое соотношение файла (без полей с object-contain) */
+  const mediaFrameBaseClass =
+    "relative w-full min-h-0 shrink-0 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800";
 
   return (
     <div 
       onClick={handleCardClick}
       className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
       {/* Image/Header */}
-      <div className={mediaFrameClass}>
+      <div
+        ref={mediaFrameRef}
+        className={clsx(mediaFrameBaseClass, !heroNaturalAspect && "aspect-video")}
+      >
         {heroImgSrc && !imageError ? (
           <img
+            key={heroImgSrc}
+            ref={heroImgRef}
             src={heroImgSrc}
             alt={discount.title}
             className={clsx(
-              "relative z-10 h-full w-full",
-              heroIsPartnerLogoOnly ? "object-contain bg-white/[0.08] object-center p-4" : "object-cover object-center"
+              "absolute inset-0 z-10 h-full w-full object-contain object-center",
+              heroIsPartnerLogoOnly && "bg-white/[0.08] p-4"
             )}
             loading={eagerBanner ? "eager" : "lazy"}
             decoding={eagerBanner ? "sync" : "async"}
-            onError={discount.isPartnerVenue === true ? handleHeroImgError : () => setImageError(true)}
+            onLoad={(e) => syncHeroNaturalAspectFromEl(e.currentTarget)}
+            onError={
+              discount.isPartnerVenue === true
+                ? handleHeroImgError
+                : () => {
+                    setImageError(true);
+                    setHeroNaturalAspect(null);
+                  }
+            }
           />
         ) : (
           <div
-            className={`flex h-full items-center justify-center px-3 py-4 text-center text-white sm:px-6 ${
+            className={`absolute inset-0 flex h-full items-center justify-center px-3 py-4 text-center text-white sm:px-6 ${
               discount.isPartnerVenue
                 ? "bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 dark:from-indigo-700 dark:via-blue-700 dark:to-cyan-600"
                 : "bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-blue-600 dark:via-purple-600 dark:to-pink-600"

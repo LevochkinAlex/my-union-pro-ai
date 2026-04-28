@@ -5,12 +5,10 @@ import { runSyncAllUsersDiscounts } from "@/lib/discount-sync-all-users";
 const CRON_SECRET = process.env.CRON_SECRET;
 
 function validateCronRequest(request: NextRequest): boolean {
-  if (request.headers.get("x-vercel-cron") === "true") return true;
   if (!CRON_SECRET) return false;
   if (request.headers.get("authorization") === `Bearer ${CRON_SECRET}`) return true;
   const url = new URL(request.url);
-  if (url.searchParams.get("secret") === CRON_SECRET) return true;
-  return false;
+  return url.searchParams.get("secret") === CRON_SECRET;
 }
 
 /**

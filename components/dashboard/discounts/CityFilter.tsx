@@ -39,10 +39,8 @@ export default function CityFilter({ cities, value, onChange }: CityFilterProps)
 
   const filtered = useMemo(() => {
     const q = normalizeCityQuery(query);
-    if (!q) return sortedCities.slice(0, 80);
-    return sortedCities
-      .filter((c) => normalizeCityQuery(c.name).includes(q))
-      .slice(0, 80);
+    if (!q) return sortedCities;
+    return sortedCities.filter((c) => normalizeCityQuery(c.name).includes(q));
   }, [sortedCities, query]);
 
   useEffect(() => {
