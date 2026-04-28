@@ -58,8 +58,8 @@ pm2 logs my-union-pro --lines 50
 2. Вход в `/login`, отправка magic link — работает.
 3. WebSocket: в консоли браузера `[useChat] ✅ Socket connected`.
 4. Админ-аналитика расходов ИИ: `/admin/ai-chat/usage` → события логируются.
-5. **BestBenefits (каталог):** на VDS  
-   `cd /opt/my-union-pro && ./node_modules/.bin/dotenv -c -- ./node_modules/.bin/tsx scripts/check-bb-org-token.ts` → ожидается **HTTP 200**; при необходимости полный импорт: тот же каталог + `tsx scripts/sync-discounts.ts`. Документация: `docs/BESTBENEFITS_SYSTEM.md`.
+5. **BestBenefits (каталог):** на VDS в `.env.local` должны быть явные строки `BEST_BENEFITS_API_URL` и `BESTBENEFITS_CATALOG_MAX_PAGES` — после `git pull` с локальной машины: **`bash scripts/ensure-vds-bb-catalog-env.sh`** (или вручную по `.env.example`). Затем проверка:  
+   `cd /opt/my-union-pro && ./node_modules/.bin/dotenv -c -- ./node_modules/.bin/tsx scripts/check-bb-org-token.ts` → **HTTP 200**; полный импорт каталога: `tsx scripts/sync-discounts.ts`. Подробнее: `docs/BESTBENEFITS_SYSTEM.md`.
 
 ## Типовые проблемы
 
