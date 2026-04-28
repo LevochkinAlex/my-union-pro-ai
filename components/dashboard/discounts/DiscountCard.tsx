@@ -6,6 +6,7 @@ import clsx from "clsx";
 import type { DiscountItem } from "@/types/discounts";
 import {
   getPartnerVenueCategoryBadgeBg,
+  getPartnerVenueCategoryLabel,
   getPartnerVenueServiceLabels,
 } from "@/lib/partner-venue-service-taxonomy";
 
@@ -19,6 +20,8 @@ interface DiscountCardProps {
   selectedCityId?: number | null; // ID выбранного города для фильтрации отображения
   /** Скрыть блок промокода (список каталога и т.п.) */
   hidePromoCode?: boolean;
+  /** Выше порядком в каталоге — eager load баннера, меньше «пустой» превью при lazy loading */
+  eagerBanner?: boolean;
 }
 
 export default function DiscountCard({
@@ -30,15 +33,22 @@ export default function DiscountCard({
   forceShowImage = false,
   selectedCityId = null,
   hidePromoCode = false,
+  eagerBanner = false,
 }: DiscountCardProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [bannerDecoded, setBannerDecoded] = useState(false);
   const [partnerLogoError, setPartnerLogoError] = useState(false);
 
   useEffect(() => {
     setPartnerLogoError(false);
   }, [discount.partnerVenueId, discount.partnerLogoUrl]);
+
+  useEffect(() => {
+    setImageError(false);
+    setBannerDecoded(false);
+  }, [discount.imageUrl, discount.id, discount.partnerVenueId]);
 
   const cities = discount.cities ?? [];
   const categories = discount.categories ?? [];
@@ -55,6 +65,21 @@ export default function DiscountCard({
           discount.partnerServiceCode
         )
       : null;
+
+  const partnerCategoryLabel =
+    discount.isPartnerVenue
+      ? getPartnerVenueCategoryLabel(discount.partnerServiceCategoryCode)
+      : null;
+
+  /** Кикер: только рубрика из кабинета (категория услуг), без юридического имени партнёра */
+  const partnerEyebrowText =
+    discount.isPartnerVenue
+      ? partnerServiceInfo?.category ?? partnerCategoryLabel ?? undefined
+      : undefined;
+  const partnerEyebrowShowsCategory =
+    discount.isPartnerVenue &&
+    Boolean(partnerServiceInfo?.category || partnerCategoryLabel);
+
   const partnerServiceBadgeBg = discount.isPartnerVenue
     ? getPartnerVenueCategoryBadgeBg(discount.partnerServiceCategoryCode)
     : "bg-indigo-600/90";
@@ -103,12 +128,6 @@ export default function DiscountCard({
     onToggleFavorite?.(discount.id);
   };
 
-  const handleClaim = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card click when clicking button
-    onClaim?.(discount.id);
-    // Link will naturally open in new tab (target="_blank")
-  };
-
   const handleCardClick = () => {
     if (discount.isPartnerVenue && discount.partnerVenueId) {
       router.push(`/dashboard/discounts/partner/${discount.partnerVenueId}`);
@@ -120,32 +139,58 @@ export default function DiscountCard({
     router.push(url);
   };
 
+  const goToDetail = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleCardClick();
+  };
+
+  /** Единая высота превью: карточки BB и партнёров выглядят одинаково в сетке */
+  const mediaFrameClass =
+    "relative h-[140px] w-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 sm:h-[160px] dark:from-gray-900 dark:to-gray-800";
+
   return (
     <div 
       onClick={handleCardClick}
       className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
       {/* Image/Header */}
-      <div className="relative w-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800">
+      <div className={mediaFrameClass}>
         {discount.imageUrl && !imageError ? (
           <img
             src={discount.imageUrl}
             alt={discount.title}
-            className="block w-full h-auto"
-            loading="lazy"
-            decoding="async"
+            className={clsx(
+              "relative z-10 h-full w-full object-cover transition-opacity duration-300 ease-out",
+              bannerDecoded ? "opacity-100" : "opacity-0"
+            )}
+            loading={eagerBanner ? "eager" : "lazy"}
+            decoding={eagerBanner ? "sync" : "async"}
+            onLoad={() => setBannerDecoded(true)}
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className={`flex min-h-[160px] items-center justify-center p-3 sm:p-6 text-center text-white ${
-            discount.isPartnerVenue
-              ? "bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 dark:from-indigo-700 dark:via-blue-700 dark:to-cyan-600"
-              : "bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-blue-600 dark:via-purple-600 dark:to-pink-600"
-          }`}>
-            <div className="max-w-full px-2">
-              <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide opacity-80 truncate">
-                {discount.isPartnerVenue ? (discount.partnerName || "Партнёр") : "Скидки BestBenefits"}
+          <div
+            className={`flex h-full items-center justify-center px-3 py-4 text-center text-white sm:px-6 ${
+              discount.isPartnerVenue
+                ? "bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 dark:from-indigo-700 dark:via-blue-700 dark:to-cyan-600"
+                : "bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-blue-600 dark:via-purple-600 dark:to-pink-600"
+            }`}
+          >
+            <div className="flex max-w-full flex-col text-left">
+              {!discount.isPartnerVenue && (
+                <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80 sm:text-xs">
+                  Скидки BestBenefits
+                </p>
+              )}
+              <p className="mt-0.5 text-sm font-bold leading-snug line-clamp-2 sm:text-base">
+                {discount.title}
               </p>
-              <p className="mt-1 sm:mt-2 text-sm sm:text-lg font-bold line-clamp-2">{discount.title}</p>
+              {discount.isPartnerVenue && (
+                <p className="mt-1 text-[10px] opacity-90 line-clamp-1 sm:text-xs">
+                  {partnerEyebrowText ||
+                    discount.partnerName ||
+                    "Партнёр"}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -232,17 +277,19 @@ export default function DiscountCard({
                 </div>
               )}
             <div className="min-w-0 flex-1 space-y-1 sm:space-y-2">
-              {(discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name) && (
-                <p
-                  className={`text-xs font-semibold uppercase tracking-wide truncate ${
-                    discount.isPartnerVenue
-                      ? "text-indigo-600 dark:text-indigo-300"
-                      : "text-blue-600 dark:text-blue-300"
-                  }`}
-                >
-                  {discount.isPartnerVenue ? discount.partnerName : discount.mainCategory?.name}
+              {(discount.isPartnerVenue ? partnerEyebrowText : discount.mainCategory?.name) && (
+                <p className="truncate text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
+                  {discount.isPartnerVenue ? partnerEyebrowText : discount.mainCategory?.name}
                 </p>
               )}
+              {discount.isPartnerVenue &&
+                partnerEyebrowShowsCategory &&
+                discount.partnerName &&
+                discount.partnerName !== discount.title && (
+                  <p className="truncate text-[11px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400 sm:text-xs">
+                    {discount.partnerName}
+                  </p>
+                )}
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
                 {discount.title}
               </h3>
@@ -256,7 +303,7 @@ export default function DiscountCard({
         </div>
 
         <div className="space-y-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             {discount.isPartnerVenue && partnerServiceInfo?.service && (
               <span
                 className={partnerServicePillClass}
@@ -272,6 +319,14 @@ export default function DiscountCard({
             <span className="min-w-0 flex-1 truncate">{citiesLabel}</span>
             {discount.distanceKm && (
               <span className="text-xs text-gray-400 dark:text-gray-500 flex-none">~{discount.distanceKm} км</span>
+            )}
+            {discount.updatedAt && (
+              <span
+                className="ml-auto shrink-0 text-[10px] tabular-nums text-gray-400 dark:text-gray-500 sm:text-[11px]"
+                title={`Обновлено ${formatDate(discount.updatedAt)}`}
+              >
+                обн. {formatShortDate(discount.updatedAt)}
+              </span>
             )}
           </div>
           {discount.validUntil && (
@@ -343,25 +398,48 @@ export default function DiscountCard({
           })()}
 
         <div className="mt-auto space-y-2 pt-2">
-          {!discount.isPartnerVenue && discount.partnerUrl && (
-            <a
-              href={discount.partnerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={handleClaim}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:ring-offset-gray-800"
+          <div className="flex w-full flex-col gap-2">
+            {!discount.isPartnerVenue && !isClaimed && onClaim && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClaim(discount.id);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:ring-offset-gray-800"
+              >
+                <span>Получить промокод</span>
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                </svg>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={goToDetail}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm transition hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-blue-500 dark:hover:text-blue-200 dark:ring-offset-gray-800"
             >
-              <span>Получить скидку</span>
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+              <span>Подробнее</span>
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                <path
+                  fillRule="evenodd"
+                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                  clipRule="evenodd"
+                />
               </svg>
-            </a>
-          )}
-          <div className="flex items-center justify-center">
-            <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
-              {formatRelative(discount.updatedAt)}
-            </span>
+            </button>
+            {discount.partnerUrl && (
+              <a
+                href={discount.partnerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-center text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+              >
+                Сайт партнёра
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -379,26 +457,13 @@ function formatDate(dateString?: string | null) {
   });
 }
 
-function formatRelative(dateString?: string | null) {
-  if (!dateString) return "недавно";
-
+/** Компактная дата для подписи в строке метаданных */
+function formatShortDate(dateString?: string | null) {
+  if (!dateString) return "—";
   const date = new Date(dateString);
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMinutes < 60) {
-    return `${diffMinutes || 1} мин назад`;
-  }
-
-  if (diffHours < 24) {
-    return `${diffHours} ч назад`;
-  }
-
-  if (diffDays < 7) {
-    return `${diffDays} дн назад`;
-  }
-
-  return formatDate(dateString);
+  return date.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
 }

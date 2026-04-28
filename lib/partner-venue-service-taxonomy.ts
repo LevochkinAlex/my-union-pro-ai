@@ -190,6 +190,15 @@ export function getPartnerVenueCategoryById(id: string): PartnerVenueServiceCate
   return PARTNER_VENUE_SERVICE_CATEGORIES.find((c) => c.id === id);
 }
 
+/** Подпись категории по коду из кабинета (достаточно выбрать категорию, услугу можно не задавать). */
+export function getPartnerVenueCategoryLabel(
+  categoryCode: string | null | undefined
+): string | null {
+  const id = categoryCode?.trim() ?? "";
+  if (!id) return null;
+  return getPartnerVenueCategoryById(id)?.label ?? null;
+}
+
 export function isValidPartnerVenueServicePair(
   categoryCode: string | null | undefined,
   serviceCode: string | null | undefined

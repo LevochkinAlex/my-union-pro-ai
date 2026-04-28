@@ -5,7 +5,8 @@ import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 import { prisma } from "@/lib/prisma";
 import DiscountsPageWrapper from "@/components/dashboard/DiscountsPageWrapper";
 import { PageHeader } from "@/components/ui";
-import type { DiscountPreferenceResponse } from "@/types/discounts";
+import type { DiscountItem, DiscountPreferenceResponse } from "@/types/discounts";
+import { fetchPartnerVenuesForDiscountCatalog } from "@/lib/fetch-partner-venues-discount-catalog";
 import { isDemoUserId, getDemoDiscounts } from "@/lib/demo";
 
 // Указываем, что страница динамическая (использует getServerSession)
@@ -55,6 +56,7 @@ export default async function DiscountsPage() {
   let initialData;
   let preference;
   let user;
+  let initialPartnerVenues: DiscountItem[] = [];
 
   try {
     // Пытаемся загрузить данные с таймаутом
@@ -63,7 +65,7 @@ export default async function DiscountsPage() {
       setTimeout(() => reject(new Error("Timeout loading discounts")), 30000)
     );
     
-    [initialData, preference, user] = await Promise.all([
+    [initialData, preference, user, initialPartnerVenues] = await Promise.all([
       Promise.race([fetchPromise, timeoutPromise]).catch((error) => {
         console.error("[discounts/page] Error loading discounts:", error);
         // Возвращаем пустую структуру данных в случае ошибки
@@ -89,6 +91,10 @@ export default async function DiscountsPage() {
         console.error("[discounts] Error fetching user:", error);
         return null;
       }),
+      fetchPartnerVenuesForDiscountCatalog({ limit: 50 }).catch((err) => {
+        console.warn("[discounts/page] Partner venues (SSR) failed:", err);
+        return [] as DiscountItem[];
+      }),
     ]);
   } catch (error) {
     console.error("[discounts/page] Critical error loading page:", error);
@@ -107,6 +113,7 @@ export default async function DiscountsPage() {
     } as any;
     preference = null;
     user = null;
+    initialPartnerVenues = [];
   }
 
   // Определяем город для фильтра из профиля пользователя
@@ -169,6 +176,7 @@ export default async function DiscountsPage() {
         initialData={initialData}
         initialPreference={preferencePayload}
         preferredCityName={user?.preferredDiscountCity ?? undefined}
+        initialPartnerVenues={initialPartnerVenues}
       />
     </div>
   );

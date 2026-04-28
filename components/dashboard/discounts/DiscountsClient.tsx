@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DiscountCard from "./DiscountCard";
 import CityFilter from "./CityFilter";
+import { mapPartnerVenuesToDiscountItems } from "@/lib/partner-venue-discount-mapper";
 import type {
+  DiscountItem,
   DiscountPreferenceResponse,
   DiscountSearchResult,
 } from "@/types/discounts";
@@ -18,6 +20,8 @@ interface DiscountsClientProps {
   initialPreference: DiscountPreferenceResponse;
   /** Название города из профиля — для отображения, когда выбран город */
   preferredCityName?: string;
+  /** Площадки партнёров с SSR (см. `fetchPartnerVenuesForDiscountCatalog`) */
+  initialPartnerVenues?: DiscountItem[];
 }
 
 type FilterState = {
@@ -52,6 +56,7 @@ export default function DiscountsClient({
   initialData,
   initialPreference,
   preferredCityName,
+  initialPartnerVenues,
 }: DiscountsClientProps) {
   // Защита от некорректных данных
   const safeInitialData: DiscountSearchResult = initialData || {
@@ -114,15 +119,26 @@ export default function DiscountsClient({
   const [searchInput, setSearchInput] = useState(filters.search);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [partnerVenues, setPartnerVenues] = useState<import("@/types/discounts").DiscountItem[]>([]);
+  const [partnerVenues, setPartnerVenues] = useState<DiscountItem[]>(
+    () => initialPartnerVenues ?? []
+  );
+
+  /** Пропускаем дублирующий клиентский fetch, если список уже пришёл с SSR и строка поиска пуста */
+  const skipNextPartnerVenuesFetchRef = useRef(
+    Boolean(initialPartnerVenues?.length && !filters.search)
+  );
 
   // Синхронизируем searchInput с filters.search (при сбросе фильтров)
   useEffect(() => {
     setSearchInput(filters.search);
   }, [filters.search]);
 
-  // Загрузка площадок партнёров (отдельная БД, не BestBenefits)
+  // Загрузка площадок партнёров (отдельная БД, не BestBenefits). При SSR `initialPartnerVenues` первый запрос не дублируем.
   useEffect(() => {
+    if (skipNextPartnerVenuesFetchRef.current) {
+      skipNextPartnerVenuesFetchRef.current = false;
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -131,37 +147,15 @@ export default function DiscountsClient({
         const res = await fetch(`/api/partner-venues/public?${params}`);
         if (!res.ok || cancelled) return;
         const json = await res.json();
-        const venues: import("@/types/discounts").DiscountItem[] = (json.venues ?? []).map(
-          (v: any, idx: number) => ({
-            id: -(idx + 1),
-            title: v.name,
-            description: v.conditions || v.description || null,
-            shortDescription: v.description || null,
-            discountValue: v.promoLabel || null,
-            promoCode: v.promoCode || null,
-            partnerUrl: v.website || null,
-            imageUrl: v.bannerUrl || null,
-            tags: [],
-            isPremium: false,
-            categories: [],
-            mainCategory: null,
-            cities: v.city ? [{ id: 0, name: v.city }] : [],
-            updatedAt: v.updatedAt || v.createdAt || null,
-            validUntil: null,
-            isPartnerVenue: true,
-            partnerVenueId: v.id,
-            partnerName: v.partner?.name ?? null,
-            partnerLogoUrl: v.partner?.logoUrl ?? null,
-            partnerServiceCategoryCode: v.serviceCategoryCode ?? null,
-            partnerServiceCode: v.serviceCode ?? null,
-          })
-        );
+        const venues = mapPartnerVenuesToDiscountItems(json.venues ?? []);
         if (!cancelled) setPartnerVenues(venues);
       } catch (e) {
         console.warn("[DiscountsClient] Failed to load partner venues:", e);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [filters.search]);
 
   // Автоматическая синхронизация с BestBenefits
@@ -1015,7 +1009,7 @@ function DiscountGrid({
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
-      {discounts.map((discount) => (
+      {discounts.map((discount, index) => (
         <DiscountCard
           key={discount.isPartnerVenue ? `pv-${discount.partnerVenueId}` : discount.id}
           discount={discount}
@@ -1026,6 +1020,7 @@ function DiscountGrid({
           forceShowImage
           selectedCityId={selectedCityId}
           hidePromoCode
+          eagerBanner={index < 9}
         />
       ))}
     </div>
