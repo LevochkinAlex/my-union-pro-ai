@@ -58,6 +58,8 @@ pm2 logs my-union-pro --lines 50
 2. Вход в `/login`, отправка magic link — работает.
 3. WebSocket: в консоли браузера `[useChat] ✅ Socket connected`.
 4. Админ-аналитика расходов ИИ: `/admin/ai-chat/usage` → события логируются.
+5. **BestBenefits (каталог):** на VDS  
+   `cd /opt/my-union-pro && ./node_modules/.bin/dotenv -c -- ./node_modules/.bin/tsx scripts/check-bb-org-token.ts` → ожидается **HTTP 200**; при необходимости полный импорт: тот же каталог + `tsx scripts/sync-discounts.ts`. Документация: `docs/BESTBENEFITS_SYSTEM.md`.
 
 ## Типовые проблемы
 

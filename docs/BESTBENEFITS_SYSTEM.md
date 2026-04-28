@@ -1,6 +1,6 @@
 # Система скидок BestBenefits
 
-> Актуальная документация на 04.03.2025
+> Актуально на 28.04.2026 (каталог org API: `/api/myunion/products`, см. `lib/best-benefits-catalog-url.ts`).
 
 ## Архитектура
 
@@ -192,6 +192,9 @@ decryptPassword(encryptedPassword: string): string
 ### Канонические (использовать эти)
 
 ```bash
+# 0. Проверка org-токена и пути каталога (без вывода секрета)
+pnpm bb:check-org-token
+
 # 1. Каталог скидок
 pnpm sync:discounts
 
@@ -220,8 +223,9 @@ BB_API_URL=https://bestbenefits.ru/api
 
 # Полный URL списка каталога для org-токена (пагинация ?per_page=&page=). По умолчанию в коде:
 #   https://bestbenefits.ru/api/myunion/products
-# Если BB отдаёт каталог по другому пути — задайте явно, например legacy:
-# BEST_BENEFITS_API_URL=https://bestbenefits.ru/api/products
+# Раньше в .env часто было BEST_BENEFITS_API_URL=https://bestbenefits.ru/api/products — такое значение
+# в рантайме автоматически заменяется на .../api/myunion/products (см. resolveBestBenefitsCatalogProductsUrl).
+# Другой явный URL задавайте только если BB выдал отдельный endpoint.
 
 # Шифрование паролей пользователей (храним пароли BB пользователей в нашей БД)
 BB_PASSWORD_ENCRYPTION_KEY=your-32-char-key
@@ -236,19 +240,21 @@ CDN_URL=https://cdn.myunion.pro
 # BB_ORG_API_BASE — опционально другая база (должна быть вроде .../api/myunion). Если указан URL с profsoyuzy — код принудительно использует /api/myunion.
 ```
 
-### Org-токен: `401` / «Невалидный токен» на `/api/products` или `/api/myunion/*`
+### Org-токен: `401` / «Невалидный токен» на каталоге
+
+Каталог с org-токеном запрашивается у **`https://bestbenefits.ru/api/myunion/products`** (или значение из `BEST_BENEFITS_API_URL`, если это не legacy `/api/products`).
 
 Это **не** пароль пользователя MyUnion, а **ключ интеграции организации**, который выдаёт поддержка / кабинет BestBenefits для проекта «МойСоюз». Срок действия или состав ключа могут меняться на стороне BB.
 
 **Что сделать:**
 
-1. Запросить у BestBenefits **актуальный Bearer** для API каталога и `myunion` (тот же тип, что раньше клали в `BB_PROFSOYUZY_TOKEN`).
-2. На VDS в `/opt/my-union-pro/.env.local` обновить строку `BB_PROFSOYUZY_TOKEN=...` (без лишних кавычек вокруг значения; при копировании из Windows следите за `\r` — код снимает BOM и нормализует пробелы).
-3. Локально проверить перед заливкой: `pnpm bb:check-org-token` (делает `GET …/api/products?per_page=1`, **не печатает** секрет).
+1. Запросить у BestBenefits **актуальный Bearer** для API каталога и `myunion` (тот же тип, что кладёте в `BB_PROFSOYUZY_TOKEN`).
+2. На VDS в `/opt/my-union-pro/.env.local` обновить строку `BB_PROFSOYUZY_TOKEN=...` (без лишних кавычек вокруг значения; при копировании из Windows следите за `\r` — код снимает BOM и нормализует пробелы, см. `lib/best-benefits-token-env.ts`).
+3. Локально проверить перед заливкой: **`pnpm bb:check-org-token`** — `GET …/myunion/products?per_page=1` (**токен не печатается**).
 4. Обновить прод: удобно `bash scripts/update-bb-env-on-vds.sh` (см. файл) **или** правка `.env.local` вручную + `pm2 restart my-union-pro`.
-5. Прогнать каталог: `pnpm sync:discounts` на сервере (через `dotenv -c -- tsx scripts/sync-discounts.ts`, как в crontab).
+5. Прогнать каталог: на сервере `dotenv -c -- tsx scripts/sync-discounts.ts` (как в crontab) или локально `pnpm sync:discounts` с рабочим `DATABASE_URL`.
 
-Если после замены ключа всё ещё `401`, проверьте, что **`BEST_BENEFITS_API_URL`** (если задан) указывает на тот же контур BB, для которого выдан токен.
+Если после замены ключа всё ещё `401`, проверьте, что **`BEST_BENEFITS_API_URL`** (если задан нестандартно) указывает на тот же контур BB, для которого выдан токен.
 
 Тексты скидок (`description` / `short_description` / отдельные поля условий) нормализуются в `lib/best-benefits-description.ts` при синхронизации и в API `/api/discounts`, чтобы блок «Условия использования» не терялся при смене схемы ответа BB.
 
