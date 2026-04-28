@@ -299,6 +299,7 @@ pnpm bb:reset-all-passwords -- --execute --only-with-bb-id
 
 ```bash
 bash scripts/ensure-vds-bb-catalog-env.sh
+# или: pnpm env:ensure-vds-bb-catalog
 ```
 
 Скрипт дописывает **`BEST_BENEFITS_API_URL`** и **`BESTBENEFITS_CATALOG_MAX_PAGES`**, не меняет `BB_PROFSOYUZY_TOKEN` и остальные переменные, делает бэкап `.env.local` и перезапускает PM2.
