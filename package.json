@@ -54,6 +54,7 @@
     "generate-icons": "node scripts/generate-icons.mjs",
     "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts",
     "sync:discounts": "dotenv -e .env.local -- tsx scripts/sync-discounts.ts",
+    "bb:check-org-token": "dotenv -e .env.local -- tsx scripts/check-bb-org-token.ts",
     "sync:all-users-discounts": "dotenv -e .env.local -- tsx scripts/sync-all-users-discounts.ts",
     "cron:partner-liquidation": "dotenv -e .env.local -- tsx scripts/run-partner-liquidation-cron.ts",
     "bb:reset-all-passwords": "dotenv -e .env.local -- tsx scripts/reset-all-bb-user-passwords.ts",

@@ -231,6 +231,20 @@ CDN_URL=https://cdn.myunion.pro
 # BB_ORG_API_BASE — опционально другая база (должна быть вроде .../api/myunion). Если указан URL с profsoyuzy — код принудительно использует /api/myunion.
 ```
 
+### Org-токен: `401` / «Невалидный токен» на `/api/products` или `/api/myunion/*`
+
+Это **не** пароль пользователя MyUnion, а **ключ интеграции организации**, который выдаёт поддержка / кабинет BestBenefits для проекта «МойСоюз». Срок действия или состав ключа могут меняться на стороне BB.
+
+**Что сделать:**
+
+1. Запросить у BestBenefits **актуальный Bearer** для API каталога и `myunion` (тот же тип, что раньше клали в `BB_PROFSOYUZY_TOKEN`).
+2. На VDS в `/opt/my-union-pro/.env.local` обновить строку `BB_PROFSOYUZY_TOKEN=...` (без лишних кавычек вокруг значения; при копировании из Windows следите за `\r` — код снимает BOM и нормализует пробелы).
+3. Локально проверить перед заливкой: `pnpm bb:check-org-token` (делает `GET …/api/products?per_page=1`, **не печатает** секрет).
+4. Обновить прод: удобно `bash scripts/update-bb-env-on-vds.sh` (см. файл) **или** правка `.env.local` вручную + `pm2 restart my-union-pro`.
+5. Прогнать каталог: `pnpm sync:discounts` на сервере (через `dotenv -c -- tsx scripts/sync-discounts.ts`, как в crontab).
+
+Если после замены ключа всё ещё `401`, проверьте, что **`BEST_BENEFITS_API_URL`** (если задан) указывает на тот же контур BB, для которого выдан токен.
+
 Тексты скидок (`description` / `short_description` / отдельные поля условий) нормализуются в `lib/best-benefits-description.ts` при синхронизации и в API `/api/discounts`, чтобы блок «Условия использования» не терялся при смене схемы ответа BB.
 
 ### Ошибка `401` / «Неверный email или пароль» при запросах от имени пользователя
