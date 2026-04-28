@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
+import { fetchAllBestBenefitsCatalogProducts } from "@/lib/best-benefits-catalog-fetch";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { cleanupExpiredDiscounts } from "@/lib/discount-activation";
 import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
@@ -150,59 +151,6 @@ async function uploadImageToCDN(
 }
 
 /**
- * Загружает все скидки из BestBenefits
- */
-async function fetchAllDiscountsFromBB(): Promise<any[]> {
-  const token = await getBestBenefitsToken();
-  const allDiscounts: any[] = [];
-  let currentPage = 1;
-  let hasMore = true;
-  const maxPages = 50;
-
-  while (hasMore && currentPage <= maxPages) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-    
-    try {
-      const url = `${API_BASE_URL}?per_page=100&page=${currentPage}`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`API error ${response.status}`);
-      }
-
-      const data = await response.json();
-      const discounts = data?.data ?? [];
-      
-      if (discounts.length === 0) {
-        hasMore = false;
-      } else {
-        allDiscounts.push(...discounts);
-        hasMore = data?.meta?.current_page < data?.meta?.last_page || discounts.length >= 100;
-        currentPage++;
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 200));
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
-  }
-
-  return allDiscounts;
-}
-
-/**
  * GET /api/cron/sync-discounts
  * Автоматическая синхронизация скидок (вызывается cron)
  */
@@ -222,8 +170,27 @@ export async function GET(request: NextRequest) {
   console.log("[cron] Starting scheduled discount sync...");
 
   try {
-    const bbDiscounts = await fetchAllDiscountsFromBB();
-    
+    const token = await getBestBenefitsToken();
+    const {
+      items: rawBb,
+      pagesFetched,
+      truncatedByCap,
+    } = await fetchAllBestBenefitsCatalogProducts({
+      token,
+      apiBaseUrl: API_BASE_URL,
+      log: (level, msg) => {
+        if (level === "warn") console.warn(msg);
+        else console.log(msg);
+      },
+    });
+    const bbDiscounts = rawBb as any[];
+
+    if (truncatedByCap) {
+      console.warn(
+        "[cron] BB catalog truncated by BESTBENEFITS_CATALOG_MAX_PAGES; increase if needed"
+      );
+    }
+
     let created = 0;
     let updated = 0;
     let imagesProcessed = 0;
@@ -336,6 +303,11 @@ export async function GET(request: NextRequest) {
         itemsFailed: errors.length,
         duration: Date.now() - startTime,
         errors: errors.length > 0 ? errors.slice(0, 50) : undefined,
+        metadata: {
+          catalogCount: bbDiscounts.length,
+          pagesFetched,
+          truncatedByCap,
+        },
       },
     });
 
@@ -360,6 +332,9 @@ export async function GET(request: NextRequest) {
       imagesProcessed,
       errors: errors.slice(0, 10),
       duration,
+      pagesFetched,
+      truncatedByCap,
+      catalogCount: bbDiscounts.length,
     });
   } catch (error) {
     console.error("[cron] Sync failed:", error);

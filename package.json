@@ -53,7 +53,7 @@
     "reset-user": "dotenv -e .env.local -- tsx scripts/reset-user-data.ts",
     "generate-icons": "node scripts/generate-icons.mjs",
     "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts",
-    "sync:discounts": "dotenv -e .env.local -- node scripts/sync-discounts.mjs",
+    "sync:discounts": "dotenv -e .env.local -- tsx scripts/sync-discounts.ts",
     "sync:all-users-discounts": "dotenv -e .env.local -- tsx scripts/sync-all-users-discounts.ts",
     "cron:partner-liquidation": "dotenv -e .env.local -- tsx scripts/run-partner-liquidation-cron.ts",
     "bb:reset-all-passwords": "dotenv -e .env.local -- tsx scripts/reset-all-bb-user-passwords.ts",

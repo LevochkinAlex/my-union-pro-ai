@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
+import { fetchAllBestBenefitsCatalogProducts } from "@/lib/best-benefits-catalog-fetch";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import crypto from "crypto";
 import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
@@ -17,6 +18,8 @@ interface SyncResult {
   imagesProcessed: number;
   errors: string[];
   duration: number;
+  pagesFetched?: number;
+  truncatedByCap?: boolean;
 }
 
 /**
@@ -157,71 +160,6 @@ async function uploadImageToCDN(
 }
 
 /**
- * Загружает все скидки из BestBenefits API
- */
-async function fetchAllDiscountsFromBB(): Promise<any[]> {
-  const token = await getBestBenefitsToken();
-  const allDiscounts: any[] = [];
-  let currentPage = 1;
-  let hasMore = true;
-  const maxPages = 50; // Ограничение для безопасности
-
-  while (hasMore && currentPage <= maxPages) {
-    console.log(`[sync-all] Fetching page ${currentPage}...`);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-    
-    try {
-      const url = `${API_BASE_URL}?per_page=100&page=${currentPage}`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`API error ${response.status}: ${await response.text()}`);
-      }
-
-      const data = await response.json();
-      const discounts = data?.data ?? [];
-      
-      if (discounts.length === 0) {
-        hasMore = false;
-      } else {
-        allDiscounts.push(...discounts);
-        
-        // Проверяем пагинацию
-        hasMore = data?.meta?.current_page && data?.meta?.last_page
-          ? data.meta.current_page < data.meta.last_page
-          : discounts.length >= 100;
-        
-        currentPage++;
-      }
-      
-      // Небольшая задержка между запросами
-      await new Promise(resolve => setTimeout(resolve, 200));
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error.name === "AbortError") {
-        console.error(`[sync-all] Request timeout on page ${currentPage}`);
-      }
-      throw error;
-    }
-  }
-
-  console.log(`[sync-all] Fetched ${allDiscounts.length} discounts from ${currentPage - 1} pages`);
-  return allDiscounts;
-}
-
-/**
  * POST /api/discounts/sync-all
  * Полная синхронизация всех скидок с BestBenefits
  * Доступно только для SUPER_ADMIN
@@ -250,8 +188,28 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
 
     console.log("[sync-all] Starting full discount sync...");
 
-    // Загружаем все скидки из BestBenefits
-    const bbDiscounts = await fetchAllDiscountsFromBB();
+    const token = await getBestBenefitsToken();
+    const {
+      items: rawBbDiscounts,
+      pagesFetched,
+      truncatedByCap,
+    } = await fetchAllBestBenefitsCatalogProducts({
+      token,
+      apiBaseUrl: API_BASE_URL,
+      log: (level, msg) => {
+        if (level === "warn") console.warn(msg);
+        else console.log(msg);
+      },
+    });
+    const bbDiscounts = rawBbDiscounts as any[];
+    if (truncatedByCap) {
+      errors.push(
+        "Каталог BB обрезан лимитом страниц (BESTBENEFITS_CATALOG_MAX_PAGES). Увеличьте лимит и повторите синхронизацию."
+      );
+    }
+    console.log(
+      `[sync-all] Fetched ${bbDiscounts.length} discounts (pages=${pagesFetched}, truncatedCap=${truncatedByCap})`
+    );
     
     let created = 0;
     let updated = 0;
@@ -422,6 +380,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
         itemsFailed: errors.length,
         duration,
         errors: errors.length > 0 ? errors.slice(0, 50) : undefined,
+        metadata: {
+          catalogCount: bbDiscounts.length,
+          pagesFetched,
+          truncatedByCap,
+        },
       },
     }).catch((e) => console.error("[sync-all] Failed to write sync log:", e));
 
@@ -433,6 +396,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
       imagesProcessed,
       errors,
       duration,
+      pagesFetched,
+      truncatedByCap,
     });
   } catch (error) {
     console.error("[sync-all] Sync failed:", error);
@@ -510,21 +475,38 @@ export async function GET() {
       return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
     }
 
-    const [totalDiscounts, activeDiscounts, lastSynced, categoriesCount] = await Promise.all([
-      prisma.discount.count(),
-      prisma.discount.count({ where: { isActive: true } }),
-      prisma.discount.findFirst({
-        orderBy: { lastSyncedAt: "desc" },
-        select: { lastSyncedAt: true },
-      }),
-      prisma.discountCategory.count(),
-    ]);
+    const [totalDiscounts, activeDiscounts, lastSynced, categoriesCount, lastCatalogSyncLog] =
+      await Promise.all([
+        prisma.discount.count(),
+        prisma.discount.count({ where: { isActive: true } }),
+        prisma.discount.findFirst({
+          orderBy: { lastSyncedAt: "desc" },
+          select: { lastSyncedAt: true },
+        }),
+        prisma.discountCategory.count(),
+        prisma.syncLog.findFirst({
+          where: { type: "DISCOUNTS" },
+          orderBy: { createdAt: "desc" },
+          select: {
+            createdAt: true,
+            status: true,
+            source: true,
+            itemsCreated: true,
+            itemsUpdated: true,
+            itemsFailed: true,
+            duration: true,
+            metadata: true,
+            errors: true,
+          },
+        }),
+      ]);
 
     return NextResponse.json({
       totalDiscounts,
       activeDiscounts,
       categoriesCount,
       lastSyncedAt: lastSynced?.lastSyncedAt ?? null,
+      lastCatalogSync: lastCatalogSyncLog,
     });
   } catch (error) {
     console.error("[sync-all] GET error:", error);

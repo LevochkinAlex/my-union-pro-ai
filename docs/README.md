@@ -27,7 +27,7 @@ ssh -i ~/.ssh/myunion_vds root@79.143.29.66 'cd /opt/my-union-pro && git pull &&
 
 ### Синхронизация скидок
 ```bash
-ssh -i ~/.ssh/myunion_vds root@79.143.29.66 'cd /opt/my-union-pro && node scripts/sync-discounts.mjs'
+ssh -i ~/.ssh/myunion_vds root@79.143.29.66 'cd /opt/my-union-pro && ./node_modules/.bin/dotenv -c -- ./node_modules/.bin/tsx scripts/sync-discounts.ts'
 ```
 
 ### Проверка логов

@@ -47,7 +47,7 @@ MYUNION_BLOCK=$(cat <<EOF
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 SHELL=/bin/bash
 CRON_TZ=UTC
-0 0 * * * cd $APP_ROOT && /usr/bin/node scripts/sync-discounts.mjs >> /var/log/myunion/sync-discounts.log 2>&1
+0 0 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-discounts.ts >> /var/log/myunion/sync-discounts.log 2>&1
 0 1 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1
 # ЕГРЮЛ / ликвидация партнёров: каждый день в 02:00 UTC (поля: мин час день месяц день_недели)
 0 2 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/run-partner-liquidation-cron.ts >> /var/log/myunion/partner-liquidation.log 2>&1
