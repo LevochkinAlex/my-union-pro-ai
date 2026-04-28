@@ -12,7 +12,6 @@ import {
   coalesceBestBenefitsDescriptions,
   mergeDiscountTextWithLocal,
 } from "@/lib/best-benefits-description";
-
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -144,6 +143,7 @@ export async function GET(request: NextRequest) {
             const password = decryptPassword(user.bestBenefitsPassword);
             const userToken = await getUserBestBenefitsToken(user.email, password);
             
+            // Персональный JWT BB — публичный каталог /api/products/{id} (не org /api/myunion).
             const response = await fetch(`https://bestbenefits.ru/api/products/${discount.id}`, {
               headers: {
                 "Accept": "application/json",

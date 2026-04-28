@@ -5,9 +5,8 @@ import { fetchAllBestBenefitsCatalogProducts } from "@/lib/best-benefits-catalog
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { cleanupExpiredDiscounts } from "@/lib/discount-activation";
 import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
+import { resolveBestBenefitsCatalogProductsUrl } from "@/lib/best-benefits-catalog-url";
 import crypto from "crypto";
-
-const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
 const CRON_SECRET = process.env.CRON_SECRET;
 
 /**
@@ -177,7 +176,7 @@ export async function GET(request: NextRequest) {
       truncatedByCap,
     } = await fetchAllBestBenefitsCatalogProducts({
       token,
-      apiBaseUrl: API_BASE_URL,
+      apiBaseUrl: resolveBestBenefitsCatalogProductsUrl(),
       log: (level, msg) => {
         if (level === "warn") console.warn(msg);
         else console.log(msg);

@@ -1,10 +1,9 @@
 /**
- * Постраничная загрузка каталога /api/products BestBenefits.
+ * Постраничная загрузка каталога BestBenefits (по умолчанию /api/myunion/products).
  * Единая логика для cron, HTTP sync и CLI — чтобы не терять страницы из‑за maxPages или битой meta.
  */
 
-const DEFAULT_API =
-  process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
+import { resolveBestBenefitsCatalogProductsUrl } from "./best-benefits-catalog-url";
 
 export type BestBenefitsCatalogFetchLog = (
   level: "info" | "warn",
@@ -87,7 +86,9 @@ export async function fetchAllBestBenefitsCatalogProducts(options: {
   signal?: AbortSignal;
   log?: BestBenefitsCatalogFetchLog;
 }): Promise<FetchBbCatalogResult> {
-  const base = (options.apiBaseUrl ?? DEFAULT_API).replace(/\/$/, "");
+  const base = (
+    options.apiBaseUrl ?? resolveBestBenefitsCatalogProductsUrl()
+  ).replace(/\/$/, "");
   const perPage = options.perPage ?? 100;
   const maxPages = options.maxPages ?? maxPagesFromEnv();
   const pageTimeoutMs = options.pageTimeoutMs ?? 60_000;

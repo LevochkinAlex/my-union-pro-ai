@@ -7,8 +7,7 @@ import { fetchAllBestBenefitsCatalogProducts } from "@/lib/best-benefits-catalog
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import crypto from "crypto";
 import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
-
-const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
+import { resolveBestBenefitsCatalogProductsUrl } from "@/lib/best-benefits-catalog-url";
 
 interface SyncResult {
   success: boolean;
@@ -195,7 +194,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
       truncatedByCap,
     } = await fetchAllBestBenefitsCatalogProducts({
       token,
-      apiBaseUrl: API_BASE_URL,
+      apiBaseUrl: resolveBestBenefitsCatalogProductsUrl(),
       log: (level, msg) => {
         if (level === "warn") console.warn(msg);
         else console.log(msg);

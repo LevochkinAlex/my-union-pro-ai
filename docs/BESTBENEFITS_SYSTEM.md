@@ -218,6 +218,11 @@ BB_PROFSOYUZY_TOKEN=...
 
 BB_API_URL=https://bestbenefits.ru/api
 
+# Полный URL списка каталога для org-токена (пагинация ?per_page=&page=). По умолчанию в коде:
+#   https://bestbenefits.ru/api/myunion/products
+# Если BB отдаёт каталог по другому пути — задайте явно, например legacy:
+# BEST_BENEFITS_API_URL=https://bestbenefits.ru/api/products
+
 # Шифрование паролей пользователей (храним пароли BB пользователей в нашей БД)
 BB_PASSWORD_ENCRYPTION_KEY=your-32-char-key
 

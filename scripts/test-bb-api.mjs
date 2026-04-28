@@ -14,7 +14,9 @@ config({ path: path.join(root, ".env") });
 config({ path: path.join(root, ".env.local"), override: true });
 
 const AUTH_URL = "https://bestbenefits.ru/api/auth";
-const PRODUCTS_URL = "https://bestbenefits.ru/api/products";
+const PRODUCTS_URL =
+  process.env.BEST_BENEFITS_API_URL?.trim() ||
+  "https://bestbenefits.ru/api/myunion/products";
 
 const staticToken =
   process.env.BB_PROFSOYUZY_TOKEN?.trim() || process.env.BB_API_TOKEN?.trim();

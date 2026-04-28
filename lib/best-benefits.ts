@@ -15,9 +15,9 @@ import { getBestBenefitsToken } from "@/lib/best-benefits-auth";
 import { getAllRussianCities } from "@/lib/constants/russian-regions";
 import { getDiscountsFromLocalDB } from "@/lib/fetch-discounts-from-db";
 import { coalesceBestBenefitsDescriptions } from "@/lib/best-benefits-description";
+import { resolveBestBenefitsCatalogProductsUrl } from "@/lib/best-benefits-catalog-url";
 
 const SAMPLE_FILE = path.join(process.cwd(), "public", "best_benefits", "sample-discounts.json");
-const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
 const USE_REAL_API = process.env.USE_REAL_BB_API === "true";
 
 type FetchContext = {
@@ -250,9 +250,7 @@ function localDiscountItemToBbRaw(d: DiscountItem): BestBenefitsDiscount {
 }
 
 async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefitsResponse> {
-  if (!API_BASE_URL) {
-    throw new Error("BestBenefits API url is not defined");
-  }
+  const catalogBase = resolveBestBenefitsCatalogProductsUrl();
 
   // Get authentication token
   const token = await getBestBenefitsToken();
@@ -264,7 +262,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     // Если один ID - запрашиваем через /products/{id}
     if (idList.length === 1) {
       try {
-        const singleUrl = `${API_BASE_URL}/${idList[0]}`;
+        const singleUrl = `${catalogBase}/${idList[0]}`;
         // console.log("[best-benefits] Fetching single discount from API:", singleUrl);
         
         const singleResponse = await fetch(singleUrl, {
@@ -339,7 +337,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
         const batch = idList.slice(i, i + batchSize);
         const batchPromises = batch.map(async (id) => {
           try {
-            const url = `${API_BASE_URL}/${id}`;
+            const url = `${catalogBase}/${id}`;
             const response = await fetch(url, {
               method: "GET",
               headers: {
@@ -476,7 +474,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
   if (params.limit) searchParams.set("per_page", String(params.limit));
   if (params.page) searchParams.set("page", String(params.page));
 
-  const url = `${API_BASE_URL}?${searchParams.toString()}`;
+  const url = `${catalogBase}?${searchParams.toString()}`;
   console.log("[best-benefits] Fetching from API:", url);
 
   // Добавляем таймаут для основного запроса к /products

@@ -1,5 +1,5 @@
 /**
- * Проверка org-токена BestBenefits (каталог GET /api/products).
+ * Проверка org-токена BestBenefits (каталог GET …/products, по умолчанию /api/myunion/products).
  *
  *   pnpm dotenv -e .env.local -- tsx scripts/check-bb-org-token.ts
  *
@@ -12,15 +12,14 @@ import { fileURLToPath } from "url";
 
 import { normalizeBbOrgTokenFromEnv } from "../lib/best-benefits-token-env";
 import { getBestBenefitsToken } from "../lib/best-benefits-auth";
+import { resolveBestBenefitsCatalogProductsUrl } from "../lib/best-benefits-catalog-url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 config({ path: path.join(root, ".env") });
 config({ path: path.join(root, ".env.local"), override: true });
 
-const PRODUCTS_BASE =
-  process.env.BEST_BENEFITS_API_URL?.trim() ||
-  "https://bestbenefits.ru/api/products";
+const PRODUCTS_BASE = resolveBestBenefitsCatalogProductsUrl();
 
 async function main() {
   const rawProf = process.env.BB_PROFSOYUZY_TOKEN;
