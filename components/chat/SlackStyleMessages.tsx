@@ -590,7 +590,7 @@ function MessageReactionsDisplay({
                   inline-flex items-center justify-center w-6 h-6 rounded-full text-xs transition-all shadow-sm
                   ${isLiked
                     ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700"
-                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ring-1 ring-gray-200 dark:ring-gray-600"
+                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover-surface ring-1 ring-gray-200 dark:ring-gray-600"
                   }
                 `}
                 title={data.users?.find(u => u.id === userId)?.name || 'Пользователь'}
@@ -619,7 +619,7 @@ function MessageReactionsDisplay({
               inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-all shadow-sm
               ${isLiked
                 ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700"
-                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ring-1 ring-gray-200 dark:ring-gray-600"
+                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover-surface ring-1 ring-gray-200 dark:ring-gray-600"
               }
             `}
             title={data.users?.map((u) => u.name).join(", ") || `${count} реакций`}
@@ -2206,7 +2206,7 @@ export default function SlackStyleMessages({
           type="button"
           title="Прокрутить вниз"
           onClick={() => scrollToBottom()}
-          className="absolute bottom-24 right-6 p-3 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all hover:scale-105"
+          className="absolute bottom-24 right-6 p-3 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover-surface hover:scale-105"
         >
           <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-300" aria-hidden />
         </button>

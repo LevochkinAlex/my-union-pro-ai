@@ -164,7 +164,7 @@ export default function CityFilter({ cities, value, onChange }: CityFilterProps)
                 className={`block w-full px-3 py-2 text-left text-sm transition ${
                   idx === highlightIndex
                     ? "bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
-                    : "text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700/60"
+                    : "text-gray-700 hover-surface dark:text-gray-200"
                 }`}
               >
                 {city.name}

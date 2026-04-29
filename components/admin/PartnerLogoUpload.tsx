@@ -289,7 +289,7 @@ export default function PartnerLogoUpload({
           />
           <label
             htmlFor={pickId}
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-white px-4 py-8 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 ${
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-white px-4 py-8 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 ${
               disabled ? "pointer-events-none opacity-50" : ""
             }`}
           >

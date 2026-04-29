@@ -83,15 +83,19 @@ export default function DiscountsPreview() {
         const response = await fetch("/api/discounts?limit=6", {
           cache: "no-store",
         });
-        
+
         if (!response.ok) {
-          throw new Error("Failed to load discounts");
+          console.warn("[DiscountsPreview] HTTP", response.status, response.statusText);
+          setDiscounts([]);
+          setError(true);
+          return;
         }
-        
-        const data = await response.json();
-        setDiscounts(data.discounts || []);
+
+        const data = await response.json().catch(() => ({}));
+        setDiscounts(Array.isArray(data.discounts) ? data.discounts : []);
       } catch (err) {
         console.error("[DiscountsPreview] Error loading discounts:", err);
+        setDiscounts([]);
         setError(true);
       } finally {
         setLoading(false);
@@ -121,15 +125,20 @@ export default function DiscountsPreview() {
     );
   }
 
-  // При ошибке показываем сообщение
+  // Нет данных или ошибка загрузки — ссылка в каталог, без падения страницы
   if (error || discounts.length === 0) {
     return (
-      <div className="text-center py-6">
-        <Link 
+      <div className="space-y-2 py-6 text-center">
+        {error && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Не удалось загрузить превью скидок. Откройте раздел целиком.
+          </p>
+        )}
+        <Link
           href="/dashboard/discounts"
-          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+          className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
           Перейти к скидкам и привилегиям

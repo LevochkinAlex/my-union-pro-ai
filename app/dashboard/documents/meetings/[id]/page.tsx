@@ -1866,7 +1866,7 @@ export default function MeetingDetailPage({
                                         key={m.id}
                                         type="button"
                                         disabled={disabled}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover-surface disabled:opacity-50"
                                         onClick={() => {
                                           const list = agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item);
                                           const sid = agendaEditForm[item.id]?.speakerId ?? item.speakerId ?? "";
@@ -1897,7 +1897,7 @@ export default function MeetingDetailPage({
                                         key={p.id}
                                         type="button"
                                         disabled={disabled}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover-surface disabled:opacity-50"
                                         onClick={() => {
                                           const list = agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item);
                                           const sName = agendaEditForm[item.id]?.speakerName ?? item.speakerName ?? "";
@@ -1932,7 +1932,7 @@ export default function MeetingDetailPage({
                           <button
                             type="button"
                             onClick={cancelEditAgendaItem}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300"
                           >
                             Отмена
                           </button>
@@ -2175,7 +2175,7 @@ export default function MeetingDetailPage({
                                         key={m.id}
                                         type="button"
                                         disabled={disabled}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover-surface disabled:opacity-50"
                                         onClick={() => {
                                           if ((newAgendaForm.coSpeakers || []).some((c) => c.userId === m.id) || m.id === newAgendaForm.speakerId) return;
                                           setNewAgendaForm((prev) => ({ ...prev, coSpeakers: [...(prev.coSpeakers || []), { userId: m.id, name: getElectedMemberName(m), position: m.jobTitle || m.roleName || "" }] }));
@@ -2202,7 +2202,7 @@ export default function MeetingDetailPage({
                                         key={p.id}
                                         type="button"
                                         disabled={disabled}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover-surface disabled:opacity-50"
                                         onClick={() => {
                                           if ((newAgendaForm.coSpeakers || []).some((c) => c.extId === p.id) || p.externalName === newAgendaForm.speakerName) return;
                                           setNewAgendaForm((prev) => ({ ...prev, coSpeakers: [...(prev.coSpeakers || []), { extId: p.id, name: p.externalName || "", position: p.externalPosition || undefined }] }));
@@ -2240,7 +2240,7 @@ export default function MeetingDetailPage({
                             setNewAgendaForm({ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakers: [], attachments: [] });
                             setCoSpeakerDropdownNew(false);
                           }}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300"
                         >
                           Отмена
                         </button>
@@ -2456,7 +2456,7 @@ export default function MeetingDetailPage({
                         setSendingProtocolToInbox(false);
                       }
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover-surface disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                     title={protocolSentToInbox ? "Протокол уже разослан участникам" : "Создать копии протокола во Входящих у всех участников заседания и отправить уведомления"}
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2555,7 +2555,7 @@ export default function MeetingDetailPage({
                   type="button"
                   onClick={() => !protocolBlocksLocked && setProtocolGeneralCollapsed((c) => !c)}
                   disabled={protocolBlocksLocked}
-                  className="flex w-full items-center justify-between p-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-t-xl disabled:opacity-90 disabled:cursor-default"
+                  className="flex w-full items-center justify-between p-4 text-left hover-surface rounded-t-xl disabled:opacity-90 disabled:cursor-default"
                   {...(protocolGeneralCollapsed && !protocolBlocksLocked ? { "aria-expanded": "false" } : { "aria-expanded": "true" })}
                 >
                   <h4 className="text-base font-semibold text-gray-900 dark:text-white">Общие сведения протокола</h4>
@@ -2907,7 +2907,7 @@ export default function MeetingDetailPage({
                       {presentElectedBody.map(m => {
                         const checked = voteCounterUserIds.includes(m.id);
                         return (
-                          <label key={m.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors ${protocolBlocksLocked ? "cursor-default" : "cursor-pointer"} ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700/50"}`}>
+                          <label key={m.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors ${protocolBlocksLocked ? "cursor-default" : "cursor-pointer"} ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover-surface dark:border-gray-600"}`}>
                             <input type="checkbox" checked={checked} onChange={(e) => setVoteCounterUserIds(prev => e.target.checked ? [...prev, m.id] : prev.filter(id => id !== m.id))} disabled={protocolBlocksLocked} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 disabled:opacity-70 disabled:cursor-not-allowed" />
                             <span className="text-gray-900 dark:text-white">{getElectedMemberName(m)}</span>
                             {(m.jobTitle || m.roleName) && <span className="text-xs text-gray-500 dark:text-gray-400">({m.jobTitle || m.roleName})</span>}
@@ -2976,7 +2976,7 @@ export default function MeetingDetailPage({
                           return (
                             <label
                               key={item.id}
-                              className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors ${protocolBlocksLocked ? "cursor-default" : "cursor-pointer"} ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700/50"}`}
+                              className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors ${protocolBlocksLocked ? "cursor-default" : "cursor-pointer"} ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover-surface dark:border-gray-600"}`}
                             >
                               <input
                                 type="checkbox"
@@ -3816,7 +3816,7 @@ export default function MeetingDetailPage({
                         return (
                           <label
                             key={item.id}
-                            className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors cursor-pointer ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700/50"}`}
+                            className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors cursor-pointer ${checked ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30" : "border-gray-200 hover-surface dark:border-gray-600"}`}
                           >
                             <input
                               type="checkbox"
@@ -4147,7 +4147,7 @@ export default function MeetingDetailPage({
               setExtractIdForSendModal(null);
               setSelectedUserIdsForExtract([]);
             }}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300"
           >
             Отмена
           </button>
@@ -4213,7 +4213,7 @@ export default function MeetingDetailPage({
           <button
             type="button"
             onClick={() => setPdfPreviewUrl(null)}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300"
           >
             Закрыть
           </button>

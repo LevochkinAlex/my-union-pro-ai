@@ -507,7 +507,7 @@ export default function DocumentTemplatesPage() {
             <button
               type="button"
               onClick={closeModal}
-              className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+              className="rounded-lg border border-gray-300 px-4 py-2 hover-surface dark:border-gray-600"
             >
               Отмена
             </button>

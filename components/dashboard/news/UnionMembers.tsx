@@ -123,7 +123,7 @@ function UnionMembersComponent() {
             {members.map((member) => (
               <div
                 key={member.id}
-                className="group flex items-center gap-3 rounded-lg p-3 transition hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                className="group flex items-center gap-3 rounded-lg p-3 hover-surface"
               >
                 {/* Avatar */}
                 {member.avatarUrl ? (

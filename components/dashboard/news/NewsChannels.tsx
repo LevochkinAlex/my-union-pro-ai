@@ -113,7 +113,7 @@ function NewsChannelsComponent({ selectedChannelId = null, onSelectChannel }: Ne
               key={channel.id}
               type="button"
               onClick={() => onSelectChannel?.(isSelected ? null : channel.id)}
-              className={`group w-full flex items-start gap-3 rounded-lg p-3 text-left transition hover:bg-gray-50 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+              className={`group w-full flex items-start gap-3 rounded-lg p-3 text-left hover-surface focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
                 isSelected ? "bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-200 dark:ring-blue-800" : ""
               }`}
             >

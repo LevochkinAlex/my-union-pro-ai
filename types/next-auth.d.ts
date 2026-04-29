@@ -22,6 +22,15 @@ declare module "next-auth" {
       avatarUrl?: string | null;
       originalAdminId?: string;
       isImpersonating?: boolean;
+      /** Снимок админа из JWT при impersonation (для выхода без БД) */
+      restoreAdminProfile?: {
+        id: string;
+        role: UserRole;
+        membershipStatus: MembershipStatus;
+        email?: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+      };
       /** Текущий режим кабинета: MEMBER | PPO_HEAD | MPO_HEAD | RPO_HEAD */
       viewMode?: string;
       isPPOHead?: boolean;
@@ -36,6 +45,16 @@ declare module "next-auth" {
 }
 
 declare module "next-auth/jwt" {
+  /** Снимок супер-админа при impersonation — для restore-admin, если БД временно недоступна */
+  interface RestoreAdminProfileJwt {
+    id: string;
+    role: UserRole;
+    membershipStatus: MembershipStatus;
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  }
+
   interface JWT {
     id: string;
     role: UserRole;
@@ -47,6 +66,7 @@ declare module "next-auth/jwt" {
     name?: string | null;
     originalAdminId?: string;
     isImpersonating?: boolean;
+    restoreAdminProfile?: RestoreAdminProfileJwt;
     isDemo?: boolean;
     viewMode?: string;
     isPPOHead?: boolean;

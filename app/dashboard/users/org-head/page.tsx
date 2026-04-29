@@ -321,7 +321,7 @@ export default function OrgHeadUsersPage() {
                 return (
                   <tr
                     key={user.id}
-                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                    className={`hover-surface ${
                       needsAttention
                         ? "border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
                         : ""
@@ -406,7 +406,7 @@ export default function OrgHeadUsersPage() {
               type="button"
               onClick={() => goToPage(page - 1)}
               disabled={page <= 1}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover-surface"
             >
               <ChevronLeft className="h-4 w-4" />
               Назад
@@ -418,7 +418,7 @@ export default function OrgHeadUsersPage() {
               type="button"
               onClick={() => goToPage(page + 1)}
               disabled={page >= totalPages}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover-surface"
             >
               Вперёд
               <ChevronRight className="h-4 w-4" />

@@ -114,7 +114,7 @@ export default function PartnerVenuesPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {venues.map((venue) => (
-                  <tr key={venue.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                  <tr key={venue.id} className="hover-surface">
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                       {venue.name}
                     </td>

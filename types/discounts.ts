@@ -112,6 +112,12 @@ export interface DiscountItem {
   /** Коды услуги площадки (`lib/partner-venue-service-taxonomy`) */
   partnerServiceCategoryCode?: string | null;
   partnerServiceCode?: string | null;
+  /** Режим участия площадки (для карточки каталога) */
+  partnerParticipationMode?: "PROMO_CODE" | "APPLICATION" | null;
+  /** Остаток слотов под заявки (если задан лимит 1–999); иначе null */
+  partnerRemainingApplicationSlots?: number | null;
+  /** true — у площадки включён лимит мест (не «Неограничено») */
+  partnerApplicationSlotsCapped?: boolean;
 }
 
 export interface DiscountSearchParams {

@@ -268,7 +268,7 @@ export default function OrganizationDetailPage({ params }: { params: Promise<{ i
               </div>
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={handleSave} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{saving ? "Сохранение…" : "Сохранить"}</button>
-                <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Отмена</button>
+                <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300">Отмена</button>
               </div>
             </div>
           )}
@@ -289,7 +289,7 @@ export default function OrganizationDetailPage({ params }: { params: Promise<{ i
               headCandidates.map((u) => {
                 const fullName = [u.lastName, u.firstName].filter(Boolean).join(" ").trim() || "Без имени";
                 return (
-                  <button key={u.id} type="button" onClick={() => setSelectedHeadUserId(u.id)} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 ${selectedHeadUserId === u.id ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}>
+                  <button key={u.id} type="button" onClick={() => setSelectedHeadUserId(u.id)} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover-surface ${selectedHeadUserId === u.id ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}>
                     <span className="font-medium text-gray-900 dark:text-white">{fullName}</span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{u.email || u.phone || "—"}</span>
                   </button>
@@ -298,7 +298,7 @@ export default function OrganizationDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
           <div className="mt-3 flex justify-end gap-2">
-            <button type="button" onClick={() => setAssignOpen(false)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Отмена</button>
+            <button type="button" onClick={() => setAssignOpen(false)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300">Отмена</button>
             <button type="button" onClick={assignHead} disabled={!selectedHeadUserId || isAssigningHead} className="rounded-lg bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700 disabled:opacity-50">{isAssigningHead ? "Назначение…" : "Назначить"}</button>
           </div>
         </div>

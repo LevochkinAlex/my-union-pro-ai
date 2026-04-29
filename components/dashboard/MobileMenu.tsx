@@ -10,6 +10,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { useTour } from "@/components/dashboard/TourGuideProvider";
 import { safeFetchJson } from "@/lib/safe-fetch";
 import { withStableNavIconKey } from "@/lib/nav-icon";
+import PartnerApplicationsNewBadge from "@/components/dashboard/PartnerApplicationsNewBadge";
 
 interface NavItem {
   href: string;
@@ -397,7 +398,10 @@ export default function MobileMenu({
                             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         }`}
                       >
-                        {withStableNavIconKey(item.icon, item.href)}
+                        <span className="relative flex-shrink-0">
+                          {withStableNavIconKey(item.icon, item.href)}
+                          {item.href === "/partner-dashboard/applications" && <PartnerApplicationsNewBadge />}
+                        </span>
                         <span className="flex-1 text-left">{item.label}</span>
                         <svg
                           className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none ${
@@ -465,7 +469,10 @@ export default function MobileMenu({
                           : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                       }`}
                     >
-                      {withStableNavIconKey(item.icon, item.href)}
+                      <span className="relative flex-shrink-0">
+                        {withStableNavIconKey(item.icon, item.href)}
+                        {item.href === "/partner-dashboard/applications" && <PartnerApplicationsNewBadge />}
+                      </span>
                       {item.label}
                     </Link>
                   )}

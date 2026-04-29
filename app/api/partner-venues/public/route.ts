@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { PV_APPLICATION_STATUS } from "@/lib/partner-venue-application-status";
+import {
+  countOccupyingApplicationsRaw,
+  countOccupyingByVenueIdsRaw,
+  getApplicationByVenueAndApplicantRaw,
+} from "@/lib/partner-venue-application-raw";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
+import {
+  mergeParticipationModeOnVenue,
+  mergeParticipationModesOnVenues,
+} from "@/lib/partner-venue-participation-db";
+import { partnerVenueHasApplicationSlotCap } from "@/lib/partner-venue-slot-cap";
 
 /**
  * GET /api/partner-venues/public?search=&city=&page=1&limit=20
@@ -27,14 +38,46 @@ export async function GET(request: NextRequest) {
         },
         include: {
           partner: {
-            select: { id: true, name: true, description: true, website: true, logoUrl: true },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              website: true,
+              logoUrl: true,
+              email: true,
+              contactEmail: true,
+            },
           },
         },
       });
       if (!venue) {
         return NextResponse.json({ error: "Площадка не найдена" }, { status: 404 });
       }
-      return NextResponse.json({ venue });
+      const venueHydrated = await mergeParticipationModeOnVenue(prisma, venue);
+
+      const [applicationsCount, currentUserApp] = await Promise.all([
+        countOccupyingApplicationsRaw(prisma, venue.id),
+        getApplicationByVenueAndApplicantRaw(prisma, venue.id, session.user.id),
+      ]);
+      const currentUserHasApplication = Boolean(
+        currentUserApp && currentUserApp.status !== PV_APPLICATION_STATUS.CANCELLED
+      );
+
+      const cap = venue.remainingSlots;
+      const applicationSlotsCapped = partnerVenueHasApplicationSlotCap(cap);
+      const remainingApplicationSlots = applicationSlotsCapped
+        ? Math.max(0, cap - applicationsCount)
+        : null;
+
+      return NextResponse.json({
+        venue: {
+          ...venueHydrated,
+          applicationsCount,
+          currentUserHasApplication,
+          applicationSlotsCapped,
+          remainingApplicationSlots,
+        },
+      });
     }
 
     const search = searchParams.get("search")?.trim() || "";
@@ -91,8 +134,24 @@ export async function GET(request: NextRequest) {
       prisma.partnerVenue.count({ where }),
     ]);
 
+    const venuesHydrated = await withPrismaRetry(() =>
+      mergeParticipationModesOnVenues(prisma, venues)
+    );
+
+    const venueIds = venuesHydrated.map((v) => v.id);
+    const countsByVenue =
+      venueIds.length > 0 ? await countOccupyingByVenueIdsRaw(prisma, venueIds) : new Map<string, number>();
+
+    const venuesWithSlots = venuesHydrated.map((v) => {
+      const cap = v.remainingSlots;
+      const used = countsByVenue.get(v.id) ?? 0;
+      const applicationSlotsCapped = partnerVenueHasApplicationSlotCap(cap);
+      const remainingApplicationSlots = applicationSlotsCapped ? Math.max(0, cap - used) : null;
+      return { ...v, applicationsCount: used, applicationSlotsCapped, remainingApplicationSlots };
+    });
+
     return NextResponse.json({
-      venues,
+      venues: venuesWithSlots,
       total,
       page,
       limit,

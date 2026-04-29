@@ -387,7 +387,7 @@ export default function TicketDetailPage() {
           {canEdit && !isEditing && (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -425,7 +425,7 @@ export default function TicketDetailPage() {
           {canClose && (
             <button
               onClick={() => setShowCloseModal(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -494,7 +494,7 @@ export default function TicketDetailPage() {
                   setEditTitle(ticket.title);
                   setEditContent(ticket.content);
                 }}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover-surface dark:border-gray-600"
               >
                 Отмена
               </button>
@@ -663,7 +663,7 @@ export default function TicketDetailPage() {
               </button>
               <button
                 onClick={() => { setShowTakeInWorkModal(false); setActionMessage(""); }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover-surface dark:border-gray-600 dark:text-white"
               >
                 Отмена
               </button>
@@ -698,7 +698,7 @@ export default function TicketDetailPage() {
               </button>
               <button
                 onClick={() => { setShowRejectModal(false); setActionMessage(""); }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover-surface dark:border-gray-600 dark:text-white"
               >
                 Отмена
               </button>
@@ -769,7 +769,7 @@ export default function TicketDetailPage() {
                   setSelectedRating(0);
                   setRatingComment("");
                 }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover-surface dark:border-gray-600"
               >
                 Отмена
               </button>

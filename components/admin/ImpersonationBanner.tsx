@@ -1,76 +1,100 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 export default function ImpersonationBanner() {
   const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const router = useRouter();
+  const [bannerError, setBannerError] = useState<string | null>(null);
 
   if (!session?.user?.isImpersonating || dismissed) {
     return null;
   }
 
   const handleStopImpersonation = async () => {
+    setBannerError(null);
     setLoading(true);
     try {
       if (!session?.user?.originalAdminId) {
-        throw new Error("Не найден ID админа");
+        setBannerError(
+          "Не найден ID администратора для восстановления сессии. Выйдите из аккаунта и войдите как администратор заново."
+        );
+        return;
       }
 
-      const adminId = session.user.originalAdminId;
+      const impersonatedUserId = session.user.id;
       /** До restore сессия ещё «партнёрская» — после restore role сменится */
       const returnTo =
         session.user.role === "PARTNER" ? "/admin/partners" : "/admin/users";
 
-      console.log("[Stop Impersonation] Starting restore for admin:", adminId);
+      const prep = await fetch("/api/admin/impersonate/stop", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const prepJson = (await prep.json().catch(() => ({}))) as {
+        error?: string;
+        restoreJwt?: string;
+        adminId?: string;
+      };
+
+      if (!prep.ok || !prepJson.restoreJwt || !prepJson.adminId) {
+        setBannerError(
+          prepJson.error ||
+            "Не удалось подготовить выход из режима просмотра. Попробуйте обновить страницу или заново войти от имени пользователя."
+        );
+        return;
+      }
 
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Таймаут запроса")), 20000)
       );
 
       const signInPromise = signIn("restore-admin", {
-        adminId: adminId,
-        restoreToken: "restore", // Токен не проверяется строго, только для совместимости
+        adminId: prepJson.adminId,
+        impersonatedUserId,
+        restoreJwt: prepJson.restoreJwt,
         redirect: false,
         callbackUrl: returnTo,
       });
 
       const result = await Promise.race([signInPromise, timeoutPromise]);
 
-      console.log("[Stop Impersonation] SignIn result:", result);
-
       if (result?.error) {
-        console.error("[Stop Impersonation] SignIn error:", result.error);
-        throw new Error(result.error);
+        const isCreds = result.error === "CredentialsSignin";
+        setBannerError(
+          isCreds
+            ? "Не удалось восстановить сессию администратора (ошибка входа). Проверьте доступ к базе данных или выполните выход и войдите как администратор."
+            : `Ошибка: ${result.error}. Перезагрузите страницу или выполните выход и войдите заново.`
+        );
+        return;
       }
 
-      if (!result?.ok) {
-        throw new Error("Не удалось восстановить сессию админа");
+      if (!result || result.ok !== true) {
+        setBannerError(
+          "Не удалось восстановить сессию админа. Попробуйте ещё раз или выйдите из аккаунта."
+        );
+        return;
       }
 
-      // Обновляем сессию перед редиректом
-      await router.refresh();
-      
-      // Небольшая задержка для обновления сессии
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      router.push(returnTo);
+      // Полная загрузка страницы — после смены JWT client router часто оставляет старую сессию в памяти
+      window.location.assign(returnTo);
     } catch (error) {
       console.error("[Stop Impersonation] Error:", error);
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Ошибка при выходе из режима impersonation";
-      
-      // Показываем более информативное сообщение
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Ошибка при выходе из режима impersonation";
+
       if (errorMessage.includes("Таймаут")) {
-        alert("Превышено время ожидания. Пожалуйста, попробуйте еще раз или перезагрузите страницу.");
+        setBannerError(
+          "Превышено время ожидания. Попробуйте снова или перезагрузите страницу."
+        );
       } else {
-        alert(`Ошибка: ${errorMessage}\n\nПопробуйте выйти из системы и войти заново.`);
+        setBannerError(
+          `${errorMessage} Попробуйте выйти из системы и войти заново.`
+        );
       }
     } finally {
       setLoading(false);
@@ -78,8 +102,17 @@ export default function ImpersonationBanner() {
   };
 
   return (
-    <div className="sticky top-0 z-50 flex flex-col gap-3 bg-yellow-500 px-4 py-3 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
+    <div className="sticky top-0 z-50 flex flex-col gap-3 bg-yellow-500 px-4 py-3 text-white shadow-lg">
+      {bannerError ? (
+        <p
+          role="alert"
+          className="w-full rounded-md bg-yellow-900/25 px-3 py-2 text-sm font-medium text-yellow-950"
+        >
+          {bannerError}
+        </p>
+      ) : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
         <svg
           className="mt-0.5 h-5 w-5 flex-shrink-0 sm:mt-0"
           fill="none"
@@ -99,8 +132,8 @@ export default function ImpersonationBanner() {
             ? "Режим просмотра: вы вошли в кабинет партнёра от имени пользователя"
             : "Режим просмотра: вы просматриваете личный кабинет от имени пользователя"}
         </span>
-      </div>
-      <div className="flex w-full min-w-0 shrink-0 items-stretch gap-2 sm:w-auto sm:items-center sm:justify-start">
+        </div>
+        <div className="flex w-full min-w-0 shrink-0 items-stretch gap-2 sm:w-auto sm:items-center sm:justify-start">
         <button
           type="button"
           onClick={handleStopImpersonation}
@@ -129,6 +162,7 @@ export default function ImpersonationBanner() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+        </div>
       </div>
     </div>
   );

@@ -445,7 +445,7 @@ export default function PPOHeadDocumentsPage() {
         <div className="flex items-center gap-3">
           <a
             href="/dashboard/documents/journal"
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover-surface dark:border-gray-600"
           >
             Журнал документов
           </a>
@@ -689,7 +689,7 @@ export default function PPOHeadDocumentsPage() {
                         {members.map((member) => (
                           <label
                             key={member.id}
-                            className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-2 rounded"
+                            className="flex items-center gap-2 cursor-pointer hover-surface p-2 rounded"
                           >
                             <input
                               type="checkbox"
@@ -717,7 +717,7 @@ export default function PPOHeadDocumentsPage() {
                       {members.map((member) => (
                         <label
                           key={member.id}
-                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded"
+                          className="flex items-center gap-2 cursor-pointer hover-surface p-1 rounded"
                         >
                           <input
                             type="checkbox"
@@ -738,7 +738,7 @@ export default function PPOHeadDocumentsPage() {
                       {members.map((member) => (
                         <label
                           key={member.id}
-                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded"
+                          className="flex items-center gap-2 cursor-pointer hover-surface p-1 rounded"
                         >
                           <input
                             type="checkbox"
@@ -844,7 +844,7 @@ export default function PPOHeadDocumentsPage() {
                   });
                   setSelectedTemplate(null);
                 }}
-                className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="rounded-lg border border-gray-300 px-4 py-2 hover-surface dark:border-gray-600"
               >
                 Отмена
               </button>

@@ -381,7 +381,7 @@ export default function ViewModeSwitch({ collapsed = false, serverViewModes = []
                   className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                     mode.mode === currentMode
                       ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                      : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                      : "hover-surface text-gray-700 dark:text-gray-300"
                   } ${isSwitching ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   <ModeIcon mode={mode.mode} />

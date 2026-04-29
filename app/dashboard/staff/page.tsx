@@ -884,7 +884,7 @@ export default function StaffManagementPage() {
                                   setAddStaffSearchQuery("");
                                   setAddStaffSearchResults([]);
                                 }}
-                                className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 flex flex-col"
+                                className="w-full text-left px-3 py-2.5 text-sm hover-surface flex flex-col"
                               >
                                 <span className="font-medium text-gray-900 dark:text-white">{name}</span>
                                 <span className="text-gray-500 dark:text-gray-400 text-xs">{u.email || u.phone || ""}</span>

@@ -1,9 +1,31 @@
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
   __prisma: PrismaClient | undefined;
   __prismaInitError: Error | undefined;
+  /** Имя пакета из `.prisma/client/package.json` — меняется после `prisma generate`, чтобы сбросить устаревший singleton */
+  __prismaGeneratedClientId: string | undefined;
 };
+
+/**
+ * Идентификатор сгенерированного клиента (поле `name` в `.prisma/client/package.json`).
+ * После изменения схемы и `prisma generate` значение меняется — тогда нужен новый PrismaClient.
+ */
+function readPrismaGeneratedClientId(): string {
+  try {
+    const require = createRequire(join(process.cwd(), 'package.json'));
+    const prismaClientPkg = require.resolve('@prisma/client/package.json');
+    const generatedPkg = join(dirname(prismaClientPkg), '..', '..', '.prisma', 'client', 'package.json');
+    const raw = readFileSync(generatedPkg, 'utf8');
+    const j = JSON.parse(raw) as { name?: string };
+    return typeof j.name === 'string' ? j.name : '';
+  } catch {
+    return '';
+  }
+}
 
 function createPrismaClient(): PrismaClient {
   if (!process.env.DATABASE_URL) {
@@ -53,15 +75,26 @@ function createPrismaClient(): PrismaClient {
 function getPrismaClient(): PrismaClient {
   if (globalForPrisma.__prisma) {
     const cached = globalForPrisma.__prisma as PrismaClient & { partner?: unknown };
-    // После `prisma generate` с новыми моделями старый закэшированный клиент может не иметь
-    // делегатов (например partner) → prisma.partner.create падает с reading 'create'.
-    // Сбрасываем кэш и создаём клиент заново (достаточно перезапуска dev, но так надёжнее при HMR).
-    if (typeof cached.partner === "undefined") {
-      console.warn(
-        "[prisma] Кэш клиента устарел (нет модели partner). Пересоздаём PrismaClient — при необходимости выполните: npx prisma generate"
-      );
+    const diskId = readPrismaGeneratedClientId();
+    const cachedId = globalForPrisma.__prismaGeneratedClientId;
+    // Нет сохранённого id (старый процесс до этого патча) или хеш на диске изменился после `prisma generate`
+    const generatedClientOutdated = Boolean(diskId && cachedId !== diskId);
+    const partnerDelegateMissing = typeof cached.partner === "undefined";
+
+    if (generatedClientOutdated || partnerDelegateMissing) {
+      if (generatedClientOutdated) {
+        console.warn(
+          "[prisma] Сгенерированный клиент обновился (например, после `prisma generate`). Пересоздаём PrismaClient."
+        );
+      } else {
+        console.warn(
+          "[prisma] Кэш клиента устарел (нет модели partner). Пересоздаём PrismaClient — при необходимости выполните: npx prisma generate"
+        );
+      }
+      void cached.$disconnect().catch(() => {});
       globalForPrisma.__prisma = undefined;
       globalForPrisma.__prismaInitError = undefined;
+      globalForPrisma.__prismaGeneratedClientId = undefined;
     } else {
       return globalForPrisma.__prisma;
     }
@@ -72,6 +105,7 @@ function getPrismaClient(): PrismaClient {
   try {
     const client = createPrismaClient();
     globalForPrisma.__prisma = client;
+    globalForPrisma.__prismaGeneratedClientId = readPrismaGeneratedClientId() || undefined;
     if (typeof process !== 'undefined') {
       process.on('beforeExit', async () => {
         await client.$disconnect();
@@ -120,6 +154,7 @@ async function resetPrismaAfterConnectionLoss(): Promise<void> {
   }
   globalForPrisma.__prisma = undefined;
   globalForPrisma.__prismaInitError = undefined;
+  globalForPrisma.__prismaGeneratedClientId = undefined;
 }
 
 export async function withPrismaRetry<T>(

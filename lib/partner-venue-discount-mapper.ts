@@ -15,6 +15,9 @@ export type PartnerVenueCardSource = {
   createdAt?: string | Date | null;
   serviceCategoryCode?: string | null;
   serviceCode?: string | null;
+  participationMode?: "PROMO_CODE" | "APPLICATION" | null;
+  applicationSlotsCapped?: boolean;
+  remainingApplicationSlots?: number | null;
   partner?: { name?: string | null; logoUrl?: string | null } | null;
 };
 
@@ -53,5 +56,11 @@ export function mapPartnerVenuesToDiscountItems(
     partnerLogoUrl: v.partner?.logoUrl ?? null,
     partnerServiceCategoryCode: v.serviceCategoryCode ?? null,
     partnerServiceCode: v.serviceCode ?? null,
+    partnerParticipationMode: v.participationMode ?? null,
+    partnerApplicationSlotsCapped: v.applicationSlotsCapped === true,
+    partnerRemainingApplicationSlots:
+      v.applicationSlotsCapped === true && typeof v.remainingApplicationSlots === "number"
+        ? v.remainingApplicationSlots
+        : null,
   }));
 }

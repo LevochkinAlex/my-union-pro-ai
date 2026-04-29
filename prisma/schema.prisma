@@ -297,6 +297,9 @@ model User {
   partnerRecordId String?  @unique
   partnerRecord   Partner? @relation("PartnerCabinetUser", fields: [partnerRecordId], references: [id], onDelete: SetNull)
 
+  /// Заявки на участие в площадках партнёров (режим «по заявке»)
+  partnerVenueApplications PartnerVenueApplication[] @relation("PartnerVenueApplicationsApplicant")
+
   // Расходы ИИ, зафиксированные для этого пользователя
   aiUsageEvents AIUsageEvent[]
 
@@ -641,6 +644,12 @@ enum PartnerModerationStatus {
   RETURNED // Возвращено на доработку
 }
 
+/// Как член получает участие в предложении площадки
+enum PartnerVenueParticipationMode {
+  PROMO_CODE // По промокоду
+  APPLICATION // По заявке
+}
+
 // Площадка / магазин партнёра (баннеры, промокоды, условия)
 model PartnerVenue {
   id        String  @id @default(cuid())
@@ -665,6 +674,8 @@ model PartnerVenue {
   /// Дата и время проведения (мероприятие / акция на площадке)
   eventAt DateTime?
 
+  participationMode PartnerVenueParticipationMode @default(PROMO_CODE)
+
   /// Осталось мест: null — неограничено, 1–999 — число свободных мест
   remainingSlots Int?
 
@@ -679,10 +690,37 @@ model PartnerVenue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  applications PartnerVenueApplication[]
+
   @@index([partnerId])
   @@index([isActive])
   @@index([city])
   @@index([createdAt])
+}
+
+/// Статус заявки на участие по площадке партнёра
+enum PartnerVenueApplicationStatus {
+  NEW
+  IN_PROGRESS
+  CANCELLED
+}
+
+/// Заявка члена на участие в предложении площадки (участие по заявке)
+model PartnerVenueApplication {
+  id              String       @id @default(cuid())
+  partnerVenueId  String
+  partnerVenue    PartnerVenue @relation(fields: [partnerVenueId], references: [id], onDelete: Cascade)
+  applicantUserId String
+  applicant       User         @relation("PartnerVenueApplicationsApplicant", fields: [applicantUserId], references: [id], onDelete: Cascade)
+
+  status    PartnerVenueApplicationStatus @default(NEW)
+  createdAt DateTime                        @default(now())
+
+  @@unique([partnerVenueId, applicantUserId])
+  @@index([partnerVenueId])
+  @@index([applicantUserId])
+  @@index([createdAt])
+  @@index([status])
 }
 
 enum BillingEntityType {

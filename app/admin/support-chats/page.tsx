@@ -168,7 +168,7 @@ export default function AdminSupportChatsPage() {
                     <button
                       type="button"
                       onClick={() => loadConversation(c.chatId)}
-                      className={`w-full text-left px-4 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
+                      className={`w-full text-left px-4 py-3 hover-surface ${
                         selectedChatId === c.chatId
                           ? "bg-blue-50 dark:bg-blue-950/40 border-l-4 border-l-blue-500"
                           : ""

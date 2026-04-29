@@ -207,7 +207,7 @@ function UsersPageContent() {
       <div className="lg:hidden">
         <button
           onClick={() => setShowUsersPanel(!showUsersPanel)}
-          className="w-full flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover-surface"
         >
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">

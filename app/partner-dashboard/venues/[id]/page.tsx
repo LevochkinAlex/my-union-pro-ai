@@ -8,6 +8,7 @@ import RemainingSlotsSelect from "@/components/partner/RemainingSlotsSelect";
 import PartnerVenueServiceFields from "@/components/partner/PartnerVenueServiceFields";
 import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
 import { datetimeLocalValueToIso, isoToDatetimeLocalValue } from "@/lib/datetime-local-form";
+import { PARTNER_VENUE_PARTICIPATION_OPTIONS } from "@/lib/partner-venue-participation";
 
 interface VenueData {
   id: string;
@@ -24,6 +25,7 @@ interface VenueData {
   conditions: string | null;
   isActive: boolean;
   eventAt: string | null;
+  participationMode?: "PROMO_CODE" | "APPLICATION" | null;
   remainingSlots?: number | null;
   serviceCategoryCode?: string | null;
   serviceCode?: string | null;
@@ -53,6 +55,7 @@ export default function EditVenuePage() {
     conditions: "",
     isActive: true,
     eventAt: "",
+    participationMode: "PROMO_CODE" as "PROMO_CODE" | "APPLICATION",
     remainingSlots: "",
     serviceCategoryCode: "",
     serviceCode: "",
@@ -86,6 +89,8 @@ export default function EditVenuePage() {
           conditions: data.conditions || "",
           isActive: data.isActive,
           eventAt: isoToDatetimeLocalValue(data.eventAt ?? undefined),
+          participationMode:
+            data.participationMode === "APPLICATION" ? "APPLICATION" : "PROMO_CODE",
           remainingSlots:
             data.remainingSlots != null &&
             Number.isInteger(data.remainingSlots) &&
@@ -209,6 +214,8 @@ export default function EditVenuePage() {
     );
   }
 
+  const promoFieldsDisabled = form.participationMode === "APPLICATION";
+
   if (error && !form.name) {
     return (
       <div className="space-y-4">
@@ -313,22 +320,45 @@ export default function EditVenuePage() {
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="edit-venue-event-at"
-                className="flex flex-wrap items-baseline gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                <span>Дата и время проведения</span>
-                <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(необязательно.)</span>
-              </label>
-              <input
-                id="edit-venue-event-at"
-                type="datetime-local"
-                name="eventAt"
-                value={form.eventAt}
-                onChange={handleChange}
-                className="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:[color-scheme:dark]"
-              />
+            <div className="sm:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-end sm:gap-x-6">
+              <div>
+                <label
+                  htmlFor="edit-venue-event-at"
+                  className="flex flex-wrap items-baseline gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  <span>Дата и время проведения</span>
+                  <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(необязательно.)</span>
+                </label>
+                <input
+                  id="edit-venue-event-at"
+                  type="datetime-local"
+                  name="eventAt"
+                  value={form.eventAt}
+                  onChange={handleChange}
+                  className="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:[color-scheme:dark]"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="edit-venue-participation-mode"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Участие
+                </label>
+                <select
+                  id="edit-venue-participation-mode"
+                  name="participationMode"
+                  value={form.participationMode}
+                  onChange={handleChange}
+                  className="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                >
+                  {PARTNER_VENUE_PARTICIPATION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <RemainingSlotsSelect
@@ -408,7 +438,9 @@ export default function EditVenuePage() {
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label
+                className={`block text-sm font-medium ${promoFieldsDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-700 dark:text-gray-300"}`}
+              >
                 Промокод
               </label>
               <input
@@ -416,12 +448,16 @@ export default function EditVenuePage() {
                 name="promoCode"
                 value={form.promoCode}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                disabled={promoFieldsDisabled}
+                title={promoFieldsDisabled ? "При участии по заявке промокод не используется" : undefined}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:disabled:bg-gray-800/70 dark:disabled:text-gray-500"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label
+                className={`block text-sm font-medium ${promoFieldsDisabled ? "text-gray-400 dark:text-gray-500" : "text-gray-700 dark:text-gray-300"}`}
+              >
                 Название промоакции
               </label>
               <input
@@ -429,7 +465,9 @@ export default function EditVenuePage() {
                 name="promoLabel"
                 value={form.promoLabel}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                disabled={promoFieldsDisabled}
+                title={promoFieldsDisabled ? "При участии по заявке название промоакции не используется" : undefined}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:disabled:bg-gray-800/70 dark:disabled:text-gray-500"
               />
             </div>
 

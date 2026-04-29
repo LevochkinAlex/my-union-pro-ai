@@ -1933,7 +1933,7 @@ export default function ProfilePage() {
                       <button
                         type="button"
                         onClick={editingProfessionIndex !== null ? cancelEditProfession : cancelAddProfession}
-                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover-surface focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       >
                         Отмена
                       </button>
@@ -2097,7 +2097,7 @@ export default function ProfilePage() {
                       <button
                         type="button"
                         onClick={editingEducationIndex !== null ? cancelEditEducation : cancelAddEducation}
-                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover-surface focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                       >
                         Отмена
                       </button>
@@ -2312,7 +2312,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={openEditJoinedDateModal}
-                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
                     >
                       Изменить дату
                     </button>
@@ -2371,7 +2371,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setShowEditJoinedDateModal(false)}
-                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover-surface dark:border-gray-600"
                 >
                   Отмена
                 </button>
@@ -2580,7 +2580,7 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={editingAwardIndex !== null ? cancelEditAward : cancelAddAward}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover-surface focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                   >
                     Отмена
                   </button>

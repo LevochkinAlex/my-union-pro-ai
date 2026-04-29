@@ -442,7 +442,7 @@ export default function NewTicketPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="w-full sm:w-auto rounded-lg border border-gray-300 bg-white px-4 sm:px-6 py-2.5 text-sm sm:text-base font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            className="w-full sm:w-auto rounded-lg border border-gray-300 bg-white px-4 sm:px-6 py-2.5 text-sm sm:text-base font-medium text-gray-700 hover-surface dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           >
             Отмена
           </button>

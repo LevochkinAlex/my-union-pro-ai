@@ -439,6 +439,16 @@ export default function DiscountCard({
               </span>
             )}
           </div>
+          {discount.isPartnerVenue &&
+            discount.partnerParticipationMode === "APPLICATION" &&
+            discount.partnerApplicationSlotsCapped === true &&
+            typeof discount.partnerRemainingApplicationSlots === "number" && (
+              <div>
+                <span className="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full bg-red-600/90 px-2 py-0.5 text-xs font-semibold leading-none text-white shadow dark:bg-red-700/90">
+                  Осталось мест {discount.partnerRemainingApplicationSlots}
+                </span>
+              </div>
+            )}
           {discount.validUntil && (
             <div className="flex items-center gap-2">
               <svg className="h-4 w-4 flex-none text-gray-400 dark:text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">

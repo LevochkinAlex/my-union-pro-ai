@@ -882,7 +882,7 @@ export default function MembersPage() {
                 {sortedMembers.map((member) => (
                   <tr 
                     key={member.id} 
-                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
+                    className={`hover-surface ${
                       selectedIds.has(member.id) ? "bg-blue-50 dark:bg-blue-900/20" : ""
                     }`}
                   >
@@ -1036,7 +1036,7 @@ export default function MembersPage() {
               setShowApproveModal(false);
               setApproveTargetIds([]);
             }}
-            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover-surface dark:border-gray-600"
           >
             Отмена
           </button>
@@ -1093,7 +1093,7 @@ export default function MembersPage() {
               </button>
               <button
                 onClick={() => setShowEditJoinedDateModal(false)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover-surface dark:border-gray-600"
               >
                 Отмена
               </button>
@@ -1151,7 +1151,7 @@ export default function MembersPage() {
                   setSelectedMember(null);
                   setRejectionReason("");
                 }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover-surface dark:border-gray-600"
               >
                 Отмена
               </button>

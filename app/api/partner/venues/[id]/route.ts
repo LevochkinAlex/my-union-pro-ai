@@ -5,6 +5,14 @@ import { Prisma } from "@prisma/client";
 import { PrismaClientValidationError } from "@prisma/client/runtime/library";
 import { deletePartnerVenueBannerStoredFile } from "@/lib/partner-venue-banner-file";
 import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
+import {
+  isPartnerVenueParticipationValue,
+  type PartnerVenueParticipationValue,
+} from "@/lib/partner-venue-participation";
+import {
+  mergeParticipationModeOnVenue,
+  setPartnerVenueParticipationModeRaw,
+} from "@/lib/partner-venue-participation-db";
 
 type PatchBody = {
   name?: unknown;
@@ -24,6 +32,7 @@ type PatchBody = {
   remainingSlots?: unknown;
   serviceCategoryCode?: unknown;
   serviceCode?: unknown;
+  participationMode?: unknown;
 };
 
 function optionalString(v: unknown): string | null | undefined {
@@ -35,11 +44,12 @@ function optionalString(v: unknown): string | null | undefined {
 }
 
 async function getVenueForPartner(venueId: string, partnerId: string) {
-  return withPrismaRetry(() =>
-    prisma.partnerVenue.findFirst({
+  return withPrismaRetry(async () => {
+    const venue = await prisma.partnerVenue.findFirst({
       where: { id: venueId, partnerId },
-    })
-  );
+    });
+    return mergeParticipationModeOnVenue(prisma, venue);
+  });
 }
 
 /**
@@ -208,23 +218,42 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     data.serviceCode = srv;
   }
 
-  if (Object.keys(data).length === 0) {
+  let participationModePatch: PartnerVenueParticipationValue | undefined;
+  if ("participationMode" in body) {
+    const v = body.participationMode;
+    if (v === null || v === undefined || v === "") {
+      participationModePatch = "PROMO_CODE";
+    } else if (typeof v === "string" && isPartnerVenueParticipationValue(v.trim())) {
+      participationModePatch = v.trim() as PartnerVenueParticipationValue;
+    } else {
+      return NextResponse.json(
+        { error: "Некорректное значение поля «Участие»: выберите «По промокоду» или «По заявке»" },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (Object.keys(data).length === 0 && participationModePatch === undefined) {
     return NextResponse.json({ venue: existing });
   }
 
   try {
-    const venue = await withPrismaRetry(() =>
-      prisma.partnerVenue.update({
-        where: { id },
-        data,
-      })
-    );
-    return NextResponse.json({ venue });
+    let venue = existing;
+    if (Object.keys(data).length > 0) {
+      venue = await withPrismaRetry(() =>
+        prisma.partnerVenue.update({
+          where: { id },
+          data,
+        })
+      );
+    }
+    if (participationModePatch !== undefined) {
+      await withPrismaRetry(() => setPartnerVenueParticipationModeRaw(prisma, id, participationModePatch));
+    }
+    const fresh = await getVenueForPartner(id, partnerId);
+    return NextResponse.json({ venue: fresh ?? venue });
   } catch (e) {
     console.error("[partner/venues/[id] PATCH]", e);
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      return NextResponse.json({ error: "Ошибка сохранения площадки" }, { status: 400 });
-    }
     if (e instanceof PrismaClientValidationError) {
       return NextResponse.json(
         {
@@ -233,6 +262,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         },
         { status: 500 }
       );
+    }
+    // instanceof Prisma.PrismaClientKnownRequestError в Next-бандле иногда не срабатывает — проверяем по полю code
+    const prismaCode =
+      typeof e === "object" && e !== null && "code" in e && typeof (e as { code: unknown }).code === "string"
+        ? (e as { code: string }).code
+        : null;
+    const prismaMessage =
+      typeof e === "object" && e !== null && "message" in e && typeof (e as { message: unknown }).message === "string"
+        ? (e as { message: string }).message
+        : null;
+    if (prismaCode?.startsWith("P") && prismaMessage) {
+      return NextResponse.json({ error: prismaMessage }, { status: 400 });
+    }
+    if (e instanceof Error && e.message) {
+      return NextResponse.json({ error: e.message }, { status: 500 });
     }
     return NextResponse.json({ error: "Не удалось обновить площадку" }, { status: 500 });
   }

@@ -147,7 +147,7 @@ export default function GroupIconUpload({ value, onChange }: GroupIconUploadProp
           />
           <label
             htmlFor="group-icon-upload"
-            className="flex flex-col items-center justify-center w-32 h-32 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+            className="flex flex-col items-center justify-center w-32 h-32 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover-surface"
           >
             <svg
               className="w-10 h-10 text-gray-400"

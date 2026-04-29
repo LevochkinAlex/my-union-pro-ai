@@ -368,7 +368,7 @@ export default function OrgHeadReportsPage() {
                   return (
                     <tr
                       key={report.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      className="hover-surface"
                     >
                       <td className="px-6 py-4">
                         <Link

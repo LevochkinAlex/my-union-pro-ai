@@ -324,7 +324,7 @@ export default function RpoRolesPage() {
                     <button
                       type="button"
                       onClick={() => openEditModal(role)}
-                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300 transition-colors"
                     >
                       Редактировать
                     </button>
@@ -462,7 +462,7 @@ export default function RpoRolesPage() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300"
               >
                 Отмена
               </button>

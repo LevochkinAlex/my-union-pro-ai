@@ -765,7 +765,7 @@ export default function MeetingsPage() {
                     loadMeetings();
                     resetFormAndClose();
                   }}
-                  className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                  className="rounded-lg border border-gray-300 px-4 py-2 hover-surface dark:border-gray-600"
                 >
                   Сохранить как черновик
                 </button>
@@ -1038,7 +1038,7 @@ export default function MeetingsPage() {
                                 <button
                                   key={member.id}
                                   type="button"
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover-surface"
                                   onClick={() => {
                                     setFormData((p) => ({
                                       ...p,
@@ -1179,7 +1179,7 @@ export default function MeetingsPage() {
                                       key={m.id}
                                       type="button"
                                       disabled={disabled}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover-surface disabled:opacity-50"
                                       onClick={() => addCoSpeaker(index, { userId: m.id, name: getMemberFullName(m), position: m.jobTitle || m.roleName })}
                                     >
                                       {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}{isMainSpeaker ? " — докладчик" : ""}
@@ -1200,7 +1200,7 @@ export default function MeetingsPage() {
                                       key={idx}
                                       type="button"
                                       disabled={added}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover-surface disabled:opacity-50"
                                       onClick={() => addCoSpeaker(index, { extIndex: idx, name: ext.name.trim(), position: ext.position?.trim() })}
                                     >
                                       {ext.name.trim()}{ext.position?.trim() ? ` (${ext.position.trim()})` : ""}
@@ -1341,7 +1341,7 @@ export default function MeetingsPage() {
               </button>
               <button
                 onClick={resetFormAndClose}
-                className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="rounded-lg border border-gray-300 px-4 py-2 hover-surface dark:border-gray-600"
               >
                 Отмена
               </button>
@@ -1431,7 +1431,7 @@ export default function MeetingsPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <Link
                     href={`/dashboard/documents/meetings/${meeting.id}`}
-                    className="group min-w-0 flex-1 rounded-lg -m-1 p-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    className="group min-w-0 flex-1 rounded-lg -m-1 p-1 hover-surface"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base font-semibold text-gray-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
@@ -1484,7 +1484,7 @@ export default function MeetingsPage() {
                         {meeting.groupChat && (
                           <Link
                             href={`/dashboard/chat?chatId=${meeting.groupChat.id}`}
-                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/50 sm:px-3 sm:py-1.5 sm:pr-2"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 p-2 text-gray-700 hover-surface dark:border-gray-600 dark:text-gray-300 sm:px-3 sm:py-1.5 sm:pr-2"
                             title="Чат заседания"
                           >
                             <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>

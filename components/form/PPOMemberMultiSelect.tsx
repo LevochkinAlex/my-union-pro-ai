@@ -170,7 +170,7 @@ export default function PPOMemberMultiSelect({
                 {members.map((member) => (
                   <label
                     key={member.id}
-                    className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                    className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover-surface dark:hover:bg-gray-600 ${
                       value.includes(member.id) ? "bg-blue-50 dark:bg-blue-900/20" : ""
                     }`}
                   >

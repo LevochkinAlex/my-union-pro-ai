@@ -234,7 +234,7 @@ export default function Autocomplete({
               className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition-colors ${
                 index === highlightedIndex
                   ? "bg-blue-50 text-blue-900 dark:bg-blue-900/20 dark:text-blue-200"
-                  : "text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"
+                  : "text-gray-900 hover-surface dark:text-gray-200"
               }`}
             >
               {option}

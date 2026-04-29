@@ -256,7 +256,7 @@ export default function AdminLogsPage() {
               <tbody>
                 {logs.map((log) => (
                   <tbody key={log.id}>
-                    <tr className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr className="border-b border-gray-100 dark:border-gray-700 hover-surface">
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getLevelColor(log.level)}`}>
                           <span className="inline-flex items-center gap-1">

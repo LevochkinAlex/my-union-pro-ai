@@ -461,7 +461,7 @@ export default async function DashboardPage() {
               <div className="space-y-2">
                 <Link
                   href="/dashboard/documents"
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg hover-surface"
                 >
                   <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -470,7 +470,7 @@ export default async function DashboardPage() {
                 </Link>
                 <Link
                   href="/dashboard/chat"
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg hover-surface"
                 >
                   <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -479,7 +479,7 @@ export default async function DashboardPage() {
                 </Link>
                 <Link
                   href="/dashboard/discounts"
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg hover-surface"
                 >
                   <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -512,60 +512,71 @@ export default async function DashboardPage() {
     recentDiscounts
   ] = await Promise.all([
     // 1. Получаем подписки
-    prisma.userSubscription.findMany({
-      where: {
-        subscriberId: userId,
-      },
-      select: {
-        targetUserId: true,
-      },
-    }),
-    
+    prisma.userSubscription
+      .findMany({
+        where: {
+          subscriberId: userId,
+        },
+        select: {
+          targetUserId: true,
+        },
+      })
+      .catch((err) => {
+        console.error("[Dashboard] subscriptions:", err);
+        return [] as { targetUserId: string }[];
+      }),
+
     // 2. Получаем свежие новости (последние 5) - ТОЛЬКО из организации пользователя
-    prisma.newsPost.findMany({
-      where: {
-        isPublished: true,
-        channel: {
-          organizationId: userOrganizationId || "___none___",
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 5,
-      include: {
-        author: {
-          select: {
-            firstName: true,
-            lastName: true,
-            avatarUrl: true,
+    prisma.newsPost
+      .findMany({
+        where: {
+          isPublished: true,
+          channel: {
+            organizationId: userOrganizationId || "___none___",
           },
         },
-        likes: {
-          where: {
-            userId: userId,
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 5,
+        include: {
+          author: {
+            select: {
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
           },
-          select: {
-            id: true,
+          likes: {
+            where: {
+              userId: userId,
+            },
+            select: {
+              id: true,
+            },
+          },
+          _count: {
+            select: {
+              likes: true,
+              comments: true,
+            },
           },
         },
-        _count: {
-          select: {
-            likes: true,
-            comments: true,
-          },
-        },
-      },
-    }).then((posts) =>
-      posts.map((post) => ({
-        ...post,
-        publishedAt: post.publishedAt?.toISOString() || null,
-        createdAt: post.createdAt.toISOString(),
-        updatedAt: post.updatedAt.toISOString(),
-        isLiked: post.likes.length > 0,
-        polls: [], // На главной странице опросы не показываем
-      }))
-    ),
+      })
+      .then((posts) =>
+        posts.map((post) => ({
+          ...post,
+          publishedAt: post.publishedAt?.toISOString() || null,
+          createdAt: post.createdAt.toISOString(),
+          updatedAt: post.updatedAt.toISOString(),
+          isLiked: post.likes.length > 0,
+          polls: [], // На главной странице опросы не показываем
+        }))
+      )
+      .catch((err) => {
+        console.error("[Dashboard] newsPost:", err);
+        return [];
+      }),
     
     // 3. Получаем данные текущего пользователя для баннера
     prisma.user.findUnique({
@@ -593,41 +604,46 @@ export default async function DashboardPage() {
     }),
     
     // 4. Получаем новых пользователей (последние 10) - ТОЛЬКО из организации пользователя
-    prisma.user.findMany({
-      where: {
-        id: {
-          not: userId, // Исключаем текущего пользователя
-        },
-        createdAt: {
-          gte: sevenDaysAgo,
-        },
-        role: {
-          not: "SUPER_ADMIN",
-        },
-        // ВАЖНО: Показываем только одобренных членов профсоюза
-        membershipStatus: "APPROVED",
-        organizationId: userOrganizationId || "___none___",
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 10,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        avatarUrl: true,
-        jobTitle: true,
-        profession: true,
-        organization: {
-          select: {
-            name: true,
+    prisma.user
+      .findMany({
+        where: {
+          id: {
+            not: userId, // Исключаем текущего пользователя
           },
+          createdAt: {
+            gte: sevenDaysAgo,
+          },
+          role: {
+            not: "SUPER_ADMIN",
+          },
+          // ВАЖНО: Показываем только одобренных членов профсоюза
+          membershipStatus: "APPROVED",
+          organizationId: userOrganizationId || "___none___",
         },
-        createdAt: true,
-      },
-    }),
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 10,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          avatarUrl: true,
+          jobTitle: true,
+          profession: true,
+          organization: {
+            select: {
+              name: true,
+            },
+          },
+          createdAt: true,
+        },
+      })
+      .catch((err) => {
+        console.error("[Dashboard] newUsers:", err);
+        return [];
+      }),
     
     // 5. Скидки убраны с главной страницы для оптимизации производительности
     Promise.resolve([])
@@ -638,55 +654,60 @@ export default async function DashboardPage() {
   // Получаем посты от подписок (последние 10) - только если есть подписки
   let postsFromSubscriptions: any[] = [];
   if (subscribedUserIds.length > 0) {
-    postsFromSubscriptions = await prisma.userPost.findMany({
-      where: {
-        authorId: {
-          in: subscribedUserIds,
+    try {
+      postsFromSubscriptions = await prisma.userPost.findMany({
+        where: {
+          authorId: {
+            in: subscribedUserIds,
+          },
         },
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            avatarUrl: true,
-            jobTitle: true,
-            profession: true,
-            organization: {
-              select: {
-                id: true,
-                name: true,
+        include: {
+          author: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              avatarUrl: true,
+              jobTitle: true,
+              profession: true,
+              organization: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
-        },
-        attachments: {
-          orderBy: {
-            createdAt: "asc",
+          attachments: {
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+          likes: {
+            where: {
+              userId: userId,
+            },
+            select: {
+              id: true,
+            },
+          },
+          _count: {
+            select: {
+              likes: true,
+              comments: true,
+            },
           },
         },
-        likes: {
-          where: {
-            userId: userId,
-          },
-          select: {
-            id: true,
-          },
+        orderBy: {
+          createdAt: "desc",
         },
-        _count: {
-          select: {
-            likes: true,
-            comments: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 10,
-    });
+        take: 10,
+      });
+    } catch (err) {
+      console.error("[Dashboard] postsFromSubscriptions:", err);
+      postsFromSubscriptions = [];
+    }
   }
 
   // Вычисляем прогресс заполнения профиля
@@ -785,7 +806,7 @@ export default async function DashboardPage() {
                 Все новости
               </Link>
             </CardHeader>
-            {recentNews.length > 0 ? (
+            {Array.isArray(recentNews) && recentNews.length > 0 ? (
               <NewsList news={recentNews} />
             ) : (
               <EmptyState title="Пока нет новостей в вашей организации" className="border-0 bg-transparent dark:bg-transparent py-4" />
@@ -821,7 +842,7 @@ export default async function DashboardPage() {
                 Все коллеги
               </Link>
             </CardHeader>
-            {newUsers.length > 0 ? (
+            {Array.isArray(newUsers) && newUsers.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {newUsers.map((user) => (
                   <UserCard key={user.id} user={user} />
@@ -840,7 +861,7 @@ export default async function DashboardPage() {
             <div className="space-y-2">
               <Link
                 href="/dashboard/documents"
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-lg hover-surface"
               >
                 <svg
                   className="h-5 w-5 text-gray-600 dark:text-gray-400"
@@ -861,7 +882,7 @@ export default async function DashboardPage() {
               </Link>
               <Link
                 href="/dashboard/chat"
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-lg hover-surface"
               >
                 <svg
                   className="h-5 w-5 text-gray-600 dark:text-gray-400"
@@ -882,7 +903,7 @@ export default async function DashboardPage() {
               </Link>
               <Link
                 href="/dashboard/discounts"
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-lg hover-surface"
               >
                 <svg
                   className="h-5 w-5 text-gray-600 dark:text-gray-400"
@@ -912,20 +933,55 @@ export default async function DashboardPage() {
     if (error?.message === 'NEXT_REDIRECT' || error?.digest?.startsWith('NEXT_REDIRECT')) {
       throw error; // Пробрасываем редирект дальше
     }
-    
+
     console.error("[dashboard/page] Fatal error:", error);
-    
-    // Только для реальных ошибок проверяем сессию еще раз
-    try {
-      const session = await getServerSession(authOptions);
-      if (!session) {
-        redirect("/login?error=session_error");
-      }
-    } catch (sessionError) {
+
+    const recoverySession = await getServerSession(authOptions).catch(() => null);
+    if (!recoverySession?.user) {
       redirect("/login?error=session_error");
     }
-    
-    // Если сессия есть, но все равно ошибка - пробрасываем дальше
-    throw error;
+
+    const devDetail =
+      process.env.NODE_ENV === "development" && error?.message
+        ? String(error.message)
+        : null;
+
+    return (
+      <div className="space-y-6 min-w-0 w-full">
+        <PageHeader
+          title="Не удалось загрузить кабинет"
+          description="Сервер базы данных временно недоступен или произошла ошибка. Вы остаётесь в системе — попробуйте обновить страницу через некоторое время."
+        />
+        <Card className="min-w-0 border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30">
+          <CardHeader>
+            <CardTitle as="h2" className="text-amber-900 dark:text-amber-100">
+              Что можно сделать
+            </CardTitle>
+          </CardHeader>
+          <div className="space-y-3 px-6 pb-6 text-sm text-amber-900/90 dark:text-amber-100/90">
+            <p>Проверьте подключение к интернету и доступность базы данных (для разработки — VPN или локальный PostgreSQL).</p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/dashboard"
+                className="inline-flex rounded-lg bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-700"
+              >
+                Обновить страницу
+              </Link>
+              <Link
+                href="/dashboard/discounts"
+                className="inline-flex rounded-lg border border-amber-700 px-4 py-2 font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-500 dark:text-amber-50 dark:hover:bg-amber-900/40"
+              >
+                Перейти к скидкам
+              </Link>
+            </div>
+            {devDetail && (
+              <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-black/5 p-3 text-xs dark:bg-black/30">
+                {devDetail}
+              </pre>
+            )}
+          </div>
+        </Card>
+      </div>
+    );
   }
 }

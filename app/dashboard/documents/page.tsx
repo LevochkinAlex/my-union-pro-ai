@@ -586,7 +586,7 @@ export default function DocumentsPage() {
                 className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
                   incomingFilter === value
                     ? "border-blue-500 bg-blue-500 text-white dark:border-blue-400 dark:bg-blue-600 dark:text-white"
-                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    : "border-gray-300 bg-white text-gray-700 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
                 }`}
               >
                 {label}
@@ -695,7 +695,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={() => setIncomingFilter("all")}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
               >
                 Показать все документы
               </button>
@@ -776,7 +776,7 @@ export default function DocumentsPage() {
                           <button
                             type="button"
                             onClick={() => setPreviewDoc({ id: doc.id, useSigned: !doc.filePath && !!doc.signedFilePath, fileName: doc.fileName })}
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover-surface focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
                             title="Открыть документ"
                           >
                             <svg
@@ -824,7 +824,7 @@ export default function DocumentsPage() {
                         <button
                           type="button"
                           onClick={() => setPreviewDoc({ id: doc.id, useSigned: !doc.filePath && !!doc.signedFilePath, fileName: doc.fileName })}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover-surface focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
                           title="Открыть документ в окне для просмотра, печати или скачивания"
                         >
                           <svg

@@ -509,7 +509,7 @@ export default function PPOHeadAppealsPage() {
                   setRejectionReason("");
                   setSelectedTicket(null);
                 }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-medium hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-medium hover-surface dark:border-gray-600 transition-colors"
               >
                 Отмена
               </button>

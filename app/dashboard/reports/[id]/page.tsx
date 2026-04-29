@@ -466,7 +466,7 @@ export default function ReportDetailPage() {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                     activeSection === section.code
                       ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"
-                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      : "text-gray-600 dark:text-gray-400 hover-surface"
                   }`}
                 >
                   {section.title}
@@ -546,7 +546,7 @@ export default function ReportDetailPage() {
                   <button
                     onClick={saveReport}
                     disabled={saving || !hasChanges}
-                    className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                    className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover-surface disabled:opacity-50"
                   >
                     Сохранить
                   </button>

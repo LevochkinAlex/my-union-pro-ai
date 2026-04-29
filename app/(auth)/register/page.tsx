@@ -238,7 +238,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setShowPolicyModal(false)}
-                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover-surface"
               >
                 Закрыть
               </button>

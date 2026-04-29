@@ -219,6 +219,16 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+@layer components {
+  /**
+   * Единый ховер для строк таблиц, списков, пунктирных зон загрузки и прочих интерактивных поверхностей.
+   * Используйте класс `hover-surface` вместо дублирования `hover:bg-gray-50 dark:hover:bg-gray-700/…`.
+   */
+  .hover-surface {
+    @apply transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/30;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

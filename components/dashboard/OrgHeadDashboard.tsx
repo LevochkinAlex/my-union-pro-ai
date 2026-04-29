@@ -264,7 +264,7 @@ export default function OrgHeadDashboard() {
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
               {stats.organizations.slice(0, 10).map((org) => (
-                <tr key={org.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                <tr key={org.id} className="hover-surface">
                   <td className="whitespace-nowrap px-4 py-3">
                     <p className="font-medium text-gray-900 dark:text-white">{org.name}</p>
                   </td>

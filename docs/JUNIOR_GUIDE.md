@@ -286,7 +286,6 @@ my-union-pro-ai/
 │   └── ...
 │
 ├── __tests__/              # Тесты
-│   ├── login-copy.test.ts
 │   ├── chat-flows.test.ts
 │   ├── auth-translit.test.ts
 │   └── ...

@@ -36,7 +36,7 @@ const Button: React.FC<ButtonProps> = ({
     secondary:
       "bg-blue-100 text-blue-700 hover:bg-blue-200 focus:ring-blue-500 disabled:bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30",
     outline:
-      "bg-transparent text-gray-800 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:ring-blue-500 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700",
+      "bg-transparent text-gray-800 ring-1 ring-inset ring-gray-300 hover-surface focus:ring-blue-500 dark:text-gray-200 dark:ring-gray-600",
   };
 
   return (

@@ -81,7 +81,7 @@ export default function ChatItem({ chat, isSelected, onClick }: ChatItemProps) {
 
   return (
     <div
-      className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+      className={`flex items-center gap-3 p-3 cursor-pointer hover-surface ${
         isSelected ? "bg-blue-50 dark:bg-blue-900/30" : ""
       }`}
       onClick={onClick}

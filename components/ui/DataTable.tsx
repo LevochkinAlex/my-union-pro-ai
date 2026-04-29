@@ -69,7 +69,7 @@ export function DataTable<T>({
                 onClick={onRowClick ? () => onRowClick(item) : undefined}
                 className={cn(
                   "transition-colors",
-                  onRowClick && "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40",
+                  onRowClick && "cursor-pointer hover-surface",
                 )}
               >
                 {columns.map((col) => (

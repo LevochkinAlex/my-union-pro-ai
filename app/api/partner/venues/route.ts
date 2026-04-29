@@ -3,6 +3,15 @@ import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { ensurePartner } from "@/lib/partner-auth";
 import { Prisma } from "@prisma/client";
 import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
+import {
+  isPartnerVenueParticipationValue,
+  type PartnerVenueParticipationValue,
+} from "@/lib/partner-venue-participation";
+import {
+  mergeParticipationModeOnVenue,
+  mergeParticipationModesOnVenues,
+  setPartnerVenueParticipationModeRaw,
+} from "@/lib/partner-venue-participation-db";
 
 type CreateBody = {
   name?: unknown;
@@ -21,6 +30,7 @@ type CreateBody = {
   remainingSlots?: unknown;
   serviceCategoryCode?: unknown;
   serviceCode?: unknown;
+  participationMode?: unknown;
 };
 
 function optionalString(v: unknown): string | null | undefined {
@@ -57,7 +67,10 @@ export async function GET() {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
       })
     );
-    return NextResponse.json({ venues });
+    const hydrated = await withPrismaRetry(() =>
+      mergeParticipationModesOnVenues(prisma, venues)
+    );
+    return NextResponse.json({ venues: hydrated });
   } catch (e) {
     console.error("[partner/venues GET]", e);
     return NextResponse.json({ error: "Не удалось загрузить площадки" }, { status: 500 });
@@ -172,9 +185,30 @@ export async function POST(request: NextRequest) {
     data.serviceCode = srv;
   }
 
+  let participationModeCreate: PartnerVenueParticipationValue | undefined;
+  if ("participationMode" in body) {
+    const v = body.participationMode;
+    if (v === null || v === undefined || v === "") {
+      participationModeCreate = "PROMO_CODE";
+    } else if (typeof v === "string" && isPartnerVenueParticipationValue(v.trim())) {
+      participationModeCreate = v.trim() as PartnerVenueParticipationValue;
+    } else {
+      return NextResponse.json(
+        { error: "Некорректное значение поля «Участие»: выберите «По промокоду» или «По заявке»" },
+        { status: 400 }
+      );
+    }
+  }
+
   try {
     const venue = await withPrismaRetry(() => prisma.partnerVenue.create({ data }));
-    return NextResponse.json({ venue });
+    if (participationModeCreate !== undefined) {
+      await withPrismaRetry(() =>
+        setPartnerVenueParticipationModeRaw(prisma, venue.id, participationModeCreate)
+      );
+    }
+    const venueOut = await mergeParticipationModeOnVenue(prisma, venue);
+    return NextResponse.json({ venue: venueOut });
   } catch (e) {
     console.error("[partner/venues POST]", e);
     if (e instanceof Prisma.PrismaClientKnownRequestError) {

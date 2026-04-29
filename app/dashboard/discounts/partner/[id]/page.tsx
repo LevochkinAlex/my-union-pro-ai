@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getPartnerVenueServiceLabels } from "@/lib/partner-venue-service-taxonomy";
+import { partnerVenueParticipationLabel } from "@/lib/partner-venue-participation";
+import { partnerVenueHasApplicationSlotCap } from "@/lib/partner-venue-slot-cap";
 import { useParams, useRouter } from "next/navigation";
 
 interface PartnerVenueDetail {
@@ -18,7 +20,16 @@ interface PartnerVenueDetail {
   promoLabel: string | null;
   conditions: string | null;
   eventAt: string | null;
+  participationMode?: "PROMO_CODE" | "APPLICATION" | null;
   remainingSlots: number | null;
+  /** Число поданных заявок (если отдал API) */
+  applicationsCount?: number;
+  /** Текущий пользователь уже подал заявку */
+  currentUserHasApplication?: boolean;
+  /** Остаток слотов под заявки: capacity − заявки (только если задан лимит 1–999) */
+  remainingApplicationSlots?: number | null;
+  /** Лимит мест включён (не «Неограничено») */
+  applicationSlotsCapped?: boolean;
   serviceCategoryCode?: string | null;
   serviceCode?: string | null;
   createdAt: string;
@@ -27,6 +38,8 @@ interface PartnerVenueDetail {
     name: string;
     description: string | null;
     website: string | null;
+    email?: string | null;
+    contactEmail?: string | null;
   };
 }
 
@@ -40,6 +53,9 @@ export default function PartnerVenueDetailPage() {
   const [copied, setCopied] = useState(false);
   /** Баннер в БД есть, но картинка не загрузилась (404, битый файл) */
   const [bannerLoadFailed, setBannerLoadFailed] = useState(false);
+  const [applySubmitting, setApplySubmitting] = useState(false);
+  const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   const loadVenue = useCallback(async () => {
     try {
@@ -68,6 +84,50 @@ export default function PartnerVenueDetailPage() {
   useEffect(() => {
     setBannerLoadFailed(false);
   }, [venue?.id, venue?.bannerUrl]);
+
+  const hasPartnerNotificationEmail =
+    Boolean(venue?.email?.trim()) ||
+    Boolean(venue?.partner?.contactEmail?.trim()) ||
+    Boolean(venue?.partner?.email?.trim());
+
+  const handleSubmitApplication = async () => {
+    if (!venue || applySubmitting) return;
+    setApplySubmitting(true);
+    setApplyError(null);
+    setApplyMessage(null);
+    try {
+      const res = await fetch("/api/partner-venues/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ venueId: venue.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setApplyMessage(typeof data.message === "string" ? data.message : "Заявка отправлена.");
+        setVenue((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            currentUserHasApplication: true,
+            applicationsCount:
+              typeof data.applicationsCount === "number" ? data.applicationsCount : prev.applicationsCount,
+            remainingApplicationSlots:
+              typeof data.remainingApplicationSlots === "number"
+                ? data.remainingApplicationSlots
+                : prev.remainingApplicationSlots,
+          };
+        });
+      } else if (res.status === 409) {
+        setApplyError(typeof data.error === "string" ? data.error : "Вы уже подали заявку по этой площадке.");
+      } else {
+        setApplyError(typeof data.error === "string" ? data.error : "Не удалось отправить заявку.");
+      }
+    } catch {
+      setApplyError("Ошибка сети. Попробуйте позже.");
+    } finally {
+      setApplySubmitting(false);
+    }
+  };
 
   const handleCopyPromo = async () => {
     if (!venue?.promoCode || !navigator?.clipboard) return;
@@ -105,6 +165,38 @@ export default function PartnerVenueDetailPage() {
       </div>
     );
   }
+
+  const capInt = partnerVenueHasApplicationSlotCap(venue.remainingSlots) ? venue.remainingSlots : null;
+
+  /** Бейдж «Осталось мест»: только при явном лимите в БД или согласованном ответе API */
+  const slotCapacityConfigured =
+    capInt !== null ||
+    (venue.applicationSlotsCapped === true && typeof venue.remainingApplicationSlots === "number");
+
+  const slotsRemainingDisplay =
+    typeof venue.remainingApplicationSlots === "number"
+      ? venue.remainingApplicationSlots
+      : capInt !== null
+        ? Math.max(
+            0,
+            capInt - (typeof venue.applicationsCount === "number" ? venue.applicationsCount : 0)
+          )
+        : null;
+
+  /** Блокировка по местам: только при лимите 1–999 и остатке ровно 0. Кнопка ещё неактивна при отправке и если заявка уже подана. */
+  const applyBlockedBySlots = (() => {
+    if (capInt === null) return false;
+    const remaining =
+      typeof venue.remainingApplicationSlots === "number"
+        ? venue.remainingApplicationSlots
+        : Math.max(
+            0,
+            capInt - (typeof venue.applicationsCount === "number" ? venue.applicationsCount : 0)
+          );
+    return remaining === 0;
+  })();
+  const applyDisabled =
+    applySubmitting || applyBlockedBySlots || Boolean(venue.currentUserHasApplication);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 dark:bg-gray-900">
@@ -177,6 +269,10 @@ export default function PartnerVenueDetailPage() {
                   <span>{venue.city}</span>
                 </div>
               )}
+              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-medium text-gray-700 dark:text-gray-300">Участие:</span>
+                <span>{partnerVenueParticipationLabel(venue.participationMode)}</span>
+              </div>
               {venue.eventAt && (
                 <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
                   <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
@@ -197,14 +293,11 @@ export default function PartnerVenueDetailPage() {
                   </span>
                 </div>
               )}
-              {venue.remainingSlots != null &&
-                venue.remainingSlots >= 1 &&
-                venue.remainingSlots <= 999 && (
-                  <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Осталось мест:</span>
-                    <span>{String(venue.remainingSlots).padStart(3, "0")}</span>
-                  </div>
-                )}
+              {slotCapacityConfigured && slotsRemainingDisplay !== null && (
+                <span className="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full bg-red-600/90 px-2 py-0.5 text-xs font-semibold leading-none text-white shadow dark:bg-red-700/90">
+                  Осталось мест {slotsRemainingDisplay}
+                </span>
+              )}
               {(() => {
                 const svc = getPartnerVenueServiceLabels(
                   venue.serviceCategoryCode,
@@ -359,20 +452,61 @@ export default function PartnerVenueDetailPage() {
               </div>
             )}
 
-            {venue.website && (
-              <div className="mt-6 sm:mt-8">
-                <a
-                  href={venue.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-indigo-700 sm:px-6 sm:py-4 sm:text-lg"
-                >
-                  <span>Перейти на сайт</span>
-                  <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                  </svg>
-                </a>
+            {(venue.participationMode === "APPLICATION" || venue.website) && (
+              <div className="mt-6 sm:mt-8 flex flex-col gap-3">
+                {venue.participationMode === "APPLICATION" &&
+                  (hasPartnerNotificationEmail ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleSubmitApplication}
+                        disabled={applyDisabled}
+                        title={
+                          venue.currentUserHasApplication
+                            ? "Вы уже подали заявку по этой площадке."
+                            : applyBlockedBySlots
+                              ? "Свободных мест для заявок не осталось."
+                              : undefined
+                        }
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 sm:px-6 sm:py-4 sm:text-lg"
+                      >
+                        <svg className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                          <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                          <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                        </svg>
+                        <span>{applySubmitting ? "Отправка…" : "Подать заявку"}</span>
+                      </button>
+                      {applyMessage && (
+                        <p className="text-center text-sm text-emerald-700 dark:text-emerald-400">{applyMessage}</p>
+                      )}
+                      {applyError && (
+                        <p className="text-center text-sm text-red-600 dark:text-red-400">{applyError}</p>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      title="У партнёра не указан email для уведомлений. Свяжитесь по телефону или через сайт ниже."
+                      className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-gray-300 px-4 py-3 text-base font-semibold text-gray-600 shadow sm:px-6 sm:py-4 sm:text-lg dark:bg-gray-600 dark:text-gray-300"
+                    >
+                      <span>Подать заявку</span>
+                    </button>
+                  ))}
+                {venue.website && (
+                  <a
+                    href={venue.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-indigo-700 sm:px-6 sm:py-4 sm:text-lg"
+                  >
+                    <span>Перейти на сайт</span>
+                    <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                      <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                    </svg>
+                  </a>
+                )}
               </div>
             )}
 

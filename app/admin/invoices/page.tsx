@@ -172,7 +172,7 @@ export default function AdminInvoicesPage() {
                 </tr>
               ) : (
                 invoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <tr key={inv.id} className="hover-surface">
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                       {inv.offerNumber}
                     </td>

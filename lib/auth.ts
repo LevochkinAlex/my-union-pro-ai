@@ -1,4 +1,5 @@
 import type { NextAuthOptions, User } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import YandexProvider from "next-auth/providers/yandex";
 import { prisma } from "./prisma";
@@ -6,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "./demo-constants";
 import { translitLatinToCyrillic } from "./translit-latin-to-cyrillic";
 import { mergeUsers } from "./account-merge";
+import { verifyImpersonationRestoreToken } from "./impersonation-restore-token";
 
 /**
  * Нормализация номера телефона к формату +7XXXXXXXXXX
@@ -492,7 +494,27 @@ export const authOptions: NextAuthOptions = {
             // Добавляем метаданные для impersonation
             originalAdminId: admin.id,
             isImpersonating: true,
-          } as User & { originalAdminId: string; isImpersonating: boolean };
+            // Снимок админа в JWT — restore-admin сможет восстановить сессию, если Prisma временно недоступна
+            restoreAdminProfile: {
+              id: admin.id,
+              email: admin.email,
+              firstName: admin.firstName,
+              lastName: admin.lastName,
+              role: admin.role,
+              membershipStatus: admin.membershipStatus,
+            },
+          } as User & {
+            originalAdminId: string;
+            isImpersonating: boolean;
+            restoreAdminProfile: {
+              id: string;
+              email: string | null;
+              firstName: string | null;
+              lastName: string | null;
+              role: (typeof admin)["role"];
+              membershipStatus: (typeof admin)["membershipStatus"];
+            };
+          };
         } catch (error) {
           console.error("[Auth] Impersonate error:", error);
           return null;
@@ -505,49 +527,72 @@ export const authOptions: NextAuthOptions = {
       name: "Restore Admin",
       credentials: {
         adminId: { label: "Admin ID", type: "text" },
-        restoreToken: { label: "Restore Token", type: "text" },
+        impersonatedUserId: { label: "Impersonated user ID", type: "text" },
+        restoreJwt: { label: "Restore JWT", type: "text" },
       },
       async authorize(credentials): Promise<User | null> {
-        if (!credentials?.adminId) {
-          console.error("[Auth] Restore admin: No adminId provided");
+        const adminId = String(credentials?.adminId ?? "").trim();
+        const impersonatedUserId = String(credentials?.impersonatedUserId ?? "").trim();
+        const restoreJwt = String(credentials?.restoreJwt ?? "").trim();
+
+        if (!adminId || !impersonatedUserId || !restoreJwt) {
+          console.error("[Auth] Restore admin: missing adminId, impersonatedUserId or restoreJwt");
           return null;
         }
 
+        const signed = verifyImpersonationRestoreToken(restoreJwt);
+        if (!signed) {
+          console.error("[Auth] Restore admin: invalid or expired restoreJwt");
+          return null;
+        }
+        if (signed.admin.id !== adminId || signed.impersonatedUserId !== impersonatedUserId) {
+          console.error("[Auth] Restore admin: JWT does not match credentials");
+          return null;
+        }
+        if (signed.admin.role !== "SUPER_ADMIN") {
+          console.error("[Auth] Restore admin: snapshot role is not SUPER_ADMIN");
+          return null;
+        }
+
+        const buildAdminUser = (
+          row: Pick<
+            NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>,
+            "id" | "email" | "firstName" | "lastName" | "role" | "membershipStatus" | "avatarUrl"
+          >
+        ): User => ({
+          id: row.id,
+          email: row.email || undefined,
+          name: `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || undefined,
+          role: row.role,
+          membershipStatus: row.membershipStatus,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          avatarUrl: row.avatarUrl,
+        });
+
         try {
-          // Добавляем таймаут для запроса к БД
-          const admin = await Promise.race([
-            prisma.user.findUnique({
-              where: { id: credentials.adminId },
-            }),
-            new Promise<null>((_, reject) => 
-              setTimeout(() => reject(new Error("Database query timeout")), 10000)
-            )
-          ]).catch((error) => {
-            console.error("[Auth] Restore admin database error:", error);
-            return null;
-          }) as Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
-
-          if (!admin) {
-            console.error("[Auth] Restore admin: Admin not found");
-            return null;
+          try {
+            const row = await prisma.user.findUnique({ where: { id: adminId } });
+            if (row?.role === "SUPER_ADMIN") {
+              return buildAdminUser(row);
+            }
+            if (row) {
+              console.error("[Auth] Restore admin: admin in DB is no longer SUPER_ADMIN");
+              return null;
+            }
+          } catch (dbErr) {
+            console.error("[Auth] Restore admin database error (fallback to JWT payload):", dbErr);
           }
 
-          if (admin.role !== "SUPER_ADMIN") {
-            console.error("[Auth] Restore admin: User is not SUPER_ADMIN");
-            return null;
-          }
-
-          // Возвращаем админа без флагов impersonation
-          return {
-            id: admin.id,
-            email: admin.email || undefined,
-            name: `${admin.firstName ?? ""} ${admin.lastName ?? ""}`.trim() || undefined,
-            role: admin.role,
-            membershipStatus: admin.membershipStatus,
-            firstName: admin.firstName,
-            lastName: admin.lastName,
-            avatarUrl: admin.avatarUrl,
-          };
+          return buildAdminUser({
+            id: signed.admin.id,
+            email: signed.admin.email,
+            firstName: signed.admin.firstName,
+            lastName: signed.admin.lastName,
+            role: signed.admin.role,
+            membershipStatus: signed.admin.membershipStatus,
+            avatarUrl: null,
+          });
         } catch (error) {
           console.error("[Auth] Restore admin error:", error);
           return null;
@@ -957,6 +1002,12 @@ export const authOptions: NextAuthOptions = {
         } else {
           token.isImpersonating = undefined;
         }
+        if ("restoreAdminProfile" in user && (user as { restoreAdminProfile?: unknown }).restoreAdminProfile) {
+          token.restoreAdminProfile = (user as { restoreAdminProfile: JWT["restoreAdminProfile"] })
+            .restoreAdminProfile;
+        } else {
+          token.restoreAdminProfile = undefined;
+        }
         // Демо-режим: не обращаемся к БД
         if ('isDemo' in user && user.isDemo) {
           token.isDemo = true;
@@ -1124,7 +1175,12 @@ export const authOptions: NextAuthOptions = {
         } else {
           (session.user as any).isImpersonating = undefined;
         }
-        
+        if (token.restoreAdminProfile) {
+          (session.user as any).restoreAdminProfile = token.restoreAdminProfile;
+        } else {
+          (session.user as any).restoreAdminProfile = undefined;
+        }
+
         // Добавляем accessToken для WebSocket аутентификации
         // Используем JWT токен из NextAuth
         (session as any).accessToken = token.sub ? 

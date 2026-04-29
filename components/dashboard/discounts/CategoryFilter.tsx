@@ -207,7 +207,7 @@ export default function CategoryFilter({
                         "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition",
                         isSelected
                           ? "bg-blue-50 dark:bg-blue-900/20"
-                          : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                          : "hover-surface"
                       )}
                     >
                       <input

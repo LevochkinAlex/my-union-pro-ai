@@ -563,7 +563,7 @@ export default function SubscriptionPage() {
             <button
               type="button"
               onClick={() => setBillingProfileModalOpen(true)}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover-surface"
             >
               {billingProfile ? "Редактировать реквизиты" : "Заполнить реквизиты"}
             </button>
@@ -676,7 +676,7 @@ export default function SubscriptionPage() {
               type="button"
               onClick={handleSyncPayments}
               disabled={syncPaymentsLoading}
-              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover-surface disabled:opacity-50"
             >
               {syncPaymentsLoading ? "Синхронизация…" : "Синхронизировать с T-Bank"}
             </button>

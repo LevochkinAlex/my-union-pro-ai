@@ -10,6 +10,7 @@ import { signOut } from "next-auth/react";
 import ViewModeSwitch from "./ViewModeSwitch";
 import ChatUnreadBadge from "./ChatUnreadBadge";
 import NotificationUnreadBadge from "./NotificationUnreadBadge";
+import PartnerApplicationsNewBadge from "./PartnerApplicationsNewBadge";
 import { useTour } from "./TourGuideProvider";
 import { withStableNavIconKey } from "@/lib/nav-icon";
 
@@ -176,6 +177,7 @@ function SidebarContent({ items, userInitial, avatarUrl, isAdmin = false, brandH
                       {withStableNavIconKey(item.icon, item.href)}
                       {(item.href === '/dashboard/chat' || item.href === '/dashboard/chats/ppo-head') && <ChatUnreadBadge />}
                       {item.href === '/dashboard/notifications' && <NotificationUnreadBadge />}
+                      {item.href === "/partner-dashboard/applications" && <PartnerApplicationsNewBadge />}
                     </span>
                     {!isCollapsed && (
                       <span className="flex min-w-0 flex-1 items-center justify-between gap-1">
@@ -211,6 +213,7 @@ function SidebarContent({ items, userInitial, avatarUrl, isAdmin = false, brandH
                       {withStableNavIconKey(item.icon, item.href)}
                       {(item.href === '/dashboard/chat' || item.href === '/dashboard/chats/ppo-head') && <ChatUnreadBadge />}
                       {item.href === '/dashboard/notifications' && <NotificationUnreadBadge />}
+                      {item.href === "/partner-dashboard/applications" && <PartnerApplicationsNewBadge />}
                     </span>
                     {!isCollapsed && <span>{item.label}</span>}
                   </Link>

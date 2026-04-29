@@ -373,7 +373,7 @@ export default function AdditionalInfoModal({
                           setEditingAwardIndex(null);
                           setNewAward({ type: "ведомственная", year: "", description: "", attachments: [] });
                         }}
-                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
                       >
                         Отмена
                       </button>
@@ -464,7 +464,7 @@ export default function AdditionalInfoModal({
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover-surface dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
               >
                 Назад
               </button>
