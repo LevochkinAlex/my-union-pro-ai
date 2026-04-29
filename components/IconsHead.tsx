@@ -1,14 +1,10 @@
 /**
- * Компонент для рендеринга иконок с поддержкой CDN
- * Используется в layout.tsx для динамической генерации иконок
+ * Ссылки на статические favicon/manifest из `public/` через `getIconUrl()` (same-origin).
  */
 
 import { getIconUrl } from "@/lib/cdn";
 
 export function IconsHead() {
-  const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
-  const useCDN = !!cdnUrl;
-
   // Список иконок
   const icons = [
     { rel: "icon", href: "/favicon.ico", sizes: "any" },
@@ -30,7 +26,7 @@ export function IconsHead() {
         <link
           key={`icon-${index}`}
           rel={icon.rel}
-          href={getIconUrl(icon.href, useCDN)}
+          href={getIconUrl(icon.href)}
           {...(icon.type && { type: icon.type })}
           {...(icon.sizes && { sizes: icon.sizes })}
         />
@@ -41,13 +37,13 @@ export function IconsHead() {
         rel="apple-touch-icon"
         sizes="180x180"
         type="image/png"
-        href={getIconUrl("/apple-touch-icon.png", useCDN)}
+        href={getIconUrl("/apple-touch-icon.png")}
       />
       {appleIcons.map((icon, index) => (
         <link
           key={`apple-${index}`}
           rel={icon.rel}
-          href={getIconUrl(icon.href, useCDN)}
+          href={getIconUrl(icon.href)}
           sizes={icon.sizes}
           type={icon.type}
         />

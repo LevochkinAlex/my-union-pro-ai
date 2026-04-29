@@ -35,6 +35,32 @@ let citiesLoadingPromise: Promise<DiscountCity[]> | null = null;
 const BB_CITIES_API = "https://bestbenefits.ru/api/cities";
 
 /**
+ * Парсит тело ответа BB как JSON. При HTML (ошибка, редирект, WAF) не бросает SyntaxError —
+ * возвращает null, чтобы верхний код мог сделать fallback.
+ */
+async function parseBbResponseJson<T>(response: Response, context: string): Promise<T | null> {
+  const raw = await response.text();
+  const trimmed = raw.trimStart();
+  if (!trimmed) {
+    console.warn(`[best-benefits] ${context}: empty body`);
+    return null;
+  }
+  if (trimmed.startsWith("<")) {
+    console.warn(
+      `[best-benefits] ${context}: expected JSON, got HTML`,
+      trimmed.slice(0, 160).replace(/\s+/g, " ")
+    );
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch (e) {
+    console.warn(`[best-benefits] ${context}: JSON.parse failed`, e);
+    return null;
+  }
+}
+
+/**
  * Загружает полный справочник городов из BB /api/cities.
  * BB пагинирует по 40 записей, всего ~1167 городов (~30 страниц).
  */
@@ -69,9 +95,9 @@ async function fetchAllCitiesForFilter(): Promise<DiscountCity[]> {
             signal: controller.signal,
           });
           clearTimeout(tid);
-        } catch (err: any) {
+        } catch (err: unknown) {
           clearTimeout(tid);
-          if (err.name === "AbortError") {
+          if (err instanceof Error && err.name === "AbortError") {
             console.warn(`[best-benefits] /api/cities timeout on page ${page}`);
             break;
           }
@@ -83,17 +109,24 @@ async function fetchAllCitiesForFilter(): Promise<DiscountCity[]> {
           break;
         }
 
-        const json = await response.json();
-        const items: any[] = json.data || json;
-        if (!Array.isArray(items) || items.length === 0) break;
+        const json = await parseBbResponseJson<{
+          data?: unknown;
+          meta?: { current_page?: number; last_page?: number };
+        }>(response, `/api/cities page ${page}`);
+        if (!json) break;
+        const rawItems =
+          json.data !== undefined && json.data !== null ? json.data : json;
+        const items: unknown[] = Array.isArray(rawItems) ? rawItems : [];
+        if (items.length === 0) break;
 
         for (const c of items) {
-          if (c.id && c.name && c.name.trim()) {
-            citiesMap.set(c.id, {
-              id: c.id,
-              name: c.name.trim(),
-              slug: c.slug ?? null,
-              coordinates: getCityCoordinates(c.name),
+          const row = c as { id?: number; name?: string; slug?: string | null };
+          if (row.id && row.name && row.name.trim()) {
+            citiesMap.set(row.id, {
+              id: row.id,
+              name: row.name.trim(),
+              slug: row.slug ?? null,
+              coordinates: getCityCoordinates(row.name),
             });
           }
         }
@@ -355,10 +388,18 @@ async function fetchBestBenefitsSearchOne(
       console.warn(`[best-benefits] /search HTTP ${response.status}`, { query: queryText });
       return null;
     }
-    return (await response.json()) as BestBenefitsResponse;
+    return await parseBbResponseJson<BestBenefitsResponse>(
+      response,
+      `/search query=${JSON.stringify(queryText)}`
+    );
   } catch (error: unknown) {
     clearTimeout(timeoutId);
-    throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      console.warn(`[best-benefits] /search aborted/timeout`, { query: queryText });
+      return null;
+    }
+    console.warn(`[best-benefits] /search request failed`, { query: queryText, error });
+    return null;
   }
 }
 
@@ -389,19 +430,29 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
         });
 
         if (singleResponse.ok) {
-          const singleData = await singleResponse.json();
-          const discount = singleData.data || singleData;
-          const list = Array.isArray(discount) ? discount : discount ? [discount] : [];
-          if (list.length > 0) {
-            return {
-              data: list,
-              meta: {
-                total: list.length,
-                per_page: list.length,
-                current_page: 1,
-                last_page: 1,
-              },
-            } as BestBenefitsResponse;
+          const singleData = await parseBbResponseJson<Record<string, unknown>>(
+            singleResponse,
+            `GET product ${idList[0]}`
+          );
+          if (!singleData) {
+            console.warn(`[best-benefits] Single product ${idList[0]}: non-JSON body, trying local DB`);
+          } else {
+            const discount =
+              (singleData as { data?: unknown }).data !== undefined
+                ? (singleData as { data: unknown }).data
+                : singleData;
+            const list = Array.isArray(discount) ? discount : discount ? [discount] : [];
+            if (list.length > 0) {
+              return {
+                data: list,
+                meta: {
+                  total: list.length,
+                  per_page: list.length,
+                  current_page: 1,
+                  last_page: 1,
+                },
+              } as BestBenefitsResponse;
+            }
           }
         } else {
           console.warn(
@@ -442,7 +493,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     // Это нужно для корректной работы favorites/claimed views
     if (idList.length > 1) {
       console.log(`[best-benefits] Fetching ${idList.length} discounts by IDs for filtered view`);
-      const discounts: any[] = [];
+      const discounts: BestBenefitsDiscount[] = [];
       
       // Загружаем все скидки параллельно (максимум 10 одновременно для избежания перегрузки)
       const batchSize = 10;
@@ -462,8 +513,16 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
             });
             
             if (response.ok) {
-              const data = await response.json();
-              return data.data || data;
+              const parsed = await parseBbResponseJson<{ data?: unknown }>(
+                response,
+                `GET ${catalogBase.replace(/\/$/, "")}/${id}`
+              );
+              if (!parsed) return null;
+              const body =
+                (parsed as { data?: unknown }).data !== undefined
+                  ? (parsed as { data: unknown }).data
+                  : parsed;
+              return body as BestBenefitsDiscount;
             }
             return null;
           } catch (error) {
@@ -473,7 +532,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
         });
         
         const batchResults = await Promise.all(batchPromises);
-        discounts.push(...batchResults.filter(Boolean));
+        discounts.push(...batchResults.filter((x): x is BestBenefitsDiscount => x != null));
       }
       
       console.log(`[best-benefits] Fetched ${discounts.length} out of ${idList.length} requested discounts`);
@@ -528,17 +587,9 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
 
       if (allRejected && allTimeout) {
         console.warn("[best-benefits] /search all variants timed out, falling back to /products");
-        throw new Error("Search timeout");
       }
-    } catch (error: any) {
-      if (error.message === "Search timeout" || error.message?.includes?.("timeout")) {
-        console.warn("[best-benefits] /search timeout, falling back to /products");
-      } else {
-        console.warn("[best-benefits] /search failed:", error);
-      }
-      if (!(error.message === "Search timeout" || error.message?.includes?.("timeout"))) {
-        throw error;
-      }
+    } catch (error: unknown) {
+      console.warn("[best-benefits] /search block error, falling back to /products:", error);
     }
   }
 
@@ -586,9 +637,9 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-  } catch (error: any) {
+  } catch (error: unknown) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
+    if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`Request timeout after 15s: ${url}`);
     }
     throw error;
@@ -602,7 +653,14 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     throw new Error(`BestBenefits API responded with ${response.status}: ${errorText}`);
   }
 
-  const data = (await response.json()) as BestBenefitsResponse;
+  const data = await parseBbResponseJson<BestBenefitsResponse>(
+    response,
+    `/products GET ${catalogBase}`
+  );
+  if (!data) {
+    console.warn("[best-benefits] API returned success but body was not JSON, treating as failure");
+    throw new Error(`BestBenefits API returned non-JSON body for ${url}`);
+  }
   // console.log("[best-benefits] Fetched", data?.data?.length ?? 0, "discounts from API");
   
   // Логируем первый элемент для проверки наличия описания (закомментировано для production)

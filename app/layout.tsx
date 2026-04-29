@@ -6,10 +6,6 @@ import { IconsHead } from "@/components/IconsHead";
 import { AnalyticsScripts } from "@/components/AnalyticsScripts";
 import { getIconUrl } from "@/lib/cdn";
 
-// Получаем CDN URL для иконок
-const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
-const useCDN = !!cdnUrl;
-
 export const metadata: Metadata = {
   title: "MyUnion Pro — единая панель управления профсоюзом",
   description: "Современная AI-платформа для управления профсоюзом. Автоматизация документооборота, управление членами, обработка обращений. До 80% автоматизации рутинных задач.",
@@ -25,17 +21,17 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: getIconUrl("/favicon.ico", useCDN), sizes: "any" },
-      { url: getIconUrl("/icon.png", useCDN), sizes: "any" },
-      { url: getIconUrl("/favicon-16x16.png", useCDN), sizes: "16x16", type: "image/png" },
-      { url: getIconUrl("/favicon-32x32.png", useCDN), sizes: "32x32", type: "image/png" },
-      { url: getIconUrl("/icon-192x192.png", useCDN), sizes: "192x192", type: "image/png" },
-      { url: getIconUrl("/icon-512x512.png", useCDN), sizes: "512x512", type: "image/png" },
+      { url: getIconUrl("/favicon.ico"), sizes: "any" },
+      { url: getIconUrl("/icon.png"), sizes: "any" },
+      { url: getIconUrl("/favicon-16x16.png"), sizes: "16x16", type: "image/png" },
+      { url: getIconUrl("/favicon-32x32.png"), sizes: "32x32", type: "image/png" },
+      { url: getIconUrl("/icon-192x192.png"), sizes: "192x192", type: "image/png" },
+      { url: getIconUrl("/icon-512x512.png"), sizes: "512x512", type: "image/png" },
     ],
     apple: [
-      { url: getIconUrl("/apple-touch-icon.png", useCDN), sizes: "180x180", type: "image/png" },
+      { url: getIconUrl("/apple-touch-icon.png"), sizes: "180x180", type: "image/png" },
     ],
-    shortcut: getIconUrl("/favicon.ico", useCDN),
+    shortcut: getIconUrl("/favicon.ico"),
   },
   // manifest.json должен быть локальным (не через CDN), так как браузер требует CORS заголовки
   manifest: "/manifest.json",

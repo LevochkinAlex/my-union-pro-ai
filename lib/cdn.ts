@@ -220,34 +220,20 @@ export function getDocumentUrl(filePath: string | null | undefined): string {
 }
 
 /**
- * Получает URL статической иконки через CDN (favicon, apple-touch-icon и т.д.)
- * 
- * @param iconPath - Путь к иконке (например, "/favicon.ico", "/apple-touch-icon.png")
- * @param useCDN - Использовать ли CDN (по умолчанию true, если CDN настроен)
- * @returns Полный URL иконки с CDN или относительный путь
- * 
- * @example
- * // С CDN: "https://cdn.myunion.pro/favicon.ico"
- * // Без CDN: "/favicon.ico"
+ * URL статических иконок из `public/` (favicon, apple-touch-icon и т.д.).
+ * Всегда отдаём с тем же origin, что и приложение — иконки лежат в Next, а CDN зарезервирован
+ * под пользовательские загрузки (`/uploads/...`). Если у CDN временные проблемы с TLS,
+ * фавикон не должен ломаться.
+ *
  */
-export function getIconUrl(iconPath: string, useCDN: boolean = true): string {
+export function getIconUrl(iconPath: string): string {
   if (!iconPath) return "";
-  
-  // Если это уже полный URL, возвращаем как есть
+
   if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
     return iconPath;
   }
-  
-  // Убираем начальный слеш для консистентности
+
   const normalizedPath = iconPath.startsWith("/") ? iconPath.slice(1) : iconPath;
-  
-  const cdnUrl = useCDN ? getCDNUrl() : null;
-  
-  if (cdnUrl) {
-    return `${cdnUrl}/${normalizedPath}`;
-  }
-  
-  // Без CDN возвращаем относительный путь
   return `/${normalizedPath}`;
 }
 
