@@ -240,7 +240,11 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailDis
     }
     return { sent: true };
   } catch (error) {
-    console.error("[Email] Ошибка отправки:", error);
+    console.error("[Email] Ошибка отправки через SMTP:", error);
+    if (await trySendViaResend(options)) {
+      console.log("[Email] Отправлено через Resend после сбоя SMTP");
+      return { sent: true };
+    }
     throw error;
   }
 }
@@ -395,12 +399,20 @@ export async function sendMagicLinkEmail(
       hasPin ? "Код и ссылка действительны 5 минут." : "Ссылка действительна 5 минут.",
     ].join("\n");
 
-    await sendEmail({
+    const dispatch = await sendEmail({
       to: email,
       subject,
       html: htmlContent,
       text: textContent,
     });
+
+    if (!dispatch.sent) {
+      return {
+        success: false,
+        error:
+          "Почтовый сервер не подтвердил отправку. Проверьте SMTP_* в .env или задайте RESEND_API_KEY.",
+      };
+    }
 
     return {
       success: true,

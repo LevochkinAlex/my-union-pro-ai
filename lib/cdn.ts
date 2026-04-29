@@ -229,11 +229,26 @@ export function getDocumentUrl(filePath: string | null | undefined): string {
 export function getIconUrl(iconPath: string): string {
   if (!iconPath) return "";
 
-  if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
-    return iconPath;
+  const trimmed = iconPath.trim();
+  try {
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      const u = new URL(trimmed);
+      if (
+        u.hostname === "cdn.myunion.pro" ||
+        /\.cdn\.myunion\.pro$/i.test(u.hostname) ||
+        /^cdn\./i.test(u.hostname)
+      ) {
+        const p = u.pathname || "/";
+        return p.startsWith("/") ? p : `/${p}`;
+      }
+      return trimmed;
+    }
+  } catch {
+    const normalizedPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+    return `/${normalizedPath}`;
   }
 
-  const normalizedPath = iconPath.startsWith("/") ? iconPath.slice(1) : iconPath;
+  const normalizedPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
   return `/${normalizedPath}`;
 }
 

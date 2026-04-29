@@ -103,6 +103,8 @@ pm2 save
 echo "--- pm2 list ---"
 pm2 list | head -7
 
+echo "💡 После простоя PostgreSQL/CDN (без полного деплоя): cd /opt/my-union-pro && pnpm run vds:recover"
+
 echo "--- root crontab (скидки + ЕГРЮЛ партнёры) ---"
 if [ "$(id -u)" -eq 0 ] && [ -f scripts/setup-cron.sh ]; then
   set +e

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, isDatabaseUnavailableError } from "@/lib/prisma";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { sendMagicLinkEmail } from "@/lib/email";
@@ -119,8 +119,17 @@ export async function POST(request: NextRequest) {
         isNewUser = true;
         // Генерируем dev токен и оставляем сгенерированный PIN
         token = `dev_${crypto.randomBytes(16).toString("hex")}`;
+      } else if (isDatabaseUnavailableError(dbError)) {
+        console.error("[Email Auth] БД недоступна (продакшен):", dbError);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Сервис временно недоступен. Попробуйте позже.",
+            code: "DB_UNAVAILABLE",
+          },
+          { status: 503 },
+        );
       } else {
-        // В продакшене - выбрасываем ошибку
         throw dbError;
       }
     }
@@ -232,10 +241,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error("[Email Auth] Ошибка:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Сервис временно недоступен. Попробуйте позже.",
+          code: "DB_UNAVAILABLE",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       {
         success: false,
-        error: "Произошла ошибка при отправке письма",
+        error:
+          "Не удалось выполнить вход по почте (сохранение кода или отправка письма). Попробуйте позже.",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

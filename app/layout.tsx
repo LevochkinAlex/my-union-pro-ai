@@ -5,8 +5,10 @@ import { Providers } from "@/components/Providers";
 import { IconsHead } from "@/components/IconsHead";
 import { AnalyticsScripts } from "@/components/AnalyticsScripts";
 import { getIconUrl } from "@/lib/cdn";
+import { getSafeSiteOrigin } from "@/lib/safe-site-origin";
 
 export const metadata: Metadata = {
+  metadataBase: getSafeSiteOrigin(),
   title: "MyUnion Pro — единая панель управления профсоюзом",
   description: "Современная AI-платформа для управления профсоюзом. Автоматизация документооборота, управление членами, обработка обращений. До 80% автоматизации рутинных задач.",
   keywords: ["профсоюз", "управление профсоюзом", "AI", "автоматизация", "документооборот", "MyUnion"],
@@ -55,7 +57,7 @@ export default function RootLayout({
       <head>
         {/* Яндекс Партнёрка: верификационный код (временно, потом удалить) */}
         <meta name="yandex-verification" content="zbrq7qg64z2qsesl" />
-        {/* Favicon и иконки для всех браузеров (с поддержкой CDN) */}
+        {/* Фавикон и иконки — same-origin (см. getIconUrl / metadataBase) */}
         <IconsHead />
         
         {/* Theme Flash Prevention - must be first script */}

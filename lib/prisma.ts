@@ -142,6 +142,7 @@ export async function withPrismaRetry<T>(
         error?.code === "P1002" ||
         error?.code === "P1008" ||
         error?.code === "P1017" ||
+        error?.code === "P2024" ||
         msg.includes("ECONNREFUSED") ||
         msg.includes("ENOTFOUND") ||
         msg.includes("Connection") ||
@@ -163,5 +164,51 @@ export async function withPrismaRetry<T>(
     }
   }
   throw lastError;
+}
+
+/**
+ * True if the failure is likely transient DB/network availability (timeouts, pool,
+ * unreachable host). Use for mapping to HTTP 503 and for logging without treating
+ * as an application bug. Walks `cause` chains (Prisma / driver wrappers).
+ */
+export function isDatabaseUnavailableError(error: unknown): boolean {
+  const prismaTransient = new Set([
+    "P1001",
+    "P1002",
+    "P1008",
+    "P1017",
+    "P2024",
+  ]);
+  let current: unknown = error;
+  for (let depth = 0; depth < 10 && current != null; depth++) {
+    const anyErr = current as {
+      code?: string;
+      message?: string;
+      cause?: unknown;
+      kind?: string;
+    };
+    if (typeof anyErr.code === "string" && prismaTransient.has(anyErr.code)) {
+      return true;
+    }
+    if (anyErr.kind === "Closed") {
+      return true;
+    }
+    const msg = String(anyErr.message ?? "");
+    const looksUnavailable =
+      /\b(P1001|P1002|P1008|P1017|P2024)\b/.test(msg) ||
+      /Can't reach database server|Timed out fetching a new connection|Server has closed the connection|connection pool|connection closed/i.test(
+        msg,
+      ) ||
+      /\b(ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)\b/.test(msg) ||
+      msg.includes("kind: Closed");
+    if (looksUnavailable) {
+      return true;
+    }
+    current =
+      typeof anyErr.cause !== "undefined"
+        ? anyErr.cause
+        : (anyErr as { originalError?: unknown }).originalError;
+  }
+  return false;
 }
 

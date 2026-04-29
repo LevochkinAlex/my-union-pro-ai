@@ -67,7 +67,9 @@
     "socket": "dotenv -e .env.local -- tsx server/socket-server.ts",
     "socket:chat": "dotenv -e .env.local -- tsx server/chat-server.ts",
     "socket:build": "npx esbuild server/socket-server.ts --bundle --platform=node --outfile=dist/server/socket-server.js --external:@prisma/client --external:prisma",
-    "socket:prod": "node dist/server/socket-server.js"
+    "socket:prod": "node dist/server/socket-server.js",
+    "vds:recover": "bash scripts/vds-recover-after-outage.sh",
+    "vds:recover:migrate": "bash scripts/vds-recover-after-outage.sh --migrate"
   },
   "dependencies": {
     "@heroui/react": "^2.8.10",

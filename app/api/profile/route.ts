@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getDemoProfile } from "@/lib/demo";
-import { prisma, withPrismaRetry } from "@/lib/prisma";
+import { prisma, withPrismaRetry, isDatabaseUnavailableError } from "@/lib/prisma";
 import { invalidateUsersCache } from "@/lib/cache-invalidation";
 import { cacheDeletePattern } from "@/lib/cache";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
@@ -203,23 +203,14 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("[profile] GET error:", error);
-    
-    // Проверяем, является ли это ошибкой подключения к БД
-    const isConnectionError = 
-      error?.code === 'P1001' || // Can't reach database server
-      error?.code === 'P1002' || // Database server doesn't accept connections
-      error?.code === 'P1008' || // Operations timed out
-      error?.code === 'P1017' || // Server has closed the connection
-      error?.message?.includes('timeout') ||
-      error?.message?.includes('ECONNREFUSED');
-    
-    if (isConnectionError) {
+
+    if (isDatabaseUnavailableError(error)) {
       return NextResponse.json(
         { error: "Сервис временно недоступен. Попробуйте позже." },
         { status: 503 },
       );
     }
-    
+
     return NextResponse.json(
       { error: "Не удалось загрузить профиль" },
       { status: 500 },
@@ -731,6 +722,12 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error) {
     console.error("[profile] PUT error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return NextResponse.json(
+        { error: "Сервис временно недоступен. Попробуйте позже." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: "Не удалось обновить профиль" },
       { status: 500 },
