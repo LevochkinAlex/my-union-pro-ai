@@ -275,8 +275,8 @@ ssh root@79.143.29.66 'pm2 logs my-union-pro --err --lines 20 --nostream'
 ### 1. Подготовка сервера
 
 ```bash
-# Подключиться к серверу
-ssh root@YOUR_SERVER_IP
+# Подключиться к серверу (текущий прод — см. таблицу выше)
+ssh root@79.143.29.66
 
 # Обновить систему
 apt update && apt upgrade -y
