@@ -13,7 +13,7 @@ export default async function MyApplicationsPage() {
   }
 
   return (
-    <div className="w-full max-w-full space-y-6 pb-8 md:space-y-8 md:pb-12">
+    <div className="w-full min-w-0 max-w-full space-y-6 pb-8 md:space-y-8 md:pb-12">
       <PageHeader
         title="Мои заявки"
         description="Площадки партнёров, на участие в которых вы подали заявку."

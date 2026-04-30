@@ -58,6 +58,7 @@
     "env:ensure-vds-bb-catalog": "bash scripts/ensure-vds-bb-catalog-env.sh",
     "sync:all-users-discounts": "dotenv -e .env.local -- tsx scripts/sync-all-users-discounts.ts",
     "cron:partner-liquidation": "dotenv -e .env.local -- tsx scripts/run-partner-liquidation-cron.ts",
+    "cron:partner-venue-sla": "dotenv -e .env.local -- tsx scripts/run-partner-venue-sla-cron.ts",
     "bb:reset-all-passwords": "dotenv -e .env.local -- tsx scripts/reset-all-bb-user-passwords.ts",
     "sync:channel-posts-to-news": "dotenv -e .env.local -- tsx scripts/sync-channel-posts-to-news.ts",
     "fix:news-cover-images": "dotenv -e .env.local -- tsx scripts/fix-news-cover-image-paths.ts",

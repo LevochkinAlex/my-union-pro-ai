@@ -93,9 +93,7 @@ function renderFolderIcon(icon: string | null | undefined, className: string) {
 // ТИПЫ
 // ============================================================================
 
-export type ChatCategory = "work" | "personal" | "ai";
-
-// Интерфейс для папки чатов
+/** Папка чатов в боковой панели */
 export interface ChatFolder {
   id: string;
   name: string;

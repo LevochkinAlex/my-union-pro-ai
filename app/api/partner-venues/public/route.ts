@@ -13,6 +13,7 @@ import {
   mergeParticipationModesOnVenues,
 } from "@/lib/partner-venue-participation-db";
 import { partnerVenueHasApplicationSlotCap } from "@/lib/partner-venue-slot-cap";
+import { getPartnerVenueIdsSlaOverdueFromCatalog } from "@/lib/partner-venue-sla";
 
 /**
  * GET /api/partner-venues/public?search=&city=&page=1&limit=20
@@ -51,6 +52,10 @@ export async function GET(request: NextRequest) {
         },
       });
       if (!venue) {
+        return NextResponse.json({ error: "Площадка не найдена" }, { status: 404 });
+      }
+      const slaHiddenIds = await getPartnerVenueIdsSlaOverdueFromCatalog(prisma);
+      if (slaHiddenIds.includes(venue.id)) {
         return NextResponse.json({ error: "Площадка не найдена" }, { status: 404 });
       }
       const venueHydrated = await mergeParticipationModeOnVenue(prisma, venue);
@@ -111,6 +116,11 @@ export async function GET(request: NextRequest) {
         });
         where.AND = words.map((w) => orForWord(w));
       }
+    }
+
+    const slaHiddenIds = await getPartnerVenueIdsSlaOverdueFromCatalog(prisma);
+    if (slaHiddenIds.length > 0) {
+      where.id = { notIn: slaHiddenIds };
     }
 
     const [venues, total] = await Promise.all([

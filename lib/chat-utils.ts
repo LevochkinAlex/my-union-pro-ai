@@ -19,7 +19,7 @@ export function isDeletedUser(user: ChatUser | any | null | undefined): boolean 
 /**
  * Получить полное имя пользователя
  * В русской традиции: Фамилия Имя Отчество
- * Консистентно с остальным приложением (lib/documents.ts, MergeAccountsModal, ppo-head pages)
+ * Консистентно с остальным приложением (lib/documents.ts, страницы ppo-head)
  * Для удалённого пользователя возвращает сохранённое имя или "Удалённый пользователь".
  */
 export function getUserName(user: ChatUser | any | null | undefined): string {

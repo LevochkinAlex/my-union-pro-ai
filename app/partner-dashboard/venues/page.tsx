@@ -14,7 +14,6 @@ interface Venue {
 export default function PartnerVenuesPage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchVenues = useCallback(async () => {
     try {
@@ -33,24 +32,6 @@ export default function PartnerVenuesPage() {
   useEffect(() => {
     fetchVenues();
   }, [fetchVenues]);
-
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Удалить площадку «${name}»? Это действие необратимо.`)) return;
-
-    setDeleting(id);
-    try {
-      const res = await fetch(`/api/partner/venues/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setVenues((prev) => prev.filter((v) => v.id !== id));
-      } else {
-        alert("Не удалось удалить площадку");
-      }
-    } catch {
-      alert("Ошибка сети");
-    } finally {
-      setDeleting(null);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -142,21 +123,12 @@ export default function PartnerVenuesPage() {
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/partner-dashboard/venues/${venue.id}`}
-                          className="rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
-                        >
-                          Редактировать
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(venue.id, venue.name)}
-                          disabled={deleting === venue.id}
-                          className="rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
-                        >
-                          {deleting === venue.id ? "Удаление..." : "Удалить"}
-                        </button>
-                      </div>
+                      <Link
+                        href={`/partner-dashboard/venues/${venue.id}`}
+                        className="inline-flex rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
+                      >
+                        Редактировать
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -191,20 +163,13 @@ export default function PartnerVenuesPage() {
                     </code>
                   </p>
                 )}
-                <div className="flex gap-3 pt-1">
+                <div className="pt-1">
                   <Link
                     href={`/partner-dashboard/venues/${venue.id}`}
                     className="text-sm font-medium text-blue-600 dark:text-blue-400"
                   >
                     Редактировать
                   </Link>
-                  <button
-                    onClick={() => handleDelete(venue.id, venue.name)}
-                    disabled={deleting === venue.id}
-                    className="text-sm font-medium text-red-600 dark:text-red-400 disabled:opacity-50"
-                  >
-                    {deleting === venue.id ? "Удаление..." : "Удалить"}
-                  </button>
                 </div>
               </div>
             ))}

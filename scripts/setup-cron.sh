@@ -24,9 +24,11 @@ mkdir -p /var/log/myunion
 touch /var/log/myunion/sync-discounts.log
 touch /var/log/myunion/sync-user-discounts.log
 touch /var/log/myunion/partner-liquidation.log
+touch /var/log/myunion/partner-venue-sla.log
 chmod 644 /var/log/myunion/sync-discounts.log
 chmod 644 /var/log/myunion/sync-user-discounts.log
 chmod 644 /var/log/myunion/partner-liquidation.log
+chmod 644 /var/log/myunion/partner-venue-sla.log
 
 # Удаляем старые задания MyUnion: блок с маркерами + устаревшие строки без маркеров
 echo -e "${YELLOW}Очистка старых cron-заданий MyUnion...${NC}"
@@ -34,7 +36,7 @@ crontab -l 2>/dev/null | awk '
   /^# --- MYUNION_CRON start ---$/ { skip=1; next }
   /^# --- MYUNION_CRON end ---$/ { skip=0; next }
   !skip { print }
-' | grep -v "sync-discounts\|sync-user-discounts\|cron-sync\|run-partner-liquidation-cron\|check-partner-liquidation" | crontab - 2>/dev/null || true
+' | grep -v "sync-discounts\|sync-user-discounts\|cron-sync\|run-partner-liquidation-cron\|run-partner-venue-sla-cron\|check-partner-liquidation" | crontab - 2>/dev/null || true
 
 # Каталог приложения на сервере (deploy.sh передаёт APP_ROOT=VDS_PATH)
 APP_ROOT="${APP_ROOT:-/opt/my-union-pro}"
@@ -50,6 +52,7 @@ SHELL=/bin/bash
 CRON_TZ=UTC
 */15 * * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-discounts.ts >> /var/log/myunion/sync-discounts.log 2>&1
 0 1 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/sync-all-users-discounts.ts >> /var/log/myunion/sync-user-discounts.log 2>&1
+*/15 * * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/run-partner-venue-sla-cron.ts >> /var/log/myunion/partner-venue-sla.log 2>&1
 # ЕГРЮЛ / ликвидация партнёров: каждый день в 02:00 UTC (поля: мин час день месяц день_недели)
 0 2 * * * cd $APP_ROOT && $APP_ROOT/node_modules/.bin/dotenv -c -- /usr/bin/node $APP_ROOT/node_modules/tsx/dist/cli.mjs scripts/run-partner-liquidation-cron.ts >> /var/log/myunion/partner-liquidation.log 2>&1
 # --- MYUNION_CRON end ---
@@ -61,6 +64,7 @@ EOF
 echo -e "${GREEN}Cron-задания добавлены (CRON_TZ=UTC):${NC}"
 echo -e "  ${YELLOW}*/15 — каталог скидок (каждые 15 мин, полный импорт с BB)${NC}"
 echo -e "  ${YELLOW}0 1 — скидки пользователей (04:00 МСК)${NC}"
+echo -e "  ${YELLOW}*/15 — SLA заявок партнёров (напоминания, скрытие в каталоге)${NC}"
 echo -e "  ${YELLOW}0 2 — ЕГРЮЛ партнёров (02:00 UTC, 05:00 МСК)${NC}"
 
 # Проверяем cron
@@ -72,7 +76,9 @@ echo -e "Логи:"
 echo -e "  /var/log/myunion/sync-discounts.log"
 echo -e "  /var/log/myunion/sync-user-discounts.log"
 echo -e "  /var/log/myunion/partner-liquidation.log"
+echo -e "  /var/log/myunion/partner-venue-sla.log"
 echo -e "\nРучной запуск:"
 echo -e "  pnpm sync:discounts"
 echo -e "  pnpm sync:all-users-discounts"
 echo -e "  pnpm cron:partner-liquidation"
+echo -e "  pnpm cron:partner-venue-sla"

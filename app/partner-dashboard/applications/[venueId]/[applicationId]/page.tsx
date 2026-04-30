@@ -78,7 +78,9 @@ export default async function PartnerVenueApplicationStubPage({ params }: PagePr
     await prisma.$executeRaw(
       Prisma.sql`
         UPDATE "PartnerVenueApplication" a
-        SET status = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
+        SET status = 'IN_PROGRESS'::"PartnerVenueApplicationStatus",
+            "slaReminder24hSentAt" = NULL,
+            "slaReminder2hSentAt" = NULL
         FROM "PartnerVenue" v
         WHERE a.id = ${aid}
           AND a."partnerVenueId" = ${venueOwned.id}

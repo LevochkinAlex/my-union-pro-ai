@@ -687,6 +687,9 @@ model PartnerVenue {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
+  /// Партнёру отправлено письмо о блокировке в каталоге из‑за просроченных заявок NEW; сбрасывается кроном при снятии блокировки
+  slaOverdueBlockEmailSentAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -715,6 +718,11 @@ model PartnerVenueApplication {
 
   status    PartnerVenueApplicationStatus @default(NEW)
   createdAt DateTime                        @default(now())
+
+  /// Напоминание «осталось 24 ч до истечения 48 ч» (отправлено)
+  slaReminder24hSentAt DateTime?
+  /// Напоминание «осталось 2 ч до истечения 48 ч» (отправлено)
+  slaReminder2hSentAt DateTime?
 
   @@unique([partnerVenueId, applicantUserId])
   @@index([partnerVenueId])

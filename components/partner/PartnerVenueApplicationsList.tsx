@@ -93,42 +93,44 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
   }
 
   return (
-    <div className="max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-      <div className="hidden max-h-[min(75dvh,720px)] overflow-x-auto overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] sm:block">
-        <table className="w-full min-w-max divide-y divide-gray-200 dark:divide-gray-700">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="hidden w-full min-w-0 max-h-[min(75dvh,720px)] overflow-x-auto overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] sm:block">
+        <table className="w-full table-auto divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="sticky top-0 z-10 bg-gray-50 shadow-sm dark:bg-gray-800/95 dark:shadow-none">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="min-w-0 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 Название
               </th>
               {variant === "member" && (
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <th className="w-px whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Партнёр
                 </th>
               )}
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="w-px whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 Город
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="w-px whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 Промокод
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Заявок
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Последняя заявка
+              {variant === "partner" && (
+                <th className="w-px whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Заявок
+                </th>
+              )}
+              <th className="w-px whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                {variant === "member" ? "Дата заявки" : "Последняя заявка"}
               </th>
               {variant === "partner" && (
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <th className="w-px whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Статус
                 </th>
               )}
               {variant === "member" && (
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <th className="w-px whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Статус
                 </th>
               )}
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="w-px whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 Действия
               </th>
             </tr>
@@ -136,18 +138,18 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {venues.map((v) => (
               <tr key={v.id} className="hover-surface">
-                <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                <td className="min-w-0 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white break-words align-top">
                   {v.name}
                 </td>
                 {variant === "member" && (
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                  <td className="w-px whitespace-nowrap px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
                     {v.partnerName || "—"}
                   </td>
                 )}
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                <td className="w-px whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                   {v.city || "—"}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                <td className="w-px whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                   {v.promoCode ? (
                     <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono dark:bg-gray-700">
                       {v.promoCode}
@@ -156,14 +158,16 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
                     "—"
                   )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                  {v.applicationsCount}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                {variant === "partner" && (
+                  <td className="w-px whitespace-nowrap px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                    {v.applicationsCount}
+                  </td>
+                )}
+                <td className="w-px whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                   {formatDate(v.lastAppliedAt)}
                 </td>
                 {variant === "partner" && (
-                  <td className="whitespace-nowrap px-4 py-3 text-sm">
+                  <td className="w-px whitespace-nowrap px-4 py-3 text-center text-sm">
                     {v.isActive ? (
                       <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
                         Активна
@@ -176,7 +180,7 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
                   </td>
                 )}
                 {variant === "member" && (
-                  <td className="whitespace-nowrap px-4 py-3 text-sm">
+                  <td className="w-px whitespace-nowrap px-4 py-3 text-center text-sm">
                     {v.isActive ? (
                       <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
                         Активна
@@ -188,7 +192,7 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
                     )}
                   </td>
                 )}
-                <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
+                <td className="w-px whitespace-nowrap px-4 py-3 text-center text-sm">
                   <Link
                     href={detailHref(v.id)}
                     className={
@@ -234,7 +238,13 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
               </p>
             )}
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Заявок: {v.applicationsCount} · {formatDate(v.lastAppliedAt)}
+              {variant === "partner" ? (
+                <>
+                  Заявок: {v.applicationsCount} · {formatDate(v.lastAppliedAt)}
+                </>
+              ) : (
+                <>Дата заявки: {formatDate(v.lastAppliedAt)}</>
+              )}
             </p>
             <Link
               href={detailHref(v.id)}
