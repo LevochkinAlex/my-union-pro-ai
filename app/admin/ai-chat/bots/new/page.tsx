@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/button/Button";
 import Select from "@/components/ui/Select";
@@ -183,7 +184,7 @@ export default function NewBotPage() {
       <div className="mb-6 flex items-center gap-4">
         <Link
           href="/admin/ai-chat"
-          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+          className={backNavLinkButtonClass}
         >
           ← Назад к ботам
         </Link>

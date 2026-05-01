@@ -47,30 +47,6 @@ export function getPhoneDigits(phone: string | null | undefined): string {
 }
 
 /**
- * Форматирует телефон для отображения
- * +7 (XXX) XXX-XX-XX
- */
-export function formatPhoneDisplay(phone: string | null | undefined): string {
-  if (!phone) return "";
-  
-  const normalized = normalizePhone(phone);
-  if (!normalized) return phone;
-  
-  const digits = getPhoneDigits(normalized);
-  
-  if (digits.length === 11) {
-    const code = digits.slice(0, 1);
-    const area = digits.slice(1, 4);
-    const part1 = digits.slice(4, 7);
-    const part2 = digits.slice(7, 9);
-    const part3 = digits.slice(9, 11);
-    return `+${code} (${area}) ${part1}-${part2}-${part3}`;
-  }
-  
-  return phone;
-}
-
-/**
  * Проверяет, являются ли два номера одинаковыми (с учётом разных форматов)
  */
 export function isSamePhone(phone1: string | null | undefined, phone2: string | null | undefined): boolean {

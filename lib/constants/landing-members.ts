@@ -100,18 +100,6 @@ export const MEMBER_ROADMAP = [
   },
 ] as const;
 
-/** Примеры западных сервисов для оплаты */
-export const WESTERN_SERVICES = [
-  { name: "Netflix", description: "Стриминг фильмов и сериалов" },
-  { name: "Spotify", description: "Музыкальный стриминг" },
-  { name: "YouTube Premium", description: "YouTube без рекламы" },
-  { name: "ChatGPT Plus", description: "Продвинутый ИИ-ассистент" },
-  { name: "Midjourney", description: "Генерация изображений" },
-  { name: "Apple One", description: "Подписка Apple" },
-  { name: "PlayStation Plus", description: "Игровые сервисы" },
-  { name: "Adobe Creative Cloud", description: "Творческие инструменты" },
-] as const;
-
 /** Статистика платформы */
 export const PLATFORM_STATS = [
   { value: "10 000+", label: "Членов профсоюза" },

@@ -384,7 +384,7 @@ export default function PartnerLogoUpload({
               className="max-h-full max-w-full object-contain object-center"
             />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 md:w-full md:flex-row md:flex-nowrap md:items-stretch">
             <input
               type="file"
               accept="image/*"
@@ -395,7 +395,7 @@ export default function PartnerLogoUpload({
             />
             <label
               htmlFor={changeId}
-              className={`inline-flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 sm:flex-none ${
+              className={`inline-flex min-w-0 w-full cursor-pointer items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 md:flex-1 ${
                 disabled ? "pointer-events-none opacity-50" : ""
               }`}
             >
@@ -405,7 +405,7 @@ export default function PartnerLogoUpload({
               type="button"
               onClick={handleRemove}
               disabled={disabled || removing}
-              className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-gray-700 dark:text-red-400 dark:hover:bg-red-900/20"
+              className="min-w-0 w-full rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-gray-700 dark:text-red-400 dark:hover:bg-red-900/20 md:flex-1"
             >
               {removing ? "Удаление…" : "Удалить логотип"}
             </button>

@@ -9,6 +9,7 @@ import PartnerVenueServiceFields from "@/components/partner/PartnerVenueServiceF
 import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
 import { datetimeLocalValueToIso, isoToDatetimeLocalValue } from "@/lib/datetime-local-form";
 import { PARTNER_VENUE_PARTICIPATION_OPTIONS } from "@/lib/partner-venue-participation";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 
 interface VenueData {
   id: string;
@@ -222,11 +223,8 @@ export default function EditVenuePage() {
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
-        <Link
-          href="/partner-dashboard/venues"
-          className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <Link href="/partner-dashboard/venues" className={`${backNavLinkButtonClass} gap-2`}>
+          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Назад к площадкам
@@ -237,14 +235,12 @@ export default function EditVenuePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/partner-dashboard/venues"
-          className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
-        >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="flex flex-wrap items-center gap-3">
+        <Link href="/partner-dashboard/venues" className={`${backNavLinkButtonClass} gap-2`}>
+          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
+          Назад к площадкам
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Редактировать площадку
@@ -518,12 +514,27 @@ export default function EditVenuePage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="order-2 inline-flex w-full min-h-[2.5rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-red-600 bg-white/90 px-3 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:border-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-500 dark:bg-gray-800/90 dark:text-red-400 dark:hover:border-red-400 dark:hover:bg-red-900/45 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50 sm:order-1 sm:w-auto"
+          >
+            {deleting ? "Удаление..." : "Удалить площадку"}
+          </button>
+
+          <div className="order-1 grid min-w-0 w-full grid-cols-2 gap-3 sm:order-2 sm:ml-auto sm:flex sm:w-auto sm:shrink-0 sm:items-center">
+            <Link
+              href="/partner-dashboard/venues"
+              className="inline-flex min-h-[2.5rem] w-full min-w-0 items-center justify-center whitespace-nowrap rounded-md border border-gray-600 bg-white/90 px-3 py-2 text-center text-sm font-medium text-gray-600 shadow-sm transition hover:border-gray-700 hover:bg-gray-100 hover:text-gray-800 dark:border-gray-500 dark:bg-gray-800/90 dark:text-gray-400 dark:hover:border-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 sm:w-auto"
+            >
+              Отмена
+            </Link>
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex min-h-[2.5rem] min-w-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors disabled:opacity-50 sm:inline-flex sm:min-h-0"
             >
               {saving ? (
                 <>
@@ -534,22 +545,7 @@ export default function EditVenuePage() {
                 "Сохранить"
               )}
             </button>
-            <Link
-              href="/partner-dashboard/venues"
-              className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
-            >
-              Отмена
-            </Link>
           </div>
-
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
-          >
-            {deleting ? "Удаление..." : "Удалить площадку"}
-          </button>
         </div>
       </form>
     </div>

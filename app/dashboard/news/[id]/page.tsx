@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { getFileUrlWithCDN } from "@/lib/cdn";
 import NewsComments from "@/components/dashboard/news/NewsComments";
 import styles from "./NewsDetail.module.css";
@@ -178,10 +179,7 @@ export default function NewsDetailPage() {
       <div className="max-w-3xl mx-auto py-8 px-4">
         <div className="text-center py-12">
           <p className="text-gray-500 dark:text-gray-400 mb-4">{error || "Новость не найдена"}</p>
-          <Link
-            href="/dashboard/news"
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-          >
+          <Link href="/dashboard/news" className={backNavLinkButtonClass}>
             ← Вернуться к новостям
           </Link>
         </div>
@@ -198,11 +196,8 @@ export default function NewsDetailPage() {
     <div className="max-w-3xl mx-auto py-8 px-4">
       {/* Навигация */}
       <div className="mb-6">
-        <Link
-          href="/dashboard/news"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <Link href="/dashboard/news" className={`${backNavLinkButtonClass} gap-2`}>
+          <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Назад к новостям

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import Input from "@/components/ui/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
@@ -211,10 +212,7 @@ function ResetPasswordContent() {
 
           <div className="mt-5">
             <p className="text-sm font-normal text-center text-gray-700 dark:text-gray-400">
-              <Link
-                href="/login"
-                className="text-brand-500 hover:text-brand-600 dark:text-brand-400"
-              >
+              <Link href="/login" className={`${backNavLinkButtonClass} mx-auto inline-flex`}>
                 Вернуться к входу
               </Link>
             </p>

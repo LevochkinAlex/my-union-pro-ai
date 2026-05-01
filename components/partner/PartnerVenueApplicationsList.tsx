@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { dispatchPartnerApplicationsNewRefresh } from "@/components/dashboard/PartnerApplicationsNewBadge";
+import { adminTableActionOutlineClass } from "@/lib/admin-table-action-styles";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 export type ApplicationVenueRow = {
   id: string;
@@ -37,6 +39,7 @@ function formatDate(iso: string) {
 export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props) {
   const [venues, setVenues] = useState<ApplicationVenueRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const touchRow = useTouchStickyRowSelection();
 
   const load = useCallback(async () => {
     try {
@@ -93,7 +96,10 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
   }
 
   return (
-    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <div
+      ref={touchRow.containerRef}
+      className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+    >
       <div className="hidden w-full min-w-0 max-h-[min(75dvh,720px)] overflow-x-auto overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] sm:block">
         <table className="w-full table-auto divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="sticky top-0 z-10 bg-gray-50 shadow-sm dark:bg-gray-800/95 dark:shadow-none">
@@ -137,7 +143,11 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {venues.map((v) => (
-              <tr key={v.id} className="hover-surface">
+              <tr
+                key={v.id}
+                className={touchRow.getRowClassName(v.id)}
+                onClick={(e) => touchRow.handleRowClick(e, v.id)}
+              >
                 <td className="min-w-0 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white break-words align-top">
                   {v.name}
                 </td>
@@ -197,8 +207,8 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
                     href={detailHref(v.id)}
                     className={
                       variant === "partner"
-                        ? "inline-flex rounded-md border border-blue-600 bg-white px-2.5 py-1.5 text-sm font-medium text-blue-600 shadow-sm transition hover:bg-blue-50 dark:border-blue-500 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                        : "rounded-md px-2.5 py-1.5 font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
+                        ? adminTableActionOutlineClass
+                        : "rounded-md px-2.5 py-1.5 font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                     }
                   >
                     {variant === "partner" ? "Просмотр" : "Открыть"}
@@ -212,7 +222,11 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
 
       <div className="max-h-[min(75dvh,720px)] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] sm:hidden divide-y divide-gray-200 dark:divide-gray-700">
         {venues.map((v) => (
-          <div key={v.id} className="space-y-2 p-4">
+          <div
+            key={v.id}
+            className={touchRow.getRowClassName(v.id, "space-y-2 p-4")}
+            onClick={(e) => touchRow.handleRowClick(e, v.id)}
+          >
             <div className="flex items-center justify-between gap-2">
               <p className="font-medium text-gray-900 dark:text-white">{v.name}</p>
               {v.isActive ? (
@@ -250,7 +264,7 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
               href={detailHref(v.id)}
               className={
                 variant === "partner"
-                  ? "inline-flex rounded-md border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-600 shadow-sm dark:border-blue-500 dark:bg-gray-800 dark:text-blue-400"
+                  ? adminTableActionOutlineClass
                   : "inline-block text-sm font-medium text-blue-600 dark:text-blue-400"
               }
             >

@@ -12,6 +12,7 @@ import {
   mergeParticipationModesOnVenues,
   setPartnerVenueParticipationModeRaw,
 } from "@/lib/partner-venue-participation-db";
+import { partnerVenuePartnerApiSelect } from "@/lib/partner-venue-partner-api-select";
 
 type CreateBody = {
   name?: unknown;
@@ -65,6 +66,7 @@ export async function GET() {
       prisma.partnerVenue.findMany({
         where: { partnerId },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+        select: partnerVenuePartnerApiSelect,
       })
     );
     const hydrated = await withPrismaRetry(() =>

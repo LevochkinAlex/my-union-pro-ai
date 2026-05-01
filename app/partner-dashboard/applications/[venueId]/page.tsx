@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { dispatchPartnerApplicationsNewRefresh } from "@/components/dashboard/PartnerApplicationsNewBadge";
 import PartnerVenueApplicationStatusBadge from "@/components/partner/PartnerVenueApplicationStatusBadge";
+import { adminTableActionOutlineClass } from "@/lib/admin-table-action-styles";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 type ApplicantUser = {
   id: string;
@@ -41,9 +44,6 @@ function formatDate(iso: string) {
   }
 }
 
-const viewApplicantButtonClass =
-  "inline-flex rounded-md border border-blue-600 bg-white px-2.5 py-1.5 text-sm font-medium text-blue-600 shadow-sm transition hover:bg-blue-50 dark:border-blue-500 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/20";
-
 export default function PartnerVenueApplicationsDetailPage() {
   const params = useParams();
   const venueId = params.venueId as string;
@@ -53,6 +53,7 @@ export default function PartnerVenueApplicationsDetailPage() {
   const [applicants, setApplicants] = useState<ApplicantRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const touchRow = useTouchStickyRowSelection();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,7 +96,7 @@ export default function PartnerVenueApplicationsDetailPage() {
       <div>
         <Link
           href="/partner-dashboard/applications"
-          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+          className={backNavLinkButtonClass}
         >
           ← К списку заявок
         </Link>
@@ -119,7 +120,10 @@ export default function PartnerVenueApplicationsDetailPage() {
           <p className="text-gray-500 dark:text-gray-400">По этой площадке пока нет заявок.</p>
         </div>
       ) : (
-        <div className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div
+          ref={touchRow.containerRef}
+          className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+        >
           <div className="hidden w-full min-w-0 max-h-[min(75dvh,720px)] overflow-x-auto overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] sm:block">
             <table className="w-full table-auto divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="sticky top-0 z-10 bg-gray-50 shadow-sm dark:bg-gray-800/95 dark:shadow-none">
@@ -148,7 +152,8 @@ export default function PartnerVenueApplicationsDetailPage() {
                 {applicants.map((row) => (
                   <tr
                     key={row.applicationId}
-                    className="hover-surface"
+                    className={touchRow.getRowClassName(row.applicationId)}
+                    onClick={(e) => touchRow.handleRowClick(e, row.applicationId)}
                   >
                     <td className="min-w-0 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white break-words align-top">
                       {formatName(row.user)}
@@ -168,7 +173,7 @@ export default function PartnerVenueApplicationsDetailPage() {
                     <td className="w-px whitespace-nowrap px-4 py-3 text-center text-sm">
                       <Link
                         href={`/partner-dashboard/applications/${encodeURIComponent(venueId)}/${encodeURIComponent(row.applicationId)}`}
-                        className={viewApplicantButtonClass}
+                        className={adminTableActionOutlineClass}
                       >
                         Просмотр
                       </Link>
@@ -181,7 +186,11 @@ export default function PartnerVenueApplicationsDetailPage() {
 
           <div className="max-h-[min(75dvh,720px)] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] divide-y divide-gray-200 sm:hidden dark:divide-gray-700">
             {applicants.map((row) => (
-              <div key={row.applicationId} className="space-y-2 p-4">
+              <div
+                key={row.applicationId}
+                className={touchRow.getRowClassName(row.applicationId, "space-y-2 p-4")}
+                onClick={(e) => touchRow.handleRowClick(e, row.applicationId)}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-gray-900 dark:text-white">{formatName(row.user)}</p>
                   <PartnerVenueApplicationStatusBadge status={row.status} />
@@ -195,7 +204,7 @@ export default function PartnerVenueApplicationsDetailPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(row.appliedAt)}</p>
                 <Link
                   href={`/partner-dashboard/applications/${encodeURIComponent(venueId)}/${encodeURIComponent(row.applicationId)}`}
-                  className={viewApplicantButtonClass}
+                  className={adminTableActionOutlineClass}
                 >
                   Просмотр
                 </Link>

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { OrganizationType } from "@prisma/client";
 import { Building2, Users, BarChart3, Mail, TrendingUp, AlertTriangle, CheckCircle, MessageCircle } from "lucide-react";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 interface OrgStats {
   level: "PPO" | "MPO" | "RPO";
@@ -62,6 +63,7 @@ export default function OrgHeadDashboard() {
   const [stats, setStats] = useState<OrgStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const touchRow = useTouchStickyRowSelection();
 
   useEffect(() => {
     const loadStats = async () => {
@@ -241,7 +243,7 @@ export default function OrgHeadDashboard() {
             Все организации →
           </Link>
         </div>
-        <div className="overflow-x-auto">
+        <div ref={touchRow.containerRef} className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead>
               <tr>
@@ -264,7 +266,11 @@ export default function OrgHeadDashboard() {
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
               {stats.organizations.slice(0, 10).map((org) => (
-                <tr key={org.id} className="hover-surface">
+                <tr
+                  key={org.id}
+                  className={touchRow.getRowClassName(org.id)}
+                  onClick={(e) => touchRow.handleRowClick(e, org.id)}
+                >
                   <td className="whitespace-nowrap px-4 py-3">
                     <p className="font-medium text-gray-900 dark:text-white">{org.name}</p>
                   </td>

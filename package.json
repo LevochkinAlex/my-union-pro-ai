@@ -3,6 +3,13 @@
   "version": "1.10.7-beta.0",
   "private": true,
   "packageManager": "pnpm@9.15.9",
+  "browserslist": [
+    "chrome >= 111",
+    "edge >= 111",
+    "firefox >= 111",
+    "safari >= 15",
+    "ios_saf >= 15"
+  ],
   "scripts": {
     "postinstall": "prisma generate",
     "fix-appeal-messages": "tsx scripts/fix-appeal-messages.ts",
@@ -17,6 +24,7 @@
     "dev:free": "npm run dev",
     "dev:clean": "npm run kill:3004 && rm -rf .next && dotenv -e .env.local -- next dev -p 3004 --webpack",
     "dev:turbo": "npm run kill:3004 && dotenv -e .env.local -- next dev -p 3004 --turbopack",
+    "dev:lan": "npm run kill:3004 && dotenv -e .env.local -- next dev -p 3004 --hostname 0.0.0.0 --webpack",
     "prebuild": "pnpm prisma:generate",
     "build": "dotenv -e .env.local -- next build",
     "start": "dotenv -e .env.local -- next start -p 3004",

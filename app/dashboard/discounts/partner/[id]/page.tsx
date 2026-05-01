@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { getPartnerVenueServiceLabels } from "@/lib/partner-venue-service-taxonomy";
 import { partnerVenueParticipationLabel } from "@/lib/partner-venue-participation";
 import { partnerVenueHasApplicationSlotCap } from "@/lib/partner-venue-slot-cap";
-import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 
 interface PartnerVenueDetail {
   id: string;
@@ -45,7 +47,6 @@ interface PartnerVenueDetail {
 
 export default function PartnerVenueDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const venueId = params.id as string;
 
   const [venue, setVenue] = useState<PartnerVenueDetail | null>(null);
@@ -155,12 +156,9 @@ export default function PartnerVenueDetailPage() {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Площадка не найдена
           </h2>
-          <button
-            onClick={() => router.push("/dashboard/discounts")}
-            className="mt-4 text-blue-600 hover:underline"
-          >
+          <Link href="/dashboard/discounts" className={`${backNavLinkButtonClass} mt-4 inline-flex`}>
             ← Вернуться к скидкам
-          </button>
+          </Link>
         </div>
       </div>
     );
@@ -201,11 +199,8 @@ export default function PartnerVenueDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20 dark:bg-gray-900">
       <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6 sm:py-8">
-        <button
-          onClick={() => router.back()}
-          className="mb-6 flex items-center gap-2 text-gray-600 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-        >
-          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <Link href="/dashboard/discounts" className={`${backNavLinkButtonClass} mb-6 gap-2`}>
+          <svg className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
             <path
               fillRule="evenodd"
               d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
@@ -213,7 +208,7 @@ export default function PartnerVenueDetailPage() {
             />
           </svg>
           Назад к скидкам
-        </button>
+        </Link>
 
         <div className="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-gray-800">
           {venue.bannerUrl && !bannerLoadFailed ? (

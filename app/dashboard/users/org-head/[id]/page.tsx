@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { useSession } from "next-auth/react";
 import { Check, Download, Trash2, X } from "lucide-react";
 import {
@@ -206,7 +207,7 @@ export default function OrgHeadUserDetailPage() {
     return (
       <div className="min-w-0 w-full space-y-6 py-4">
         <p className="text-red-500">{error || "Пользователь не найден"}</p>
-        <Link href="/dashboard/users/org-head" className="text-blue-600 hover:underline">
+        <Link href="/dashboard/users/org-head" className={backNavLinkButtonClass}>
           ← К списку пользователей
         </Link>
       </div>
@@ -274,37 +275,35 @@ export default function OrgHeadUserDetailPage() {
 
   return (
     <div className="min-w-0 w-full space-y-6">
-      <div className="mb-6 flex items-center gap-4">
-        <Link
-          href="/dashboard/users/org-head"
-          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
-        >
+      <div className="mb-6 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+        <Link href="/dashboard/users/org-head" className={`${backNavLinkButtonClass} w-full justify-center sm:w-auto`}>
           ← Назад к списку пользователей
         </Link>
       </div>
 
       {/* Header */}
-      <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-        <div className="flex items-start gap-6">
-          <div className="flex-shrink-0">
-            {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-24 w-24 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                <span className="text-3xl font-bold text-gray-500 dark:text-gray-400">
-                  {user.firstName?.[0]}
-                  {user.lastName?.[0]}
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {user.lastName} {user.firstName} {user.middleName}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">{user.email}</p>
-            <p className="text-gray-600 dark:text-gray-400">{user.phone}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+      <div className="rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800">
+        <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:gap-6">
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-3 min-[420px]:flex-row min-[420px]:items-start min-[420px]:gap-4">
+            <div className="shrink-0">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover sm:h-24 sm:w-24" />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-200 sm:h-24 sm:w-24 dark:bg-gray-700">
+                  <span className="text-2xl font-bold text-gray-500 sm:text-3xl dark:text-gray-400">
+                    {user.firstName?.[0]}
+                    {user.lastName?.[0]}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="w-full min-w-0 flex-1 text-center min-[420px]:text-left">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
+                {user.lastName} {user.firstName} {user.middleName}
+              </h1>
+              <p className="break-words text-gray-600 dark:text-gray-400">{user.email}</p>
+              <p className="text-gray-600 dark:text-gray-400">{user.phone}</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-2 min-[420px]:justify-start">
               <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                 {getUserRoleLabel(user.role, user.isPPOHead)}
               </span>
@@ -330,15 +329,17 @@ export default function OrgHeadUserDetailPage() {
                   Карточка: {user.unionCardNumber}
                 </span>
               )}
+              </div>
             </div>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex w-full min-w-0 shrink-0 flex-col gap-2 md:w-auto">
             {canValidate && (
               <>
                 <button
+                  type="button"
                   onClick={() => handleValidate("APPROVED")}
                   disabled={validating}
-                  className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+                  className="inline-flex min-h-[2.5rem] w-full items-center justify-center whitespace-nowrap rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-700 disabled:opacity-50 md:w-auto"
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <Check className="h-4 w-4" />
@@ -346,9 +347,10 @@ export default function OrgHeadUserDetailPage() {
                   </span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleValidate("REJECTED")}
                   disabled={validating}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+                  className="inline-flex min-h-[2.5rem] w-full items-center justify-center whitespace-nowrap rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50 md:w-auto"
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <X className="h-4 w-4" />
@@ -359,9 +361,10 @@ export default function OrgHeadUserDetailPage() {
             )}
             {session?.user?.id !== user.id && (
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={deleting}
-                className="rounded-lg border border-red-300 bg-white px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                className="inline-flex min-h-[2.5rem] w-full items-center justify-center whitespace-nowrap rounded-md border border-red-300 bg-white/90 px-3 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50 disabled:opacity-50 md:w-auto dark:border-red-700 dark:bg-gray-800/90 dark:text-red-400 dark:hover:bg-red-900/20"
               >
                 {deleting ? (
                   "Удаление..."

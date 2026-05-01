@@ -16,6 +16,8 @@ import {
   Spinner,
   Tabs,
 } from "@/components/ui";
+import { cn } from "@/lib/utils";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 interface Document {
   id: string;
@@ -264,7 +266,8 @@ export default function MembersPage() {
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
-  
+  const touchRow = useTouchStickyRowSelection();
+
   // Sorting state
   const [sortField, setSortField] = useState<"name" | "date" | "email">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -824,7 +827,7 @@ export default function MembersPage() {
         />
       ) : (
         <Card noPadding>
-          <div className="overflow-x-auto">
+          <div ref={touchRow.containerRef} className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/50">
                 <tr>
@@ -880,11 +883,13 @@ export default function MembersPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {sortedMembers.map((member) => (
-                  <tr 
-                    key={member.id} 
-                    className={`hover-surface ${
-                      selectedIds.has(member.id) ? "bg-blue-50 dark:bg-blue-900/20" : ""
-                    }`}
+                  <tr
+                    key={member.id}
+                    className={cn(
+                      touchRow.getRowClassName(member.id),
+                      selectedIds.has(member.id) && "bg-blue-50 dark:bg-blue-900/20"
+                    )}
+                    onClick={(e) => touchRow.handleRowClick(e, member.id)}
                   >
                     <td className="px-4 py-3">
                       <input

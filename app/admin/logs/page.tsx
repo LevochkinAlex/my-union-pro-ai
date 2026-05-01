@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import { AlertTriangle, Info, Siren, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 interface SystemLog {
   id: string;
@@ -37,6 +39,7 @@ export default function AdminLogsPage() {
   const [filter, setFilter] = useState<"all" | "ERROR" | "WARNING" | "CRITICAL">("all");
   const [searchSource, setSearchSource] = useState("");
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const touchRow = useTouchStickyRowSelection();
 
   useEffect(() => {
     fetchLogs();
@@ -229,7 +232,7 @@ export default function AdminLogsPage() {
             <div className="text-gray-600 dark:text-gray-400">Логи не найдены</div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div ref={touchRow.containerRef} className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                 <tr>
@@ -256,7 +259,13 @@ export default function AdminLogsPage() {
               <tbody>
                 {logs.map((log) => (
                   <tbody key={log.id}>
-                    <tr className="border-b border-gray-100 dark:border-gray-700 hover-surface">
+                    <tr
+                      className={cn(
+                        "border-b border-gray-100 dark:border-gray-700",
+                        touchRow.getRowClassName(log.id)
+                      )}
+                      onClick={(e) => touchRow.handleRowClick(e, log.id)}
+                    >
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getLevelColor(log.level)}`}>
                           <span className="inline-flex items-center gap-1">

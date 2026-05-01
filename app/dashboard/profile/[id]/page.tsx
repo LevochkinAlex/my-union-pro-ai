@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import PostFeed from "@/components/posts/PostFeed";
 import CreatePost from "@/components/posts/CreatePost";
 
@@ -167,10 +168,7 @@ export default function PublicProfilePage() {
             {error || "Профиль не найден"}
           </p>
         </div>
-        <Link
-          href="/dashboard/news"
-          className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-        >
+        <Link href="/dashboard/news" className={`${backNavLinkButtonClass} mt-4`}>
           ← Вернуться к новостям
         </Link>
       </div>
@@ -180,11 +178,8 @@ export default function PublicProfilePage() {
   return (
     <div className="max-w-2xl lg:max-w-3xl mx-auto px-4 py-6">
       {/* Кнопка назад */}
-      <Link
-        href="/dashboard/users"
-        className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 transition mb-4"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <Link href="/dashboard/users" className={`${backNavLinkButtonClass} mb-4 gap-2`}>
+        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
         Назад к участникам

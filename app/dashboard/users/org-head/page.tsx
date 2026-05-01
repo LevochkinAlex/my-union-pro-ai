@@ -8,6 +8,8 @@ import {
   getMembershipStatusLabel,
   getMembershipStatusBadgeClass,
 } from "@/lib/status-labels";
+import { cn } from "@/lib/utils";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 const PAGE_SIZE = 20;
 type TabType = "all" | "validation" | "active";
@@ -49,6 +51,7 @@ export default function OrgHeadUsersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const touchRow = useTouchStickyRowSelection();
 
   const loadUsers = useCallback(async (pageNum: number, searchQuery: string, tabValue: TabType) => {
     setLoading(true);
@@ -244,7 +247,7 @@ export default function OrgHeadUsersPage() {
 
       <form onSubmit={handleSearchSubmit}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative min-w-0 w-full max-w-full sm:min-w-[200px] sm:flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="search"
@@ -281,7 +284,10 @@ export default function OrgHeadUsersPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+      <div
+        ref={touchRow.containerRef}
+        className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+      >
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
@@ -302,7 +308,9 @@ export default function OrgHeadUsersPage() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Email</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Имя</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Роль</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Статус</th>
+                <th className="min-w-[9rem] max-w-[18rem] px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                  Статус
+                </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Организация</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Место работы</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Дата регистрации</th>
@@ -321,11 +329,11 @@ export default function OrgHeadUsersPage() {
                 return (
                   <tr
                     key={user.id}
-                    className={`hover-surface ${
-                      needsAttention
-                        ? "border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
-                        : ""
-                    }`}
+                    className={cn(
+                      touchRow.getRowClassName(user.id),
+                      needsAttention && "border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
+                    )}
+                    onClick={(e) => touchRow.handleRowClick(e, user.id)}
                   >
                     <td className="px-4 py-4">
                       {canSelect && (
@@ -347,14 +355,36 @@ export default function OrgHeadUsersPage() {
                         {getUserRoleLabel(user.role)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getMembershipStatusBadgeClass(
-                          user.membershipStatus
-                        )}`}
-                      >
-                        {getMembershipStatusLabel(user.membershipStatus)}
-                      </span>
+                    <td className="min-w-[9rem] max-w-[18rem] align-middle px-6 py-4 text-sm">
+                      <div className="flex justify-center">
+                        {user.membershipStatus === "PROFILE_INCOMPLETE" ? (
+                          <span
+                            className={`inline-flex flex-col items-center justify-center gap-0.5 rounded-full px-3 py-1.5 text-center text-xs font-semibold leading-none ${getMembershipStatusBadgeClass(
+                              user.membershipStatus
+                            )}`}
+                          >
+                            <span>Профиль</span>
+                            <span className="whitespace-nowrap">не заполнен</span>
+                          </span>
+                        ) : user.membershipStatus === "DOCUMENTS_PENDING" ? (
+                          <span
+                            className={`inline-flex flex-col items-center justify-center gap-0.5 rounded-full px-3 py-1.5 text-center text-xs font-semibold leading-none ${getMembershipStatusBadgeClass(
+                              user.membershipStatus
+                            )}`}
+                          >
+                            <span>Документы</span>
+                            <span className="whitespace-nowrap">на проверке</span>
+                          </span>
+                        ) : (
+                          <span
+                            className={`w-fit max-w-full line-clamp-2 break-words rounded-full px-3 py-1 text-center text-xs font-semibold leading-snug ${getMembershipStatusBadgeClass(
+                              user.membershipStatus
+                            )}`}
+                          >
+                            {getMembershipStatusLabel(user.membershipStatus)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                       {user.effectiveOrganization?.name || "—"}

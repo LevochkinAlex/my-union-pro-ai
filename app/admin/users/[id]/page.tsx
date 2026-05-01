@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { useSession } from "next-auth/react";
 import { Check, Download, Trash2, X } from "lucide-react";
 import {
@@ -423,129 +424,135 @@ export default function AdminUserDetailsPage() {
 
   return (
     <div className="space-y-6 min-w-0 w-full">
-      <div className="mb-6 flex items-center gap-4">
-        <Link href="/admin/users" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
+      <div className="mb-6 flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <Link href="/admin/users" className={`${backNavLinkButtonClass} w-full justify-center sm:w-auto`}>
           ← Назад к списку пользователей
         </Link>
+        {session?.user?.id !== user.id && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="inline-flex min-h-[2.5rem] w-full shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-red-300 bg-white/90 px-3 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50 disabled:opacity-50 sm:ml-auto sm:w-auto dark:border-red-700 dark:bg-gray-800/90 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            {deleting ? (
+              "Удаление..."
+            ) : (
+              <span className="inline-flex items-center gap-1.5">
+                <Trash2 className="h-4 w-4" />
+                Удалить
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Header с аватаром и действиями */}
-      <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-        <div className="flex items-start gap-6">
-          {/* Аватар */}
-          <div className="flex-shrink-0">
-            {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-24 w-24 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                <span className="text-3xl font-bold text-gray-500 dark:text-gray-400">
-                  {user.firstName?.[0]}{user.lastName?.[0]}
+      <div className="rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800">
+        <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:gap-6">
+          {/* Аватар + ФИО: до 419px ширины — аватар над именем; от 420px — в ряд */}
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-3 min-[420px]:flex-row min-[420px]:items-start min-[420px]:gap-4">
+            <div className="shrink-0">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover sm:h-24 sm:w-24" />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-200 sm:h-24 sm:w-24 dark:bg-gray-700">
+                  <span className="text-2xl font-bold text-gray-500 sm:text-3xl dark:text-gray-400">
+                    {user.firstName?.[0]}
+                    {user.lastName?.[0]}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="w-full min-w-0 flex-1 text-center min-[420px]:text-left">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
+                {user.lastName} {user.firstName} {user.middleName}
+              </h1>
+              <p className="break-words text-gray-600 dark:text-gray-400">{user.email}</p>
+              <p className="text-gray-600 dark:text-gray-400">{user.phone}</p>
+
+              <div className="mt-3 flex flex-wrap justify-center gap-2 min-[420px]:justify-start">
+                <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                  {getUserRoleLabel(user.role, user.isPPOHead)}
                 </span>
+                <span
+                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getMembershipStatusBadgeClass(user.membershipStatus)}`}
+                >
+                  {getMembershipStatusLabel(user.membershipStatus)}
+                </span>
+                {user.isPPOHead && (
+                  <span className="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    Председатель ППО
+                  </span>
+                )}
+                {user.isRPOHead && user.rpoHeadOrganization && (
+                  <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                    Председатель РПО
+                  </span>
+                )}
+                {user.unionCardNumber && (
+                  <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                    Карточка: {user.unionCardNumber}
+                  </span>
+                )}
               </div>
-            )}
-          </div>
-          
-          {/* Info */}
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {user.lastName} {user.firstName} {user.middleName}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">{user.email}</p>
-            <p className="text-gray-600 dark:text-gray-400">{user.phone}</p>
-            
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {getUserRoleLabel(user.role, user.isPPOHead)}
-              </span>
-              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getMembershipStatusBadgeClass(user.membershipStatus)}`}>
-                {getMembershipStatusLabel(user.membershipStatus)}
-              </span>
-              {user.isPPOHead && (
-                <span className="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                  Председатель ППО
-                </span>
-              )}
-              {user.isRPOHead && user.rpoHeadOrganization && (
-                <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                  Председатель РПО
-                </span>
-              )}
-              {user.unionCardNumber && (
-                <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                  Карточка: {user.unionCardNumber}
-                </span>
-              )}
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col gap-2">
-            {canValidate && (
-              <>
-                <button
-                  onClick={() => handleValidate("APPROVED")}
-                  disabled={validating}
-                  className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Check className="h-4 w-4" />
-                    Одобрить
-                  </span>
-                </button>
-                <button
-                  onClick={() => handleValidate("REJECTED")}
-                  disabled={validating}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <X className="h-4 w-4" />
-                    Отклонить
-                  </span>
-                </button>
-              </>
-            )}
-            {/* Кнопка удаления - только если это не текущий пользователь */}
-            {session?.user?.id !== user.id && (
+          {/* Actions: модерация заявки — на мобильных полная ширина, не обрезается справа */}
+          {canValidate && (
+            <div className="flex w-full min-w-0 shrink-0 flex-col gap-2 md:w-auto">
               <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="rounded-lg border border-red-300 bg-white px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                type="button"
+                onClick={() => handleValidate("APPROVED")}
+                disabled={validating}
+                className="inline-flex min-h-[2.5rem] w-full items-center justify-center whitespace-nowrap rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-700 disabled:opacity-50 md:w-auto"
               >
-                {deleting ? "Удаление..." : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Trash2 className="h-4 w-4" />
-                    Удалить
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1.5">
+                  <Check className="h-4 w-4" />
+                  Одобрить
+                </span>
               </button>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => handleValidate("REJECTED")}
+                disabled={validating}
+                className="inline-flex min-h-[2.5rem] w-full items-center justify-center whitespace-nowrap rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50 md:w-auto"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <X className="h-4 w-4" />
+                  Отклонить
+                </span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Блок назначения председателем РПО (суперадмин) */}
         <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-700">
           <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Председатель РПО</h3>
           {user.isRPOHead && user.rpoHeadOrganization ? (
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+              <p className="min-w-0 break-words text-sm text-gray-600 dark:text-gray-400">
                 {user.rpoHeadOrganization.name}
               </p>
               <button
+                type="button"
                 onClick={handleUnassignRpo}
                 disabled={assignRpoLoading}
-                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:bg-gray-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                className="w-full shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 disabled:opacity-50 sm:w-auto dark:border-amber-700 dark:bg-gray-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
               >
                 {assignRpoLoading ? "..." : "Снять с РПО"}
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[280px]">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="min-w-0 w-full sm:w-auto sm:min-w-[min(100%,17.5rem)] sm:max-w-md">
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Организация РПО</label>
                 <select
                   value={selectedRpoOrgId}
                   onChange={(e) => setSelectedRpoOrgId(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                  className="w-full max-w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   aria-label="Выберите организацию РПО"
                 >
                   <option value="">— Выберите РПО —</option>
@@ -554,19 +561,20 @@ export default function AdminUserDetailsPage() {
                   ))}
                 </select>
               </div>
-              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <label className="flex w-full min-w-0 cursor-pointer items-center gap-2 text-sm text-gray-600 sm:w-auto dark:text-gray-400">
                 <input
                   type="checkbox"
                   checked={approveWithRpo}
                   onChange={(e) => setApproveWithRpo(e.target.checked)}
-                  className="rounded border-gray-300"
+                  className="shrink-0 rounded border-gray-300"
                 />
-                Одобрить членство
+                <span className="min-w-0">Одобрить членство</span>
               </label>
               <button
+                type="button"
                 onClick={handleAssignRpo}
                 disabled={assignRpoLoading || !selectedRpoOrgId}
-                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 sm:w-auto sm:shrink-0"
               >
                 {assignRpoLoading ? "Назначение..." : "Назначить председателем РПО"}
               </button>

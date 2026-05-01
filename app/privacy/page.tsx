@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { readFile } from "fs/promises";
 import path from "path";
 import mammoth from "mammoth";
@@ -45,10 +46,7 @@ export default async function PrivacyPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
-        <Link
-          href="/"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white mb-8"
-        >
+        <Link href="/" className={`${backNavLinkButtonClass} mb-8`}>
           ← На главную
         </Link>
 
@@ -117,10 +115,7 @@ export default async function PrivacyPage() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
-          <Link
-            href="/"
-            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
-          >
+          <Link href="/" className={backNavLinkButtonClass}>
             ← На главную
           </Link>
         </div>

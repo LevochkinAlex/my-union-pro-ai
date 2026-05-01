@@ -227,6 +227,11 @@
   .hover-surface {
     @apply transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/30;
   }
+
+  /** Подсветка строки после клика (как у hover-surface), держится до следующего клика. */
+  .touch-row-selected {
+    @apply bg-gray-50 dark:bg-gray-700/30;
+  }
 }
 
 @layer base {

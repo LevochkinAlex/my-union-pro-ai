@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { notFound, redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -106,7 +107,7 @@ export default async function PartnerVenueApplicationStubPage({ params }: PagePr
       <div>
         <Link
           href={`/partner-dashboard/applications/${encodeURIComponent(vid)}`}
-          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+          className={backNavLinkButtonClass}
         >
           ← К списку заявок по площадке
         </Link>

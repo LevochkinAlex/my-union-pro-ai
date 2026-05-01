@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 interface InvoiceItem {
   id: string;
@@ -24,6 +25,7 @@ export default function AdminInvoicesPage() {
   const [offerFilter, setOfferFilter] = useState("");
   const [skip, setSkip] = useState(0);
   const limit = 30;
+  const touchRow = useTouchStickyRowSelection();
 
   const load = async () => {
     setLoading(true);
@@ -133,7 +135,10 @@ export default function AdminInvoicesPage() {
           {errorMessage}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+        <div
+          ref={touchRow.containerRef}
+          className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+        >
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
@@ -172,7 +177,11 @@ export default function AdminInvoicesPage() {
                 </tr>
               ) : (
                 invoices.map((inv) => (
-                  <tr key={inv.id} className="hover-surface">
+                  <tr
+                    key={inv.id}
+                    className={touchRow.getRowClassName(inv.id)}
+                    onClick={(e) => touchRow.handleRowClick(e, inv.id)}
+                  >
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                       {inv.offerNumber}
                     </td>

@@ -18,6 +18,8 @@ import {
   getPartnerModerationStatusLabel,
   partnerModerationStatusBadgeClass,
 } from "@/lib/partner-moderation-status";
+import { adminTableActionOutlineClass } from "@/lib/admin-table-action-styles";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 const PAGE_SIZE = 20;
 
@@ -121,6 +123,7 @@ export default function PartnersPageClient({
   /** Явный lazy-init, чтобы состояние всегда было объектом формы (не ссылкой на factory). */
   const [formData, setFormData] = useState<PartnerForm>(() => emptyForm());
   const [saving, setSaving] = useState(false);
+  const touchRow = useTouchStickyRowSelection();
 
   /** Модалка «Создание»: как название — пока не заполнены обязательные поля, «Сохранить» неактивна */
   const createFormCanSave = useMemo(() => {
@@ -292,13 +295,13 @@ export default function PartnersPageClient({
           onClick={handleCreate}
           className="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-blue-700"
         >
-          + Создать партнёра
+          Добавить партнера
         </button>
       </div>
 
       <form onSubmit={handleSearchSubmit}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1">
+          <div className="relative min-w-0 w-full max-w-full sm:min-w-[200px] sm:flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="search"
@@ -335,7 +338,10 @@ export default function PartnersPageClient({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div
+        ref={touchRow.containerRef}
+        className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+      >
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
@@ -381,7 +387,11 @@ export default function PartnersPageClient({
                   p.contactEmail?.trim() ||
                   "";
                 return (
-                  <tr key={p.id} className="hover-surface">
+                  <tr
+                    key={p.id}
+                    className={touchRow.getRowClassName(p.id)}
+                    onClick={(e) => touchRow.handleRowClick(e, p.id)}
+                  >
                     <td className="min-w-0 px-6 py-4 text-center text-sm font-medium text-gray-900 dark:text-white">
                       <span className="inline-block max-w-full break-words">{p.name ?? "—"}</span>
                     </td>
@@ -414,7 +424,7 @@ export default function PartnersPageClient({
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Link
                           href={`/admin/partners/${p.id}`}
-                          className="inline-flex flex-nowrap items-center justify-center whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30 dark:hover:text-blue-300"
+                          className={adminTableActionOutlineClass}
                         >
                           Редактировать
                         </Link>
@@ -422,7 +432,6 @@ export default function PartnersPageClient({
                           <ImpersonateButton
                             userId={impersonateId}
                             userEmail={impersonateEmail || undefined}
-                            label="Войти как"
                             disabled={(p.moderationStatus ?? "") === "BLOCKED"}
                           />
                         ) : (

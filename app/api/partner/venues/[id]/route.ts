@@ -13,6 +13,7 @@ import {
   mergeParticipationModeOnVenue,
   setPartnerVenueParticipationModeRaw,
 } from "@/lib/partner-venue-participation-db";
+import { partnerVenuePartnerApiSelect } from "@/lib/partner-venue-partner-api-select";
 
 type PatchBody = {
   name?: unknown;
@@ -47,6 +48,7 @@ async function getVenueForPartner(venueId: string, partnerId: string) {
   return withPrismaRetry(async () => {
     const venue = await prisma.partnerVenue.findFirst({
       where: { id: venueId, partnerId },
+      select: partnerVenuePartnerApiSelect,
     });
     return mergeParticipationModeOnVenue(prisma, venue);
   });

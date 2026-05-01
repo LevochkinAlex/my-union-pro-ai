@@ -4,21 +4,26 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { UserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { adminTableImpersonateOutlineClass } from "@/lib/admin-table-action-styles";
 
 interface ImpersonateButtonProps {
   userId: string;
   userEmail?: string | null;
-  /** Подпись кнопки (по умолчанию «Войти») */
+  /** Подпись кнопки (по умолчанию «Войти как») */
   label?: string;
   /** Например, карточка партнёра в статусе «Заблокирован» — вход от имени запрещён */
   disabled?: boolean;
+  /** Дополнительные классы (например `w-full min-h-[2.5rem] px-3 py-2` на странице партнёра) */
+  className?: string;
 }
 
 export default function ImpersonateButton({
   userId,
   userEmail,
-  label = "Войти",
+  label = "Войти как",
   disabled = false,
+  className,
 }: ImpersonateButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -71,7 +76,11 @@ export default function ImpersonateButton({
       type="button"
       onClick={handleImpersonate}
       disabled={loading || disabled}
-      className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 hover:text-green-700 dark:text-green-400 dark:hover:bg-green-950/30 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      className={cn(
+        adminTableImpersonateOutlineClass,
+        "gap-1.5 disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
       title={
         disabled
           ? "Вход от имени недоступен (учётная запись или партнёр заблокированы)"

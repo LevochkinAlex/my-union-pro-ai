@@ -1,5 +1,8 @@
+"use client";
+
 import React from "react";
 import { cn } from "@/lib/utils";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 interface Column<T> {
   key: string;
@@ -35,8 +38,11 @@ export function DataTable<T>({
   card = true,
   stickyHeader = false,
 }: DataTableProps<T>) {
+  const touchRow = useTouchStickyRowSelection();
+
   return (
     <div
+      ref={touchRow.containerRef}
       className={cn(
         "overflow-hidden",
         card && "rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800",
@@ -63,13 +69,24 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-            {data.map((item, idx) => (
+            {data.map((item, idx) => {
+              const rowKey = keyExtractor(item, idx);
+              return (
               <tr
-                key={keyExtractor(item, idx)}
-                onClick={onRowClick ? () => onRowClick(item) : undefined}
+                key={rowKey}
+                onClick={
+                  onRowClick
+                    ? (e) => {
+                        const el = e.target as HTMLElement;
+                        if (el.closest("a, button, input, select, textarea, [role='button']")) return;
+                        touchRow.handleRowClick(e, rowKey);
+                        onRowClick(item);
+                      }
+                    : undefined
+                }
                 className={cn(
                   "transition-colors",
-                  onRowClick && "cursor-pointer hover-surface",
+                  onRowClick && touchRow.getRowClassName(rowKey),
                 )}
               >
                 {columns.map((col) => (
@@ -87,7 +104,8 @@ export function DataTable<T>({
                   </td>
                 ))}
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { OrganizationType } from "@prisma/client";
 import { Building2 } from "lucide-react";
 import { ORG_TYPE_LABELS } from "@/lib/status-labels";
@@ -175,7 +176,7 @@ export default function OrganizationDetailPage({ params }: { params: Promise<{ i
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
           {error || "Организация не найдена"}
         </div>
-        <Link href="/dashboard/organizations" className="mt-4 inline-block text-blue-600 hover:underline dark:text-blue-400">
+        <Link href="/dashboard/organizations" className={`${backNavLinkButtonClass} mt-4 inline-flex`}>
           ← К списку организаций
         </Link>
       </div>
@@ -185,7 +186,7 @@ export default function OrganizationDetailPage({ params }: { params: Promise<{ i
   return (
     <div className="px-4 py-8 sm:px-8 lg:px-12 max-w-4xl">
       <div className="mb-6">
-        <Link href="/dashboard/organizations" className="text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+        <Link href="/dashboard/organizations" className={backNavLinkButtonClass}>
           ← Организации
         </Link>
       </div>

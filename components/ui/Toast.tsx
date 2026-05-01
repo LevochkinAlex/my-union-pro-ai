@@ -98,16 +98,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+      <div className="pointer-events-none fixed left-4 right-4 top-4 z-50 flex flex-col gap-2 sm:left-auto sm:right-4 sm:w-[min(28rem,calc(100vw-2rem))]">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg min-w-[300px] max-w-md animate-in slide-in-from-top-5 fade-in-0 ${variantClasses[toast.variant].container}`}
+            className={`pointer-events-auto flex min-w-0 w-full items-center gap-3 rounded-lg border px-4 py-3 shadow-lg animate-in slide-in-from-top-5 fade-in-0 ${variantClasses[toast.variant].container}`}
           >
             <div className={`flex-shrink-0 ${variantClasses[toast.variant].icon}`}>
               {icons[toast.variant]}
             </div>
-            <p className={`flex-1 text-sm font-medium ${variantClasses[toast.variant].text}`}>
+            <p className={`min-w-0 flex-1 break-words text-sm font-medium ${variantClasses[toast.variant].text}`}>
               {toast.message}
             </p>
             <button

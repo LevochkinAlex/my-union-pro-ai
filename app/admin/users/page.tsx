@@ -9,6 +9,9 @@ import {
   getMembershipStatusLabel,
   getMembershipStatusBadgeClass,
 } from "@/lib/status-labels";
+import { adminTableActionOutlineClass } from "@/lib/admin-table-action-styles";
+import { cn } from "@/lib/utils";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 const PAGE_SIZE = 20;
 
@@ -44,6 +47,7 @@ export default function AdminUsers() {
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const touchRow = useTouchStickyRowSelection();
 
   const loadUsers = useCallback(async (pageNum: number, searchQuery: string) => {
     setLoading(true);
@@ -109,7 +113,7 @@ export default function AdminUsers() {
       {/* Поиск */}
       <form onSubmit={handleSearchSubmit}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative min-w-0 w-full max-w-full sm:min-w-[200px] sm:flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="search"
@@ -147,13 +151,16 @@ export default function AdminUsers() {
       )}
 
       {/* Таблица */}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+      <div
+        ref={touchRow.containerRef}
+        className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+      >
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
           </div>
         ) : (
-          <table className="w-full">
+          <table className="w-full table-auto">
             <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
@@ -162,10 +169,10 @@ export default function AdminUsers() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                   Имя
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                <th className="w-px whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
                   Роль
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                <th className="min-w-[9rem] max-w-[18rem] whitespace-nowrap px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
                   Статус
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
@@ -177,7 +184,7 @@ export default function AdminUsers() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                   Дата регистрации
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">
                   Действия
                 </th>
               </tr>
@@ -193,11 +200,12 @@ export default function AdminUsers() {
                 return (
                   <tr
                     key={user.id}
-                    className={`hover-surface ${
-                      needsAttention
-                        ? "border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 animate-pulse"
-                        : ""
-                    }`}
+                    className={cn(
+                      touchRow.getRowClassName(user.id),
+                      needsAttention &&
+                        "border-l-4 border-yellow-500 bg-yellow-50 animate-pulse dark:bg-yellow-900/20"
+                    )}
+                    onClick={(e) => touchRow.handleRowClick(e, user.id)}
                   >
                     <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
                       {user.email ?? "—"}
@@ -205,19 +213,48 @@ export default function AdminUsers() {
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                       {[user.firstName, user.lastName].filter(Boolean).join(" ") || "—"}
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {getUserRoleLabel(user.role)}
-                      </span>
+                    <td className="w-px px-6 py-4 text-center align-middle text-sm">
+                      {user.role?.toUpperCase() === "PENDING_MEMBER" ? (
+                        <span className="inline-flex flex-col items-center justify-center gap-0.5 rounded-full bg-blue-100 px-3 py-1.5 text-center text-xs font-semibold leading-none text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          <span>Новый</span>
+                          <span>пользователь</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex whitespace-nowrap rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {getUserRoleLabel(user.role)}
+                        </span>
+                      )}
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getMembershipStatusBadgeClass(
-                          user.membershipStatus
-                        )}`}
-                      >
-                        {getMembershipStatusLabel(user.membershipStatus)}
-                      </span>
+                    <td className="min-w-[9rem] max-w-[18rem] align-middle px-6 py-4 text-sm">
+                      <div className="flex justify-center">
+                        {user.membershipStatus === "PROFILE_INCOMPLETE" ? (
+                          <span
+                            className={`inline-flex flex-col items-center justify-center gap-0.5 rounded-full px-3 py-1.5 text-center text-xs font-semibold leading-none ${getMembershipStatusBadgeClass(
+                              user.membershipStatus
+                            )}`}
+                          >
+                            <span>Профиль</span>
+                            <span className="whitespace-nowrap">не заполнен</span>
+                          </span>
+                        ) : user.membershipStatus === "DOCUMENTS_PENDING" ? (
+                          <span
+                            className={`inline-flex flex-col items-center justify-center gap-0.5 rounded-full px-3 py-1.5 text-center text-xs font-semibold leading-none ${getMembershipStatusBadgeClass(
+                              user.membershipStatus
+                            )}`}
+                          >
+                            <span>Документы</span>
+                            <span className="whitespace-nowrap">на проверке</span>
+                          </span>
+                        ) : (
+                          <span
+                            className={`w-fit max-w-full line-clamp-2 break-words rounded-full px-3 py-1 text-center text-xs font-semibold leading-snug ${getMembershipStatusBadgeClass(
+                              user.membershipStatus
+                            )}`}
+                          >
+                            {getMembershipStatusLabel(user.membershipStatus)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                       {user.effectiveOrganization?.name || "—"}
@@ -237,13 +274,13 @@ export default function AdminUsers() {
                         ? new Date(user.createdAt).toLocaleDateString("ru-RU")
                         : "—"}
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex flex-wrap items-center gap-3">
+                    <td className="px-6 py-4 text-center text-sm">
+                      <div className="flex flex-wrap items-center justify-center gap-3">
                         <Link
                           href={`/admin/users/${user.id}`}
-                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                          className={adminTableActionOutlineClass}
                         >
-                          Просмотр
+                          Редактировать
                         </Link>
                         <ImpersonateButton
                           userId={user.id}

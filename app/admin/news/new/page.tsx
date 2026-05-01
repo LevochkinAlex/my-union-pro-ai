@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import ImageUploadWithCrop from "@/components/admin/ImageUploadWithCrop";
 import ImageInsertWithCrop from "@/components/admin/ImageInsertWithCrop";
 import RichTextEditor from "@/components/admin/RichTextEditor";
@@ -359,10 +360,7 @@ export default function NewNewsPage() {
   return (
     <div className="space-y-4 sm:space-y-6 pb-8">
       {/* Кнопка назад */}
-      <Link
-        href="/admin/news"
-        className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 transition"
-      >
+      <Link href="/admin/news" className={`${backNavLinkButtonClass} gap-2`}>
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>

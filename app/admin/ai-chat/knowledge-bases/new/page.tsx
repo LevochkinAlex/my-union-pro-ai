@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import Button from "@/components/ui/button/Button";
 import InputField from "@/components/ui/InputField";
 import Label from "@/components/form/Label";
@@ -46,7 +47,7 @@ export default function NewKnowledgeBasePage() {
       <div className="mb-6 flex items-center gap-4">
         <Link
           href="/admin/ai-chat"
-          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+          className={backNavLinkButtonClass}
         >
           ← Назад к базам знаний
         </Link>

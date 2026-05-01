@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import FileAttachment from "@/components/shared/FileAttachment";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import RichTextEditor from "@/components/admin/RichTextEditor";
@@ -348,10 +349,7 @@ export default function TicketDetailPage() {
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
           {error || "Обращение не найдено"}
         </div>
-        <Link
-          href="/dashboard/appeals"
-          className="inline-block rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700"
-        >
+        <Link href="/dashboard/appeals" className={backNavLinkButtonClass}>
           Вернуться к списку
         </Link>
       </div>
@@ -361,10 +359,7 @@ export default function TicketDetailPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/appeals"
-          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
+        <Link href="/dashboard/appeals" className={backNavLinkButtonClass}>
           ← Назад к списку
         </Link>
         <div className="flex gap-2">

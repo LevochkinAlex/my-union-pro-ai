@@ -910,7 +910,7 @@ export default function OrganizationsPage() {
       {/* Поиск, тип, алфавит */}
       <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="min-w-[200px] flex-1">
+          <div className="min-w-0 w-full max-w-full sm:min-w-[200px] sm:flex-1">
             <label htmlFor="org-search" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Поиск
             </label>
@@ -1412,7 +1412,7 @@ export default function OrganizationsPage() {
                       className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700"
                     />
                   </div>
-                  <div className="min-w-[200px] flex-1">
+                  <div className="min-w-0 w-full max-w-full sm:min-w-[200px] sm:flex-1">
                     <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Название юр. лица</label>
                     <input
                       type="text"

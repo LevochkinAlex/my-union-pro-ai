@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { OrganizationType, ReportStatus } from "@prisma/client";
 import { ClipboardList } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection";
 
 interface Report {
   id: string;
@@ -112,6 +114,7 @@ export default function OrgHeadReportsPage() {
   const [selectedPeriodicity, setSelectedPeriodicity] = useState<"all" | "monthly" | "annual">("all");
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const touchRow = useTouchStickyRowSelection();
 
   useEffect(() => {
     const loadReports = async () => {
@@ -337,7 +340,7 @@ export default function OrgHeadReportsPage() {
 
       {/* Таблица отчётов */}
       <div className="overflow-hidden rounded-xl bg-white shadow-sm dark:bg-gray-800">
-        <div className="overflow-x-auto">
+        <div ref={touchRow.containerRef} className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
@@ -368,7 +371,8 @@ export default function OrgHeadReportsPage() {
                   return (
                     <tr
                       key={report.id}
-                      className="hover-surface"
+                      className={touchRow.getRowClassName(report.id)}
+                      onClick={(e) => touchRow.handleRowClick(e, report.id)}
                     >
                       <td className="px-6 py-4">
                         <Link

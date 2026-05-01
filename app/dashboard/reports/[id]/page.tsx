@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 
 interface ReportField {
   id: string;
@@ -386,7 +387,7 @@ export default function ReportDetailPage() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Отчёт не найден</p>
-        <Link href={reportsListHref} className="text-blue-600 hover:underline mt-2 inline-block">
+        <Link href={reportsListHref} className={`${backNavLinkButtonClass} mt-2 inline-flex`}>
           Вернуться к списку
         </Link>
       </div>
@@ -509,10 +510,7 @@ export default function ReportDetailPage() {
 
           {/* Кнопки действий */}
           <div className="mt-6 flex items-center justify-between">
-            <Link
-              href={reportsListHref}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            >
+            <Link href={reportsListHref} className={backNavLinkButtonClass}>
               ← Вернуться к списку
             </Link>
 

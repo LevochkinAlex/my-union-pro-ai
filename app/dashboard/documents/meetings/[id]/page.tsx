@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import { DATE_INPUT_MIN, DATE_INPUT_MAX, normalizeDateInputValue } from "@/lib/date-bounds";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { MembershipGate } from "@/components/MembershipGate";
 import { HorizontalTabArrowStrip } from "@/components/ui/HorizontalTabArrowStrip";
@@ -986,7 +987,7 @@ export default function MeetingDetailPage({
   ) : !meeting ? (
       <div className="text-center py-12">
         <p className="text-gray-600 dark:text-gray-400">Заседание не найдено</p>
-        <Link href="/dashboard/documents/meetings" className="mt-4 text-blue-600 hover:underline">
+        <Link href="/dashboard/documents/meetings" className={`${backNavLinkButtonClass} mt-4 inline-flex`}>
           ← Назад к списку
         </Link>
       </div>
@@ -995,10 +996,7 @@ export default function MeetingDetailPage({
       {/* Шапка */}
       <div className="flex items-start justify-between">
         <div>
-          <Link
-            href="/dashboard/documents/meetings"
-            className="mb-2 inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
-          >
+          <Link href="/dashboard/documents/meetings" className={`${backNavLinkButtonClass} mb-2`}>
             ← Назад к заседаниям
           </Link>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">

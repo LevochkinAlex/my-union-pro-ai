@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 
 export default function AdminUsersInvitePage() {
   const [email, setEmail] = useState("");
@@ -143,10 +144,7 @@ export default function AdminUsersInvitePage() {
             >
               {loading ? "Отправка…" : "Отправить приглашение"}
             </button>
-            <Link
-              href="/admin/users"
-              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-            >
+            <Link href="/admin/users" className={backNavLinkButtonClass}>
               Назад к пользователям
             </Link>
           </div>

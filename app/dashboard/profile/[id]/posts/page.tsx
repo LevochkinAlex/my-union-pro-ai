@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { useSession } from "next-auth/react";
 import PostFeed from "@/components/posts/PostFeed";
 import CreatePost from "@/components/posts/CreatePost";
@@ -17,10 +18,11 @@ export default function UserPostsPage() {
     <div className="max-w-2xl lg:max-w-3xl mx-auto px-4 py-6">
       {/* Кнопка назад */}
       <button
+        type="button"
         onClick={() => router.back()}
-        className="mb-6 flex items-center gap-2 text-gray-600 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+        className={`${backNavLinkButtonClass} mb-6 gap-2`}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
         <span>Назад</span>

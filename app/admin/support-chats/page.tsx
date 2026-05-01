@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { Headset, ArrowLeft, Send, User, MessageSquare } from "lucide-react";
 
 type SupportChatItem = {
@@ -112,12 +113,9 @@ export default function AdminSupportChatsPage() {
     <div className="space-y-6 min-w-0 w-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            href="/admin"
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition-colors"
-            aria-label="Назад"
-          >
-            <ArrowLeft className="h-5 w-5" />
+          <Link href="/admin" className={`${backNavLinkButtonClass} gap-2`} aria-label="Назад в админку">
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            <span>Назад</span>
           </Link>
           <div className="flex items-center gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-200/50 dark:bg-blue-800/40">

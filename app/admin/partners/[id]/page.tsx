@@ -14,6 +14,7 @@ import {
   PARTNER_KPP_MAX,
   PARTNER_OGRN_MAX,
 } from "@/lib/partner-requisites";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import {
   getPartnerModerationStatusLabel,
   partnerModerationIsApprovedWithoutTimestamp,
@@ -450,7 +451,7 @@ export default function PartnerEditPage() {
   if (loadError) {
     return (
       <div className="space-y-4">
-        <Link href="/admin/partners" className="text-blue-600 hover:underline dark:text-blue-400">
+        <Link href="/admin/partners" className={`${backNavLinkButtonClass} mt-4`}>
           ← К списку партнёров
         </Link>
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
@@ -463,10 +464,13 @@ export default function PartnerEditPage() {
   const impersonateId = formData.linkedUserId.trim();
   const impersonateEmail = linkedUserEmail?.trim() || "";
 
+  const adminToolbarGrayButtonClass =
+    "inline-flex min-h-[2.5rem] items-center justify-center whitespace-nowrap rounded-md border border-gray-600 bg-white/90 px-3 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:border-gray-700 hover:bg-gray-100 hover:text-gray-800 dark:border-gray-500 dark:bg-gray-800/90 dark:text-gray-400 dark:hover:border-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200";
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-12">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <Link href="/admin/partners" className="text-blue-600 hover:underline dark:text-blue-400">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <Link href="/admin/partners" className={backNavLinkButtonClass}>
           ← К списку партнёров
         </Link>
         {isSuperAdmin ? (
@@ -475,7 +479,7 @@ export default function PartnerEditPage() {
               type="button"
               onClick={handleDeletePartner}
               disabled={deleting || saving || loading}
-              className="inline-flex w-full min-h-[2.5rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full min-h-[2.5rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-red-600 bg-white/90 px-3 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:border-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-500 dark:bg-gray-800/90 dark:text-red-400 dark:hover:border-red-400 dark:hover:bg-red-900/45 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {deleting ? "Удаление…" : "Удалить партнёра и данные"}
             </button>
@@ -483,7 +487,7 @@ export default function PartnerEditPage() {
               type="button"
               onClick={handleCheckLiquidation}
               disabled={checkingLiquidation || !canCheckEgrulRequisites}
-              className="inline-flex w-full min-h-[2.5rem] items-center justify-center whitespace-nowrap rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm hover-surface disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+              className={`${adminToolbarGrayButtonClass} w-full disabled:cursor-not-allowed disabled:opacity-50`}
               title={
                 canCheckEgrulRequisites
                   ? "Запросить актуальные сведения в ЕГРЮЛ по ИНН/ОГРН"
@@ -492,13 +496,20 @@ export default function PartnerEditPage() {
             >
               {checkingLiquidation ? "Проверка…" : "Проверить статус организации"}
             </button>
+            {impersonateId ? (
+              <ImpersonateButton
+                userId={impersonateId}
+                userEmail={impersonateEmail || undefined}
+                disabled={(moderationStatus ?? "") === "BLOCKED"}
+                className="w-full min-h-[2.5rem] px-3 py-2 shadow-sm"
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
 
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Редактирование партнёра</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">Измените данные и нажмите «Сохранить».</p>
         {moderationStatus ? (
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Статус модерации:{" "}
@@ -510,19 +521,6 @@ export default function PartnerEditPage() {
               {getPartnerModerationStatusLabel(moderationStatus)}
             </span>
           </p>
-        ) : null}
-        {impersonateId ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <ImpersonateButton
-              userId={impersonateId}
-              userEmail={impersonateEmail || undefined}
-              label="Войти как"
-              disabled={(moderationStatus ?? "") === "BLOCKED"}
-            />
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              Просмотр кабинета от имени партнёра
-            </span>
-          </div>
         ) : null}
       </div>
 

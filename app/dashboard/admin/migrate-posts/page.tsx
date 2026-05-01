@@ -11,6 +11,7 @@ import {
   FileText,
   RefreshCw,
 } from "lucide-react";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 
 export default function MigratePostsPage() {
   const { data: session } = useSession();
@@ -49,10 +50,11 @@ export default function MigratePostsPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-4xl mx-auto">
         <button
+          type="button"
           onClick={() => router.back()}
-          className="mb-6 flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          className={`${backNavLinkButtonClass} mb-6 gap-2`}
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4 shrink-0" />
           Назад
         </button>
 

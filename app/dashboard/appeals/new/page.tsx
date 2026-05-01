@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { backNavLinkButtonClass } from "@/lib/back-nav-link-button";
 import { useSession } from "next-auth/react";
 import SimpleRichTextEditor from "@/components/form/SimpleRichTextEditor";
 import { useAlert } from "@/components/ui/Alert";
@@ -223,10 +224,11 @@ export default function NewTicketPage() {
     <div className="w-full max-w-2xl lg:max-w-3xl mx-auto space-y-4 sm:space-y-6">
       {/* Back Button */}
       <button
+        type="button"
         onClick={() => router.back()}
-        className="mb-2 flex items-center gap-2 text-sm sm:text-base text-gray-600 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+        className={`${backNavLinkButtonClass} mb-2 gap-2`}
       >
-        <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
+        <svg className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
           <path
             fillRule="evenodd"
             d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
