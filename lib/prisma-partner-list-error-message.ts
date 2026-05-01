@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 export function partnerListPrismaErrorToUserMessage(e: unknown, fallback: string): string {
   if (e instanceof Prisma.PrismaClientKnownRequestError) {
     if (e.code === "P2022") {
-      return "Схема базы устарела (нет колонки в таблице Partner). Выполните: npx prisma migrate deploy";
+      return "Схема базы устарела (нет ожидаемой колонки). Выполните: npx prisma migrate deploy";
     }
     if (e.code === "P2021") {
       return "Таблица Partner в базе не создана. Выполните в проекте: npx prisma db push (или prisma migrate deploy).";

@@ -13,6 +13,7 @@ import {
   setPartnerVenueParticipationModeRaw,
 } from "@/lib/partner-venue-participation-db";
 import { partnerVenuePartnerApiSelect } from "@/lib/partner-venue-partner-api-select";
+import { partnerListPrismaErrorToUserMessage } from "@/lib/prisma-partner-list-error-message";
 
 type CreateBody = {
   name?: unknown;
@@ -75,7 +76,18 @@ export async function GET() {
     return NextResponse.json({ venues: hydrated });
   } catch (e) {
     console.error("[partner/venues GET]", e);
-    return NextResponse.json({ error: "Не удалось загрузить площадки" }, { status: 500 });
+    const message = partnerListPrismaErrorToUserMessage(e, "Не удалось загрузить площадки");
+    const hintMigration =
+      /migrate deploy|prisma migrate|P2021|P2022|таблиц[аы].*не создан|колонк|Схема базы/i.test(
+        message,
+      );
+    return NextResponse.json(
+      {
+        error: message,
+        ...(hintMigration ? { hintMigration: true as const } : {}),
+      },
+      { status: 500 },
+    );
   }
 }
 

@@ -17,10 +17,12 @@ export default function PartnerVenuesPage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [migrateHint, setMigrateHint] = useState(false);
   const touchRow = useTouchStickyRowSelection();
 
   const fetchVenues = useCallback(async () => {
     setLoadError(null);
+    setMigrateHint(false);
     try {
       const res = await fetch("/api/partner/venues");
       if (res.ok) {
@@ -29,17 +31,21 @@ export default function PartnerVenuesPage() {
         return;
       }
       let message = "Не удалось загрузить площадки";
+      let hintMigration = false;
       try {
         const data = await res.json();
         if (typeof data?.error === "string" && data.error) message = data.error;
+        if (data?.hintMigration === true) hintMigration = true;
       } catch {
         /* ignore */
       }
       setVenues([]);
       setLoadError(message);
+      setMigrateHint(hintMigration);
     } catch {
       setVenues([]);
       setLoadError("Ошибка сети");
+      setMigrateHint(false);
     } finally {
       setLoading(false);
     }
@@ -70,10 +76,16 @@ export default function PartnerVenuesPage() {
       ) : loadError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
           <p className="font-medium">{loadError}</p>
+          {migrateHint ? (
           <p className="mt-2 text-red-700 dark:text-red-300">
             Если вы недавно обновляли проект, выполните на сервере:{" "}
             <code className="rounded bg-red-100 px-1 py-0.5 text-xs dark:bg-red-900/50">npx prisma migrate deploy</code>
           </p>
+          ) : (
+            <p className="mt-2 text-red-700 dark:text-red-300">
+              При повторении ошибки откройте консоль браузера (Network → ответ запроса к API) или обратитесь в поддержку.
+            </p>
+          )}
           <button
             type="button"
             onClick={() => {
