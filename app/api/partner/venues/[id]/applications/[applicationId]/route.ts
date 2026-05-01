@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ensurePartner } from "@/lib/partner-auth";
 import { PV_APPLICATION_STATUS } from "@/lib/partner-venue-application-status";
 import { partnerVenueHasApplicationSlotCap } from "@/lib/partner-venue-slot-cap";
+import { partnerApiPrismaJsonBody } from "@/lib/prisma-partner-list-error-message";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,9 @@ export async function PATCH(
     });
   } catch (e) {
     console.error("[PATCH partner/venues/[id]/applications/[applicationId]]", e);
-    return NextResponse.json({ error: "Не удалось обновить заявку" }, { status: 500 });
+    return NextResponse.json(
+      partnerApiPrismaJsonBody(e, "Не удалось обновить заявку"),
+      { status: 500 },
+    );
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensurePartner } from "@/lib/partner-auth";
+import { partnerApiPrismaJsonBody } from "@/lib/prisma-partner-list-error-message";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ venue, applicants });
   } catch (e) {
     console.error("[partner/venues/[id]/applications GET]", e);
-    return NextResponse.json({ error: "Не удалось загрузить заявки" }, { status: 500 });
+    return NextResponse.json(
+      partnerApiPrismaJsonBody(e, "Не удалось загрузить заявки"),
+      { status: 500 },
+    );
   }
 }

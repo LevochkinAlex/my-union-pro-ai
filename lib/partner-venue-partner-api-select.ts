@@ -5,6 +5,10 @@ import type { Prisma } from "@prisma/client";
  * Не включаем `slaOverdueBlockEmailSentAt`, чтобы `findMany` / `findFirst` работали,
  * пока на базе не применена миграция `partner_venue_application_sla` (иначе Prisma
  * генерирует SELECT по всем колонкам схемы и PostgreSQL падает с «column does not exist»).
+ *
+ * Не включаем `participationMode` в Prisma-select: после `pull` без `prisma generate`
+ * рантайм даёт Unknown field для старого клиента; значение подставляют
+ * `mergeParticipationModeOnVenue` / `mergeParticipationModesOnVenues` через raw SQL.
  */
 export const partnerVenuePartnerApiSelect = {
   id: true,
@@ -22,7 +26,6 @@ export const partnerVenuePartnerApiSelect = {
   promoLabel: true,
   conditions: true,
   eventAt: true,
-  participationMode: true,
   remainingSlots: true,
   serviceCategoryCode: true,
   serviceCode: true,

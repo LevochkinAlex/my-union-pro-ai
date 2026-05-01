@@ -10,7 +10,7 @@ export function partnerListPrismaErrorToUserMessage(e: unknown, fallback: string
       return "Схема базы устарела (нет ожидаемой колонки). Выполните: npx prisma migrate deploy";
     }
     if (e.code === "P2021") {
-      return "Таблица Partner в базе не создана. Выполните в проекте: npx prisma db push (или prisma migrate deploy).";
+      return "В базе отсутствует ожидаемая таблица. Выполните: npx prisma migrate deploy (или npx prisma db push в dev).";
     }
     if (e.code === "P2002") {
       return "Запись с такими уникальными данными уже существует.";
@@ -41,4 +41,24 @@ export function partnerListPrismaErrorToUserMessage(e: unknown, fallback: string
     }
   }
   return fallback;
+}
+
+/**
+ * Ответ для JSON API партнёрки: понятное сообщение и флаг подсказки про миграции только если текст явно про схему/развёртывание.
+ */
+export function partnerPrismaErrorSuggestsMigration(message: string): boolean {
+  // Только явные признаки «БД без миграции», без общих упоминаний migrate из ValidationError (Unknown field и т.д.).
+  return /Схема базы устарела|нет ожидаемой колонки|отсутствует ожидаемая таблица|\bP2021\b|\bP2022\b/i.test(
+    message,
+  );
+}
+
+export function partnerApiPrismaJsonBody(
+  e: unknown,
+  fallback: string
+): { error: string; hintMigration?: true } {
+  const error = partnerListPrismaErrorToUserMessage(e, fallback);
+  return partnerPrismaErrorSuggestsMigration(error)
+    ? { error, hintMigration: true as const }
+    : { error };
 }

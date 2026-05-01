@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { ensurePartner } from "@/lib/partner-auth";
 import { Prisma } from "@prisma/client";
-import { PrismaClientValidationError } from "@prisma/client/runtime/library";
 import { deletePartnerVenueBannerStoredFile } from "@/lib/partner-venue-banner-file";
 import { isValidPartnerVenueServicePair } from "@/lib/partner-venue-service-taxonomy";
 import {
@@ -14,6 +13,7 @@ import {
   setPartnerVenueParticipationModeRaw,
 } from "@/lib/partner-venue-participation-db";
 import { partnerVenuePartnerApiSelect } from "@/lib/partner-venue-partner-api-select";
+import { partnerApiPrismaJsonBody } from "@/lib/prisma-partner-list-error-message";
 
 type PatchBody = {
   name?: unknown;
@@ -75,7 +75,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ venue });
   } catch (e) {
     console.error("[partner/venues/[id] GET]", e);
-    return NextResponse.json({ error: "Не удалось загрузить площадку" }, { status: 500 });
+    return NextResponse.json(
+      partnerApiPrismaJsonBody(e, "Не удалось загрузить площадку"),
+      { status: 500 },
+    );
   }
 }
 
@@ -256,31 +259,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ venue: fresh ?? venue });
   } catch (e) {
     console.error("[partner/venues/[id] PATCH]", e);
-    if (e instanceof PrismaClientValidationError) {
-      return NextResponse.json(
-        {
-          error:
-            "Клиент Prisma устарел относительно схемы. Выполните «npx prisma generate» и перезапустите dev-сервер (npm run dev).",
-        },
-        { status: 500 }
-      );
-    }
-    // instanceof Prisma.PrismaClientKnownRequestError в Next-бандле иногда не срабатывает — проверяем по полю code
-    const prismaCode =
-      typeof e === "object" && e !== null && "code" in e && typeof (e as { code: unknown }).code === "string"
-        ? (e as { code: string }).code
-        : null;
-    const prismaMessage =
-      typeof e === "object" && e !== null && "message" in e && typeof (e as { message: unknown }).message === "string"
-        ? (e as { message: string }).message
-        : null;
-    if (prismaCode?.startsWith("P") && prismaMessage) {
-      return NextResponse.json({ error: prismaMessage }, { status: 400 });
-    }
-    if (e instanceof Error && e.message) {
-      return NextResponse.json({ error: e.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: "Не удалось обновить площадку" }, { status: 500 });
+    return NextResponse.json(
+      partnerApiPrismaJsonBody(e, "Не удалось обновить площадку"),
+      { status: 500 },
+    );
   }
 }
 
@@ -308,6 +290,9 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[partner/venues/[id] DELETE]", e);
-    return NextResponse.json({ error: "Не удалось удалить площадку" }, { status: 500 });
+    return NextResponse.json(
+      partnerApiPrismaJsonBody(e, "Не удалось удалить площадку"),
+      { status: 500 },
+    );
   }
 }

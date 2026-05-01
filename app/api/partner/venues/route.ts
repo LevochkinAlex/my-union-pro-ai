@@ -13,7 +13,7 @@ import {
   setPartnerVenueParticipationModeRaw,
 } from "@/lib/partner-venue-participation-db";
 import { partnerVenuePartnerApiSelect } from "@/lib/partner-venue-partner-api-select";
-import { partnerListPrismaErrorToUserMessage } from "@/lib/prisma-partner-list-error-message";
+import { partnerApiPrismaJsonBody } from "@/lib/prisma-partner-list-error-message";
 
 type CreateBody = {
   name?: unknown;
@@ -76,16 +76,8 @@ export async function GET() {
     return NextResponse.json({ venues: hydrated });
   } catch (e) {
     console.error("[partner/venues GET]", e);
-    const message = partnerListPrismaErrorToUserMessage(e, "Не удалось загрузить площадки");
-    const hintMigration =
-      /migrate deploy|prisma migrate|P2021|P2022|таблиц[аы].*не создан|колонк|Схема базы/i.test(
-        message,
-      );
     return NextResponse.json(
-      {
-        error: message,
-        ...(hintMigration ? { hintMigration: true as const } : {}),
-      },
+      partnerApiPrismaJsonBody(e, "Не удалось загрузить площадки"),
       { status: 500 },
     );
   }
@@ -225,9 +217,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ venue: venueOut });
   } catch (e) {
     console.error("[partner/venues POST]", e);
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      return NextResponse.json({ error: "Ошибка сохранения площадки" }, { status: 400 });
-    }
-    return NextResponse.json({ error: "Не удалось создать площадку" }, { status: 500 });
+    return NextResponse.json(
+      partnerApiPrismaJsonBody(e, "Не удалось создать площадку"),
+      { status: 500 },
+    );
   }
 }

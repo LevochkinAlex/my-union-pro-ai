@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { PV_APPLICATION_STATUS } from "@/lib/partner-venue-application-status";
 import { prisma } from "@/lib/prisma";
+import { partnerApiPrismaJsonBody } from "@/lib/prisma-partner-list-error-message";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,6 @@ export async function GET() {
     return NextResponse.json({ venues });
   } catch (e) {
     console.error("[partner/applications] GET:", e);
-    return NextResponse.json({ error: "Ошибка загрузки" }, { status: 500 });
+    return NextResponse.json(partnerApiPrismaJsonBody(e, "Ошибка загрузки"), { status: 500 });
   }
 }
