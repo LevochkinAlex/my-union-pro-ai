@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
   Image,
   KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   PanResponder,
   Platform,
   Pressable,
@@ -19,8 +21,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ChatMessageItem } from "../types/chat";
 import { ChannelPostCard } from "../components/ChannelPostCard";
 import { formatReplySnippet, getChannelPostFromMessage } from "../lib/channelPost";
-import { FluidText, FluidAvatar, GlassCard } from "../components/ui";
-import { colors, fonts, radii, spacing } from "../theme/tokens";
+import { FluidText, FluidAvatar } from "../components/ui";
+import { colors, fonts } from "../theme/tokens";
 
 /* ─── Types ─── */
 type Props = {
@@ -38,6 +40,8 @@ type Props = {
   onCancelReply: () => void;
   onBack: () => void;
 };
+
+type Attachment = NonNullable<ChatMessageItem["attachments"]>[number];
 
 /* ─── Constants ─── */
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🙏", "😮"] as const;
@@ -64,10 +68,16 @@ function pickColor(id: string): string {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 
+function formatSenderName(sender: { firstName?: string | null; lastName?: string | null } | null | undefined): string {
+  return `${sender?.firstName || ""} ${sender?.lastName || ""}`.trim() || "Участник";
+}
+
 /* ─── Swipe-to-reply row ─── */
 function SwipeRow({ children, onSwipe }: { children: React.ReactNode; onSwipe: () => void }) {
   const tx = useRef(new Animated.Value(0)).current;
   const firedRef = useRef(false);
+  const onSwipeRef = useRef(onSwipe);
+  onSwipeRef.current = onSwipe;
 
   const snap = () => {
     Animated.spring(tx, { toValue: 0, useNativeDriver: true, tension: 140, friction: 12 }).start();
@@ -84,13 +94,13 @@ function SwipeRow({ children, onSwipe }: { children: React.ReactNode; onSwipe: (
           if (dx >= 60 && !firedRef.current) {
             firedRef.current = true;
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onSwipe();
+            onSwipeRef.current();
           }
         },
         onPanResponderRelease: snap,
         onPanResponderTerminate: snap,
       }),
-    [onSwipe, tx],
+    [tx],
   );
 
   const iconOp = tx.interpolate({ inputRange: [0, 20, 50], outputRange: [0, 0.3, 1], extrapolate: "clamp" });
@@ -108,7 +118,7 @@ function SwipeRow({ children, onSwipe }: { children: React.ReactNode; onSwipe: (
 }
 
 /* ─── Attachment ─── */
-function AttachmentView({ att, isMine, maxW }: { att: NonNullable<ChatMessageItem["attachments"]>[0]; isMine: boolean; maxW: number }) {
+function AttachmentView({ att, isMine, maxW }: { att: Attachment; isMine: boolean; maxW: number }) {
   const isImg = att.type === "IMAGE" || att.type === "image" || att.mimeType?.startsWith("image/");
   if (isImg) {
     return (
@@ -135,13 +145,16 @@ function AttachmentView({ att, isMine, maxW }: { att: NonNullable<ChatMessageIte
 
 /* ─── Reactions row ─── */
 function Reactions({ reactions, onToggle, messageId }: { reactions: NonNullable<ChatMessageItem["reactions"]>; onToggle: (id: string, e: string) => void; messageId: string }) {
-  if (!Array.isArray(reactions) || reactions.length === 0) return null;
-  const g: Record<string, number> = {};
-  for (const r of reactions) {
-    if (!r || typeof r.emoji !== "string" || !r.emoji) continue;
-    g[r.emoji] = (g[r.emoji] || 0) + 1;
-  }
-  const entries = Object.entries(g);
+  const entries = useMemo(() => {
+    if (!Array.isArray(reactions) || reactions.length === 0) return [];
+    const g: Record<string, number> = {};
+    for (const r of reactions) {
+      if (!r || typeof r.emoji !== "string" || !r.emoji) continue;
+      g[r.emoji] = (g[r.emoji] || 0) + 1;
+    }
+    return Object.entries(g);
+  }, [reactions]);
+
   if (entries.length === 0) return null;
   return (
     <View style={st.rxRow}>
@@ -193,28 +206,29 @@ function ReplyInline({ replyTo, isMine }: { replyTo: NonNullable<ChatMessageItem
    MAIN SCREEN
    ════════════════════════════════════════════════ */
 export function ChatThreadScreen({
-  title, messages, loadingMessages, currentUserId,
+  title, messages, currentUserId,
   messageInput, onChangeInput, onSend, onPickImage,
   onToggleReaction, onReply, replyToMessage, onCancelReply, onBack,
 }: Props) {
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
+  const isAtBottomRef = useRef(true);
   const [trayMsgId, setTrayMsgId] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const { width: screenW } = useWindowDimensions();
   const bubbleMax = Math.round(screenW * 0.78);
   const imgMax = bubbleMax - 28;
 
-  const handleLongPress = (id: string) => {
+  const handleLongPress = useCallback((id: string) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setTrayMsgId((p) => (p === id ? null : id));
-  };
+  }, []);
 
-  const handleReply = (item: ChatMessageItem) => {
+  const handleReply = useCallback((item: ChatMessageItem) => {
     setTrayMsgId(null);
     onReply(item);
     inputRef.current?.focus();
-  };
+  }, [onReply]);
 
   const handleSend = () => {
     if (!messageInput.trim()) return;
@@ -222,10 +236,92 @@ export function ChatThreadScreen({
     setPlusOpen(false);
   };
 
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+    isAtBottomRef.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
+  }, []);
+
+  const renderItem = useCallback(({ item, index }: { item: ChatMessageItem; index: number }) => {
+    const mine = item.senderId === currentUserId;
+    const prev = index > 0 ? messages[index - 1] : null;
+    const sameSender = prev?.senderId === item.senderId;
+    const showAvatar = !mine && !sameSender;
+    const senderName = formatSenderName(item.sender);
+    const showDate = !prev || new Date(item.createdAt).toDateString() !== new Date(prev.createdAt).toDateString();
+    const chPost = getChannelPostFromMessage(item.content, item.messageType);
+
+    return (
+      <View style={st.msgFull}>
+        {showDate && (
+          <View style={st.dateSep}>
+            <View style={st.datePill}>
+              <FluidText variant="labelSm" color={colors.onSurfaceVariant}>{formatDateSeparator(item.createdAt)}</FluidText>
+            </View>
+          </View>
+        )}
+
+        <SwipeRow onSwipe={() => handleReply(item)}>
+          <Pressable onLongPress={() => handleLongPress(item.id)} delayLongPress={250} onPress={() => trayMsgId && setTrayMsgId(null)}>
+
+            {trayMsgId === item.id && (
+              <View style={mine ? { alignItems: "flex-end" } : { alignItems: "flex-start", paddingLeft: 40 }}>
+                <ReactionTray
+                  isMine={mine}
+                  onPick={(e) => { onToggleReaction(item.id, e); setTrayMsgId(null); }}
+                  onReply={() => handleReply(item)}
+                />
+              </View>
+            )}
+
+            <View style={[st.bubbleRow, mine ? { justifyContent: "flex-end" } : { justifyContent: "flex-start" }]}>
+              {!mine && (
+                <View style={st.avatarCol}>
+                  {showAvatar ? (
+                    <FluidAvatar uri={item.sender.avatarUrl} name={senderName} size={28} rounded="full" />
+                  ) : (
+                    <View style={{ width: 28 }} />
+                  )}
+                </View>
+              )}
+
+              <View style={{ maxWidth: bubbleMax }}>
+                {mine ? (
+                  <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.bubbleMine}>
+                    {item.replyTo && <ReplyInline replyTo={item.replyTo} isMine />}
+                    {chPost ? <ChannelPostCard post={chPost} isMine /> : <FluidText variant="bodyMd" color={colors.white}>{item.content}</FluidText>}
+                    {item.attachments?.map((a: Attachment) => <AttachmentView key={a.id} att={a} isMine maxW={imgMax} />)}
+                  </LinearGradient>
+                ) : (
+                  <View style={st.bubbleOther}>
+                    {showAvatar && <FluidText variant="labelSm" color={pickColor(item.senderId)} style={{ fontFamily: fonts.bodySemibold, marginBottom: 2 }}>{senderName}</FluidText>}
+                    {item.replyTo && <ReplyInline replyTo={item.replyTo} isMine={false} />}
+                    {chPost ? <ChannelPostCard post={chPost} isMine={false} /> : <FluidText variant="bodyMd" color={colors.onSurface}>{item.content}</FluidText>}
+                    {item.attachments?.map((a: Attachment) => <AttachmentView key={a.id} att={a} isMine={false} maxW={imgMax} />)}
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <View style={[st.tsRow, mine ? { justifyContent: "flex-end", paddingRight: 4 } : { justifyContent: "flex-start", paddingLeft: 40 }]}>
+              <FluidText variant="labelSm" color={colors.outline}>{formatTime(item.createdAt)}</FluidText>
+              {mine && item.readBy && item.readBy.length > 0 && (
+                <MaterialCommunityIcons name="check-all" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+              )}
+            </View>
+
+            <View style={mine ? { alignItems: "flex-end" } : { paddingLeft: 40 }}>
+              <Reactions reactions={item.reactions || []} onToggle={onToggleReaction} messageId={item.id} />
+            </View>
+          </Pressable>
+        </SwipeRow>
+      </View>
+    );
+  }, [messages, trayMsgId, currentUserId, bubbleMax, imgMax, handleLongPress, handleReply, onToggleReaction]);
+
   return (
     <KeyboardAvoidingView style={st.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
 
-      {/* ── HEADER (matches group_chat mockup) ── */}
+      {/* ── HEADER ── */}
       <View style={st.header}>
         <Pressable onPress={onBack} hitSlop={8} style={st.headerBack}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={colors.onSurface} />
@@ -255,100 +351,21 @@ export function ChatThreadScreen({
         keyExtractor={(m) => m.id}
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         keyboardShouldPersistTaps="handled"
+        onScroll={handleScroll}
+        scrollEventThrottle={100}
         onScrollBeginDrag={() => { setTrayMsgId(null); setPlusOpen(false); }}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-        renderItem={({ item, index }) => {
-          const mine = item.senderId === currentUserId;
-          const prev = index > 0 ? messages[index - 1] : null;
-          const sameSender = prev?.senderId === item.senderId;
-          const showAvatar = !mine && !sameSender;
-          const senderName = `${item.sender.firstName || ""} ${item.sender.lastName || ""}`.trim() || "Участник";
-          const showDate = !prev || new Date(item.createdAt).toDateString() !== new Date(prev.createdAt).toDateString();
-          const chPost = getChannelPostFromMessage(item.content, item.messageType);
-
-          return (
-            <>
-              {showDate && (
-                <View style={st.dateSep}>
-                  <View style={st.datePill}>
-                    <FluidText variant="labelSm" color={colors.onSurfaceVariant}>{formatDateSeparator(item.createdAt)}</FluidText>
-                  </View>
-                </View>
-              )}
-
-              <View style={st.msgFull}>
-                <SwipeRow onSwipe={() => handleReply(item)}>
-                  <Pressable onLongPress={() => handleLongPress(item.id)} delayLongPress={250} onPress={() => trayMsgId && setTrayMsgId(null)}>
-
-                    {/* reaction tray */}
-                    {trayMsgId === item.id && (
-                      <View style={mine ? { alignItems: "flex-end" } : { alignItems: "flex-start", paddingLeft: mine ? 0 : 40 }}>
-                        <ReactionTray
-                          isMine={mine}
-                          onPick={(e) => { onToggleReaction(item.id, e); setTrayMsgId(null); }}
-                          onReply={() => handleReply(item)}
-                        />
-                      </View>
-                    )}
-
-                    {/* bubble row: avatar + bubble */}
-                    <View style={[st.bubbleRow, mine ? { justifyContent: "flex-end" } : { justifyContent: "flex-start" }]}>
-                      {!mine && (
-                        <View style={st.avatarCol}>
-                          {showAvatar ? (
-                            <FluidAvatar uri={item.sender.avatarUrl} name={senderName} size={28} rounded="full" />
-                          ) : (
-                            <View style={{ width: 28 }} />
-                          )}
-                        </View>
-                      )}
-
-                      <View style={{ maxWidth: bubbleMax }}>
-                        {mine ? (
-                          <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.bubbleMine}>
-                            {item.replyTo && <ReplyInline replyTo={item.replyTo} isMine />}
-                            {chPost ? <ChannelPostCard post={chPost} isMine /> : <FluidText variant="bodyMd" color={colors.white}>{item.content}</FluidText>}
-                            {item.attachments?.map((a: NonNullable<ChatMessageItem["attachments"]>[number]) => <AttachmentView key={a.id} att={a} isMine maxW={imgMax} />)}
-                          </LinearGradient>
-                        ) : (
-                          <View style={st.bubbleOther}>
-                            {showAvatar && <FluidText variant="labelSm" color={pickColor(item.senderId)} style={{ fontFamily: fonts.bodySemibold, marginBottom: 2 }}>{senderName}</FluidText>}
-                            {item.replyTo && <ReplyInline replyTo={item.replyTo} isMine={false} />}
-                            {chPost ? <ChannelPostCard post={chPost} isMine={false} /> : <FluidText variant="bodyMd" color={colors.onSurface}>{item.content}</FluidText>}
-                            {item.attachments?.map((a: NonNullable<ChatMessageItem["attachments"]>[number]) => <AttachmentView key={a.id} att={a} isMine={false} maxW={imgMax} />)}
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* timestamp row (below bubble, like mockup) */}
-                    <View style={[st.tsRow, mine ? { justifyContent: "flex-end", paddingRight: 4 } : { justifyContent: "flex-start", paddingLeft: 40 }]}>
-                      <FluidText variant="labelSm" color={colors.outline}>{formatTime(item.createdAt)}</FluidText>
-                      {mine && item.readBy && item.readBy.length > 0 && (
-                        <MaterialCommunityIcons name="check-all" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
-                      )}
-                    </View>
-
-                    {/* reactions */}
-                    <View style={mine ? { alignItems: "flex-end" } : { paddingLeft: 40 }}>
-                      <Reactions reactions={item.reactions || []} onToggle={onToggleReaction} messageId={item.id} />
-                    </View>
-                  </Pressable>
-                </SwipeRow>
-              </View>
-            </>
-          );
-        }}
+        onContentSizeChange={() => { if (isAtBottomRef.current) flatListRef.current?.scrollToEnd({ animated: false }); }}
+        renderItem={renderItem}
       />
 
-      {/* ── COMPOSER (matches mockup: + | input pill | mic | send) ── */}
+      {/* ── COMPOSER ── */}
       <View style={st.composeWrap}>
         {replyToMessage && (
           <View style={st.replyBar}>
             <View style={st.replyAccent} />
             <View style={{ flex: 1 }}>
               <FluidText variant="labelSm" color={colors.primary} style={{ fontFamily: fonts.bodySemibold }}>
-                {`${replyToMessage.sender.firstName || ""} ${replyToMessage.sender.lastName || ""}`.trim() || "Участник"}
+                {formatSenderName(replyToMessage.sender)}
               </FluidText>
               <FluidText variant="bodySm" color={colors.onSurfaceVariant} numberOfLines={1}>
                 {formatReplySnippet(replyToMessage.content)}
@@ -421,7 +438,6 @@ export function ChatThreadScreen({
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
 
-  /* header — matches group_chat mockup */
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -435,16 +451,13 @@ const st = StyleSheet.create({
   headerAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceContainerHighest, alignItems: "center", justifyContent: "center" },
   headerIcon: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
 
-  /* date separator */
   dateSep: { alignItems: "center", marginVertical: 14 },
   datePill: { backgroundColor: colors.surfaceContainerHigh, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 4 },
 
-  /* message row — full-width container, bubble aligns via justifyContent on bubbleRow */
   msgFull: { marginBottom: 2, width: "100%" },
   bubbleRow: { flexDirection: "row", alignItems: "flex-end" },
   avatarCol: { width: 32, marginRight: 8, alignItems: "center", justifyContent: "flex-end" },
 
-  /* bubbles */
   bubbleMine: {
     borderRadius: 18,
     borderBottomRightRadius: 4,
@@ -465,15 +478,12 @@ const st = StyleSheet.create({
 
   replyInline: { paddingLeft: 10, borderLeftWidth: 2, marginBottom: 6, paddingVertical: 3, borderRadius: 4 },
 
-  /* timestamp — below bubble, outside */
   tsRow: { flexDirection: "row", alignItems: "center", marginTop: 3, marginBottom: 1 },
 
-  /* reactions */
   rxRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 2, marginBottom: 2 },
   rxPill: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: colors.surfaceContainerHighest, borderRadius: 10, borderWidth: 1, borderColor: "transparent" },
   rxAdd: { borderColor: "rgba(145,143,161,0.3)" },
 
-  /* reaction tray (long-press popover) */
   tray: {
     flexDirection: "row", alignItems: "center",
     backgroundColor: colors.surfaceContainerHigh,
@@ -487,11 +497,9 @@ const st = StyleSheet.create({
   trayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   trayReplyBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceContainerHighest },
 
-  /* attachments */
   fileRow: { flexDirection: "row", alignItems: "center", marginTop: 6, padding: 8, backgroundColor: colors.surfaceContainerLowest, borderRadius: 12, borderWidth: 1, borderColor: "rgba(145,143,161,0.2)", gap: 8 },
   fileIcon: { width: 34, height: 34, borderRadius: 8, backgroundColor: "rgba(195,192,255,0.2)", alignItems: "center", justifyContent: "center" },
 
-  /* compose — matches group_chat mockup */
   composeWrap: {
     backgroundColor: colors.surfaceContainerLow,
     borderTopWidth: StyleSheet.hairlineWidth,
