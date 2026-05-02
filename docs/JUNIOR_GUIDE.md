@@ -20,7 +20,7 @@
 10. [Роли и права доступа](#10-роли-и-права-доступа)
 11. [Основные фичи системы](#11-основные-фичи-системы)
 12. [Рабочий процесс: от задачи до деплоя](#12-рабочий-процесс-от-задачи-до-деплоя)
-13. [Работа с Git и Bitbucket](#13-работа-с-git-и-bitbucket)
+13. [Работа с Git и GitHub](#13-работа-с-git-и-github)
 14. [Работа с Cursor AI](#14-работа-с-cursor-ai)
 15. [Деплой — как код попадает на сервер](#15-деплой--как-код-попадает-на-сервер)
 16. [Как запустить проект локально](#16-как-запустить-проект-локально)
@@ -68,11 +68,11 @@
 | Термин | Что это значит |
 |--------|---------------|
 | **Git** | Система контроля версий. Хранит всю историю изменений кода. Как «Ctrl+Z» на стероидах. |
-| **Bitbucket** | Сервис для хранения Git-репозиториев в облаке. Наш код: `bitbucket.org/usmanoff/my-union-pro-ai` (приватный репозиторий). |
+| **GitHub** | Сервис для хранения Git-репозиториев в облаке. Наш код: организация [myunion-pro](https://github.com/myunion-pro), репозиторий `my-union-pro-ai` (приватный). |
 | **Репозиторий (Repo)** | Хранилище кода проекта. |
 | **Коммит (Commit)** | «Снимок» изменений кода с описанием: что и зачем изменил. |
-| **Пуш (Push)** | Отправка коммитов из локального компьютера в удалённый репозиторий (Bitbucket). |
-| **Пулл (Pull)** | Загрузка последних изменений с Bitbucket на свой компьютер. |
+| **Пуш (Push)** | Отправка коммитов из локального компьютера в удалённый репозиторий на GitHub (`origin`). |
+| **Пулл (Pull)** | Загрузка последних изменений с GitHub на свой компьютер. |
 | **Ветка (Branch)** | Параллельная версия кода. `main` — основная ветка (продакшн). |
 | **Мердж (Merge)** | Объединение изменений из одной ветки в другую. |
 | **PR (Pull Request)** | Запрос на добавление кода в основную ветку. Коллеги проверяют и одобряют. |
@@ -163,7 +163,7 @@
 │  VDS (79.143.29.66) — сервер приложения        │
 │  PM2 — менеджер процессов                       │
 │  Nginx — реверс-прокси + SSL                    │
-│  Bitbucket — хранение кода                      │
+│  GitHub — хранение кода                         │
 │  Sentry — мониторинг ошибок                     │
 └─────────────────────────────────────────────────┘
 ```
@@ -753,7 +753,7 @@ git push
 
 ---
 
-## 13. Работа с Git и Bitbucket
+## 13. Работа с Git и GitHub
 
 ### Основные команды
 
@@ -770,7 +770,7 @@ git add -A
 # Создать коммит с описанием
 git commit -m "Fix: исправлена авторизация через VK ID"
 
-# Отправить в Bitbucket (origin)
+# Отправить на GitHub (origin)
 git push
 
 # Получить последние изменения
@@ -818,10 +818,10 @@ git checkout -b feature/add-file-upload
 # Работать, коммитить...
 git add -A && git commit -m "Feature: загрузка файлов в обращения"
 
-# Отправить ветку на Bitbucket
+# Отправить ветку на GitHub
 git push -u origin feature/add-file-upload
 
-# Создать Pull Request в веб-интерфейсе Bitbucket (кнопка появится после пуша)
+# Создать Pull Request в веб-интерфейсе GitHub (кнопка появится после пуша)
 
 # После одобрения — замерджить в main
 ```
@@ -933,10 +933,10 @@ Cursor AI знает скрипты деплоя и выполнит `commit-and
 ### Инфраструктура
 
 ```
-Твой компьютер                 Bitbucket                   Сервер (VDS)
+Твой компьютер                 GitHub                      Сервер (VDS)
      │                            │                           │
      │ git push ─────────────────►│                           │
-     │                            │ git pull ◄────────────────│
+     │                            │  git fetch / reset ───────►│
      │                            │                           │
      │ ssh + скрипт ──────────────┼──────────────────────────►│
      │                            │                     pnpm build
@@ -968,7 +968,7 @@ Cursor AI знает скрипты деплоя и выполнит `commit-and
 2. `git commit -m "описание"`
 3. `git push`
 4. Pre-deploy проверки (TypeScript, Prisma, тесты)
-5. SSH на сервер → `git pull` → `pnpm build` → `pm2 restart`
+5. SSH на сервер → `git fetch origin main && git reset --hard origin/main` → `pnpm build` → `pm2 restart`
 
 #### Способ 2: Скрипт commit-and-deploy.sh
 
@@ -987,7 +987,7 @@ echo "export VDS_PASSWORD='пароль'" > vds.deploy.env
 1. Коммит и пуш
 2. Pre-deploy проверки
 3. SSH на сервер
-4. `git pull`
+4. `git fetch origin main && git reset --hard origin/main`
 5. `pnpm install`
 6. `npx prisma migrate deploy`
 7. `pnpm build`
@@ -1004,7 +1004,7 @@ ssh root@79.143.29.66
 
 # 3. На сервере:
 cd /opt/my-union-pro
-git pull origin main
+git fetch origin main && git reset --hard origin/main
 pnpm install
 npx prisma migrate deploy   # если менялась схема БД
 pnpm build
@@ -1024,7 +1024,7 @@ pm2 logs my-union-pro --lines 20
    └── API тесты (test-tickets-api.mjs)
 
 2. SSH на сервер (79.143.29.66)
-   ├── git pull origin main
+   ├── git fetch origin main && git reset --hard origin/main
    ├── pnpm install
    ├── npx prisma generate
    ├── npx prisma migrate deploy
@@ -1068,7 +1068,7 @@ ssh root@79.143.29.66 'pm2 logs my-union-pro --err --lines 20 --nostream'
 
 ```bash
 # 1. Клонировать репозиторий
-git clone git@bitbucket.org:usmanoff/my-union-pro-ai.git
+git clone git@github.com:myunion-pro/my-union-pro-ai.git
 cd my-union-pro-ai
 
 # 2. Установить зависимости

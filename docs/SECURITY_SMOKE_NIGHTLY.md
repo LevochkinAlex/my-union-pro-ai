@@ -2,7 +2,9 @@
 
 Скрипт: `scripts/security-role-runtime-smoke.mjs`. Запуск: `pnpm test:security:runtime`.
 
-Раньше существовал ручной запуск через GitHub Actions; репозиторий перенесён на **Bitbucket**. Сейчас смок запускай **локально** или настрой **Bitbucket Pipelines** (если понадобится CI) с теми же переменными окружения, что перечислены ниже.
+Репозиторий кода находится на **GitHub** (организация [myunion-pro](https://github.com/myunion-pro)). Автоматический CI для ночного смока можно настроить через **GitHub Actions** или запускать смок **локально**/на выделенной машине с теми же переменными окружения, что перечислены ниже.
+
+## Переменные для CI (GitHub Actions и т.п.)
 
 При падении тестов в лог пишется предупреждение; для строгого режима см. `SEC_SMOKE_STRICT` в скрипте. POST заседаний в безопасном режиме CI можно отключить: `SEC_SMOKE_SKIP_MEETINGS_POST=1`.
 
@@ -34,10 +36,8 @@ For strict mode (fail on missing env):
 SEC_SMOKE_STRICT=1 pnpm test:security:runtime
 ```
 
-## Переменные для CI (Bitbucket Pipelines и т.п.)
-
 Если `SEC_SMOKE_BASE_URL` не задан, job можно пропустить.  
-Для прогона смока задай переменные репозитория (или secured variables в Pipelines):
+Для прогона смока задай секреты/variables в CI (GitHub Secrets, и т. п.):
 
 - `SEC_SMOKE_BASE_URL` (for example: `https://myunion.pro`)
 - `SEC_SMOKE_COOKIE_REPORTS_ALLOW`

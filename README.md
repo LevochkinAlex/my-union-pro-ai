@@ -19,7 +19,7 @@
 
 ```bash
 # 1. Клонировать репозиторий
-git clone git@bitbucket.org:usmanoff/my-union-pro-ai.git
+git clone git@github.com:myunion-pro/my-union-pro-ai.git
 cd my-union-pro-ai
 
 # 2. Установить зависимости
@@ -217,6 +217,11 @@ ORM: **Prisma** — схема в `prisma/schema.prisma`.
 | БД | PostgreSQL на VK Cloud |
 | Кэш | Redis (localhost:6379) |
 
+### Исходный код
+
+Единственный remote: организация **GitHub:** [myunion-pro](https://github.com/myunion-pro) → репозиторий **`my-union-pro-ai`** (приватный).  
+Подробнее: `DEPLOY-CHECKLIST.md` (в т. ч. первый раз: пустой репозиторий на GitHub, push истории, смена `origin` на VDS).
+
 ### Деплой
 
 #### Автоматический (рекомендуемый)
@@ -244,7 +249,7 @@ git add -A && git commit -m "Fix: описание" && git push
 # На сервере
 ssh root@79.143.29.66
 cd /opt/my-union-pro
-git pull origin main
+git fetch origin main && git reset --hard origin/main
 pnpm install
 npx prisma migrate deploy
 pnpm build
@@ -312,7 +317,7 @@ bash scripts/server-install-chrome.sh
 
 ```bash
 cd /opt
-git clone git@bitbucket.org:usmanoff/my-union-pro-ai.git my-union-pro
+git clone git@github.com:myunion-pro/my-union-pro-ai.git my-union-pro
 cd my-union-pro
 pnpm install
 ```

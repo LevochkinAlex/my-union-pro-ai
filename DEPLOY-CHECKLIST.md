@@ -1,6 +1,10 @@
 # Деплой и проверки
 
-**Репозиторий:** https://bitbucket.org/usmanoff/my-union-pro-ai
+**Репозиторий (единственный источник кода):** https://github.com/myunion-pro/my-union-pro-ai  
+**SSH clone / remote:** `git@github.com:myunion-pro/my-union-pro-ai.git`
+
+**Один раз владельцу организации [myunion-pro](https://github.com/myunion-pro):** создать **пустой** приватный репозиторий `my-union-pro-ai` (без README и лицензии), выдать доступ разработчикам и при необходимости добавить **Deploy key** с публичной частью ключа VDS (`myunion_vds`).
+
 **Прод-сервер:** `79.143.29.66` (Selectel, RU), путь `/opt/my-union-pro`
 **БД:** VK Cloud PostgreSQL (`83.166.237.161:5432`), подключение в `.env.local` сервера
 **CDN:** VK Cloud (`cdn.myunion.pro` → origin на этот же сервер)
@@ -8,11 +12,11 @@
 
 ## Быстрый деплой
 
-С локальной машины:
+С локальной машины (**`origin` должен указывать на GitHub**, см. раздел ниже про миграцию с VDS):
 
 ```bash
-./deploy.sh           # git fetch на сервере + build + pm2 restart + root crontab (скидки + ЕГРЮЛ партнёры)
-./deploy.sh --push    # то же, но сначала git push origin main
+./deploy.sh           # на сервере: git fetch + reset на origin/main + build + pm2 restart + root crontab
+./deploy.sh --push    # то же + предварительно git push origin main на GitHub
 ```
 
 После `./deploy.sh` на сервере от **root** автоматически выполняется `APP_ROOT=$VDS_PATH bash scripts/setup-cron.sh`. Все три задания идут в **`CRON_TZ=UTC`**: ЕГРЮЛ партнёров — **`0 2 * * *`** (02:00 UTC ≈ 05:00 МСК).
@@ -36,11 +40,50 @@
 - `VDS_USER` — по умолчанию `root`
 - `VDS_PATH` — по умолчанию `/opt/my-union-pro`
 
+## Миграция remote с Bitbucket на GitHub
+
+Bitbucket для этого проекта **не используется**. На всех машинах должен быть только remote на GitHub.
+
+### Локально (рабочая копия)
+
+```bash
+git remote set-url origin git@github.com:myunion-pro/my-union-pro-ai.git
+git remote -v
+git fetch origin && git branch -vv
+# первый пуш истории в пустой репозиторий GitHub:
+git push -u origin main
+git push origin --tags   # если используете теги
+```
+
+Или выполните: `./scripts/use-github-origin.sh`.
+
+### На VDS (один раз после появления кода на GitHub)
+
+Подключитесь по SSH (ключ `~/.ssh/myunion_vds`). На сервере у GitHub должен быть доступ по тому же ключу (Deploy key в репозитории или SSH user key).
+
+```bash
+cd /opt/my-union-pro
+git remote -v
+git remote set-url origin git@github.com:myunion-pro/my-union-pro-ai.git
+git fetch origin main
+git reset --hard origin/main
+pnpm install --frozen-lockfile
+pnpm prisma generate
+pnpm prisma migrate deploy
+rm -rf .next && pnpm build
+pm2 restart my-union-pro --update-env
+pm2 restart my-union-socket --update-env
+pm2 save
+```
+
+Дальше деплой только через `./deploy.sh` с локальной машины (он делает `git fetch` и `reset --hard origin/main` на проде).
+
 ## Ручные команды на сервере
 
 ```bash
 ssh -i ~/.ssh/myunion_vds root@79.143.29.66
 cd /opt/my-union-pro
+git remote -v   # origin → git@github.com:myunion-pro/my-union-pro-ai.git
 git fetch origin main && git reset --hard origin/main
 pnpm install --frozen-lockfile      # если менялся lockfile
 pnpm prisma generate

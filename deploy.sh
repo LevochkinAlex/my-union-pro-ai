@@ -9,7 +9,7 @@
 #   VDS_PATH     — путь к проекту (по умолчанию /opt/my-union-pro)
 #
 # Что делает:
-# 1. git pull origin main (на проде)
+# 1. git fetch origin main && git reset --hard origin/main (на проде)
 # 2. pnpm install --frozen-lockfile (если изменился lockfile)
 # 3. pnpm prisma generate
 # 4. pnpm prisma migrate deploy (безопасно, только новые миграции)
@@ -18,8 +18,8 @@
 # 7. root crontab: скидки + проверка ЕГРЮЛ партнёров (scripts/setup-cron.sh)
 # 8. Быстрый smoke-test по https
 #
-# Необходимо, чтобы git уже был синхронизирован с bitbucket (делайте
-# commit+push заранее или используйте `./deploy.sh --push`).
+# Репозиторий на GitHub: git@github.com:myunion-pro/my-union-pro-ai.git
+# Перед деплоем: commit + push в origin/main (или `./deploy.sh --push`).
 
 set -euo pipefail
 

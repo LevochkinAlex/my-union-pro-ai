@@ -61,5 +61,5 @@ pm2 logs my-union-pro --lines 50
 ## Полезные ссылки
 - Prod: https://myunion.pro
 - Local dev: http://localhost:3004
-- Репозиторий: https://bitbucket.org/usmanoff/my-union-pro-ai
+- Репозиторий: https://github.com/myunion-pro/my-union-pro-ai
 ```
