@@ -19,7 +19,7 @@
 
 ```bash
 # 1. Клонировать репозиторий
-git clone git@github.com:myunion-pro/my-union-pro-ai.git
+git clone https://github.com/myunion-pro/my-union-pro-ai.git
 cd my-union-pro-ai
 
 # 2. Установить зависимости
@@ -219,43 +219,17 @@ ORM: **Prisma** — схема в `prisma/schema.prisma`.
 
 ### Исходный код
 
-Единственный источник кода: **GitHub** — организация [myunion-pro](https://github.com/myunion-pro), репозиторий **`my-union-pro-ai`** (приватный), SSH: `git@github.com:myunion-pro/my-union-pro-ai.git`.  
+Единственный источник кода: **GitHub** — организация [myunion-pro](https://github.com/myunion-pro), репозиторий **`my-union-pro-ai`** (приватный), `https://github.com/myunion-pro/my-union-pro-ai.git`.  
 Полный чеклист деплоя, VDS и настройка `git`/`gh`: **`DEPLOY-CHECKLIST.md`**.
 
 ### Деплой
 
-#### Автоматический (рекомендуемый)
-
 ```bash
-# Настроить пароль (один раз)
-echo "export VDS_PASSWORD='пароль'" > vds.deploy.env
-
-# Деплой: коммит + пуш + pre-deploy проверки + сборка на сервере + перезапуск
-./commit-and-deploy.sh "Описание изменений"
+./deploy.sh           # fetch + build + pm2 restart на VDS
+./deploy.sh --push    # сначала git push origin main, затем как выше
 ```
 
-Скрипт выполняет:
-1. `git add -A && git commit && git push`
-2. Pre-deploy: TypeScript, Prisma, API-тесты
-3. SSH → `git fetch origin main && git reset --hard origin/main` → `pnpm install` → `prisma migrate deploy` → `pnpm build`
-4. `pm2 restart my-union-pro && pm2 restart my-union-socket`
-
-#### Ручной
-
-```bash
-# На локальной машине
-git add -A && git commit -m "Fix: описание" && git push
-
-# На сервере
-ssh root@79.143.29.66
-cd /opt/my-union-pro
-git fetch origin main && git reset --hard origin/main
-pnpm install
-npx prisma migrate deploy
-pnpm build
-pm2 restart my-union-pro
-pm2 restart my-union-socket
-```
+Детали и troubleshooting: **[DEPLOY-CHECKLIST.md](DEPLOY-CHECKLIST.md)**.
 
 ### Мониторинг
 
@@ -317,7 +291,7 @@ bash scripts/server-install-chrome.sh
 
 ```bash
 cd /opt
-git clone git@github.com:myunion-pro/my-union-pro-ai.git my-union-pro
+git clone https://github.com/myunion-pro/my-union-pro-ai.git my-union-pro
 cd my-union-pro
 pnpm install
 ```
