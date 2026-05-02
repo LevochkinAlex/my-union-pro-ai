@@ -12,10 +12,7 @@
 
 ## Быстрый деплой
 
-Локально: **`deploy.sh`** пушит в **`origin`**, на VDS делает **`git fetch` и `reset --hard` с того же `origin`**.
-
-- После переезда: **`origin` = GitHub** — тогда `./deploy.sh --push` обновляет [myunion-pro/my-union-pro-ai](https://github.com/myunion-pro/my-union-pro-ai).
-- На время миграции `origin` может оставаться зеркалом на Bitbucket; используйте remote **`github`** для первых пушей на GitHub (см. раздел «Миграция remote» ниже), затем **`./scripts/use-github-origin.sh cutover`**.
+Локально **`origin` = GitHub**. Скрипт **`./deploy.sh --push`** выполняет **`git push origin main`**, на VDS подтягивает тот же **`origin/main`**.
 
 ```bash
 ./deploy.sh           # на VDS: fetch + reset на origin/main + build + pm2 + crontab
@@ -43,32 +40,31 @@
 - `VDS_USER` — по умолчанию `root`
 - `VDS_PATH` — по умолчанию `/opt/my-union-pro`
 
-## Миграция remote с Bitbucket на GitHub
+### Почему SSH «есть», а `git push` пишет Repository not found?
 
-**Целевое состояние:** единственный canonical remote — GitHub. Bitbucket выводится из оборота после успешного зеркалирования и смены `origin` на VDS (см. ниже).
-
-### Локально (рабочая копия)
+- **SSH только подтверждает доступ к аккаунту GitHub**, к которому привязан ключ (в логах: `Hi username!`). Это **не создаёт репозиторий** само по себе.
+- Нужно, чтобы в организации **`myunion-pro`** существовал репозиторий **`my-union-pro-ai`** (пустой или с кодом), и чтобы **этот аккаунт или Deploy key имели право push/pull**.
+- Проверка:
 
 ```bash
-./scripts/use-github-origin.sh add     # добавить remote github (если ещё нет)
-
-git push github main                   # когда репозиторий уже создан на GitHub
-git push github --tags                 # если используете теги
-
-# Когда код на GitHub проверен и VDS переведён:
-./scripts/use-github-origin.sh cutover # перевести origin только на GitHub
+GIT_SSH_COMMAND="ssh -o BatchMode=yes" git ls-remote git@github.com:myunion-pro/my-union-pro-ai.git refs/heads/main
 ```
 
-### Полностью убрать Bitbucket
+— должен вывести хеш коммита, а не ошибку.
 
-1. Проверьте: `git ls-remote github refs/heads/main` даёт ожидаемый SHA; на VDS **`origin` уже GitHub**.
-2. Локально выполните **`./scripts/use-github-origin.sh cutover`** (если `origin` ещё не GitHub).
-3. Опционально: `git remote remove github`, если достаточно одного `origin`.
-4. При необходимости удалите старый репозиторий в Bitbucket в веб-интерфейсе.
+**Первый push истории после создания пустого репозитория:**
 
-### На VDS (один раз после появления кода на GitHub)
+```bash
+git remote set-url origin git@github.com:myunion-pro/my-union-pro-ai.git
+git push -u origin main
+git push origin --tags   # при необходимости
+```
 
-Подключитесь по SSH (ключ `~/.ssh/myunion_vds`). На сервере у GitHub должен быть доступ по тому же ключу (Deploy key в репозитории или SSH user key).
+**Bitbucket** в проектной документации больше не используется. Старое зеркало при желании можно держать у себя вручную как отдельный remote (не входит в стандартный поток деплоя).
+
+## VDS: переключить `origin` на GitHub и подтянуть код
+
+Подключитесь по SSH (ключ `~/.ssh/myunion_vds`). На сервер GitHub должен пускать тот же ключ (**Deploy key** с доступом записи или доступ организации для серверного пользователя по SSH).
 
 ```bash
 cd /opt/my-union-pro
@@ -87,7 +83,7 @@ pm2 save
 
 Дальше деплой только через `./deploy.sh` с локальной машины (он делает `git fetch` и `reset --hard origin/main` на проде).
 
-## Ручные команды на сервере
+## Ручные команды на сервере (повтор операций deploy без `./deploy.sh`)
 
 ```bash
 ssh -i ~/.ssh/myunion_vds root@79.143.29.66
@@ -110,7 +106,7 @@ pm2 logs my-union-pro --lines 50
 2. Вход в `/login`, отправка magic link — работает.
 3. WebSocket: в консоли браузера `[useChat] ✅ Socket connected`.
 4. Админ-аналитика расходов ИИ: `/admin/ai-chat/usage` → события логируются.
-5. **BestBenefits (каталог):** на VDS в `.env.local` должны быть явные строки `BEST_BENEFITS_API_URL` и `BESTBENEFITS_CATALOG_MAX_PAGES` — после `git pull` с локальной машины: **`bash scripts/ensure-vds-bb-catalog-env.sh`** (или вручную по `.env.example`). Затем проверка:  
+5. **BestBenefits (каталог):** на VDS в `.env.local` должны быть явные строки `BEST_BENEFITS_API_URL` и `BESTBENEFITS_CATALOG_MAX_PAGES` — после синхронизации кода (`git fetch` / `reset`): **`bash scripts/ensure-vds-bb-catalog-env.sh`** (или вручную по `.env.example`). Затем проверка:  
    `cd /opt/my-union-pro && ./node_modules/.bin/dotenv -c -- ./node_modules/.bin/tsx scripts/check-bb-org-token.ts` → **HTTP 200**; полный импорт каталога: `tsx scripts/sync-discounts.ts`. Подробнее: `docs/BESTBENEFITS_SYSTEM.md`.
 
 ## Типовые проблемы
