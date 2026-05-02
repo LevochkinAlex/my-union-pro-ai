@@ -1,7 +1,9 @@
 # Деплой и проверки
 
 **Репозиторий (единственный источник кода):** https://github.com/myunion-pro/my-union-pro-ai  
-**SSH clone / remote:** `git@github.com:myunion-pro/my-union-pro-ai.git`
+**SSH clone / `origin`:** `git@github.com:myunion-pro/my-union-pro-ai.git`
+
+Старые хостинги кода (в т.ч. Bitbucket) **не используются**: в документации, скриптах и на VDS должен остаться только этот URL. Локально для приведения remotes: **`./scripts/use-github-origin.sh cutover`** (или `add`, затем `cutover`).
 
 **Один раз владельцу организации [myunion-pro](https://github.com/myunion-pro):** создать **пустой** приватный репозиторий `my-union-pro-ai` (без README и лицензии), выдать доступ разработчикам и при необходимости добавить **Deploy key** с публичной частью ключа VDS (`myunion_vds`).
 
@@ -10,18 +12,18 @@
 **CDN:** VK Cloud (`cdn.myunion.pro` → origin на этот же сервер)
 **Доступ:** по SSH-ключу `~/.ssh/myunion_vds` (пароли нигде не храним)
 
-### GitHub CLI (`gh`) — один аккаунт для работы с MyUnion
+### GitHub CLI (`gh`) и SSH — только org **myunion-pro**
 
-У **`gh` нет входа «в организацию»**: авторизуется только **пользователь GitHub**, у которого есть доступ к org **[myunion-pro](https://github.com/myunion-pro)** (рабочий аккаунт компании, сервисная учётка или отдельный бот — как договоритесь в команде).
+У **`gh` нет входа «в организацию»**: авторизуется **пользователь GitHub**, у которого есть доступ к org **[myunion-pro](https://github.com/myunion-pro)**.
 
-Рекомендуемая политика:
+**Убрать старые GitHub-сессии и оставить одну рабочую:**
 
-1. На машине держать в `gh` **не больше одной** активной учётной записи на `github.com`:
-   - `gh auth status`
-   - выйти из лишней: **`gh auth logout -h github.com -u ЛИШНИЙ_ЛОГИН`**
-   - либо несколько раз **`gh auth logout`**, затем один раз **`gh auth login`** только под нужным пользователем.
-2. Убедиться, что у этой учётки есть доступ к org: например **`gh api user/orgs -q '.[].login'`** — в списке должна быть **`myunion-pro`** (для членов организации).
-3. Личные GitHub-аккаунты на той же машине удобнее вести через **`git` + отдельный Host в `~/.ssh/config`** (например `github.com-myunion` vs `github.com`), а **`gh` оставить только под MyUnion** — так не путаются контексты и токены.
+1. `gh auth status` — посмотреть, какие учётки залогинены на `github.com`.
+2. Выйти из всех лишних: **`gh auth logout -h github.com -u ЛОГИН`** (повторить для каждого ненужного логина) или несколько раз **`gh auth logout`**, пока `gh auth status` не покажет отсутствие логина.
+3. Один раз: **`gh auth login`** — только пользователь с доступом к **myunion-pro** (HTTPS или SSH — как привыкли).
+4. Проверка org: **`gh api user/orgs -q '.[].login'`** — в списке должна быть **`myunion-pro`**.
+
+**Личный GitHub на той же машине:** не смешивать с рабочим `gh` — для личных репозиториев использовать **`git` + отдельный `Host` в `~/.ssh/config`** (например `Host github.com-personal` → `HostName github.com` + свой ключ), а для **myunion.pro** в `~/.ssh/config` оставить ключ **`myunion_vds`** на `github.com` (или отдельный `Host github.com-myunion` и `urlInsteadOf` в `git config` — по договорённости в команде). Цель: **`gh` и push в `myunion-pro/*` всегда от рабочей учётки**, без переключения «на память».
 
 ## Быстрый деплой
 
@@ -73,15 +75,39 @@ git push -u origin main
 git push origin --tags   # при необходимости
 ```
 
-**Bitbucket** в проектной документации больше не используется. Старое зеркало при желании можно держать у себя вручную как отдельный remote (не входит в стандартный поток деплоя).
+## Однократно: залить историю в GitHub, если код ещё лежит только на старом сервере
 
-## VDS: переключить `origin` на GitHub и подтянуть код
+Выполняется **один раз** с машины, где есть полная история `git` (все ветки/теги, которые нужно сохранить).
 
-Подключитесь по SSH (ключ `~/.ssh/myunion_vds`). На сервер GitHub должен пускать тот же ключ (**Deploy key** с доступом записи или доступ организации для серверного пользователя по SSH).
+1. В организации [myunion-pro](https://github.com/myunion-pro) создать пустой репозиторий **`my-union-pro-ai`** (без README).
+2. Добавить GitHub как remote и отправить историю:
+
+```bash
+./scripts/use-github-origin.sh add   # remote github → git@github.com:myunion-pro/my-union-pro-ai.git
+git push github --all
+git push github --tags
+```
+
+3. Сделать GitHub основным для `origin` и убрать лишние remotes (например старые имена `bitbucket` / `bb`):
+
+```bash
+./scripts/use-github-origin.sh cutover
+```
+
+4. Дальше везде только: **`git push origin main`** (и теги при необходимости).
+
+После переноса **в CI/CD, на VDS и у разработчиков** не должно остаться URL старого хоста — только `git@github.com:myunion-pro/my-union-pro-ai.git`.
+
+## VDS: только GitHub — сменить `origin` и подтянуть код
+
+Подключитесь по SSH (ключ `~/.ssh/myunion_vds`). GitHub должен принимать этот ключ (**Deploy key** с правом чтения/записи или членство организации).
 
 ```bash
 cd /opt/my-union-pro
 git remote -v
+# Удалить старые remotes, если остались от прежнего хоста (имена могут отличаться — проверьте вывод выше):
+git remote remove bitbucket 2>/dev/null || true
+git remote remove bb 2>/dev/null || true
 git remote set-url origin git@github.com:myunion-pro/my-union-pro-ai.git
 git fetch origin main
 git reset --hard origin/main

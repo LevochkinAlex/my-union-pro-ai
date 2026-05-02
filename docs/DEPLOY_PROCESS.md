@@ -2,6 +2,7 @@
 
 ## Инфраструктура
 
+- **Код:** только репозиторий **https://github.com/myunion-pro/my-union-pro-ai** (`git@github.com:myunion-pro/my-union-pro-ai.git`). Деплой и документация не предполагают других remotes.
 - **Сервер приложения:** `79.143.29.66` (Selectel, RU), приложение в `/opt/my-union-pro`, PM2 (`my-union-pro` + `my-union-socket`).
 - **База данных:** VK Cloud PostgreSQL — хост `83.166.237.161`, база `myunion_db`. Локальная разработка и прод подключаются к одной БД (DATABASE_URL в `.env.local` и на сервере указывает на VK Cloud).
 - **CDN:** VK Cloud CDN (`cdn.myunion.pro` → origin на этот же сервер). Cloudflare — только DNS.

@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
-# Настройка remotes под переезд на GitHub (организация myunion-pro).
+# Настройка remotes: единственный канал — GitHub org myunion-pro.
 #
-#   ./scripts/use-github-origin.sh add      — добавляет remote github (ничего не ломает)
-#   ./scripts/use-github-origin.sh cutover — origin → только GitHub (после создания repo и первого push)
+#   ./scripts/use-github-origin.sh add       — remote github → org (дополнительно к origin)
+#   ./scripts/use-github-origin.sh cutover   — origin только на GitHub + удалить типичные legacy-remotes
+#   ./scripts/use-github-origin.sh cleanup   — только удалить legacy-remotes (bitbucket, bb), origin не трогает
 #
 set -euo pipefail
 GITHUB_SSH="git@github.com:myunion-pro/my-union-pro-ai.git"
+
+remove_legacy_remotes() {
+  for name in bitbucket bb; do
+    if git remote get-url "$name" &>/dev/null; then
+      git remote remove "$name"
+      echo "→ удалён remote: $name"
+    fi
+  done
+}
 
 case "${1:-add}" in
   add)
@@ -18,11 +28,15 @@ case "${1:-add}" in
     fi
     ;;
   cutover)
-    echo "→ origin переводится только на GitHub (Bitbucket через origin использоваться не будет)"
+    echo "→ origin → $GITHUB_SSH"
     git remote set-url origin "$GITHUB_SSH"
+    remove_legacy_remotes
+    ;;
+  cleanup)
+    remove_legacy_remotes
     ;;
   *)
-    echo "Использование: $0 [add|cutover]" >&2
+    echo "Использование: $0 [add|cutover|cleanup]" >&2
     exit 2
     ;;
 esac

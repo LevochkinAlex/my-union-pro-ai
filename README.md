@@ -219,8 +219,8 @@ ORM: **Prisma** — схема в `prisma/schema.prisma`.
 
 ### Исходный код
 
-Единственный remote: организация **GitHub:** [myunion-pro](https://github.com/myunion-pro) → репозиторий **`my-union-pro-ai`** (приватный).  
-Подробнее и миграция с Bitbucket: **`DEPLOY-CHECKLIST.md`**.
+Единственный источник кода: **GitHub** — организация [myunion-pro](https://github.com/myunion-pro), репозиторий **`my-union-pro-ai`** (приватный), SSH: `git@github.com:myunion-pro/my-union-pro-ai.git`.  
+Полный чеклист деплоя, VDS и настройка `git`/`gh`: **`DEPLOY-CHECKLIST.md`**.
 
 ### Деплой
 
