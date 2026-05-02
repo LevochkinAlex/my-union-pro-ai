@@ -12,11 +12,14 @@
 
 ## Быстрый деплой
 
-С локальной машины (**`origin` должен указывать на GitHub**, см. раздел ниже про миграцию с VDS):
+Локально: **`deploy.sh`** пушит в **`origin`**, на VDS делает **`git fetch` и `reset --hard` с того же `origin`**.
+
+- После переезда: **`origin` = GitHub** — тогда `./deploy.sh --push` обновляет [myunion-pro/my-union-pro-ai](https://github.com/myunion-pro/my-union-pro-ai).
+- На время миграции `origin` может оставаться зеркалом на Bitbucket; используйте remote **`github`** для первых пушей на GitHub (см. раздел «Миграция remote» ниже), затем **`./scripts/use-github-origin.sh cutover`**.
 
 ```bash
-./deploy.sh           # на сервере: git fetch + reset на origin/main + build + pm2 restart + root crontab
-./deploy.sh --push    # то же + предварительно git push origin main на GitHub
+./deploy.sh           # на VDS: fetch + reset на origin/main + build + pm2 + crontab
+./deploy.sh --push    # сначала git push origin main, затем как выше
 ```
 
 После `./deploy.sh` на сервере от **root** автоматически выполняется `APP_ROOT=$VDS_PATH bash scripts/setup-cron.sh`. Все три задания идут в **`CRON_TZ=UTC`**: ЕГРЮЛ партнёров — **`0 2 * * *`** (02:00 UTC ≈ 05:00 МСК).
@@ -42,20 +45,26 @@
 
 ## Миграция remote с Bitbucket на GitHub
 
-Bitbucket для этого проекта **не используется**. На всех машинах должен быть только remote на GitHub.
+**Целевое состояние:** единственный canonical remote — GitHub. Bitbucket выводится из оборота после успешного зеркалирования и смены `origin` на VDS (см. ниже).
 
 ### Локально (рабочая копия)
 
 ```bash
-git remote set-url origin git@github.com:myunion-pro/my-union-pro-ai.git
-git remote -v
-git fetch origin && git branch -vv
-# первый пуш истории в пустой репозиторий GitHub:
-git push -u origin main
-git push origin --tags   # если используете теги
+./scripts/use-github-origin.sh add     # добавить remote github (если ещё нет)
+
+git push github main                   # когда репозиторий уже создан на GitHub
+git push github --tags                 # если используете теги
+
+# Когда код на GitHub проверен и VDS переведён:
+./scripts/use-github-origin.sh cutover # перевести origin только на GitHub
 ```
 
-Или выполните: `./scripts/use-github-origin.sh`.
+### Полностью убрать Bitbucket
+
+1. Проверьте: `git ls-remote github refs/heads/main` даёт ожидаемый SHA; на VDS **`origin` уже GitHub**.
+2. Локально выполните **`./scripts/use-github-origin.sh cutover`** (если `origin` ещё не GitHub).
+3. Опционально: `git remote remove github`, если достаточно одного `origin`.
+4. При необходимости удалите старый репозиторий в Bitbucket в веб-интерфейсе.
 
 ### На VDS (один раз после появления кода на GitHub)
 

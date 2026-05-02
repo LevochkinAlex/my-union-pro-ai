@@ -220,7 +220,7 @@ ORM: **Prisma** — схема в `prisma/schema.prisma`.
 ### Исходный код
 
 Единственный remote: организация **GitHub:** [myunion-pro](https://github.com/myunion-pro) → репозиторий **`my-union-pro-ai`** (приватный).  
-Подробнее: `DEPLOY-CHECKLIST.md` (в т. ч. первый раз: пустой репозиторий на GitHub, push истории, смена `origin` на VDS).
+Подробнее и миграция с Bitbucket: **`DEPLOY-CHECKLIST.md`**.
 
 ### Деплой
 
@@ -237,7 +237,7 @@ echo "export VDS_PASSWORD='пароль'" > vds.deploy.env
 Скрипт выполняет:
 1. `git add -A && git commit && git push`
 2. Pre-deploy: TypeScript, Prisma, API-тесты
-3. SSH → `git pull` → `pnpm install` → `prisma migrate deploy` → `pnpm build`
+3. SSH → `git fetch origin main && git reset --hard origin/main` → `pnpm install` → `prisma migrate deploy` → `pnpm build`
 4. `pm2 restart my-union-pro && pm2 restart my-union-socket`
 
 #### Ручной
