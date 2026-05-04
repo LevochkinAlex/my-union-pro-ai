@@ -13,6 +13,8 @@ const partnerStubActivePayClass =
   "inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900";
 const partnerStubDisabledApproveClass =
   "inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-emerald-600/50 px-5 py-2.5 text-sm font-medium text-white shadow-sm dark:bg-emerald-600/40";
+const partnerStubActiveApproveClass =
+  "inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus-visible:ring-emerald-400 dark:focus-visible:ring-offset-gray-900";
 
 /** «Отклонить» / «Отменить» — та же геометрия и скругление, что у заглушек выше. */
 const partnerStubDangerOutlineClass =
@@ -94,6 +96,35 @@ export default function PartnerApplicationStubActions({
         return;
       }
       setStatus(data.status ?? "CANCELLED");
+      dispatchPartnerApplicationsNewRefresh();
+      router.refresh();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const approve = async () => {
+    if (!canAct || submitting || viewContext !== "partner") return;
+    if (!confirm("Одобрить заявку? Статус станет «Одобрено», место в лимите площадки освободится.")) {
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/partner/venues/${encodeURIComponent(venueId)}/applications/${encodeURIComponent(applicationId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "approve" }),
+        }
+      );
+      const data = (await res.json().catch(() => ({}))) as { error?: string; status?: string };
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "Не удалось одобрить заявку");
+        return;
+      }
+      setStatus(data.status ?? "APPROVED");
       dispatchPartnerApplicationsNewRefresh();
       router.refresh();
     } finally {
@@ -277,12 +308,14 @@ export default function PartnerApplicationStubActions({
       </button>
       <button
         type="button"
-        title="Функция в разработке"
-        className={partnerStubDisabledApproveClass}
-        disabled
-        aria-disabled
+        title="Перевести заявку в статус «Одобрено» без подтверждения оплаты"
+        className={canAct && !submitting ? partnerStubActiveApproveClass : partnerStubDisabledApproveClass}
+        disabled={!canAct || submitting}
+        onClick={() => {
+          if (canAct && !submitting) void approve();
+        }}
       >
-        Одобрить
+        {submitting ? "Отправка…" : "Одобрить"}
       </button>
       <button
         type="button"

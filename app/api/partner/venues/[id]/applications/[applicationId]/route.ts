@@ -8,11 +8,26 @@ import { partnerApiPrismaJsonBody } from "@/lib/prisma-partner-list-error-messag
 
 export const dynamic = "force-dynamic";
 
+async function slotCountsAfterUpdate(venueId: string, cap: number | null) {
+  const usedRows = await prisma.$queryRaw<Array<{ c: bigint }>>(
+    Prisma.sql`
+      SELECT COUNT(*)::bigint AS c
+      FROM "PartnerVenueApplication" a
+      WHERE a."partnerVenueId" = ${venueId}
+        AND a.status::text IN ('NEW', 'IN_PROGRESS')
+    `
+  );
+  const usedAfter = Number(usedRows[0]?.c ?? 0);
+  const remainingApplicationSlots = partnerVenueHasApplicationSlotCap(cap)
+    ? Math.max(0, cap - usedAfter)
+    : null;
+  return { applicationsCount: usedAfter, remainingApplicationSlots };
+}
+
 /**
  * PATCH /api/partner/venues/[id]/applications/[applicationId]
- * Тело: { "action": "reject" } — заявка «Новая» / «В работе» → «Отменена» (освобождает слот лимита).
- *
- * Чтение/запись статуса через SQL — см. GET partner/applications (enum IN_PROGRESS в dev).
+ * Тело: { "action": "reject" } — «Новая» / «В работе» → «Отменена».
+ *       { "action": "approve" } — «Новая» / «В работе» → «Одобрено» (освобождает слот лимита).
  */
 export async function PATCH(
   request: NextRequest,
@@ -34,7 +49,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Ожидается JSON" }, { status: 400 });
   }
 
-  if (body.action !== "reject") {
+  const action = body.action;
+  if (action !== "reject" && action !== "approve") {
     return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
   }
 
@@ -66,19 +82,43 @@ export async function PATCH(
     }
 
     const st = appRows[0]!.status;
-    const canReject =
+    const canMutate =
       st === PV_APPLICATION_STATUS.NEW || st === PV_APPLICATION_STATUS.IN_PROGRESS;
-    if (!canReject) {
+    if (!canMutate) {
       return NextResponse.json(
-        { error: "Отменить можно только заявку в статусе «Новая» или «В работе»" },
+        { error: "Доступно только для заявок в статусе «Новая» или «В работе»" },
         { status: 400 }
       );
+    }
+
+    const cap = venue.remainingSlots;
+
+    if (action === "reject") {
+      await prisma.$executeRaw(
+        Prisma.sql`
+          UPDATE "PartnerVenueApplication" a
+          SET status = 'CANCELLED'::"PartnerVenueApplicationStatus"
+          FROM "PartnerVenue" v
+          WHERE a.id = ${aid}
+            AND a."partnerVenueId" = ${venue.id}
+            AND v.id = a."partnerVenueId"
+            AND v."partnerId" = ${partnerId}
+            AND a.status::text IN ('NEW', 'IN_PROGRESS')
+        `
+      );
+      const slots = await slotCountsAfterUpdate(venue.id, cap);
+      return NextResponse.json({
+        ok: true,
+        status: PV_APPLICATION_STATUS.CANCELLED,
+        ...slots,
+      });
     }
 
     await prisma.$executeRaw(
       Prisma.sql`
         UPDATE "PartnerVenueApplication" a
-        SET status = 'CANCELLED'::"PartnerVenueApplicationStatus"
+        SET status = 'APPROVED'::"PartnerVenueApplicationStatus",
+            "inProgressAt" = NULL
         FROM "PartnerVenue" v
         WHERE a.id = ${aid}
           AND a."partnerVenueId" = ${venue.id}
@@ -87,32 +127,17 @@ export async function PATCH(
           AND a.status::text IN ('NEW', 'IN_PROGRESS')
       `
     );
-
-    const cap = venue.remainingSlots;
-    const usedRows = await prisma.$queryRaw<Array<{ c: bigint }>>(
-      Prisma.sql`
-        SELECT COUNT(*)::bigint AS c
-        FROM "PartnerVenueApplication" a
-        WHERE a."partnerVenueId" = ${venue.id}
-          AND a.status::text IN ('NEW', 'IN_PROGRESS')
-      `
-    );
-    const usedAfter = Number(usedRows[0]?.c ?? 0);
-    const remainingApplicationSlots = partnerVenueHasApplicationSlotCap(cap)
-      ? Math.max(0, cap - usedAfter)
-      : null;
-
+    const slots = await slotCountsAfterUpdate(venue.id, cap);
     return NextResponse.json({
       ok: true,
-      status: PV_APPLICATION_STATUS.CANCELLED,
-      applicationsCount: usedAfter,
-      remainingApplicationSlots,
+      status: PV_APPLICATION_STATUS.APPROVED,
+      ...slots,
     });
   } catch (e) {
     console.error("[PATCH partner/venues/[id]/applications/[applicationId]]", e);
     return NextResponse.json(
       partnerApiPrismaJsonBody(e, "Не удалось обновить заявку"),
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

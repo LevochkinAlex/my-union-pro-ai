@@ -7,7 +7,7 @@ function labelFor(status: string): string {
     case "CANCELLED":
       return "Отменена";
     case "APPROVED":
-      return "Одобрено";
+      return "Одобрена";
     default:
       return status || "—";
   }
