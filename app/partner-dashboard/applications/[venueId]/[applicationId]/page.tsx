@@ -8,7 +8,9 @@ import { PV_APPLICATION_STATUS } from "@/lib/partner-venue-application-status";
 import { prisma } from "@/lib/prisma";
 import PartnerApplicationAttachmentZone from "@/components/partner/PartnerApplicationAttachmentZone";
 import PartnerApplicationOpenedBeacon from "@/components/partner/PartnerApplicationOpenedBeacon";
+import PartnerApplicationPaymentDocumentsLinks from "@/components/partner/PartnerApplicationPaymentDocumentsLinks";
 import PartnerApplicationStubActions from "@/components/partner/PartnerApplicationStubActions";
+import { partnerApplicationPaymentViewUrl } from "@/lib/partner-application-payment-upload";
 
 type PageProps = {
   params: Promise<{ venueId: string; applicationId: string }>;
@@ -80,6 +82,7 @@ export default async function PartnerVenueApplicationStubPage({ params }: PagePr
       Prisma.sql`
         UPDATE "PartnerVenueApplication" a
         SET status = 'IN_PROGRESS'::"PartnerVenueApplicationStatus",
+            "inProgressAt" = NOW(),
             "slaReminder24hSentAt" = NULL,
             "slaReminder2hSentAt" = NULL
         FROM "PartnerVenue" v
@@ -101,6 +104,43 @@ export default async function PartnerVenueApplicationStubPage({ params }: PagePr
     displayStatus = afterRows[0]?.status ?? PV_APPLICATION_STATUS.IN_PROGRESS;
   }
 
+  let partnerPaymentDocuments: Array<{
+    id: string;
+    originalFileName: string;
+    viewUrl: string;
+    createdAt: string;
+  }> = [];
+  let partnerPaymentConfirmedAtIso: string | null = null;
+  try {
+    const paymentPack = await prisma.partnerVenueApplication.findFirst({
+      where: { id: aid, partnerVenueId: venueOwned.id },
+      select: {
+        paymentConfirmedAt: true,
+        paymentDocuments: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            storedFileName: true,
+            originalFileName: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+    partnerPaymentDocuments = (paymentPack?.paymentDocuments ?? []).map((d) => ({
+      id: d.id,
+      originalFileName: d.originalFileName,
+      viewUrl: partnerApplicationPaymentViewUrl(aid, d.storedFileName),
+      createdAt: d.createdAt.toISOString(),
+    }));
+    partnerPaymentConfirmedAtIso = paymentPack?.paymentConfirmedAt?.toISOString() ?? null;
+  } catch (e) {
+    console.warn(
+      "[PartnerVenueApplicationStubPage] Документы об оплате / paymentConfirmedAt недоступны (миграция + `npx prisma generate`, перезапуск dev):",
+      e
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PartnerApplicationOpenedBeacon />
@@ -119,11 +159,16 @@ export default async function PartnerVenueApplicationStubPage({ params }: PagePr
 
       <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/80 p-8 text-center dark:border-gray-600 dark:bg-gray-800/50">
         <div className="flex flex-col gap-8">
-          <PartnerApplicationAttachmentZone />
+          <div className="flex flex-col gap-3">
+            <PartnerApplicationAttachmentZone />
+            <PartnerApplicationPaymentDocumentsLinks documents={partnerPaymentDocuments} />
+          </div>
           <PartnerApplicationStubActions
             venueId={vid}
             applicationId={aid}
             initialStatus={displayStatus}
+            partnerPaymentDocumentsCount={partnerPaymentDocuments.length}
+            partnerPaymentConfirmedAt={partnerPaymentConfirmedAtIso}
           />
         </div>
       </div>

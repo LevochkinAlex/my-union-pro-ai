@@ -1,11 +1,29 @@
-import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+
+let cachedRequireFromProjectRoot: ReturnType<
+  typeof import('node:module').createRequire
+> | undefined;
+
+/**
+ * `require` из корня репозитория (как после `prisma generate` в node_modules).
+ * Нельзя вызывать `createRequire` на верхнем уровне модуля: в RSC-бандле Next 16
+ * это превращается в `undefined` → «projectRootRequire is not a function».
+ */
+function requireFromProjectRoot(): ReturnType<typeof import('node:module').createRequire> {
+  if (!cachedRequireFromProjectRoot) {
+    const { createRequire } = require('node:module') as typeof import('node:module');
+    cachedRequireFromProjectRoot = createRequire(join(process.cwd(), 'package.json'));
+  }
+  return cachedRequireFromProjectRoot;
+}
 
 const globalForPrisma = globalThis as unknown as {
   __prisma: PrismaClient | undefined;
   __prismaInitError: Error | undefined;
+  /** Значение `readPrismaGeneratedClientId()` на момент последней ошибки инициализации — после `prisma generate` id меняется и кэш ошибки сбрасывается */
+  __prismaInitFailedAtDiskId: string | undefined;
   /** Имя пакета из `.prisma/client/package.json` — меняется после `prisma generate`, чтобы сбросить устаревший singleton */
   __prismaGeneratedClientId: string | undefined;
 };
@@ -16,8 +34,7 @@ const globalForPrisma = globalThis as unknown as {
  */
 function readPrismaGeneratedClientId(): string {
   try {
-    const require = createRequire(join(process.cwd(), 'package.json'));
-    const prismaClientPkg = require.resolve('@prisma/client/package.json');
+    const prismaClientPkg = requireFromProjectRoot().resolve('@prisma/client/package.json');
     const generatedPkg = join(dirname(prismaClientPkg), '..', '..', '.prisma', 'client', 'package.json');
     const raw = readFileSync(generatedPkg, 'utf8');
     const j = JSON.parse(raw) as { name?: string };
@@ -50,7 +67,10 @@ function createPrismaClient(): PrismaClient {
       // ignore URL parse errors
     }
   }
-  const client = new PrismaClient({
+  const { PrismaClient: PrismaClientCtor } = requireFromProjectRoot()(
+    '@prisma/client'
+  ) as typeof import('@prisma/client');
+  const client = new PrismaClientCtor({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     datasources: {
       db: {
@@ -59,11 +79,20 @@ function createPrismaClient(): PrismaClient {
     },
   });
 
-  // Убедиться, что клиент соответствует текущей схеме (иначе prisma.partner === undefined → .findMany / .create падают)
-  const anyClient = client as unknown as { partner?: unknown };
+  // Убедиться, что клиент соответствует текущей схеме (иначе делегаты undefined → .findMany / .create падают)
+  const anyClient = client as unknown as {
+    partner?: unknown;
+    partnerVenueApplicationPaymentDocument?: unknown;
+  };
   if (typeof anyClient.partner === 'undefined') {
     const msg =
       'Сгенерированный Prisma Client не содержит модель Partner. Выполните в корне проекта: npx prisma generate и перезапустите dev-сервер (npm run dev).';
+    console.error('[prisma]', msg);
+    throw new Error(msg);
+  }
+  if (typeof anyClient.partnerVenueApplicationPaymentDocument === 'undefined') {
+    const msg =
+      'Сгенерированный Prisma Client не содержит модель PartnerVenueApplicationPaymentDocument. Выполните: npx prisma generate и перезапустите dev-сервер (npm run dev).';
     console.error('[prisma]', msg);
     throw new Error(msg);
   }
@@ -71,36 +100,64 @@ function createPrismaClient(): PrismaClient {
   return client;
 }
 
+function clearPrismaInitError(): void {
+  globalForPrisma.__prismaInitError = undefined;
+  globalForPrisma.__prismaInitFailedAtDiskId = undefined;
+}
+
 /** Единый экземпляр Prisma: ленивая инициализация при первом обращении. */
 function getPrismaClient(): PrismaClient {
+  const diskIdNow = readPrismaGeneratedClientId();
+  if (globalForPrisma.__prismaInitError) {
+    const err = globalForPrisma.__prismaInitError;
+    const failedAt = globalForPrisma.__prismaInitFailedAtDiskId;
+    const diskRegenerated =
+      typeof failedAt === 'undefined' || (diskIdNow !== '' && diskIdNow !== failedAt);
+    const databaseUrlFixed =
+      typeof process.env.DATABASE_URL === 'string' &&
+      process.env.DATABASE_URL.length > 0 &&
+      err.message.includes('DATABASE_URL');
+    if (diskRegenerated || databaseUrlFixed) {
+      clearPrismaInitError();
+    } else {
+      throw err;
+    }
+  }
+
   if (globalForPrisma.__prisma) {
-    const cached = globalForPrisma.__prisma as PrismaClient & { partner?: unknown };
-    const diskId = readPrismaGeneratedClientId();
+    const cached = globalForPrisma.__prisma as PrismaClient & {
+      partner?: unknown;
+      partnerVenueApplicationPaymentDocument?: unknown;
+    };
+    const diskId = diskIdNow || readPrismaGeneratedClientId();
     const cachedId = globalForPrisma.__prismaGeneratedClientId;
     // Нет сохранённого id (старый процесс до этого патча) или хеш на диске изменился после `prisma generate`
     const generatedClientOutdated = Boolean(diskId && cachedId !== diskId);
     const partnerDelegateMissing = typeof cached.partner === "undefined";
+    const paymentDocDelegateMissing =
+      typeof cached.partnerVenueApplicationPaymentDocument === "undefined";
 
-    if (generatedClientOutdated || partnerDelegateMissing) {
+    if (generatedClientOutdated || partnerDelegateMissing || paymentDocDelegateMissing) {
       if (generatedClientOutdated) {
         console.warn(
           "[prisma] Сгенерированный клиент обновился (например, после `prisma generate`). Пересоздаём PrismaClient."
         );
-      } else {
+      } else if (partnerDelegateMissing) {
         console.warn(
           "[prisma] Кэш клиента устарел (нет модели partner). Пересоздаём PrismaClient — при необходимости выполните: npx prisma generate"
+        );
+      } else {
+        console.warn(
+          "[prisma] Кэш клиента устарел (нет модели PartnerVenueApplicationPaymentDocument). Пересоздаём PrismaClient — выполните: npx prisma generate и при необходимости перезапустите dev-сервер."
         );
       }
       void cached.$disconnect().catch(() => {});
       globalForPrisma.__prisma = undefined;
-      globalForPrisma.__prismaInitError = undefined;
+      clearPrismaInitError();
       globalForPrisma.__prismaGeneratedClientId = undefined;
     } else {
       return globalForPrisma.__prisma;
     }
-  }
-  if (globalForPrisma.__prismaInitError) {
-    throw globalForPrisma.__prismaInitError;
   }
   try {
     const client = createPrismaClient();
@@ -118,6 +175,7 @@ function getPrismaClient(): PrismaClient {
         ? err
         : new Error(err instanceof Error ? err.message : String(err));
     globalForPrisma.__prismaInitError = wrapped;
+    globalForPrisma.__prismaInitFailedAtDiskId = readPrismaGeneratedClientId();
     console.error('[prisma] Ошибка инициализации:', wrapped.message);
     throw wrapped;
   }
@@ -125,7 +183,8 @@ function getPrismaClient(): PrismaClient {
 
 /**
  * Экспорт Prisma: один экземпляр через globalThis (совместимо с Next.js + Turbopack).
- * При ошибке инициализации (нет DATABASE_URL или БД недоступна) ошибка кэшируется и пробрасывается при первом обращении.
+ * Ошибка инициализации кэшируется, но сбрасывается после `prisma generate` (сменился id клиента на диске),
+ * после появления DATABASE_URL в .env, либо при пересоздании клиента из-за устаревших делегатов.
  */
 /**
  * Proxy с Reflect.get: при обращении через `prisma.partner` корректно отрабатывают геттеры Prisma
@@ -153,7 +212,7 @@ async function resetPrismaAfterConnectionLoss(): Promise<void> {
     /* ignore */
   }
   globalForPrisma.__prisma = undefined;
-  globalForPrisma.__prismaInitError = undefined;
+  clearPrismaInitError();
   globalForPrisma.__prismaGeneratedClientId = undefined;
 }
 

@@ -320,7 +320,7 @@ export default function DocumentTemplatesPage() {
               {isCreating ? "Создание шаблона" : "Редактирование шаблона"}
             </h2>
           </ModalHeader>
-          <ModalBody scrollHint className="p-4 lg:p-6 space-y-4">
+          <ModalBody className="p-4 lg:p-6 space-y-4">
             <div>
               <label htmlFor="templateName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Название

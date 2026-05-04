@@ -55,6 +55,7 @@ export async function GET() {
 
     const venues = rows.map((r) => ({
       id: r.venueId,
+      applicationId: r.applicationId,
       name: r.venueName,
       city: r.city,
       promoCode: r.promoCode,

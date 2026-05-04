@@ -1,70 +1,112 @@
 import { Prisma } from "@prisma/client";
-import type { PrismaClient } from "@prisma/client";
 
-/** Полный срок реакции партнёра на заявку в статусе NEW (часы) */
-export const PARTNER_VENUE_APPLICATION_SLA_HOURS = 48;
+import { prisma } from "@/lib/prisma";
 
-/** Через столько часов после подачи — первое напоминание (за 24 ч до конца SLA) */
-export const PARTNER_VENUE_SLA_FIRST_REMINDER_AFTER_HOURS = 24;
+/** 48 ч: партнёр должен открыть заявку («Новая» → «В работе») */
+export const PARTNER_VENUE_APPLICATION_NEW_SLA_MS = 48 * 60 * 60 * 1000;
+export const PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS = 48;
+/** За 24 ч до конца срока NEW (24 ч после подачи) */
+export const PARTNER_VENUE_APPLICATION_NEW_SLA_REMINDER_24H_OFFSET_MS =
+  PARTNER_VENUE_APPLICATION_NEW_SLA_MS - 24 * 60 * 60 * 1000;
+/** За 2 ч до конца срока NEW (46 ч после подачи) */
+export const PARTNER_VENUE_APPLICATION_NEW_SLA_REMINDER_2H_OFFSET_MS =
+  PARTNER_VENUE_APPLICATION_NEW_SLA_MS - 2 * 60 * 60 * 1000;
 
-/** Через столько часов после подачи — второе напоминание (за 2 ч до конца SLA) */
-export const PARTNER_VENUE_SLA_SECOND_REMINDER_AFTER_HOURS = 46;
+/** 72 ч на реакцию после перевода заявки в «В работе» */
+export const PARTNER_VENUE_APPLICATION_SLA_MS = 72 * 60 * 60 * 1000;
+export const PARTNER_VENUE_APPLICATION_SLA_HOURS = 72;
+/** Напоминание за 24 ч до конца срока «В работе» (48 ч после inProgressAt) */
+export const PARTNER_VENUE_APPLICATION_SLA_REMINDER_24H_OFFSET_MS =
+  PARTNER_VENUE_APPLICATION_SLA_MS - 24 * 60 * 60 * 1000;
 
-function hoursAgo(hours: number, now: Date): Date {
-  return new Date(now.getTime() - hours * 60 * 60 * 1000);
-}
-
-/** Заявки NEW старше этого момента считаются просроченными по SLA (площадку скрываем в каталоге). */
-export function partnerVenueSlaOverdueCutoff(now: Date = new Date()): Date {
-  return hoursAgo(PARTNER_VENUE_APPLICATION_SLA_HOURS, now);
-}
-
-export function partnerVenueSlaReminder24hEligibleCutoff(now: Date = new Date()): Date {
-  return hoursAgo(PARTNER_VENUE_SLA_FIRST_REMINDER_AFTER_HOURS, now);
-}
-
-export function partnerVenueSlaReminder2hEligibleCutoff(now: Date = new Date()): Date {
-  return hoursAgo(PARTNER_VENUE_SLA_SECOND_REMINDER_AFTER_HOURS, now);
-}
-
+/** ЛК партнёра: заявки по конкретной площадке (управление). */
 export function partnerVenueApplicationsManageUrl(venueId: string): string {
-  const base = (process.env.NEXTAUTH_URL ?? "https://myunion.pro").replace(/\/$/, "");
-  return `${base}/partner-dashboard/applications/${encodeURIComponent(venueId)}`;
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  return `${base}/partner-dashboard/applications/${venueId}`;
 }
 
-/** ID площадок, у которых есть хотя бы одна заявка NEW с истёкшим SLA (скрыть из каталога «Скидки от партнёров»). */
-export async function getPartnerVenueIdsSlaOverdueFromCatalog(
-  prisma: PrismaClient,
-  now: Date = new Date()
-): Promise<string[]> {
-  const cutoff = partnerVenueSlaOverdueCutoff(now);
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>(
+type FromCatalogRow = { partnerVenueId: string };
+
+/** Площадки с просроченными заявками «Новая» (48 ч с createdAt). */
+export async function getPartnerVenueIdsWithSlaOverdueNewApplications(): Promise<string[]> {
+  const cutoff = new Date(Date.now() - PARTNER_VENUE_APPLICATION_NEW_SLA_MS);
+  const rows = await prisma.$queryRaw<FromCatalogRow[]>(
     Prisma.sql`
-      SELECT DISTINCT v.id
-      FROM "PartnerVenue" v
-      INNER JOIN "PartnerVenueApplication" a ON a."partnerVenueId" = v.id
-      WHERE a.status::text = 'NEW'
+      SELECT DISTINCT a."partnerVenueId" AS "partnerVenueId"
+      FROM "PartnerVenueApplication" a
+      WHERE a."status" = 'NEW'::"PartnerVenueApplicationStatus"
         AND a."createdAt" <= ${cutoff}
     `
   );
-  return rows.map((r) => r.id);
+  return rows.map((r) => r.partnerVenueId);
 }
 
-/** У площадки есть просроченные NEW — нельзя подавать новые заявки с каталога. */
-export async function partnerVenueHasSlaOverdueNewApplications(
-  prisma: PrismaClient,
-  partnerVenueId: string,
-  now: Date = new Date()
-): Promise<boolean> {
-  const cutoff = partnerVenueSlaOverdueCutoff(now);
-  const rows = await prisma.$queryRaw<Array<{ c: bigint }>>(
+/** Площадки с просроченными заявками «В работе» (72 ч с inProgressAt). */
+export async function getPartnerVenueIdsWithSlaOverdueInProgressApplications(): Promise<
+  string[]
+> {
+  const cutoff = new Date(Date.now() - PARTNER_VENUE_APPLICATION_SLA_MS);
+  const rows = await prisma.$queryRaw<FromCatalogRow[]>(
     Prisma.sql`
-      SELECT COUNT(*)::bigint AS c
+      SELECT DISTINCT a."partnerVenueId" AS "partnerVenueId"
+      FROM "PartnerVenueApplication" a
+      WHERE a."status" = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
+        AND a."inProgressAt" IS NOT NULL
+        AND a."inProgressAt" <= ${cutoff}
+    `
+  );
+  return rows.map((r) => r.partnerVenueId);
+}
+
+/** Скрыть из каталога «Скидки от партнёров», если есть просрочка по «Новая» или по «В работе». */
+export async function getPartnerVenueIdsSlaOverdueFromCatalog(): Promise<string[]> {
+  const [newIds, ipIds] = await Promise.all([
+    getPartnerVenueIdsWithSlaOverdueNewApplications(),
+    getPartnerVenueIdsWithSlaOverdueInProgressApplications(),
+  ]);
+  return [...new Set([...newIds, ...ipIds])];
+}
+
+export async function partnerVenueHasSlaOverdueNewApplications(
+  partnerVenueId: string
+): Promise<boolean> {
+  const cutoff = new Date(Date.now() - PARTNER_VENUE_APPLICATION_NEW_SLA_MS);
+  const row = await prisma.$queryRaw<{ ok: bigint }[]>(
+    Prisma.sql`
+      SELECT 1::bigint AS ok
       FROM "PartnerVenueApplication" a
       WHERE a."partnerVenueId" = ${partnerVenueId}
-        AND a.status::text = 'NEW'
+        AND a."status" = 'NEW'::"PartnerVenueApplicationStatus"
         AND a."createdAt" <= ${cutoff}
+      LIMIT 1
     `
   );
-  return Number(rows[0]?.c ?? 0) > 0;
+  return row.length > 0;
+}
+
+export async function partnerVenueHasSlaOverdueInProgressApplications(
+  partnerVenueId: string
+): Promise<boolean> {
+  const cutoff = new Date(Date.now() - PARTNER_VENUE_APPLICATION_SLA_MS);
+  const row = await prisma.$queryRaw<{ ok: bigint }[]>(
+    Prisma.sql`
+      SELECT 1::bigint AS ok
+      FROM "PartnerVenueApplication" a
+      WHERE a."partnerVenueId" = ${partnerVenueId}
+        AND a."status" = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
+        AND a."inProgressAt" IS NOT NULL
+        AND a."inProgressAt" <= ${cutoff}
+      LIMIT 1
+    `
+  );
+  return row.length > 0;
+}
+
+/** Блок подачи новой заявки / скрытие в каталоге по любому из SLA. */
+export async function partnerVenueHasSlaCatalogBlock(partnerVenueId: string): Promise<boolean> {
+  const [n, i] = await Promise.all([
+    partnerVenueHasSlaOverdueNewApplications(partnerVenueId),
+    partnerVenueHasSlaOverdueInProgressApplications(partnerVenueId),
+  ]);
+  return n || i;
 }

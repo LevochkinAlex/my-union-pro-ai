@@ -695,7 +695,7 @@ export default function MeetingsPage() {
             Выберите заседание с уже сформированной повесткой, для которого нужно создать протокол.
           </p>
         </ModalHeader>
-        <ModalBody scrollHint className="p-6">
+        <ModalBody className="p-6">
           {(() => {
             const withAgendaNoProtocol = meetings.filter(m => m.agendaDocument && !m.protocolDocument);
             if (withAgendaNoProtocol.length === 0) {
@@ -781,7 +781,7 @@ export default function MeetingsPage() {
           <ModalHeader>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Новое заседание</h2>
           </ModalHeader>
-          <ModalBody scrollHint className="p-6">
+          <ModalBody className="p-6">
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>

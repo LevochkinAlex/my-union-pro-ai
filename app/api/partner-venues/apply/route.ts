@@ -14,7 +14,7 @@ import {
   sendPartnerVenueApplicationEmail,
 } from "@/lib/partner-venue-application-email";
 import { partnerVenueHasApplicationSlotCap } from "@/lib/partner-venue-slot-cap";
-import { partnerVenueHasSlaOverdueNewApplications } from "@/lib/partner-venue-sla";
+import { partnerVenueHasSlaCatalogBlock } from "@/lib/partner-venue-sla";
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,11 +59,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Площадка не найдена" }, { status: 404 });
     }
 
-    if (await partnerVenueHasSlaOverdueNewApplications(prisma, venue.id)) {
+    if (await partnerVenueHasSlaCatalogBlock(venue.id)) {
       return NextResponse.json(
         {
           error:
-            "Площадка временно недоступна: не обработаны заявки в отведённый срок. Обратитесь к партнёру позже.",
+            "Площадка временно недоступна: просрочена обработка заявок (неоткрытые «Новая» дольше 48 ч или «В работе» дольше 72 ч). Обратитесь к партнёру позже.",
         },
         { status: 403 }
       );
@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
             Prisma.sql`
               UPDATE "PartnerVenueApplication"
               SET status = 'NEW'::"PartnerVenueApplicationStatus",
+                  "inProgressAt" = NULL,
                   "slaReminder24hSentAt" = NULL,
                   "slaReminder2hSentAt" = NULL
               WHERE id = ${existing.id}

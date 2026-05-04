@@ -1,193 +1,239 @@
-import { prisma } from "@/lib/prisma";
 import {
-  sendPartnerVenueApplicationSlaReminder24hEmail,
-  sendPartnerVenueApplicationSlaReminder2hEmail,
-  sendPartnerVenueSlaBlockedEmail,
-  resolvePartnerVenueNotificationEmail,
-  type PartnerVenueApplicationEmailContext,
+  sendPartnerVenueApplicationSla24hReminderEmail,
+  sendPartnerVenueApplicationSlaBlockEmail,
+  sendPartnerVenueApplicationSlaNew24hReminderEmail,
+  sendPartnerVenueApplicationSlaNew2hReminderEmail,
+  sendPartnerVenueApplicationSlaNewBlockEmail,
 } from "@/lib/partner-venue-application-email";
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
-  partnerVenueSlaOverdueCutoff,
-  partnerVenueSlaReminder24hEligibleCutoff,
-  partnerVenueSlaReminder2hEligibleCutoff,
+  getPartnerVenueIdsWithSlaOverdueInProgressApplications,
+  getPartnerVenueIdsWithSlaOverdueNewApplications,
+  PARTNER_VENUE_APPLICATION_NEW_SLA_MS,
+  PARTNER_VENUE_APPLICATION_NEW_SLA_REMINDER_24H_OFFSET_MS,
+  PARTNER_VENUE_APPLICATION_NEW_SLA_REMINDER_2H_OFFSET_MS,
+  PARTNER_VENUE_APPLICATION_SLA_MS,
+  PARTNER_VENUE_APPLICATION_SLA_REMINDER_24H_OFFSET_MS,
 } from "@/lib/partner-venue-sla";
-import { PartnerVenueApplicationStatus, Prisma } from "@prisma/client";
-
-export type PartnerVenueApplicationSlaCronResult = {
-  reminder24h: number;
-  reminder2h: number;
-  blockEmails: number;
-  errors: string[];
-};
 
 /**
- * Напоминания партнёру (24 ч и 2 ч до конца 48 ч), письмо о скрытии площадки, сброс флага при снятии блокировки.
- * Вызывается из GET /api/cron/partner-venue-application-sla и scripts/run-partner-venue-sla-cron.ts.
+ * Два независимых SLA:
+ * - «Новая»: 48 ч с подачи (createdAt); напоминания за 24 ч и 2 ч; отдельное письмо о блокировке (slaOverdueNewBlockEmailSentAt).
+ * - «В работе»: 72 ч с inProgressAt; напоминание за 24 ч; отдельное письмо (slaOverdueBlockEmailSentAt).
+ * Каталог скрывает площадку при любой просрочке; флаги писем сбрасываются отдельно при снятии своей просрочки.
  */
-export async function runPartnerVenueApplicationSlaCronJob(
-  now: Date = new Date()
-): Promise<PartnerVenueApplicationSlaCronResult> {
-  const result: PartnerVenueApplicationSlaCronResult = {
-    reminder24h: 0,
-    reminder2h: 0,
-    blockEmails: 0,
-    errors: [],
-  };
+export async function runPartnerVenueApplicationSlaCronJob(): Promise<{
+  newReminder24hSent: number;
+  newReminder2hSent: number;
+  inProgressReminder24hSent: number;
+  newBlockEmailsSent: number;
+  inProgressBlockEmailsSent: number;
+  errors: number;
+}> {
+  const now = Date.now();
+  const newReminder24Cutoff = new Date(now - PARTNER_VENUE_APPLICATION_NEW_SLA_REMINDER_24H_OFFSET_MS);
+  const newReminder2Cutoff = new Date(now - PARTNER_VENUE_APPLICATION_NEW_SLA_REMINDER_2H_OFFSET_MS);
+  const ipReminderCutoff = new Date(now - PARTNER_VENUE_APPLICATION_SLA_REMINDER_24H_OFFSET_MS);
+  const newOverdueCutoff = new Date(now - PARTNER_VENUE_APPLICATION_NEW_SLA_MS);
+  const ipOverdueCutoff = new Date(now - PARTNER_VENUE_APPLICATION_SLA_MS);
 
-  const overdueCutoff = partnerVenueSlaOverdueCutoff(now);
-  const r24Cutoff = partnerVenueSlaReminder24hEligibleCutoff(now);
-  const r2Cutoff = partnerVenueSlaReminder2hEligibleCutoff(now);
+  let newReminder24hSent = 0;
+  let newReminder2hSent = 0;
+  let inProgressReminder24hSent = 0;
+  let newBlockEmailsSent = 0;
+  let inProgressBlockEmailsSent = 0;
+  let errors = 0;
 
-  await prisma.$executeRaw(
-    Prisma.sql`
-      UPDATE "PartnerVenue" v
-      SET "slaOverdueBlockEmailSentAt" = NULL
-      WHERE v."slaOverdueBlockEmailSentAt" IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "PartnerVenueApplication" a
-          WHERE a."partnerVenueId" = v.id
-            AND a.status::text = 'NEW'
-            AND a."createdAt" <= ${overdueCutoff}
-        )
-    `
-  );
-
-  const for24 = await prisma.partnerVenueApplication.findMany({
+  const dueNew24 = await prisma.partnerVenueApplication.findMany({
     where: {
-      status: PartnerVenueApplicationStatus.NEW,
-      createdAt: { lte: r24Cutoff },
+      status: "NEW",
+      createdAt: { lte: newReminder24Cutoff },
       slaReminder24hSentAt: null,
     },
-    select: {
-      id: true,
-      partnerVenue: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          partner: { select: { email: true, contactEmail: true } },
-        },
-      },
+    include: {
+      applicant: { select: { firstName: true, lastName: true, middleName: true } },
+      partnerVenue: { include: { partner: true } },
     },
   });
 
-  for (const row of for24) {
-    const v = row.partnerVenue;
-    const to = resolvePartnerVenueNotificationEmail({
-      email: v.email,
-      partner: { contactEmail: v.partner.contactEmail, email: v.partner.email },
-    });
-    const ctx: PartnerVenueApplicationEmailContext = { venueId: v.id, venueName: v.name };
-    if (!to) {
-      result.errors.push(`[24h] Нет email партнёра, application ${row.id}`);
-      await prisma.partnerVenueApplication.update({
-        where: { id: row.id },
-        data: { slaReminder24hSentAt: now },
-      });
-      continue;
-    }
+  for (const app of dueNew24) {
+    const emailTo = app.partnerVenue.partner.contactEmail?.trim();
+    if (!emailTo) continue;
     try {
-      await sendPartnerVenueApplicationSlaReminder24hEmail(to, ctx);
-      await prisma.partnerVenueApplication.update({
-        where: { id: row.id },
-        data: { slaReminder24hSentAt: now },
+      await sendPartnerVenueApplicationSlaNew24hReminderEmail({
+        to: emailTo,
+        venueName: app.partnerVenue.name,
+        venueId: app.partnerVenueId,
+        participantName: `${app.applicant.lastName ?? ""} ${app.applicant.firstName ?? ""} ${app.applicant.middleName ?? ""}`.trim(),
       });
-      result.reminder24h += 1;
-    } catch (e) {
-      result.errors.push(`[24h] ${row.id}: ${e instanceof Error ? e.message : String(e)}`);
+      await prisma.partnerVenueApplication.update({
+        where: { id: app.id },
+        data: { slaReminder24hSentAt: new Date() },
+      });
+      newReminder24hSent++;
+    } catch {
+      errors++;
     }
   }
 
-  const for2 = await prisma.partnerVenueApplication.findMany({
+  const dueNew2 = await prisma.partnerVenueApplication.findMany({
     where: {
-      status: PartnerVenueApplicationStatus.NEW,
-      createdAt: { lte: r2Cutoff },
+      status: "NEW",
+      createdAt: { lte: newReminder2Cutoff },
       slaReminder2hSentAt: null,
     },
-    select: {
-      id: true,
-      partnerVenue: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          partner: { select: { email: true, contactEmail: true } },
-        },
-      },
+    include: {
+      applicant: { select: { firstName: true, lastName: true, middleName: true } },
+      partnerVenue: { include: { partner: true } },
     },
   });
 
-  for (const row of for2) {
-    const v = row.partnerVenue;
-    const to = resolvePartnerVenueNotificationEmail({
-      email: v.email,
-      partner: { contactEmail: v.partner.contactEmail, email: v.partner.email },
-    });
-    const ctx: PartnerVenueApplicationEmailContext = { venueId: v.id, venueName: v.name };
-    if (!to) {
-      result.errors.push(`[2h] Нет email партнёра, application ${row.id}`);
-      await prisma.partnerVenueApplication.update({
-        where: { id: row.id },
-        data: { slaReminder2hSentAt: now },
-      });
-      continue;
-    }
+  for (const app of dueNew2) {
+    const emailTo = app.partnerVenue.partner.contactEmail?.trim();
+    if (!emailTo) continue;
     try {
-      await sendPartnerVenueApplicationSlaReminder2hEmail(to, ctx);
-      await prisma.partnerVenueApplication.update({
-        where: { id: row.id },
-        data: { slaReminder2hSentAt: now },
+      await sendPartnerVenueApplicationSlaNew2hReminderEmail({
+        to: emailTo,
+        venueName: app.partnerVenue.name,
+        venueId: app.partnerVenueId,
+        participantName: `${app.applicant.lastName ?? ""} ${app.applicant.firstName ?? ""} ${app.applicant.middleName ?? ""}`.trim(),
       });
-      result.reminder2h += 1;
-    } catch (e) {
-      result.errors.push(`[2h] ${row.id}: ${e instanceof Error ? e.message : String(e)}`);
+      await prisma.partnerVenueApplication.update({
+        where: { id: app.id },
+        data: { slaReminder2hSentAt: new Date() },
+      });
+      newReminder2hSent++;
+    } catch {
+      errors++;
     }
   }
 
-  const venuesToBlockNotify = await prisma.partnerVenue.findMany({
+  const dueIp24 = await prisma.partnerVenueApplication.findMany({
     where: {
-      slaOverdueBlockEmailSentAt: null,
-      applications: {
-        some: {
-          status: PartnerVenueApplicationStatus.NEW,
-          createdAt: { lte: overdueCutoff },
-        },
-      },
+      status: "IN_PROGRESS",
+      inProgressAt: { not: null, lte: ipReminderCutoff },
+      slaReminder24hSentAt: null,
     },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      partner: { select: { email: true, contactEmail: true } },
+    include: {
+      applicant: { select: { firstName: true, lastName: true, middleName: true } },
+      partnerVenue: { include: { partner: true } },
     },
   });
 
-  for (const v of venuesToBlockNotify) {
-    const to = resolvePartnerVenueNotificationEmail({
-      email: v.email,
-      partner: { contactEmail: v.partner.contactEmail, email: v.partner.email },
-    });
-    const ctx: PartnerVenueApplicationEmailContext = { venueId: v.id, venueName: v.name };
-    if (!to) {
-      result.errors.push(`[block] Нет email партнёра, venue ${v.id}`);
-      await prisma.partnerVenue.update({
-        where: { id: v.id },
-        data: { slaOverdueBlockEmailSentAt: now },
-      });
-      continue;
-    }
+  for (const app of dueIp24) {
+    const emailTo = app.partnerVenue.partner.contactEmail?.trim();
+    if (!emailTo) continue;
     try {
-      await sendPartnerVenueSlaBlockedEmail(to, ctx);
-      await prisma.partnerVenue.update({
-        where: { id: v.id },
-        data: { slaOverdueBlockEmailSentAt: now },
+      await sendPartnerVenueApplicationSla24hReminderEmail({
+        to: emailTo,
+        venueName: app.partnerVenue.name,
+        venueId: app.partnerVenueId,
+        participantName: `${app.applicant.lastName ?? ""} ${app.applicant.firstName ?? ""} ${app.applicant.middleName ?? ""}`.trim(),
       });
-      result.blockEmails += 1;
-    } catch (e) {
-      result.errors.push(`[block] ${v.id}: ${e instanceof Error ? e.message : String(e)}`);
+      await prisma.partnerVenueApplication.update({
+        where: { id: app.id },
+        data: { slaReminder24hSentAt: new Date() },
+      });
+      inProgressReminder24hSent++;
+    } catch {
+      errors++;
     }
   }
 
-  return result;
+  try {
+    await prisma.$executeRaw(
+      Prisma.sql`
+        UPDATE "PartnerVenue" v
+        SET "slaOverdueNewBlockEmailSentAt" = NULL
+        WHERE v."slaOverdueNewBlockEmailSentAt" IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "PartnerVenueApplication" a
+            WHERE a."partnerVenueId" = v.id
+              AND a."status" = 'NEW'::"PartnerVenueApplicationStatus"
+              AND a."createdAt" <= ${newOverdueCutoff}
+          )
+      `
+    );
+  } catch {
+    errors++;
+  }
+
+  try {
+    await prisma.$executeRaw(
+      Prisma.sql`
+        UPDATE "PartnerVenue" v
+        SET "slaOverdueBlockEmailSentAt" = NULL
+        WHERE v."slaOverdueBlockEmailSentAt" IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "PartnerVenueApplication" a
+            WHERE a."partnerVenueId" = v.id
+              AND a."status" = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
+              AND a."inProgressAt" IS NOT NULL
+              AND a."inProgressAt" <= ${ipOverdueCutoff}
+          )
+      `
+    );
+  } catch {
+    errors++;
+  }
+
+  const newOverdueVenueIds = await getPartnerVenueIdsWithSlaOverdueNewApplications();
+  for (const vid of newOverdueVenueIds) {
+    const venue = await prisma.partnerVenue.findFirst({
+      where: { id: vid },
+      include: { partner: true },
+    });
+    if (!venue) continue;
+    if (venue.slaOverdueNewBlockEmailSentAt != null) continue;
+    const emailTo = venue.partner.contactEmail?.trim();
+    if (!emailTo) {
+      errors++;
+      continue;
+    }
+    try {
+      await sendPartnerVenueApplicationSlaNewBlockEmail({ to: emailTo, venueId: venue.id });
+      await prisma.partnerVenue.update({
+        where: { id: venue.id },
+        data: { slaOverdueNewBlockEmailSentAt: new Date() },
+      });
+      newBlockEmailsSent++;
+    } catch {
+      errors++;
+    }
+  }
+
+  const ipOverdueVenueIds = await getPartnerVenueIdsWithSlaOverdueInProgressApplications();
+  for (const vid of ipOverdueVenueIds) {
+    const venue = await prisma.partnerVenue.findFirst({
+      where: { id: vid },
+      include: { partner: true },
+    });
+    if (!venue) continue;
+    if (venue.slaOverdueBlockEmailSentAt != null) continue;
+    const emailTo = venue.partner.contactEmail?.trim();
+    if (!emailTo) {
+      errors++;
+      continue;
+    }
+    try {
+      await sendPartnerVenueApplicationSlaBlockEmail({ to: emailTo, venueId: venue.id });
+      await prisma.partnerVenue.update({
+        where: { id: venue.id },
+        data: { slaOverdueBlockEmailSentAt: new Date() },
+      });
+      inProgressBlockEmailsSent++;
+    } catch {
+      errors++;
+    }
+  }
+
+  return {
+    newReminder24hSent,
+    newReminder2hSent,
+    inProgressReminder24hSent,
+    newBlockEmailsSent,
+    inProgressBlockEmailsSent,
+    errors,
+  };
 }

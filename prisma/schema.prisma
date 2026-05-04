@@ -687,7 +687,9 @@ model PartnerVenue {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  /// Партнёру отправлено письмо о блокировке в каталоге из‑за просроченных заявок NEW; сбрасывается кроном при снятии блокировки
+  /// Письмо о блокировке: просроченные заявки «Новая» (48 ч с подачи); сбрасывается кроном
+  slaOverdueNewBlockEmailSentAt DateTime?
+  /// Письмо о блокировке: просроченные «В работе» (72 ч с перевода); сбрасывается кроном
   slaOverdueBlockEmailSentAt DateTime?
 
   createdAt DateTime @default(now())
@@ -701,11 +703,12 @@ model PartnerVenue {
   @@index([createdAt])
 }
 
-/// Статус заявки на участие по площадке партнёра
+/// Статус заявки на участие по площадке партнёра (порядок совпадает с enum в БД: APPROVED добавлен последним)
 enum PartnerVenueApplicationStatus {
   NEW
   IN_PROGRESS
   CANCELLED
+  APPROVED
 }
 
 /// Заявка члена на участие в предложении площадки (участие по заявке)
@@ -719,16 +722,42 @@ model PartnerVenueApplication {
   status    PartnerVenueApplicationStatus @default(NEW)
   createdAt DateTime                        @default(now())
 
-  /// Напоминание «осталось 24 ч до истечения 48 ч» (отправлено)
+  /// Момент перевода заявки в «В работе» (SLA 72 ч отсчитывается отсюда)
+  inProgressAt DateTime?
+
+  /// «За 24 ч до дедлайна»: для NEW — до 48 ч с подачи; для «В работе» — до 72 ч с inProgressAt (взаимоисключающе по статусу)
   slaReminder24hSentAt DateTime?
-  /// Напоминание «осталось 2 ч до истечения 48 ч» (отправлено)
+  /// «За 2 ч до дедлайна» только для NEW (48 ч с подачи); при переводе в «В работе» сбрасывается
   slaReminder2hSentAt DateTime?
+
+  /// Партнёр подтвердил получение/проверку документов об оплате
+  paymentConfirmedAt DateTime?
+
+  paymentDocuments PartnerVenueApplicationPaymentDocument[]
 
   @@unique([partnerVenueId, applicantUserId])
   @@index([partnerVenueId])
   @@index([applicantUserId])
   @@index([createdAt])
   @@index([status])
+}
+
+/// Загруженный участником документ об оплате по заявке (файл на диске + метаданные)
+model PartnerVenueApplicationPaymentDocument {
+  id                        String                  @id @default(cuid())
+  partnerVenueApplicationId String
+  partnerVenueApplication   PartnerVenueApplication @relation(fields: [partnerVenueApplicationId], references: [id], onDelete: Cascade)
+
+  /// Имя файла в каталоге uploads/partner-application-payment/{applicationId}/
+  storedFileName   String
+  originalFileName String
+  mimeType         String?
+  sizeBytes        Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([partnerVenueApplicationId])
+  @@index([createdAt])
 }
 
 enum BillingEntityType {

@@ -77,6 +77,9 @@ service-account*.json
 /public/uploads/**
 !/public/uploads/**/.gitkeep
 
+# Документы об оплате по заявкам (только через API, не в public)
+/uploads/partner-application-payment/**
+
 # PDF documents
 *.pdf
 # Статические PDF в репозитории (лендинг, демо)

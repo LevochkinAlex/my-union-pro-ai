@@ -6,6 +6,8 @@ function labelFor(status: string): string {
       return "В работе";
     case "CANCELLED":
       return "Отменена";
+    case "APPROVED":
+      return "Одобрено";
     default:
       return status || "—";
   }
@@ -29,6 +31,12 @@ export default function PartnerVenueApplicationStatusBadge({ status }: { status:
     case "CANCELLED":
       return (
         <span className="inline-flex shrink-0 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-950/40 dark:text-red-400">
+          {label}
+        </span>
+      );
+    case "APPROVED":
+      return (
+        <span className="inline-flex shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
           {label}
         </span>
       );

@@ -7,4 +7,5 @@ export const PV_APPLICATION_STATUS = {
   NEW: "NEW",
   IN_PROGRESS: "IN_PROGRESS",
   CANCELLED: "CANCELLED",
+  APPROVED: "APPROVED",
 } as const;

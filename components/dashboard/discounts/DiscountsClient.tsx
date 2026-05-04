@@ -128,22 +128,9 @@ export default function DiscountsClient({
     () => initialPartnerVenues ?? []
   );
 
-  /** Пропускаем дублирующий клиентский fetch, если список уже пришёл с SSR и строка поиска пуста */
-  const skipNextPartnerVenuesFetchRef = useRef(
-    Boolean(initialPartnerVenues?.length && !filters.search)
-  );
-
-  // Синхронизируем searchInput с filters.search (при сбросе фильтров)
+  // Загрузка площадок партнёров (отдельная БД, не BestBenefits). Всегда синхронизируем с API:
+  // SSR мог устареть; скрытие по SLA должно совпадать с GET /api/partner-venues/public.
   useEffect(() => {
-    setSearchInput(filters.search);
-  }, [filters.search]);
-
-  // Загрузка площадок партнёров (отдельная БД, не BestBenefits). При SSR `initialPartnerVenues` первый запрос не дублируем.
-  useEffect(() => {
-    if (skipNextPartnerVenuesFetchRef.current) {
-      skipNextPartnerVenuesFetchRef.current = false;
-      return;
-    }
     let cancelled = false;
     (async () => {
       try {
@@ -161,6 +148,14 @@ export default function DiscountsClient({
     return () => {
       cancelled = true;
     };
+  }, [filters.search]);
+
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, [filters.search]);
+
+  useEffect(() => {
+    setSearchInput(filters.search);
   }, [filters.search]);
 
   // Автоматическая синхронизация с BestBenefits

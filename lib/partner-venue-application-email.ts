@@ -1,5 +1,6 @@
 import { sendEmail } from "@/lib/email";
 import {
+  PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS,
   PARTNER_VENUE_APPLICATION_SLA_HOURS,
   partnerVenueApplicationsManageUrl,
 } from "@/lib/partner-venue-sla";
@@ -25,12 +26,17 @@ export type PartnerVenueApplicationEmailContext = {
 
 function manageParagraph(ctx: PartnerVenueApplicationEmailContext): string {
   const url = partnerVenueApplicationsManageUrl(ctx.venueId);
-  return `Обработайте заявку в личном кабинете партнёра: ${url}\n\nУ вас есть ${PARTNER_VENUE_APPLICATION_SLA_HOURS} часов с момента подачи, чтобы открыть заявку (статус «В работе»). После истечения срока площадка временно скрывается из каталога «Скидки от партнёров», пока не будут обработаны все просроченные новые заявки.`;
+  return [
+    `Обработайте заявку в личном кабинете партнёра: ${url}`,
+    "",
+    `У вас есть ${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS} часов с момента подачи заявки, чтобы открыть её (статус «В работе»). Площадка может скрываться из каталога «Скидки от партнёров», если неоткрытые новые заявки висят дольше этого срока.`,
+    `После перевода в «В работе» на обработку отводится ${PARTNER_VENUE_APPLICATION_SLA_HOURS} часов; при просрочке площадка также может скрываться из каталога, пока не будут обработаны все просроченные заявки «В работе».`,
+  ].join("\n");
 }
 
 function manageParagraphHtml(ctx: PartnerVenueApplicationEmailContext): string {
   const url = partnerVenueApplicationsManageUrl(ctx.venueId);
-  return `<p>Обработайте заявку в личном кабинете партнёра:</p><p><a href="${url}">${url}</a></p><p>У вас есть <strong>${PARTNER_VENUE_APPLICATION_SLA_HOURS} часов</strong> с момента подачи, чтобы открыть заявку (статус «В работе»). После истечения срока площадка временно скрывается из каталога «Скидки от партнёров», пока не будут обработаны все просроченные новые заявки.</p>`;
+  return `<p>Обработайте заявку в личном кабинете партнёра:</p><p><a href="${url}">${url}</a></p><p>У вас есть <strong>${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS} часов</strong> с момента подачи заявки, чтобы открыть её (статус «В работе»). Площадка может скрываться из каталога «Скидки от партнёров», если неоткрытые новые заявки висят дольше этого срока.</p><p>После перевода в «В работе» на обработку отводится <strong>${PARTNER_VENUE_APPLICATION_SLA_HOURS} часов</strong>; при просрочке площадка также может скрываться из каталога, пока не будут обработаны все просроченные заявки «В работе».</p>`;
 }
 
 /** Письмо сразу после подачи заявки членом. */
@@ -59,54 +65,92 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** За 24 часа до окончания 48-часового срока. */
-export async function sendPartnerVenueApplicationSlaReminder24hEmail(
-  to: string,
-  ctx: PartnerVenueApplicationEmailContext
+type ReminderApplicantParams = {
+  to: string;
+  venueName: string;
+  venueId: string;
+  participantName: string;
+};
+
+/** За 24 ч до окончания 48-часового срока по заявке «Новая». */
+export async function sendPartnerVenueApplicationSlaNew24hReminderEmail(
+  p: ReminderApplicantParams
 ): Promise<{ sent: boolean }> {
-  const subject = "Мой Союз: напоминание — осталось 24 ч на обработку заявки";
+  const manageUrl = partnerVenueApplicationsManageUrl(p.venueId);
+  const subject = "Мой Союз: напоминание — осталось 24 ч на открытие заявки";
+  const who = p.participantName.trim() || "участник";
   const text = [
-    `Напоминание: по площадке «${ctx.venueName}» новая заявка всё ещё ждёт реакции.`,
-    `До истечения срока (${PARTNER_VENUE_APPLICATION_SLA_HOURS} ч с момента подачи) остаётся около 24 часов.`,
+    `По площадке «${p.venueName}» новая заявка (${who}) всё ещё не открыта.`,
+    `До истечения ${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS}-часового срока с момента подачи остаётся около 24 часов. Откройте заявку в статусе «В работе».`,
     "",
-    manageParagraph(ctx),
+    manageUrl,
   ].join("\n");
-  const html = `<p>Напоминание: по площадке <strong>${escapeHtml(ctx.venueName)}</strong> новая заявка всё ещё ждёт реакции.</p><p>До истечения срока (${PARTNER_VENUE_APPLICATION_SLA_HOURS} ч с момента подачи) остаётся <strong>около 24 часов</strong>.</p>${manageParagraphHtml(ctx)}`;
-  const result = await sendEmail({ to, subject, text, html });
-  return { sent: result.sent };
+  const html = `<p>По площадке <strong>${escapeHtml(p.venueName)}</strong> новая заявка (${escapeHtml(who)}) всё ещё не открыта.</p><p>До истечения <strong>${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS}-часового</strong> срока с момента подачи остаётся <strong>около 24 часов</strong>. Откройте заявку в статусе «В работе».</p><p><a href="${manageUrl}">${manageUrl}</a></p>`;
+  return sendEmail({ to: p.to, subject, text, html });
 }
 
-/** За 2 часа до окончания 48-часового срока. */
-export async function sendPartnerVenueApplicationSlaReminder2hEmail(
-  to: string,
-  ctx: PartnerVenueApplicationEmailContext
+/** За 2 ч до окончания 48-часового срока по заявке «Новая». */
+export async function sendPartnerVenueApplicationSlaNew2hReminderEmail(
+  p: ReminderApplicantParams
 ): Promise<{ sent: boolean }> {
-  const subject = "Мой Союз: срочно — 2 ч до скрытия площадки из каталога";
+  const manageUrl = partnerVenueApplicationsManageUrl(p.venueId);
+  const subject = "Мой Союз: срочно — 2 ч до скрытия площадки (неоткрытые заявки)";
+  const who = p.participantName.trim() || "участник";
   const text = [
-    `Срочно: по площадке «${ctx.venueName}» заявка всё ещё в статусе «Новая».`,
-    `Через 2 часа истечёт срок реакции (${PARTNER_VENUE_APPLICATION_SLA_HOURS} ч). Площадка будет скрыта из каталога «Скидки от партнёров», пока заявки не будут обработаны.`,
+    `Срочно: по площадке «${p.venueName}» заявка (${who}) всё ещё в статусе «Новая».`,
+    `Через 2 часа истечёт срок ${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS} ч. Площадка может быть скрыта из каталога «Скидки от партнёров», пока не будут открыты или обработаны все просроченные новые заявки.`,
     "",
-    manageParagraph(ctx),
+    manageUrl,
   ].join("\n");
-  const html = `<p>Срочно: по площадке <strong>${escapeHtml(ctx.venueName)}</strong> заявка всё ещё в статусе «Новая».</p><p>Через <strong>2 часа</strong> истечёт срок реакции (${PARTNER_VENUE_APPLICATION_SLA_HOURS} ч). Площадка будет скрыта из каталога «Скидки от партнёров», пока заявки не будут обработаны.</p>${manageParagraphHtml(ctx)}`;
-  const result = await sendEmail({ to, subject, text, html });
-  return { sent: result.sent };
+  const html = `<p>Срочно: по площадке <strong>${escapeHtml(p.venueName)}</strong> заявка (${escapeHtml(who)}) всё ещё в статусе «Новая».</p><p>Через <strong>2 часа</strong> истечёт срок ${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS} ч.</p><p><a href="${manageUrl}">${manageUrl}</a></p>`;
+  return sendEmail({ to: p.to, subject, text, html });
 }
 
-/** Площадка скрыта из каталога из‑за просроченных заявок NEW. */
-export async function sendPartnerVenueSlaBlockedEmail(
-  to: string,
-  ctx: PartnerVenueApplicationEmailContext
+/** За 24 ч до окончания 72-часового срока после «В работе». */
+export async function sendPartnerVenueApplicationSla24hReminderEmail(
+  p: ReminderApplicantParams
 ): Promise<{ sent: boolean }> {
-  const subject = "Мой Союз: площадка скрыта из каталога — обработайте заявки";
-  const url = partnerVenueApplicationsManageUrl(ctx.venueId);
+  const manageUrl = partnerVenueApplicationsManageUrl(p.venueId);
+  const subject = "Мой Союз: напоминание — осталось 24 ч до окончания срока по заявке";
+  const who = p.participantName.trim() || "участник";
   const text = [
-    "Ваша площадка заблокирована в каталоге «Скидки от партнёров»: не обработаны новые заявки в течение 48 часов.",
+    `По площадке «${p.venueName}» заявка (${who}) всё ещё в статусе «В работе».`,
+    `До истечения ${PARTNER_VENUE_APPLICATION_SLA_HOURS}-часового срока (отсчёт с момента перевода заявки в «В работе») остаётся около 24 часов.`,
+    "",
+    `Обработайте заявки: ${manageUrl}`,
+  ].join("\n");
+  const html = `<p>По площадке <strong>${escapeHtml(p.venueName)}</strong> заявка (${escapeHtml(who)}) всё ещё в статусе «В работе».</p><p>До истечения <strong>${PARTNER_VENUE_APPLICATION_SLA_HOURS}-часового</strong> срока (отсчёт с момента перевода в «В работе») остаётся <strong>около 24 часов</strong>.</p><p><a href="${manageUrl}">${manageUrl}</a></p>`;
+  return sendEmail({ to: p.to, subject, text, html });
+}
+
+type BlockEmailParams = {
+  to: string;
+  venueId: string;
+};
+
+/** Просрочены только «Новая» (48 ч): отдельное письмо от трека «В работе». */
+export async function sendPartnerVenueApplicationSlaNewBlockEmail(
+  p: BlockEmailParams
+): Promise<{ sent: boolean }> {
+  const subject = "Мой Союз: площадка скрыта из каталога — откройте новые заявки";
+  const url = partnerVenueApplicationsManageUrl(p.venueId);
+  const text = [
+    `Площадка скрыта из каталога «Скидки от партнёров»: есть неоткрытые новые заявки дольше ${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS} часов.`,
     "Обработайте все заявки.",
     "",
-    `Список заявок по площадке «${ctx.venueName}»: ${url}`,
+    url,
   ].join("\n");
-  const html = `<p>Ваша площадка заблокирована в каталоге «Скидки от партнёров»: не обработаны новые заявки в течение ${PARTNER_VENUE_APPLICATION_SLA_HOURS} часов.</p><p><strong>Обработайте все заявки.</strong></p><p>Список заявок по площадке «${escapeHtml(ctx.venueName)}»:<br><a href="${url}">${url}</a></p>`;
-  const result = await sendEmail({ to, subject, text, html });
-  return { sent: result.sent };
+  const html = `<p>Площадка скрыта из каталога «Скидки от партнёров»: есть неоткрытые новые заявки дольше ${PARTNER_VENUE_APPLICATION_NEW_SLA_HOURS} часов.</p><p><strong>Обработайте все заявки.</strong></p><p><a href="${url}">${url}</a></p>`;
+  return sendEmail({ to: p.to, subject, text, html });
+}
+
+/** Просрочены заявки «В работе» (72 ч): текст ТЗ + ссылка. */
+export async function sendPartnerVenueApplicationSlaBlockEmail(
+  p: BlockEmailParams
+): Promise<{ sent: boolean }> {
+  const subject = "Мой Союз: площадка в каталоге скидок — обработайте заявки";
+  const url = partnerVenueApplicationsManageUrl(p.venueId);
+  const text = ["Ваша площадка заблокирована. Обработайте все заявки.", "", url].join("\n");
+  const html = `<p>Ваша площадка заблокирована. Обработайте все заявки.</p><p><a href="${url}">${url}</a></p>`;
+  return sendEmail({ to: p.to, subject, text, html });
 }

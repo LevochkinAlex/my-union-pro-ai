@@ -8,6 +8,8 @@ import { useTouchStickyRowSelection } from "@/lib/use-touch-sticky-row-selection
 
 export type ApplicationVenueRow = {
   id: string;
+  /** Заявка текущего пользователя (только variant member / my-applications) */
+  applicationId?: string;
   name: string;
   city: string | null;
   promoCode?: string | null;
@@ -62,10 +64,12 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
     load();
   }, [load]);
 
-  const detailHref = (id: string) =>
+  const detailHref = (venueId: string, applicationId?: string) =>
     variant === "partner"
-      ? `/partner-dashboard/applications/${id}`
-      : `/dashboard/discounts/partner/${id}`;
+      ? `/partner-dashboard/applications/${encodeURIComponent(venueId)}`
+      : applicationId
+        ? `/dashboard/discounts/partner/${encodeURIComponent(venueId)}/application/${encodeURIComponent(applicationId)}`
+        : `/dashboard/discounts/partner/${encodeURIComponent(venueId)}`;
 
   if (loading) {
     return (
@@ -204,14 +208,10 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
                 )}
                 <td className="w-px whitespace-nowrap px-4 py-3 text-center text-sm">
                   <Link
-                    href={detailHref(v.id)}
-                    className={
-                      variant === "partner"
-                        ? adminTableActionOutlineClass
-                        : "rounded-md px-2.5 py-1.5 font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                    }
+                    href={detailHref(v.id, variant === "member" ? v.applicationId : undefined)}
+                    className={adminTableActionOutlineClass}
                   >
-                    {variant === "partner" ? "Просмотр" : "Открыть"}
+                    Просмотр
                   </Link>
                 </td>
               </tr>
@@ -261,14 +261,10 @@ export default function PartnerVenueApplicationsList({ apiUrl, variant }: Props)
               )}
             </p>
             <Link
-              href={detailHref(v.id)}
-              className={
-                variant === "partner"
-                  ? adminTableActionOutlineClass
-                  : "inline-block text-sm font-medium text-blue-600 dark:text-blue-400"
-              }
+              href={detailHref(v.id, variant === "member" ? v.applicationId : undefined)}
+              className={adminTableActionOutlineClass}
             >
-              {variant === "partner" ? "Просмотр" : "Открыть"}
+              Просмотр
             </Link>
           </div>
         ))}

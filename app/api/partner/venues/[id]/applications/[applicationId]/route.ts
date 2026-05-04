@@ -94,7 +94,7 @@ export async function PATCH(
         SELECT COUNT(*)::bigint AS c
         FROM "PartnerVenueApplication" a
         WHERE a."partnerVenueId" = ${venue.id}
-          AND a.status::text <> 'CANCELLED'
+          AND a.status::text IN ('NEW', 'IN_PROGRESS')
       `
     );
     const usedAfter = Number(usedRows[0]?.c ?? 0);

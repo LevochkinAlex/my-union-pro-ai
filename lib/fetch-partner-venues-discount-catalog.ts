@@ -5,6 +5,7 @@ import {
   mapPartnerVenuesToDiscountItems,
   type PartnerVenueCardSource,
 } from "@/lib/partner-venue-discount-mapper";
+import { getPartnerVenueIdsSlaOverdueFromCatalog } from "@/lib/partner-venue-sla";
 
 /**
  * Загружает активные одобренные площадки для SSR каталога скидок
@@ -42,6 +43,11 @@ export async function fetchPartnerVenuesForDiscountCatalog(options?: {
       });
       where.AND = words.map((w) => orForWord(w));
     }
+  }
+
+  const slaHiddenIds = await getPartnerVenueIdsSlaOverdueFromCatalog();
+  if (slaHiddenIds.length > 0) {
+    where.id = { notIn: slaHiddenIds };
   }
 
   const venues = await prisma.partnerVenue.findMany({

@@ -73,14 +73,13 @@ export default function DiscountCard({
       ? discount.partnerLogoUrl.trim()
       : null;
 
+  /** Только баннер площадки; логотип не подставляем в шапку (иначе квадратное лого «заменяет» баннер). */
   const partnerHeroImgSrc =
     discount.isPartnerVenue &&
     partnerVenueBannerUrl &&
     !partnerBannerHeroFailed
       ? partnerVenueBannerUrl
-      : discount.isPartnerVenue && partnerLogoUrlVal
-        ? partnerLogoUrlVal
-        : null;
+      : null;
 
   const heroImgSrc =
     discount.isPartnerVenue === true
@@ -111,23 +110,12 @@ export default function DiscountCard({
     }
   }, [heroNaturalAspect]);
 
-  /** Логотип уже в верхнем блоке (нет баннера) — не дублируем в тексте карточки */
-  const partnerLogoShownInHero =
-    discount.isPartnerVenue &&
-    !partnerVenueBannerUrl &&
-    Boolean(partnerLogoUrlVal) &&
-    !partnerBannerHeroFailed &&
-    !imageError;
-
-  const heroIsPartnerLogoOnly =
-    Boolean(discount.isPartnerVenue) &&
-    !partnerVenueBannerUrl &&
-    Boolean(partnerLogoUrlVal);
-
-  const partnerPlaceholderShowsTitles =
-    discount.isPartnerVenue &&
-    !partnerVenueBannerUrl &&
-    !partnerLogoUrlVal;
+  /** Заголовок на градиенте, если в шапке нет успешно показанного баннера */
+  const showHeroPlaceholderTitles =
+    discount.isPartnerVenue !== true ||
+    imageError ||
+    !partnerVenueBannerUrl ||
+    partnerBannerHeroFailed;
 
   const handleHeroImgError = () => {
     if (
@@ -256,10 +244,7 @@ export default function DiscountCard({
             ref={heroImgRef}
             src={heroImgSrc}
             alt={discount.title}
-            className={clsx(
-              "absolute inset-0 z-10 h-full w-full object-contain object-center",
-              heroIsPartnerLogoOnly && "bg-white/[0.08] p-4"
-            )}
+            className="absolute inset-0 z-10 h-full w-full object-cover object-center"
             loading={eagerBanner ? "eager" : "lazy"}
             decoding={eagerBanner ? "sync" : "async"}
             onLoad={(e) => syncHeroNaturalAspectFromEl(e.currentTarget)}
@@ -286,9 +271,7 @@ export default function DiscountCard({
                   Скидки BestBenefits
                 </p>
               )}
-              {(discount.isPartnerVenue !== true ||
-                partnerPlaceholderShowsTitles ||
-                imageError) && (
+              {showHeroPlaceholderTitles && (
                 <>
                   <p className="mt-0.5 text-sm font-bold leading-snug line-clamp-2 sm:text-base">
                     {discount.title}
@@ -370,8 +353,7 @@ export default function DiscountCard({
           >
             {discount.isPartnerVenue &&
               discount.partnerLogoUrl &&
-              !partnerLogoError &&
-              !partnerLogoShownInHero && (
+              !partnerLogoError && (
                 <div
                   className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-white sm:h-14 sm:w-14 dark:border-gray-600 dark:bg-gray-900"
                   aria-hidden

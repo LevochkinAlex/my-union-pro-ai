@@ -85,7 +85,9 @@ export async function GET() {
       };
       const existing = byVenue.get(v.id);
       const iso = row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt);
-      const occupiesSlot = row.status !== PV_APPLICATION_STATUS.CANCELLED;
+      const occupiesSlot =
+        row.status !== PV_APPLICATION_STATUS.CANCELLED &&
+        row.status !== PV_APPLICATION_STATUS.APPROVED;
       if (!existing) {
         byVenue.set(v.id, {
           id: v.id,

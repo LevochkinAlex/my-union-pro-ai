@@ -12,7 +12,7 @@ function authorizeCron(request: NextRequest): boolean {
 
 /**
  * GET /api/cron/partner-venue-application-sla
- * Напоминания партнёру по заявкам NEW (24 ч, 2 ч до конца 48 ч), письмо о скрытии площадки.
+ * Два независимых SLA: «Новая» 48 ч (напоминания 24 ч и 2 ч + письмо); «В работе» 72 ч (напоминание 24 ч + письмо).
  * Авторизация: CRON_SECRET (заголовок Authorization: Bearer или ?secret=).
  */
 export async function GET(request: NextRequest) {

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 
-/** Заявки, занимающие слот (все кроме CANCELLED) — только SQL, без enum в Prisma Client. */
+/** Заявки, занимающие слот: «Новая» и «В работе» (только SQL, без enum в Prisma Client). */
 export async function countOccupyingApplicationsRaw(
   prisma: PrismaClient,
   partnerVenueId: string
@@ -11,7 +11,7 @@ export async function countOccupyingApplicationsRaw(
       SELECT COUNT(*)::bigint AS c
       FROM "PartnerVenueApplication"
       WHERE "partnerVenueId" = ${partnerVenueId}
-        AND status::text <> 'CANCELLED'
+        AND status::text IN ('NEW', 'IN_PROGRESS')
     `
   );
   return Number(rows[0]?.c ?? 0);
@@ -47,7 +47,7 @@ export async function countOccupyingByVenueIdsRaw(
       SELECT a."partnerVenueId", COUNT(*)::bigint AS c
       FROM "PartnerVenueApplication" a
       WHERE a."partnerVenueId" IN (${Prisma.join(venueIds)})
-        AND a.status::text <> 'CANCELLED'
+        AND a.status::text IN ('NEW', 'IN_PROGRESS')
       GROUP BY a."partnerVenueId"
     `
   );
