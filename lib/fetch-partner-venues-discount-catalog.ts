@@ -16,7 +16,7 @@ export async function fetchPartnerVenuesForDiscountCatalog(options?: {
   limit?: number;
 }): Promise<DiscountItem[]> {
   const search = options?.search?.trim() ?? "";
-  const limit = Math.min(50, Math.max(1, options?.limit ?? 50));
+  const limit = Math.min(200, Math.max(1, options?.limit ?? 200));
 
   const where: Prisma.PartnerVenueWhereInput = {
     isActive: true,

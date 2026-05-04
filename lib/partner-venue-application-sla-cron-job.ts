@@ -21,7 +21,7 @@ import {
  * Два независимых SLA:
  * - «Новая»: 48 ч с подачи (createdAt); напоминания за 24 ч и 2 ч; отдельное письмо о блокировке (slaOverdueNewBlockEmailSentAt).
  * - «В работе»: 72 ч с inProgressAt; напоминание за 24 ч; отдельное письмо (slaOverdueBlockEmailSentAt).
- * Каталог скрывает площадку при любой просрочке; флаги писем сбрасываются отдельно при снятии своей просрочки.
+ * Учитываются только площадки с participationMode = APPLICATION. Флаги писем сбрасываются отдельно.
  */
 export async function runPartnerVenueApplicationSlaCronJob(): Promise<{
   newReminder24hSent: number;
@@ -50,6 +50,7 @@ export async function runPartnerVenueApplicationSlaCronJob(): Promise<{
       status: "NEW",
       createdAt: { lte: newReminder24Cutoff },
       slaReminder24hSentAt: null,
+      partnerVenue: { participationMode: "APPLICATION" },
     },
     include: {
       applicant: { select: { firstName: true, lastName: true, middleName: true } },
@@ -82,6 +83,7 @@ export async function runPartnerVenueApplicationSlaCronJob(): Promise<{
       status: "NEW",
       createdAt: { lte: newReminder2Cutoff },
       slaReminder2hSentAt: null,
+      partnerVenue: { participationMode: "APPLICATION" },
     },
     include: {
       applicant: { select: { firstName: true, lastName: true, middleName: true } },
@@ -114,6 +116,7 @@ export async function runPartnerVenueApplicationSlaCronJob(): Promise<{
       status: "IN_PROGRESS",
       inProgressAt: { not: null, lte: ipReminderCutoff },
       slaReminder24hSentAt: null,
+      partnerVenue: { participationMode: "APPLICATION" },
     },
     include: {
       applicant: { select: { firstName: true, lastName: true, middleName: true } },
@@ -149,7 +152,9 @@ export async function runPartnerVenueApplicationSlaCronJob(): Promise<{
         WHERE v."slaOverdueNewBlockEmailSentAt" IS NOT NULL
           AND NOT EXISTS (
             SELECT 1 FROM "PartnerVenueApplication" a
+            INNER JOIN "PartnerVenue" v2 ON v2.id = a."partnerVenueId"
             WHERE a."partnerVenueId" = v.id
+              AND v2."participationMode" = 'APPLICATION'::"PartnerVenueParticipationMode"
               AND a."status" = 'NEW'::"PartnerVenueApplicationStatus"
               AND a."createdAt" <= ${newOverdueCutoff}
           )
@@ -167,7 +172,9 @@ export async function runPartnerVenueApplicationSlaCronJob(): Promise<{
         WHERE v."slaOverdueBlockEmailSentAt" IS NOT NULL
           AND NOT EXISTS (
             SELECT 1 FROM "PartnerVenueApplication" a
+            INNER JOIN "PartnerVenue" v2 ON v2.id = a."partnerVenueId"
             WHERE a."partnerVenueId" = v.id
+              AND v2."participationMode" = 'APPLICATION'::"PartnerVenueParticipationMode"
               AND a."status" = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
               AND a."inProgressAt" IS NOT NULL
               AND a."inProgressAt" <= ${ipOverdueCutoff}

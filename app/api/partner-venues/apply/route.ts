@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
             Prisma.sql`
               UPDATE "PartnerVenueApplication"
               SET status = 'NEW'::"PartnerVenueApplicationStatus",
+                  "createdAt" = NOW(),
                   "inProgressAt" = NULL,
                   "slaReminder24hSentAt" = NULL,
                   "slaReminder2hSentAt" = NULL

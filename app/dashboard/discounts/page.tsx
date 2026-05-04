@@ -90,7 +90,7 @@ export default async function DiscountsPage() {
         console.error("[discounts] Error fetching user:", error);
         return null;
       }),
-      fetchPartnerVenuesForDiscountCatalog({ limit: 50 }).catch((err) => {
+      fetchPartnerVenuesForDiscountCatalog({ limit: 200 }).catch((err) => {
         console.warn("[discounts/page] Partner venues (SSR) failed:", err);
         return [] as DiscountItem[];
       }),

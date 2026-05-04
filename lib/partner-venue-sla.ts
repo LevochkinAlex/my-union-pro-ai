@@ -27,21 +27,23 @@ export function partnerVenueApplicationsManageUrl(venueId: string): string {
 
 type FromCatalogRow = { partnerVenueId: string };
 
-/** Площадки с просроченными заявками «Новая» (48 ч с createdAt). */
+/** Площадки с просроченными «Новая» (48 ч с createdAt), только режим «По заявке». */
 export async function getPartnerVenueIdsWithSlaOverdueNewApplications(): Promise<string[]> {
   const cutoff = new Date(Date.now() - PARTNER_VENUE_APPLICATION_NEW_SLA_MS);
   const rows = await prisma.$queryRaw<FromCatalogRow[]>(
     Prisma.sql`
       SELECT DISTINCT a."partnerVenueId" AS "partnerVenueId"
       FROM "PartnerVenueApplication" a
-      WHERE a."status" = 'NEW'::"PartnerVenueApplicationStatus"
+      INNER JOIN "PartnerVenue" v ON v.id = a."partnerVenueId"
+      WHERE v."participationMode" = 'APPLICATION'::"PartnerVenueParticipationMode"
+        AND a."status" = 'NEW'::"PartnerVenueApplicationStatus"
         AND a."createdAt" <= ${cutoff}
     `
   );
   return rows.map((r) => r.partnerVenueId);
 }
 
-/** Площадки с просроченными заявками «В работе» (72 ч с inProgressAt). */
+/** Площадки с просроченными «В работе» (72 ч с inProgressAt), только режим «По заявке». */
 export async function getPartnerVenueIdsWithSlaOverdueInProgressApplications(): Promise<
   string[]
 > {
@@ -50,7 +52,9 @@ export async function getPartnerVenueIdsWithSlaOverdueInProgressApplications(): 
     Prisma.sql`
       SELECT DISTINCT a."partnerVenueId" AS "partnerVenueId"
       FROM "PartnerVenueApplication" a
-      WHERE a."status" = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
+      INNER JOIN "PartnerVenue" v ON v.id = a."partnerVenueId"
+      WHERE v."participationMode" = 'APPLICATION'::"PartnerVenueParticipationMode"
+        AND a."status" = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
         AND a."inProgressAt" IS NOT NULL
         AND a."inProgressAt" <= ${cutoff}
     `
@@ -58,7 +62,7 @@ export async function getPartnerVenueIdsWithSlaOverdueInProgressApplications(): 
   return rows.map((r) => r.partnerVenueId);
 }
 
-/** Скрыть из каталога «Скидки от партнёров», если есть просрочка по «Новая» или по «В работе». */
+/** Скрыть из каталога при просрочке «Новая» или «В работе» (только площадки с режимом «По заявке»). */
 export async function getPartnerVenueIdsSlaOverdueFromCatalog(): Promise<string[]> {
   const [newIds, ipIds] = await Promise.all([
     getPartnerVenueIdsWithSlaOverdueNewApplications(),
@@ -75,7 +79,9 @@ export async function partnerVenueHasSlaOverdueNewApplications(
     Prisma.sql`
       SELECT 1::bigint AS ok
       FROM "PartnerVenueApplication" a
+      INNER JOIN "PartnerVenue" v ON v.id = a."partnerVenueId"
       WHERE a."partnerVenueId" = ${partnerVenueId}
+        AND v."participationMode" = 'APPLICATION'::"PartnerVenueParticipationMode"
         AND a."status" = 'NEW'::"PartnerVenueApplicationStatus"
         AND a."createdAt" <= ${cutoff}
       LIMIT 1
@@ -92,7 +98,9 @@ export async function partnerVenueHasSlaOverdueInProgressApplications(
     Prisma.sql`
       SELECT 1::bigint AS ok
       FROM "PartnerVenueApplication" a
+      INNER JOIN "PartnerVenue" v ON v.id = a."partnerVenueId"
       WHERE a."partnerVenueId" = ${partnerVenueId}
+        AND v."participationMode" = 'APPLICATION'::"PartnerVenueParticipationMode"
         AND a."status" = 'IN_PROGRESS'::"PartnerVenueApplicationStatus"
         AND a."inProgressAt" IS NOT NULL
         AND a."inProgressAt" <= ${cutoff}

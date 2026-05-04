@@ -134,7 +134,7 @@ export default function DiscountsClient({
     let cancelled = false;
     (async () => {
       try {
-        const params = new URLSearchParams({ limit: "50" });
+        const params = new URLSearchParams({ limit: "200" });
         if (filters.search) params.set("search", filters.search);
         const res = await fetch(`/api/partner-venues/public?${params}`);
         if (!res.ok || cancelled) return;
